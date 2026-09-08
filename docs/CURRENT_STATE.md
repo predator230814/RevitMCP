@@ -4,31 +4,34 @@ _Last updated: 2026-09-08_
 
 ## Phase
 
-Project foundation / architecture discovery.
+Architecture foundation / local bridge design.
 
 ## What exists
 
 - GitHub repository initialized.
 - Canonical AI-agent working rules established in `AGENTS.md`.
 - Project vision defined in `docs/VISION.md`.
-- Minimal architecture baseline defined in `docs/ARCHITECTURE.md`.
+- Architecture baseline defined in `docs/ARCHITECTURE.md`.
 - ADR process initialized under `docs/adr/`.
+- ADR-0001 accepts an out-of-process architecture with a standalone C#/.NET MCP server and a Revit capability/execution add-in.
+- Revit 2025, 2026, and 2027 are the initial supported product targets from one shared codebase, with version-specific builds/adapters where required.
+- The initial MCP transport is `stdio`; Streamable HTTP, MCP Apps, WebMCP, and remote/cloud gateways remain future extension paths rather than core dependencies.
 
 ## What does not exist yet
 
-- no Revit add-in;
-- no MCP server;
-- no selected implementation language or SDK;
-- no selected transport or IPC mechanism;
+- no Revit add-in implementation;
+- no MCP server implementation;
+- no selected local IPC mechanism between server and Revit;
+- no finalized Revit instance discovery/addressing model;
 - no tool catalog;
 - no automated tests;
 - no deployment or packaging model.
 
 ## Current priorities
 
-1. Research the current MCP, Autodesk Revit MCP, Nonica, pyRevit-based approaches, WebMCP, MCP Apps, SDK, transport, and agent ecosystem.
-2. Define the architectural boundaries and system topology.
-3. Decide the initial technology stack through ADRs.
+1. Evaluate and choose the local bridge / IPC mechanism between `RevitMCP.Server` and `RevitMCP.Addin`.
+2. Define Revit instance discovery and addressing for multiple simultaneous Revit processes.
+3. Define the initial solution/project structure and multi-version build strategy.
 4. Define the first read-only capability contract.
 5. Only then create the initial implementation skeleton.
 
@@ -40,7 +43,8 @@ Project foundation / architecture discovery.
 - The architecture should preserve viable paths for both local agents and remote/cloud agents, subject to security, information-governance, and deployment-policy requirements.
 - WebMCP must remain in scope as an emerging integration surface.
 - The public repository must not contain confidential internal discussions, project information, credentials, or organization-specific sensitive details.
+- Arbitrary AI-generated code execution inside Revit is not part of the normal production capability surface.
 
 ## Next decision
 
-Determine the recommended high-level system topology for RevitMCP after current ecosystem research.
+Choose the local IPC mechanism between the standalone MCP server and the in-process Revit add-in, including its implications for security, multi-instance discovery, lifecycle, debugging, packaging, and future remote gateways.
