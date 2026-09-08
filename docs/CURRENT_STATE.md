@@ -26,7 +26,7 @@ Project foundation / architecture discovery.
 
 ## Current priorities
 
-1. Research the current MCP, Autodesk Revit MCP, WebMCP, MCP Apps, SDK, transport, and agent ecosystem.
+1. Research the current MCP, Autodesk Revit MCP, Nonica, pyRevit-based approaches, WebMCP, MCP Apps, SDK, transport, and agent ecosystem.
 2. Define the architectural boundaries and system topology.
 3. Decide the initial technology stack through ADRs.
 4. Define the first read-only capability contract.
@@ -36,8 +36,10 @@ Project foundation / architecture discovery.
 
 - Revit API execution-context and transaction constraints must be respected.
 - The solution should remain usable by multiple MCP-compatible clients and LLMs where technically possible.
-- Autodesk's official Revit MCP must be evaluated before duplicating capabilities.
+- Existing Autodesk and third-party Revit MCP implementations should be benchmarked for useful patterns, limitations, interoperability opportunities, and product gaps; they do not determine whether RevitMCP should continue or whether an overlapping capability should exist.
+- The architecture should preserve viable paths for both local agents and remote/cloud agents, subject to security, information-governance, and deployment-policy requirements.
 - WebMCP must remain in scope as an emerging integration surface.
+- The public repository must not contain confidential internal discussions, project information, credentials, or organization-specific sensitive details.
 
 ## Next decision
 
