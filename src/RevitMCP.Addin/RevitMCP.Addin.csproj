@@ -27,6 +27,11 @@
 
   <PropertyGroup Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
     <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+    <!--
+      Revit loads this class library by path. Copy the resolved NuGet runtime graph
+      next to the add-in so StreamJsonRpc and its dependencies are available in-process.
+    -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
@@ -82,6 +87,24 @@
     <Error
       Text="RevitAPIUI.dll must not be copied into RevitMCP.Addin output. The Nice3point packages are compile-time references only."
       Condition="Exists('$(OutputPath)RevitAPIUI.dll')" />
+  </Target>
+
+  <Target Name="AssertAddinRuntimePayload" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
+    <Error
+      Text="RevitMCP.Addin.dll is missing from add-in output at $(OutputPath)."
+      Condition="!Exists('$(OutputPath)RevitMCP.Addin.dll')" />
+    <Error
+      Text="RevitMCP.Bridge.dll is missing from add-in output at $(OutputPath)."
+      Condition="!Exists('$(OutputPath)RevitMCP.Bridge.dll')" />
+    <Error
+      Text="RevitMCP.Contracts.dll is missing from add-in output at $(OutputPath)."
+      Condition="!Exists('$(OutputPath)RevitMCP.Contracts.dll')" />
+    <Error
+      Text="StreamJsonRpc.dll is missing from add-in output at $(OutputPath). CopyLocalLockFileAssemblies must copy the Bridge NuGet runtime graph."
+      Condition="!Exists('$(OutputPath)StreamJsonRpc.dll')" />
+    <Error
+      Text="Nerdbank.Streams.dll is missing from add-in output at $(OutputPath). The StreamJsonRpc runtime graph is incomplete."
+      Condition="!Exists('$(OutputPath)Nerdbank.Streams.dll')" />
   </Target>
 
   <Target Name="ReportRevitBuild" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">

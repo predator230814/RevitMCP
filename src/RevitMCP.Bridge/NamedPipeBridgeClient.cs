@@ -50,16 +50,20 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
 
     public async Task<BridgeHandshakeResult> HandshakeAsync(BridgeHandshakeRequest request, CancellationToken cancellationToken)
     {
-        using var handshakeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        handshakeCts.CancelAfter(_handshakeTimeout);
-
         try
         {
+            // 2.25.29 has no OutboundRequestTimeout; a CancelAfter token on
+            // Invoke waits for a silent peer to ack cancel. WaitAsync does not.
             return await _rpc.InvokeWithCancellationAsync<BridgeHandshakeResult>(
                     "bridge.handshake",
                     [request],
-                    handshakeCts.Token)
+                    cancellationToken)
+                .WaitAsync(_handshakeTimeout, cancellationToken)
                 .ConfigureAwait(false);
+        }
+        catch (TimeoutException exception)
+        {
+            throw new BridgeException(BridgeErrorCodes.HandshakeTimeout, "The bridge handshake timed out.", exception);
         }
         catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
@@ -77,7 +81,7 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         {
             throw;
         }
-        catch (Exception exception) when (exception is IOException or TimeoutException)
+        catch (IOException exception)
         {
             throw new BridgeException(BridgeErrorCodes.HandshakeFailed, "The bridge handshake could not be completed.", exception);
         }

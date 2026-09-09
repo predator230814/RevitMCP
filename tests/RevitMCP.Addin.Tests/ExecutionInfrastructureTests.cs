@@ -6,11 +6,16 @@ namespace RevitMCP.Addin.Tests;
 public sealed class ExecutionInfrastructureTests
 {
     [Fact]
-    public void Production_addin_output_does_not_contain_revit_api_dlls()
+    public void Production_addin_output_contains_bridge_runtime_payload_without_revit_api_dlls()
     {
         var directory = Path.GetDirectoryName(typeof(RevitExecutionQueue<>).Assembly.Location);
         Assert.False(string.IsNullOrWhiteSpace(directory));
 
+        Assert.True(File.Exists(Path.Combine(directory!, "RevitMCP.Addin.dll")));
+        Assert.True(File.Exists(Path.Combine(directory!, "RevitMCP.Bridge.dll")));
+        Assert.True(File.Exists(Path.Combine(directory!, "RevitMCP.Contracts.dll")));
+        Assert.True(File.Exists(Path.Combine(directory!, "StreamJsonRpc.dll")));
+        Assert.True(File.Exists(Path.Combine(directory!, "Nerdbank.Streams.dll")));
         Assert.False(File.Exists(Path.Combine(directory!, "RevitAPI.dll")));
         Assert.False(File.Exists(Path.Combine(directory!, "RevitAPIUI.dll")));
     }

@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO.Pipes;
 using RevitMCP.Contracts;
 using Xunit;
 
@@ -75,6 +76,54 @@ public sealed class NamedPipeIntegrationTests
             NamedPipeBridgeClient.ConnectAsync(pipeName, TimeSpan.FromMilliseconds(400), CancellationToken.None));
 
         Assert.Equal(BridgeErrorCodes.HandshakeTimeout, exception.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Silent_connected_peer_times_out_handshake()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var pipeName = "revitmcp.test.silent." + Guid.NewGuid().ToString("N");
+        using var ready = new ManualResetEventSlim(false);
+        using var accepted = new ManualResetEventSlim(false);
+        using var release = new ManualResetEventSlim(false);
+        var handshakeTimeout = TimeSpan.FromMilliseconds(400);
+
+        var server = Task.Run(async () =>
+        {
+            using var listening = new NamedPipeServerStream(
+                pipeName,
+                PipeDirection.InOut,
+                1,
+                PipeTransmissionMode.Byte,
+                PipeOptions.Asynchronous | PipeOptions.CurrentUserOnly);
+            ready.Set();
+            await listening.WaitForConnectionAsync();
+            accepted.Set();
+            release.Wait();
+        });
+
+        Assert.True(ready.Wait(TimeSpan.FromSeconds(5)));
+        await using var client = await NamedPipeBridgeClient.ConnectAsync(pipeName, TimeSpan.FromSeconds(3), CancellationToken.None);
+        Assert.True(accepted.Wait(TimeSpan.FromSeconds(5)));
+
+        var handshake = client.HandshakeAsync(
+            new BridgeHandshakeRequest
+            {
+                ExpectedInstanceId = Guid.NewGuid().ToString("D"),
+                SupportedProtocolVersions = [1],
+                ClientName = "RevitMCP.Tests"
+            },
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<BridgeException>(() => handshake.WaitAsync(TimeSpan.FromSeconds(5)));
+        Assert.Equal(BridgeErrorCodes.HandshakeTimeout, exception.ErrorCode);
+
+        release.Set();
+        await server.WaitAsync(TimeSpan.FromSeconds(5));
     }
 
     [Fact]
