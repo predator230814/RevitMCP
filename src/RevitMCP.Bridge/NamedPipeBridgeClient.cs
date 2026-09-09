@@ -107,24 +107,27 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
 
         EnsureCapabilityAllowed();
 
+        // Local WaitAsync bounds the caller. StreamJsonRpc 2.25.29 has no
+        // OutboundRequestTimeout; cancelling the invoke token tells the remote
+        // EXEC queue to skip still-queued work, but we must not await the
+        // cancellation acknowledgement or a silent peer can hang the caller.
+        using var invokeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         var invoke = _rpc.InvokeWithCancellationAsync<GetContextResult>(
             "revit.get_context",
             [request],
-            cancellationToken);
+            invokeCts.Token);
         try
         {
             return await invoke.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
         }
         catch (TimeoutException exception)
         {
-            _capabilityUnusable = true;
-            ObserveIncomplete(invoke);
+            CancelUnusableCapabilityRequest(invokeCts, invoke);
             throw new BridgeException(CapabilityErrorCodes.ExecutionTimeout, "The Revit context request timed out.", exception);
         }
         catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
         {
-            _capabilityUnusable = true;
-            ObserveIncomplete(invoke);
+            CancelUnusableCapabilityRequest(invokeCts, invoke);
             throw new BridgeException(CapabilityErrorCodes.ExecutionTimeout, "The Revit context request timed out.", exception);
         }
         catch (OperationCanceledException)
@@ -154,6 +157,13 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
     {
         _rpc.Dispose();
         await _pipe.DisposeAsync().ConfigureAwait(false);
+    }
+
+    private void CancelUnusableCapabilityRequest(CancellationTokenSource invokeCts, Task invoke)
+    {
+        _capabilityUnusable = true;
+        invokeCts.Cancel();
+        ObserveIncomplete(invoke);
     }
 
     private void EnsureCapabilityAllowed()

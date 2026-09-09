@@ -14,10 +14,14 @@ internal sealed class FakeCapabilityService : IRevitCapabilityService
 
     public TaskCompletionSource<GetContextResult>? Hold { get; set; }
 
+    public TaskCompletionSource RequestTokenCancelled { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+
     public async Task<GetContextResult> GetContextAsync(GetContextRequest request, CancellationToken cancellationToken)
     {
         InvokeCount++;
         LastRequest = request;
+        cancellationToken.Register(() => RequestTokenCancelled.TrySetResult());
 
         if (Hold is not null)
         {

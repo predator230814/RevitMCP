@@ -245,6 +245,31 @@ public sealed class GetContextBridgeTests
     }
 
     [Fact]
+    public async Task Client_capability_timeout_cancels_the_server_request_token()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var capability = new FakeCapabilityService
+        {
+            Hold = new TaskCompletionSource<GetContextResult>(TaskCreationOptions.RunContinuationsAsynchronously)
+        };
+        await using var context = await StartHostAsync(capability);
+        await using var client = await ConnectAndHandshakeAsync(context, [2, 1]);
+
+        var exception = await Assert.ThrowsAsync<BridgeException>(() =>
+            client.GetContextAsync(new GetContextRequest(), TimeSpan.FromMilliseconds(400), CancellationToken.None)
+                .WaitAsync(TimeSpan.FromSeconds(5)));
+
+        Assert.Equal(CapabilityErrorCodes.ExecutionTimeout, exception.ErrorCode);
+        await capability.RequestTokenCancelled.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(capability.RequestTokenCancelled.Task.IsCompletedSuccessfully);
+        Assert.False(capability.Hold!.Task.IsCompleted);
+    }
+
+    [Fact]
     public async Task Caller_cancellation_remains_cancellation()
     {
         if (!OperatingSystem.IsWindows())
