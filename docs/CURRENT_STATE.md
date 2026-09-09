@@ -4,7 +4,7 @@ _Last updated: 2026-09-08_
 
 ## Phase
 
-Architecture foundation / solution structure and multi-version build design.
+Architecture foundation / first capability contract design.
 
 ## What exists
 
@@ -16,7 +16,9 @@ Architecture foundation / solution structure and multi-version build design.
 - ADR-0001 accepts an out-of-process architecture with a standalone C#/.NET MCP server and a Revit capability/execution add-in.
 - ADR-0002 accepts duplex Windows Named Pipes with JSON-RPC 2.0 for the local bridge, using Microsoft StreamJsonRpc as the initial implementation behind a RevitMCP-owned abstraction.
 - ADR-0003 accepts opaque per-process Revit `instance_id` values, ephemeral LocalAppData registration records, bridge validation, and deterministic multi-instance selection behavior.
-- Revit 2025, 2026, and 2027 are the initial supported product targets from one shared codebase, with version-specific builds/adapters where required.
+- ADR-0004 accepts a small SDK-style .NET solution with `Contracts`, `Bridge`, `Server`, and one multi-version `Addin` project.
+- Revit 2025, 2026, and 2027 are built from the same add-in project using an explicit `RevitVersion` build property; the initial target matrix is `net8.0-windows` for Revit 2025/2026 and `net10.0-windows` for Revit 2027.
+- Revit API references will be externally restored, version-pinned compile-time dependencies; Autodesk Revit API binaries will not be committed to the repository.
 - The initial MCP transport is `stdio`; Streamable HTTP, MCP Apps, WebMCP, Azure/cloud gateways, and other remote deployment paths remain extensions rather than core dependencies.
 - Product UI considerations are recorded separately; universal access, conversational use inside or adjacent to Revit, and reduced context switching remain open product goals rather than settled architecture.
 
@@ -24,7 +26,8 @@ Architecture foundation / solution structure and multi-version build design.
 
 - no Revit add-in implementation;
 - no MCP server implementation;
-- no finalized solution/project structure or multi-version build implementation;
+- no solution/project skeleton committed yet;
+- no selected concrete compile-time Revit API package/provider;
 - no detailed bridge handshake schema or protocol negotiation contract;
 - no explicit document identity/addressing model;
 - no request scheduling/fairness policy for multiple clients;
@@ -36,11 +39,11 @@ Architecture foundation / solution structure and multi-version build design.
 
 ## Current priorities
 
-1. Define the initial solution/project structure and multi-version build strategy for Revit 2025-2027.
-2. Define the first read-only capability contract.
-3. Define the minimum bridge handshake/protocol-version contract required by the initial implementation.
-4. Define the Revit execution queue behavior needed for the first capability.
-5. Only then create the initial implementation skeleton.
+1. Define the first read-only capability contract.
+2. Define the minimum bridge handshake/protocol-version contract required by the initial implementation.
+3. Define the Revit execution queue behavior needed for the first capability.
+4. Create a small implementation task for the initial solution/project skeleton consistent with ADR-0004.
+5. Only then begin implementation and real Revit validation.
 
 ## Known constraints
 
@@ -52,6 +55,8 @@ Architecture foundation / solution structure and multi-version build design.
 - Revit process IDs are diagnostics, not the stable RevitMCP client-facing identity. ADR-0003 defines `instance_id` for process-lifetime identity.
 - Instance discovery records are candidates only; a validated bridge handshake is required before an instance is considered ready.
 - Revit instance identity is distinct from document identity.
+- Revit-version-specific API differences should be confined to a compatibility boundary rather than scattered throughout capability or MCP-facing code.
+- Cross-version compatibility requires all supported Revit add-in variants to compile in CI; local compilation against one Revit release is insufficient.
 - WebMCP must remain in scope as an emerging integration surface.
 - The public repository must not contain confidential internal discussions, project information, credentials, or organization-specific sensitive details.
 - Arbitrary AI-generated code execution inside Revit is not part of the normal production capability surface.
@@ -59,4 +64,4 @@ Architecture foundation / solution structure and multi-version build design.
 
 ## Next decision
 
-Define the repository solution/project structure and the build/reference strategy that lets one maintainable C# codebase target Revit 2025, 2026, and 2027 while isolating Revit-version-specific dependencies and keeping the MCP server and shared contracts independently testable.
+Define the first read-only Revit capability contract: its agent-facing purpose, MCP tool shape, transport-neutral request/result contract, Revit execution behavior, deterministic errors, and acceptance criteria before any capability implementation begins.
