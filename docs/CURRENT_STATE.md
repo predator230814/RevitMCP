@@ -4,7 +4,7 @@ _Last updated: 2026-09-08_
 
 ## Phase
 
-Implementation planning / first Cursor vertical slice.
+Implementation started / ADR-0004 solution skeleton.
 
 ## What exists
 
@@ -17,7 +17,9 @@ Implementation planning / first Cursor vertical slice.
 - ADR-0002 accepts duplex Windows Named Pipes with JSON-RPC 2.0 for the local bridge, using Microsoft StreamJsonRpc as the initial implementation behind a RevitMCP-owned abstraction.
 - ADR-0003 accepts opaque per-process Revit `instance_id` values, ephemeral LocalAppData registration records, bridge validation, and deterministic multi-instance selection behavior.
 - ADR-0004 accepts a small SDK-style .NET solution with `Contracts`, `Bridge`, `Server`, and one multi-version `Addin` project.
+- The ADR-0004 solution/project skeleton is committed: `RevitMCP.sln`, `global.json`, centralized build/package props, `src/RevitMCP.Contracts`, `src/RevitMCP.Bridge`, `src/RevitMCP.Server`, one multi-version `src/RevitMCP.Addin` project, and corresponding non-Revit test projects.
 - Revit 2025, 2026, and 2027 are built from the same add-in project using an explicit `RevitVersion` build property; the initial target matrix is `net8.0-windows` for Revit 2025/2026 and `net10.0-windows` for Revit 2027.
+- GitHub Actions compiles the non-Revit projects and the 2025/2026/2027 add-in matrix.
 - Revit API references will be externally restored, version-pinned compile-time dependencies; Autodesk Revit API binaries will not be committed to the repository.
 - Capability specifications are recorded under `docs/capabilities/` before implementation.
 - CAP-0001 accepts `revit_get_context` as the first end-to-end read-only Revit capability. It returns bounded instance, active-document, active-view, and selection-count context without exposing paths or enumerating selection contents.
@@ -30,21 +32,19 @@ Implementation planning / first Cursor vertical slice.
 
 ## What does not exist yet
 
-- no Revit add-in implementation;
-- no MCP server implementation;
-- no solution/project skeleton committed yet;
+- no Revit add-in runtime implementation;
+- no MCP server runtime implementation;
 - no selected concrete compile-time Revit API package/provider;
 - no explicit document identity/addressing model;
 - no request scheduling/fairness policy for multiple clients beyond FIFO serialization required by EXEC-0001;
 - no write-locking or transaction concurrency policy;
-- no automated tests;
 - no deployment or packaging model;
 - no finalized user-facing Revit UI strategy.
 
 ## Current priorities
 
-1. Create the first small Cursor implementation task for the initial solution/project skeleton and CAP-0001 vertical slice, constrained by ADR-0001 through ADR-0004, BRIDGE-0001, and EXEC-0001.
-2. Let Cursor inspect the repository and implement only the agreed scope with automated tests where practical.
+1. Implement the first runtime vertical slice on the ADR-0004 skeleton: ADR-0003 discovery, BRIDGE-0001 handshake, EXEC-0001 dispatch, and CAP-0001 `revit_get_context`.
+2. Keep that slice small and reviewable, with automated tests where practical, and do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
 3. Review the implementation independently for contract compliance, architecture boundaries, cross-version build behavior, and failure handling.
 4. Validate the vertical slice in real Revit, including supported-version coverage appropriate to the change.
 5. Update project state and specifications from observed implementation/validation results before expanding the capability surface.
@@ -76,4 +76,4 @@ Implementation planning / first Cursor vertical slice.
 
 ## Next task
 
-Prepare the first Cursor implementation task. The task must be small and reviewable: Cursor reads the repository first, creates the ADR-0004 solution/project skeleton, implements only the infrastructure needed for ADR-0003 discovery, BRIDGE-0001 handshake, EXEC-0001 dispatch, and CAP-0001 `revit_get_context`, adds focused automated tests where practical, and does not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
+Implement the first runtime vertical slice on top of the ADR-0004 skeleton: only the infrastructure needed for ADR-0003 discovery, BRIDGE-0001 handshake, EXEC-0001 dispatch, and CAP-0001 `revit_get_context`, with focused automated tests where practical. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
