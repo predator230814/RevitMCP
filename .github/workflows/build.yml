@@ -108,21 +108,25 @@ jobs:
       - name: Missing RevitVersion fails clearly
         shell: pwsh
         run: |
-          $output = & dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj --configuration Release 2>&1 | Out-String
-          if ($LASTEXITCODE -eq 0) {
-            throw "Expected the add-in build to fail when RevitVersion is missing."
+          $output = & dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj --configuration Release 2>&1
+          $code = $LASTEXITCODE
+          $text = $output | Out-String
+          if ($code -eq 0) {
+            throw "Expected the add-in build to fail when RevitVersion is missing.`n$text"
           }
-          if ($output -notmatch "RevitMCP.Addin requires an explicit RevitVersion") {
-            throw "Missing expected error for an unset RevitVersion.`n$output"
+          if ($text -notmatch "RevitMCP.Addin requires an explicit RevitVersion") {
+            throw "Missing expected error for an unset RevitVersion.`n$text"
           }
 
       - name: Unsupported RevitVersion fails clearly
         shell: pwsh
         run: |
-          $output = & dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj -p:RevitVersion=2024 --configuration Release 2>&1 | Out-String
-          if ($LASTEXITCODE -eq 0) {
-            throw "Expected the add-in build to fail when RevitVersion is unsupported."
+          $output = & dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj -p:RevitVersion=2024 --configuration Release 2>&1
+          $code = $LASTEXITCODE
+          $text = $output | Out-String
+          if ($code -eq 0) {
+            throw "Expected the add-in build to fail when RevitVersion is unsupported.`n$text"
           }
-          if ($output -notmatch "Unsupported RevitVersion '2024'") {
-            throw "Missing expected error for an unsupported RevitVersion.`n$output"
+          if ($text -notmatch "Unsupported RevitVersion '2024'") {
+            throw "Missing expected error for an unsupported RevitVersion.`n$text"
           }
