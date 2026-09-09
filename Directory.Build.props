@@ -12,6 +12,9 @@
     <NeutralLanguage>en-US</NeutralLanguage>
     <IsPackable>false</IsPackable>
     <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <Nice3pointRevitApi2025>2025.4.60</Nice3pointRevitApi2025>
+    <Nice3pointRevitApi2026>2026.4.10</Nice3pointRevitApi2026>
+    <Nice3pointRevitApi2027>2027.2.0</Nice3pointRevitApi2027>
   </PropertyGroup>
 
   <!--
@@ -23,6 +26,14 @@
     <BaseIntermediateOutputPath>obj\$(RevitVersion)\</BaseIntermediateOutputPath>
     <MSBuildProjectExtensionsPath>$(MSBuildProjectDirectory)\obj\$(RevitVersion)\</MSBuildProjectExtensionsPath>
     <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'RevitMCP.Addin'">
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2025'">$(Nice3pointRevitApi2025)</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2026'">$(Nice3pointRevitApi2026)</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2027'">$(Nice3pointRevitApi2027)</RevitApiPackageVersion>
+    <!-- Restore of referenced Addin projects may not receive RevitVersion; keep a compile-time default. -->
+    <RevitApiPackageVersion Condition="'$(RevitApiPackageVersion)' == ''">$(Nice3pointRevitApi2026)</RevitApiPackageVersion>
   </PropertyGroup>
 </Project>
 

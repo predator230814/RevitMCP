@@ -20,6 +20,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RevitMCP.Bridge.Tests", "te
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RevitMCP.Server.Tests", "tests\RevitMCP.Server.Tests\RevitMCP.Server.Tests.csproj", "{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3003}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RevitMCP.Addin.Tests", "tests\RevitMCP.Addin.Tests\RevitMCP.Addin.Tests.csproj", "{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3004}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -54,6 +56,10 @@ Global
 		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3003}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3003}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3003}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3004}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3004}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3004}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3004}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -66,5 +72,6 @@ Global
 		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3001} = {8A1F0C11-6B2E-4D47-9C81-2E4A6B7C1002}
 		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3002} = {8A1F0C11-6B2E-4D47-9C81-2E4A6B7C1002}
 		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3003} = {8A1F0C11-6B2E-4D47-9C81-2E4A6B7C1002}
+		{8A1F0C11-6B2E-4D47-9C81-2E4A6B7C3004} = {8A1F0C11-6B2E-4D47-9C81-2E4A6B7C1002}
 	EndGlobalSection
 EndGlobal

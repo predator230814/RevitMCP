@@ -7,7 +7,7 @@ on:
 
 jobs:
   non-revit:
-    name: Contracts, Bridge, Server
+    name: Contracts, Bridge, Server, Addin tests
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -26,6 +26,7 @@ jobs:
           dotnet restore tests/RevitMCP.Contracts.Tests/RevitMCP.Contracts.Tests.csproj
           dotnet restore tests/RevitMCP.Bridge.Tests/RevitMCP.Bridge.Tests.csproj
           dotnet restore tests/RevitMCP.Server.Tests/RevitMCP.Server.Tests.csproj
+          dotnet restore tests/RevitMCP.Addin.Tests/RevitMCP.Addin.Tests.csproj -p:RevitVersion=2026
 
       - name: Build non-Revit projects
         run: |
@@ -35,12 +36,14 @@ jobs:
           dotnet build tests/RevitMCP.Contracts.Tests/RevitMCP.Contracts.Tests.csproj --no-restore --configuration Release
           dotnet build tests/RevitMCP.Bridge.Tests/RevitMCP.Bridge.Tests.csproj --no-restore --configuration Release
           dotnet build tests/RevitMCP.Server.Tests/RevitMCP.Server.Tests.csproj --no-restore --configuration Release
+          dotnet build tests/RevitMCP.Addin.Tests/RevitMCP.Addin.Tests.csproj --no-restore --configuration Release -p:RevitVersion=2026
 
       - name: Test non-Revit projects
         run: |
           dotnet test tests/RevitMCP.Contracts.Tests/RevitMCP.Contracts.Tests.csproj --no-build --configuration Release
           dotnet test tests/RevitMCP.Bridge.Tests/RevitMCP.Bridge.Tests.csproj --no-build --configuration Release
           dotnet test tests/RevitMCP.Server.Tests/RevitMCP.Server.Tests.csproj --no-build --configuration Release
+          dotnet test tests/RevitMCP.Addin.Tests/RevitMCP.Addin.Tests.csproj --no-build --configuration Release -p:RevitVersion=2026
 
   addin:
     name: Addin Revit ${{ matrix.revit-version }}
@@ -87,11 +90,18 @@ jobs:
       - name: Verify version-specific output
         shell: pwsh
         run: |
-          $dll = "src/RevitMCP.Addin/bin/${{ matrix.revit-version }}/Release/${{ matrix.target-framework }}/RevitMCP.Addin.dll"
+          $outputDir = "src/RevitMCP.Addin/bin/${{ matrix.revit-version }}/Release/${{ matrix.target-framework }}"
+          $dll = Join-Path $outputDir "RevitMCP.Addin.dll"
           if (-not (Test-Path $dll)) {
             throw "Expected add-in output at $dll"
           }
-          Write-Host "Found $dll"
+          foreach ($name in @("RevitAPI.dll", "RevitAPIUI.dll")) {
+            $forbidden = Join-Path $outputDir $name
+            if (Test-Path $forbidden) {
+              throw "$name must not be copied into add-in output at $outputDir"
+            }
+          }
+          Write-Host "Found $dll without Autodesk Revit API runtime assemblies"
 
   addin-version-validation:
     name: Addin RevitVersion validation

@@ -1,0 +1,23 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>RevitMCP.Addin.Tests</RootNamespace>
+    <IsTestProject>true</IsTestProject>
+    <RevitVersion Condition="'$(RevitVersion)' == ''">2026</RevitVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\RevitMCP.Addin\RevitMCP.Addin.csproj">
+      <AdditionalProperties>RevitVersion=$(RevitVersion)</AdditionalProperties>
+    </ProjectReference>
+  </ItemGroup>
+</Project>
