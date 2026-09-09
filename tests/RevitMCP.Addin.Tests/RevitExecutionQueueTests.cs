@@ -373,6 +373,93 @@ public sealed class RevitExecutionQueueTests
         Assert.IsType<InvalidOperationException>(exception.InnerException);
     }
 
+    [Fact]
+    public async Task Late_denied_schedule_does_not_resurrect_stopped_dispatcher()
+    {
+        await AssertLateScheduleDoesNotResurrectStoppedDispatcher(
+            new BlockingEventSignal { Result = ExecutionScheduleResult.Denied });
+    }
+
+    [Fact]
+    public async Task Late_schedule_exception_does_not_resurrect_stopped_dispatcher()
+    {
+        await AssertLateScheduleDoesNotResurrectStoppedDispatcher(
+            new BlockingEventSignal { Throw = new InvalidOperationException("raise failed after stop") });
+    }
+
+    [Fact]
+    public async Task Cancellation_and_start_are_exclusive_state_transitions()
+    {
+        var cancelWon = 0;
+        var startWon = 0;
+
+        for (var iteration = 0; iteration < 200; iteration++)
+        {
+            var signal = new RecordingEventSignal();
+            var queue = new RevitExecutionQueue<object>(signal);
+            using var cts = new CancellationTokenSource();
+            var ran = 0;
+
+            var caller = queue.EnqueueAsync(
+                _ => Interlocked.Increment(ref ran),
+                cts.Token);
+
+            var pump = Task.Run(() =>
+            {
+                Thread.Yield();
+                queue.ExecutePending(Context);
+            });
+            var cancel = Task.Run(() =>
+            {
+                Thread.Yield();
+                cts.Cancel();
+            });
+
+            await Task.WhenAll(pump, cancel).WaitAsync(TimeSpan.FromSeconds(5));
+
+            try
+            {
+                await caller.WaitAsync(TimeSpan.FromSeconds(5));
+            }
+            catch (OperationCanceledException)
+            {
+            }
+
+            if (ran == 0)
+            {
+                cancelWon++;
+                Assert.True(caller.IsCanceled, "If start lost, the queued item must not execute.");
+            }
+            else
+            {
+                startWon++;
+                Assert.Equal(1, ran);
+            }
+        }
+
+        Assert.True(cancelWon + startWon == 200);
+    }
+
+    private static async Task AssertLateScheduleDoesNotResurrectStoppedDispatcher(BlockingEventSignal signal)
+    {
+        var queue = new RevitExecutionQueue<object>(signal);
+        var enqueue = Task.Run(() => queue.EnqueueAsync(_ => 1, CancellationToken.None));
+
+        Assert.True(signal.Entered.Wait(TimeSpan.FromSeconds(5)));
+        queue.Stop();
+        Assert.Equal(RevitExecutionStatus.Stopped, queue.Status);
+
+        signal.Release.Set();
+        await Assert.ThrowsAnyAsync<Exception>(() => enqueue);
+        Assert.Equal(RevitExecutionStatus.Stopped, queue.Status);
+
+        var rejected = Assert.Throws<RevitExecutionException>(() =>
+        {
+            _ = queue.EnqueueAsync(_ => 2, CancellationToken.None);
+        });
+        Assert.Equal(RevitExecutionErrorCodes.DispatcherStopped, rejected.ErrorCode);
+    }
+
     private static int Add(List<int> order, int value)
     {
         order.Add(value);
@@ -383,5 +470,32 @@ public sealed class RevitExecutionQueueTests
     {
         public ExecutionScheduleResult Schedule() =>
             throw new InvalidOperationException("raise failed");
+    }
+
+    private sealed class BlockingEventSignal : IRevitEventSignal
+    {
+        public ManualResetEventSlim Entered { get; } = new(false);
+
+        public ManualResetEventSlim Release { get; } = new(false);
+
+        public ExecutionScheduleResult Result { get; init; } = ExecutionScheduleResult.Denied;
+
+        public Exception? Throw { get; init; }
+
+        public ExecutionScheduleResult Schedule()
+        {
+            Entered.Set();
+            if (!Release.Wait(TimeSpan.FromSeconds(10)))
+            {
+                throw new TimeoutException("The test did not release the blocked Schedule() call.");
+            }
+
+            if (Throw is not null)
+            {
+                throw Throw;
+            }
+
+            return Result;
+        }
     }
 }

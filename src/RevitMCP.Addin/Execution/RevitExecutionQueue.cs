@@ -154,11 +154,19 @@ public sealed class RevitExecutionQueue<TContext>
         lock (_gate)
         {
             RejectQueuedWork_NoLock(exception);
+            if (_status is RevitExecutionStatus.Stopping or RevitExecutionStatus.Stopped)
+            {
+                if (!_executing)
+                {
+                    _status = RevitExecutionStatus.Stopped;
+                }
+
+                return;
+            }
+
             if (!_executing)
             {
-                _status = _status == RevitExecutionStatus.Stopping
-                    ? RevitExecutionStatus.Stopped
-                    : RevitExecutionStatus.Idle;
+                _status = RevitExecutionStatus.Idle;
             }
         }
     }
@@ -208,9 +216,14 @@ public sealed class RevitExecutionQueue<TContext>
 
     private sealed class RevitWorkItem<TResult> : IRevitWorkItem<TContext>
     {
+        private const int Queued = 0;
+        private const int Running = 1;
+        private const int Completed = 2;
+
         private readonly Func<TContext, TResult> _operation;
         private readonly CancellationToken _cancellationToken;
         private readonly TaskCompletionSource<TResult> _completion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly CancellationTokenRegistration _cancellationRegistration;
         private int _state;
 
         public RevitWorkItem(
@@ -221,6 +234,10 @@ public sealed class RevitExecutionQueue<TContext>
             _operation = operation;
             _cancellationToken = cancellationToken;
             CorrelationId = correlationId;
+            if (cancellationToken.CanBeCanceled)
+            {
+                _cancellationRegistration = cancellationToken.Register(TryCancelIfNotStarted);
+            }
         }
 
         public string? CorrelationId { get; }
@@ -229,13 +246,13 @@ public sealed class RevitExecutionQueue<TContext>
 
         public bool TryBegin()
         {
-            if (_cancellationToken.IsCancellationRequested)
+            if (Interlocked.CompareExchange(ref _state, Running, Queued) != Queued)
             {
-                TrySetCanceled();
                 return false;
             }
 
-            return Interlocked.CompareExchange(ref _state, 1, 0) == 0;
+            _cancellationRegistration.Dispose();
+            return true;
         }
 
         public void Run(TContext context)
@@ -253,17 +270,19 @@ public sealed class RevitExecutionQueue<TContext>
 
         public void TryFail(Exception exception)
         {
-            Interlocked.Exchange(ref _state, 2);
+            Interlocked.Exchange(ref _state, Completed);
+            _cancellationRegistration.Dispose();
             _completion.TrySetException(exception);
         }
 
         public void TryReject(Exception exception)
         {
-            if (Interlocked.CompareExchange(ref _state, 2, 0) != 0)
+            if (Interlocked.CompareExchange(ref _state, Completed, Queued) != Queued)
             {
                 return;
             }
 
+            _cancellationRegistration.Dispose();
             if (!string.IsNullOrWhiteSpace(CorrelationId))
             {
                 exception.Data["correlation_id"] = CorrelationId;
@@ -274,16 +293,20 @@ public sealed class RevitExecutionQueue<TContext>
 
         private void CompleteResult(TResult result)
         {
-            Interlocked.Exchange(ref _state, 2);
+            Interlocked.Exchange(ref _state, Completed);
+            _cancellationRegistration.Dispose();
             _completion.TrySetResult(result);
         }
 
-        private void TrySetCanceled()
+        private void TryCancelIfNotStarted()
         {
-            if (Interlocked.CompareExchange(ref _state, 2, 0) == 0)
+            if (Interlocked.CompareExchange(ref _state, Completed, Queued) != Queued)
             {
-                _completion.TrySetCanceled(_cancellationToken);
+                return;
             }
+
+            _cancellationRegistration.Dispose();
+            _completion.TrySetCanceled(_cancellationToken);
         }
     }
 }

@@ -38,6 +38,7 @@ Implementation started / execution dispatcher infrastructure.
 
 ## What does not exist yet
 
+- no accepted design or wiring for the synchronous Revit lifecycle to async bridge/registration boundary;
 - no Revit `IExternalApplication` startup or shutdown lifecycle wiring;
 - no real-Revit validation of ExternalEvent raise/execute behavior;
 - no CAP-0001 `revit_get_context` implementation;
@@ -50,8 +51,8 @@ Implementation started / execution dispatcher infrastructure.
 
 ## Current priorities
 
-1. Keep CAP-0001 `revit_get_context` as the next capability task. Real add-in startup must create the EXEC-0001 dispatcher before publishing a ready discovery registration; that lifecycle wiring is still unimplemented.
-2. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
+1. Decide the minimal add-in lifecycle design/wiring: create the EXEC-0001 dispatcher before publishing a ready discovery registration, define safe startup/shutdown ordering, and start the async bridge from the synchronous Revit lifecycle. This boundary is a separate Tech Lead decision and is not implemented in the dispatcher slice.
+2. Keep CAP-0001 `revit_get_context` after that lifecycle boundary is decided. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
 3. Review the implementation independently for contract compliance, architecture boundaries, cross-version build behavior, and failure handling.
 4. Validate the implemented slice in real Revit, including supported-version coverage appropriate to the change. Passing compile and queue unit tests is not Revit runtime validation.
 5. Update project state and specifications from observed implementation/validation results before expanding the capability surface.
@@ -83,4 +84,4 @@ Implementation started / execution dispatcher infrastructure.
 
 ## Next task
 
-Implement CAP-0001 `revit_get_context` after the add-in can create the EXEC-0001 dispatcher during real Revit startup. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
+Decide the minimal add-in lifecycle design/wiring (dispatcher creation before ready registration, startup/shutdown ordering, and async bridge startup from the Revit lifecycle). Keep CAP-0001 after that decision. Do not implement that lifecycle wiring or CAP-0001 in the dispatcher slice, and do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
