@@ -52,7 +52,7 @@ public sealed class FileRegistrationStore : IRegistrationStore
         foreach (var filePath in Directory.EnumerateFiles(sessionDirectory, "*.json"))
         {
             cancellationToken.ThrowIfCancellationRequested();
-            results.Add(await ReadOneAsync(filePath, cancellationToken).ConfigureAwait(false));
+            results.Add(await ReadOneAsync(filePath, windowsSessionId, cancellationToken).ConfigureAwait(false));
         }
 
         return results;
@@ -87,13 +87,13 @@ public sealed class FileRegistrationStore : IRegistrationStore
         }
     }
 
-    private static async Task<RegistrationReadResult> ReadOneAsync(string filePath, CancellationToken cancellationToken)
+    private static async Task<RegistrationReadResult> ReadOneAsync(string filePath, int expectedSessionId, CancellationToken cancellationToken)
     {
         try
         {
             await using var stream = File.OpenRead(filePath);
             var registration = await JsonSerializer.DeserializeAsync<RevitInstanceRegistration>(stream, ContractJson.Options, cancellationToken).ConfigureAwait(false);
-            if (registration is null || !IsValid(registration))
+            if (registration is null || !IsValid(registration) || registration.WindowsSessionId != expectedSessionId)
             {
                 return new RegistrationReadResult { FilePath = filePath };
             }

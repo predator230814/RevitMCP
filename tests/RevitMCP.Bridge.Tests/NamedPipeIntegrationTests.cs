@@ -54,6 +54,30 @@ public sealed class NamedPipeIntegrationTests
     }
 
     [Fact]
+    public async Task Publish_failure_disposes_the_started_host()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var process = Process.GetCurrentProcess();
+        var metadata = TestSupport.CreateMetadata(
+            processId: process.Id,
+            startTime: new DateTimeOffset(process.StartTime).ToUniversalTime(),
+            sessionId: process.SessionId);
+        var pipeName = BridgePipeNames.Create(metadata.WindowsSessionId, metadata.InstanceId);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            NamedPipeBridgeHost.StartAsync(metadata, new ThrowingRegistrationStore(), CancellationToken.None));
+
+        var exception = await Assert.ThrowsAsync<BridgeException>(() =>
+            NamedPipeBridgeClient.ConnectAsync(pipeName, TimeSpan.FromMilliseconds(400), CancellationToken.None));
+
+        Assert.Equal(BridgeErrorCodes.HandshakeTimeout, exception.ErrorCode);
+    }
+
+    [Fact]
     public async Task Mismatched_instance_id_over_named_pipe_is_rejected()
     {
         if (!OperatingSystem.IsWindows())

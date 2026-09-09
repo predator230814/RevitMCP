@@ -32,7 +32,9 @@ public sealed class LocalInstanceDiscovery
         foreach (var candidate in candidates)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (candidate.IsMalformed || candidate.Registration is null)
+            if (candidate.IsMalformed
+                || candidate.Registration is null
+                || candidate.Registration.WindowsSessionId != windowsSessionId)
             {
                 continue;
             }

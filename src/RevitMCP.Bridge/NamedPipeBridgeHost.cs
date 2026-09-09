@@ -38,27 +38,35 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
 
         var pipeName = BridgePipeNames.Create(metadata.WindowsSessionId, metadata.InstanceId);
         var host = new NamedPipeBridgeHost(metadata, pipeName);
-        await host._listenerReady.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-
-        var selected = ProtocolVersionSelector.SelectHighestCommon(metadata.SupportedProtocolVersions, metadata.SupportedProtocolVersions)
-            ?? BridgeProtocol.CurrentVersion;
-
-        var registration = new RevitInstanceRegistration
+        try
         {
-            InstanceId = metadata.InstanceId,
-            ProcessId = metadata.ProcessId,
-            ProcessStartTimeUtc = metadata.ProcessStartTimeUtc,
-            WindowsSessionId = metadata.WindowsSessionId,
-            RevitVersion = metadata.RevitVersion,
-            RevitBuild = metadata.RevitBuild,
-            AddinVersion = metadata.AddinVersion,
-            BridgeProtocolVersion = selected,
-            PipeName = pipeName,
-            RegistrationCreatedUtc = DateTimeOffset.UtcNow
-        };
+            await host._listenerReady.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-        host._lease = await store.PublishAsync(registration, cancellationToken).ConfigureAwait(false);
-        return host;
+            var selected = ProtocolVersionSelector.SelectHighestCommon(metadata.SupportedProtocolVersions, metadata.SupportedProtocolVersions)
+                ?? BridgeProtocol.CurrentVersion;
+
+            var registration = new RevitInstanceRegistration
+            {
+                InstanceId = metadata.InstanceId,
+                ProcessId = metadata.ProcessId,
+                ProcessStartTimeUtc = metadata.ProcessStartTimeUtc,
+                WindowsSessionId = metadata.WindowsSessionId,
+                RevitVersion = metadata.RevitVersion,
+                RevitBuild = metadata.RevitBuild,
+                AddinVersion = metadata.AddinVersion,
+                BridgeProtocolVersion = selected,
+                PipeName = pipeName,
+                RegistrationCreatedUtc = DateTimeOffset.UtcNow
+            };
+
+            host._lease = await store.PublishAsync(registration, cancellationToken).ConfigureAwait(false);
+            return host;
+        }
+        catch
+        {
+            await host.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     public async ValueTask DisposeAsync()

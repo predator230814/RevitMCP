@@ -33,6 +33,10 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             {
                 throw new BridgeException(BridgeErrorCodes.HandshakeTimeout, "The Named Pipe connection timed out.", exception);
             }
+            catch (Exception exception) when (exception is IOException or TimeoutException)
+            {
+                throw new BridgeException(BridgeErrorCodes.HandshakeTimeout, "The Named Pipe endpoint could not be reached.", exception);
+            }
 
             var rpc = JsonRpcFactory.Create(pipe, localTarget: null);
             return new NamedPipeBridgeClient(rpc, pipe, timeout);

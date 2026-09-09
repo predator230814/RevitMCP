@@ -74,4 +74,34 @@ public sealed class RegistrationStoreTests
         Assert.Equal(DiscoveryState.Ready, results[0].State);
         Assert.Equal(registration.InstanceId, results[0].Registration?.InstanceId);
     }
+
+    [Fact]
+    public async Task Registration_with_mismatched_session_id_is_ignored()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "RevitMCP.Tests", Guid.NewGuid().ToString("N"));
+        var store = new FileRegistrationStore(root);
+        var requestedSession = 7;
+        var spoofed = TestSupport.CreateMetadata(sessionId: 99);
+        var registration = TestSupport.CreateRegistration(spoofed);
+        var sessionDirectory = Path.Combine(root, requestedSession.ToString());
+        Directory.CreateDirectory(sessionDirectory);
+        await File.WriteAllTextAsync(
+            Path.Combine(sessionDirectory, $"{registration.InstanceId}.json"),
+            System.Text.Json.JsonSerializer.Serialize(registration, ContractJson.Options));
+
+        var reads = await store.ReadSessionAsync(requestedSession, CancellationToken.None);
+        Assert.All(reads, result => Assert.True(result.IsMalformed));
+
+        var processes = new FakeProcessInspector();
+        processes.Add(spoofed.ProcessId, spoofed.ProcessStartTimeUtc);
+        var factory = new FakeBridgeClientFactory
+        {
+            Connect = _ => Task.FromResult<IRevitBridgeClient>(new FakeBridgeClient((request, _) =>
+                new BridgeHandshakeService(spoofed).HandshakeAsync(request, CancellationToken.None)))
+        };
+        var discovery = new LocalInstanceDiscovery(store, processes, factory);
+        var results = await discovery.DiscoverAsync(requestedSession, CancellationToken.None);
+
+        Assert.Empty(results);
+    }
 }
