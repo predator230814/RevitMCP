@@ -156,6 +156,48 @@ public sealed class AddinLifecycleCoordinatorTests
     }
 
     [Fact]
+    public async Task Reentrant_shutdown_while_stopping_owns_cleanup_once()
+    {
+        var events = new List<string>();
+        using var disposeEntered = new ManualResetEventSlim(false);
+        using var disposeRelease = new ManualResetEventSlim(false);
+        var coordinator = Prepare(
+            new RecordingDispatcherFactory(events),
+            new RecordingBridgeFactory(events, disposeEntered: disposeEntered, disposeRelease: disposeRelease));
+        coordinator.TryBootstrap(Runtime);
+
+        var first = Task.Run(coordinator.Shutdown);
+        Assert.True(disposeEntered.Wait(TimeSpan.FromSeconds(5)));
+        Assert.Equal(AddinLifecycleState.Stopping, coordinator.State);
+
+        coordinator.Shutdown();
+        disposeRelease.Set();
+        await first.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Equal(AddinLifecycleState.Stopped, coordinator.State);
+        Assert.Equal(1, events.Count(item => item == "dispatcher.stop"));
+        Assert.Equal(1, events.Count(item => item == "dispatcher.dispose"));
+        Assert.Equal(1, events.Count(item => item == "bridge.dispose"));
+    }
+
+    [Fact]
+    public void Bootstrap_unsubscribe_failure_is_contained_and_faults()
+    {
+        var events = new List<string>();
+        var dispatchers = new RecordingDispatcherFactory(events);
+        var coordinator = CreateCoordinator(dispatchers, new RecordingBridgeFactory(events));
+        coordinator.Prepare(new ThrowingBootstrapSubscription());
+
+        var thrown = Record.Exception(() => coordinator.TryBootstrap(Runtime));
+
+        Assert.Null(thrown);
+        Assert.Equal(AddinLifecycleState.Faulted, coordinator.State);
+        Assert.Equal(0, dispatchers.CreateCount);
+        Assert.DoesNotContain("registration.publish", events);
+        Assert.Contains("unsubscribe failed", coordinator.FailureReason);
+    }
+
+    [Fact]
     public async Task Bootstrap_cannot_become_ready_after_shutdown_begins()
     {
         var events = new List<string>();

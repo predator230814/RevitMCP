@@ -81,12 +81,11 @@ internal sealed class AddinLifecycleCoordinator
             _subscription = null;
         }
 
-        subscription?.Dispose();
-
         ILifecycleDispatcher? dispatcher = null;
         ILifecycleBridge? bridge = null;
         try
         {
+            subscription?.Dispose();
             EnsureNotStopping();
             var metadata = _metadata.Capture(InstanceId, revit);
             Metadata = metadata;
@@ -137,7 +136,7 @@ internal sealed class AddinLifecycleCoordinator
         ILifecycleBridge? bridge;
         lock (_gate)
         {
-            if (_state is AddinLifecycleState.Stopped)
+            if (_state is AddinLifecycleState.Stopping or AddinLifecycleState.Stopped)
             {
                 return;
             }

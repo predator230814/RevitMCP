@@ -27,7 +27,18 @@ public sealed class RevitMcpApplication : IExternalApplication
     internal void BeginStartup(IBootstrapScheduler scheduler)
     {
         ArgumentNullException.ThrowIfNull(scheduler);
-        _lifecycle.Prepare(scheduler.Subscribe(OnBootstrapSender));
+        IBootstrapSubscription? subscription = null;
+        try
+        {
+            subscription = scheduler.Subscribe(OnBootstrapSender);
+            _lifecycle.Prepare(subscription);
+            subscription = null;
+        }
+        catch
+        {
+            subscription?.Dispose();
+            throw;
+        }
     }
 
     public Result OnStartup(UIControlledApplication application)

@@ -33,6 +33,11 @@ internal sealed class RecordingBootstrapSubscription : IBootstrapSubscription
     public void Dispose() => DisposeCount++;
 }
 
+internal sealed class ThrowingBootstrapSubscription : IBootstrapSubscription
+{
+    public void Dispose() => throw new InvalidOperationException("unsubscribe failed");
+}
+
 internal sealed class RecordingDispatcher : ILifecycleDispatcher
 {
     private readonly List<string> _events;
@@ -78,17 +83,27 @@ internal sealed class RecordingDispatcherFactory : ILifecycleDispatcherFactory
 internal sealed class RecordingBridge : ILifecycleBridge
 {
     private readonly List<string> _events;
+    private readonly ManualResetEventSlim? _disposeEntered;
+    private readonly ManualResetEventSlim? _disposeRelease;
 
-    public RecordingBridge(List<string> events, bool hasRegistration)
+    public RecordingBridge(
+        List<string> events,
+        bool hasRegistration,
+        ManualResetEventSlim? disposeEntered = null,
+        ManualResetEventSlim? disposeRelease = null)
     {
         _events = events;
         HasRegistration = hasRegistration;
+        _disposeEntered = disposeEntered;
+        _disposeRelease = disposeRelease;
     }
 
     public bool HasRegistration { get; private set; }
 
     public ValueTask DisposeAsync()
     {
+        _disposeEntered?.Set();
+        _disposeRelease?.Wait();
         _events.Add("registration.withdraw");
         _events.Add("bridge.dispose");
         HasRegistration = false;
@@ -100,11 +115,19 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 {
     private readonly List<string> _events;
     private readonly Exception? _startError;
+    private readonly ManualResetEventSlim? _disposeEntered;
+    private readonly ManualResetEventSlim? _disposeRelease;
 
-    public RecordingBridgeFactory(List<string> events, Exception? startError = null)
+    public RecordingBridgeFactory(
+        List<string> events,
+        Exception? startError = null,
+        ManualResetEventSlim? disposeEntered = null,
+        ManualResetEventSlim? disposeRelease = null)
     {
         _events = events;
         _startError = startError;
+        _disposeEntered = disposeEntered;
+        _disposeRelease = disposeRelease;
         Published = false;
     }
 
@@ -123,7 +146,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
         Published = true;
         _events.Add("registration.publish");
-        LastBridge = new RecordingBridge(_events, hasRegistration: true);
+        LastBridge = new RecordingBridge(_events, hasRegistration: true, _disposeEntered, _disposeRelease);
         return LastBridge;
     }
 }
