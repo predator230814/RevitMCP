@@ -4,7 +4,7 @@ _Last updated: 2026-09-08_
 
 ## Phase
 
-Architecture foundation / bridge protocol and Revit execution queue design.
+Architecture foundation / Revit execution queue design.
 
 ## What exists
 
@@ -21,6 +21,8 @@ Architecture foundation / bridge protocol and Revit execution queue design.
 - Revit API references will be externally restored, version-pinned compile-time dependencies; Autodesk Revit API binaries will not be committed to the repository.
 - Capability specifications are recorded under `docs/capabilities/` before implementation.
 - CAP-0001 accepts `revit_get_context` as the first end-to-end read-only Revit capability. It returns bounded instance, active-document, active-view, and selection-count context without exposing paths or enumerating selection contents.
+- Bridge specifications are recorded under `docs/bridge/` when accepted ADRs require concrete versioned technical contracts.
+- BRIDGE-0001 defines the stable `bridge.handshake` bootstrap contract, identity validation, and integer bridge-protocol version negotiation. The handshake uses cached add-in/process metadata and must not invoke `ExternalEvent` or inspect the Revit model.
 - The initial MCP transport is `stdio`; Streamable HTTP, MCP Apps, WebMCP, Azure/cloud gateways, and other remote deployment paths remain extensions rather than core dependencies.
 - Product UI considerations are recorded separately; universal access, conversational use inside or adjacent to Revit, and reduced context switching remain open product goals rather than settled architecture.
 
@@ -30,7 +32,6 @@ Architecture foundation / bridge protocol and Revit execution queue design.
 - no MCP server implementation;
 - no solution/project skeleton committed yet;
 - no selected concrete compile-time Revit API package/provider;
-- no detailed bridge handshake schema or protocol negotiation contract;
 - no defined Revit execution queue behavior for capability requests;
 - no explicit document identity/addressing model;
 - no request scheduling/fairness policy for multiple clients beyond what is required for the first capability;
@@ -41,11 +42,11 @@ Architecture foundation / bridge protocol and Revit execution queue design.
 
 ## Current priorities
 
-1. Define the minimum bridge handshake and protocol-version contract required by CAP-0001 and ADR-0003 instance validation.
-2. Define the minimum Revit execution queue behavior required by CAP-0001.
-3. Create a small Cursor implementation task for the initial solution/project skeleton and first vertical slice.
-4. Let the implementation agent build the agreed slice and automated tests.
-5. Review the implementation independently and validate it in Revit 2025, 2026, and 2027 as appropriate.
+1. Define the minimum Revit execution queue behavior required by CAP-0001.
+2. Create a small Cursor implementation task for the initial solution/project skeleton and first vertical slice.
+3. Let the implementation agent build the agreed slice and automated tests.
+4. Review the implementation independently.
+5. Validate the vertical slice in real Revit, including supported-version coverage appropriate to the change.
 
 ## Known constraints
 
@@ -55,7 +56,9 @@ Architecture foundation / bridge protocol and Revit execution queue design.
 - The architecture should preserve viable paths for both local agents and remote/cloud agents, subject to security, information-governance, and deployment-policy requirements.
 - Local Revit IPC is intentionally separate from remote/cloud connectivity; future Azure or other hosted components must not require exposing the local Named Pipe directly.
 - Revit process IDs are diagnostics, not the stable RevitMCP client-facing identity. ADR-0003 defines `instance_id` for process-lifetime identity.
-- Instance discovery records are candidates only; a validated bridge handshake is required before an instance is considered ready.
+- Instance discovery records are candidates only; a validated BRIDGE-0001 handshake is required before an instance is considered ready.
+- The handshake is a stable bootstrap contract and must not depend on negotiated capability traffic in order to negotiate a compatible bridge protocol version.
+- The handshake must not invoke the Revit execution queue or `ExternalEvent`; it is answered from cached add-in/process metadata.
 - Revit instance identity is distinct from document identity.
 - Revit-version-specific API differences should be confined to a compatibility boundary rather than scattered throughout capability or MCP-facing code.
 - Cross-version compatibility requires all supported Revit add-in variants to compile in CI; local compilation against one Revit release is insufficient.
@@ -68,4 +71,4 @@ Architecture foundation / bridge protocol and Revit execution queue design.
 
 ## Next decision
 
-Define the minimum bridge handshake and protocol-version negotiation needed to validate ADR-0003 registrations and support the first CAP-0001 request without prematurely designing a larger RPC protocol.
+Define the minimum Revit execution queue and `ExternalEvent` behavior needed for CAP-0001, including serialization, completion, timeout/cancellation boundaries, and failure propagation, without prematurely designing write-operation concurrency or a general job scheduler.
