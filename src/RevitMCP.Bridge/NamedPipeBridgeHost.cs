@@ -64,7 +64,14 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         }
         catch
         {
-            await host.DisposeAsync().ConfigureAwait(false);
+            try
+            {
+                await host.DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+
             throw;
         }
     }
@@ -76,21 +83,48 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
             return;
         }
 
-        await _lifetime.CancelAsync().ConfigureAwait(false);
+        Exception? cleanupError = null;
+
         try
         {
-            await _acceptLoop.ConfigureAwait(false);
+            if (_lease is not null)
+            {
+                await _lease.DisposeAsync().ConfigureAwait(false);
+            }
         }
-        catch (OperationCanceledException)
+        catch (Exception exception)
         {
+            cleanupError = exception;
+        }
+        finally
+        {
+            _lease = null;
         }
 
-        if (_lease is not null)
+        try
         {
-            await _lease.DisposeAsync().ConfigureAwait(false);
+            await _lifetime.CancelAsync().ConfigureAwait(false);
+            try
+            {
+                await _acceptLoop.ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+            }
+        }
+        catch (Exception exception)
+        {
+            cleanupError ??= exception;
+        }
+        finally
+        {
+            _lifetime.Dispose();
         }
 
-        _lifetime.Dispose();
+        if (cleanupError is not null)
+        {
+            throw cleanupError;
+        }
     }
 
     private async Task AcceptLoopAsync(CancellationToken cancellationToken)
