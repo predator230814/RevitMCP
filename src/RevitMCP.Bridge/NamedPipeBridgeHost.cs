@@ -8,17 +8,19 @@ namespace RevitMCP.Bridge;
 public sealed class NamedPipeBridgeHost : IAsyncDisposable
 {
     private readonly CancellationTokenSource _lifetime = new();
-    private readonly IRevitBridgeService _service;
+    private readonly IRevitBridgeService _handshake;
+    private readonly IRevitCapabilityService? _capability;
     private readonly TaskCompletionSource _listenerReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Task _acceptLoop;
     private IRegistrationLease? _lease;
     private int _disposed;
 
-    private NamedPipeBridgeHost(BridgeInstanceMetadata metadata, string pipeName)
+    private NamedPipeBridgeHost(BridgeInstanceMetadata metadata, string pipeName, IRevitCapabilityService? capability)
     {
         Metadata = metadata;
         PipeName = pipeName;
-        _service = new BridgeHandshakeService(metadata);
+        _handshake = new BridgeHandshakeService(metadata);
+        _capability = capability;
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_lifetime.Token));
     }
 
@@ -28,33 +30,42 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
 
     public RevitInstanceRegistration? Registration => _lease?.Registration;
 
+    public static Task<NamedPipeBridgeHost> StartAsync(
+        BridgeInstanceMetadata metadata,
+        IRegistrationStore store,
+        CancellationToken cancellationToken)
+    {
+        return StartAsync(metadata, store, capability: null, cancellationToken);
+    }
+
     public static async Task<NamedPipeBridgeHost> StartAsync(
         BridgeInstanceMetadata metadata,
         IRegistrationStore store,
+        IRevitCapabilityService? capability,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         ArgumentNullException.ThrowIfNull(store);
 
-        var pipeName = BridgePipeNames.Create(metadata.WindowsSessionId, metadata.InstanceId);
-        var host = new NamedPipeBridgeHost(metadata, pipeName);
+        var advertised = WithAdvertisedProtocol(metadata, capability);
+        var pipeName = BridgePipeNames.Create(advertised.WindowsSessionId, advertised.InstanceId);
+        var host = new NamedPipeBridgeHost(advertised, pipeName, capability);
         try
         {
             await host._listenerReady.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
 
-            var selected = ProtocolVersionSelector.SelectHighestCommon(metadata.SupportedProtocolVersions, metadata.SupportedProtocolVersions)
-                ?? BridgeProtocol.CurrentVersion;
+            var advertisedVersion = advertised.SupportedProtocolVersions.Max();
 
             var registration = new RevitInstanceRegistration
             {
-                InstanceId = metadata.InstanceId,
-                ProcessId = metadata.ProcessId,
-                ProcessStartTimeUtc = metadata.ProcessStartTimeUtc,
-                WindowsSessionId = metadata.WindowsSessionId,
-                RevitVersion = metadata.RevitVersion,
-                RevitBuild = metadata.RevitBuild,
-                AddinVersion = metadata.AddinVersion,
-                BridgeProtocolVersion = selected,
+                InstanceId = advertised.InstanceId,
+                ProcessId = advertised.ProcessId,
+                ProcessStartTimeUtc = advertised.ProcessStartTimeUtc,
+                WindowsSessionId = advertised.WindowsSessionId,
+                RevitVersion = advertised.RevitVersion,
+                RevitBuild = advertised.RevitBuild,
+                AddinVersion = advertised.AddinVersion,
+                BridgeProtocolVersion = advertisedVersion,
                 PipeName = pipeName,
                 RegistrationCreatedUtc = DateTimeOffset.UtcNow
             };
@@ -127,6 +138,27 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         }
     }
 
+    internal static BridgeInstanceMetadata WithAdvertisedProtocol(
+        BridgeInstanceMetadata metadata,
+        IRevitCapabilityService? capability)
+    {
+        var versions = capability is null
+            ? BridgeProtocol.HandshakeOnlyVersions
+            : BridgeProtocol.SupportedVersions;
+
+        return new BridgeInstanceMetadata
+        {
+            InstanceId = metadata.InstanceId,
+            ProcessId = metadata.ProcessId,
+            ProcessStartTimeUtc = metadata.ProcessStartTimeUtc,
+            WindowsSessionId = metadata.WindowsSessionId,
+            RevitVersion = metadata.RevitVersion,
+            RevitBuild = metadata.RevitBuild,
+            AddinVersion = metadata.AddinVersion,
+            SupportedProtocolVersions = versions
+        };
+    }
+
     private async Task AcceptLoopAsync(CancellationToken cancellationToken)
     {
         NamedPipeServerStream? listening = null;
@@ -165,7 +197,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         JsonRpc? rpc = null;
         try
         {
-            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcHandshakeAdapter(_service));
+            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcBridgeAdapter(_handshake, _capability));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             await rpc.Completion.WaitAsync(linked.Token).ConfigureAwait(false);
         }

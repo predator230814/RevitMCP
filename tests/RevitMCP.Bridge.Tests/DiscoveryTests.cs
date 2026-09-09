@@ -68,7 +68,7 @@ public sealed class DiscoveryTests
 
         Assert.Equal(DiscoveryState.Ready, results[0].State);
         Assert.Equal(metadata.InstanceId, results[0].Handshake?.InstanceId);
-        Assert.Equal(1, results[0].Handshake?.SelectedProtocolVersion);
+        Assert.Equal(BridgeProtocol.CurrentVersion, results[0].Handshake?.SelectedProtocolVersion);
     }
 
     [Fact]

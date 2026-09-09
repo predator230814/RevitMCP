@@ -14,6 +14,8 @@ internal interface IBootstrapScheduler
 internal interface ILifecycleDispatcher : IDisposable
 {
     void Stop();
+
+    IRevitCapabilityService? CreateCapability(BridgeInstanceMetadata metadata);
 }
 
 internal interface ILifecycleBridge : IAsyncDisposable
@@ -28,7 +30,10 @@ internal interface ILifecycleDispatcherFactory
 
 internal interface ILifecycleBridgeFactory
 {
-    ILifecycleBridge Start(BridgeInstanceMetadata metadata, CancellationToken cancellationToken);
+    ILifecycleBridge Start(
+        BridgeInstanceMetadata metadata,
+        IRevitCapabilityService? capability,
+        CancellationToken cancellationToken);
 }
 
 internal interface IRuntimeMetadataSource

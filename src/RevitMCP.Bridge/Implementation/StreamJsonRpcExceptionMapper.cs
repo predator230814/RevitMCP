@@ -19,20 +19,22 @@ internal static class StreamJsonRpcExceptionMapper
         };
     }
 
-    public static BridgeException FromRemote(RemoteInvocationException exception)
+    public static BridgeException FromRemote(
+        RemoteInvocationException exception,
+        string fallbackCode = BridgeErrorCodes.HandshakeFailed)
     {
         if (TryReadError(exception.ErrorData, out var code, out var message))
         {
             return new BridgeException(code, message, exception);
         }
 
-        return new BridgeException(BridgeErrorCodes.HandshakeFailed, exception.Message, exception);
+        return new BridgeException(fallbackCode, exception.Message, exception);
     }
 
     private static bool TryReadError(object? errorData, out string code, out string message)
     {
-        code = BridgeErrorCodes.HandshakeFailed;
-        message = "The bridge handshake failed.";
+        code = string.Empty;
+        message = string.Empty;
 
         if (errorData is null)
         {

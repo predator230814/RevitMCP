@@ -1,5 +1,6 @@
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
+using RevitMCP.Addin.Capabilities;
 using RevitMCP.Addin.Execution;
 using RevitMCP.Bridge;
 
@@ -67,6 +68,12 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     public void Stop() => _dispatcher.Stop();
 
     public void Dispose() => _dispatcher.Dispose();
+
+    public IRevitCapabilityService CreateCapability(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitGetContextService(_dispatcher, metadata);
+    }
 }
 
 internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFactory
@@ -99,10 +106,13 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         _store = store ?? new FileRegistrationStore();
     }
 
-    public ILifecycleBridge Start(BridgeInstanceMetadata metadata, CancellationToken cancellationToken)
+    public ILifecycleBridge Start(
+        BridgeInstanceMetadata metadata,
+        IRevitCapabilityService? capability,
+        CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, cancellationToken)
+            .StartAsync(metadata, _store, capability, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);

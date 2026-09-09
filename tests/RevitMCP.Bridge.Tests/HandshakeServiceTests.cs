@@ -24,6 +24,42 @@ public sealed class HandshakeServiceTests
     }
 
     [Fact]
+    public async Task Current_peers_select_protocol_2()
+    {
+        var metadata = TestSupport.CreateMetadata(protocolVersions: BridgeProtocol.SupportedVersions);
+        var service = new BridgeHandshakeService(metadata);
+
+        var result = await service.HandshakeAsync(
+            new BridgeHandshakeRequest
+            {
+                ExpectedInstanceId = metadata.InstanceId,
+                SupportedProtocolVersions = BridgeProtocol.SupportedVersions
+            },
+            CancellationToken.None);
+
+        Assert.Equal(BridgeProtocol.GetContextVersion, result.SelectedProtocolVersion);
+        Assert.Equal(BridgeProtocol.SupportedVersions, result.SupportedProtocolVersions);
+    }
+
+    [Fact]
+    public async Task Current_client_falls_back_to_handshake_only_host()
+    {
+        var metadata = TestSupport.CreateMetadata(protocolVersions: BridgeProtocol.HandshakeOnlyVersions);
+        var service = new BridgeHandshakeService(metadata);
+
+        var result = await service.HandshakeAsync(
+            new BridgeHandshakeRequest
+            {
+                ExpectedInstanceId = metadata.InstanceId,
+                SupportedProtocolVersions = BridgeProtocol.SupportedVersions
+            },
+            CancellationToken.None);
+
+        Assert.Equal(BridgeProtocol.HandshakeVersion, result.SelectedProtocolVersion);
+        Assert.Equal(BridgeProtocol.HandshakeOnlyVersions, result.SupportedProtocolVersions);
+    }
+
+    [Fact]
     public async Task No_common_protocol_returns_incompatible()
     {
         var metadata = TestSupport.CreateMetadata(protocolVersions: [1]);
