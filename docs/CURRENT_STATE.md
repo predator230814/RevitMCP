@@ -60,7 +60,7 @@ CAP-0001 as a whole is **not complete**. The MCP Server/tool slice is intentiona
 - Contracts: empty request, snake_case, project/family kinds, string `element_id`, explicit null document/view, selection `count` only, no selected IDs/paths/user/cloud/property bags, round-trip, exact accepted field set.
 - Bridge: `[2,1]+[2,1] -> 2`, `[2,1]+[1] -> 1`, handshake-only host does not advertise v2, capability host advertises v2, Named Pipe `revit.get_context` with a fake service, local rejection before handshake and after v1, v2 success, structured `REVIT_EXECUTION_FAILED`, silent capability timeout, client timeout cancels the server request token, caller cancellation, existing silent handshake timeout, existing discovery/handshake/teardown tests.
 - Addin/lifecycle: existing EXEC-0001 and LIFECYCLE-0001 tests, capability created before bridge start, handshake-only capability remains nullable, no v2 advertisement without a service at the host, no extra metadata fields.
-- Solution tests: Contracts 15, Bridge 38, Addin 38, Server 2. All passed.
+- Solution tests: Contracts 15, Bridge 39, Addin 38, Server 2. All passed.
 - Addin Release builds: Revit 2025 `net8.0-windows`, Revit 2026 `net8.0-windows`, Revit 2027 `net10.0-windows`. Each output has `StreamJsonRpc.dll` and `Nerdbank.Streams.dll` present; `RevitAPI.dll` and `RevitAPIUI.dll` absent.
 
 ### Live-tested on Autodesk Revit 2026.5 (`26.5.0.55`)
