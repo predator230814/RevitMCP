@@ -4,7 +4,7 @@ _Last updated: 2026-09-08_
 
 ## Phase
 
-Architecture foundation / Revit execution queue design.
+Implementation planning / first Cursor vertical slice.
 
 ## What exists
 
@@ -23,6 +23,8 @@ Architecture foundation / Revit execution queue design.
 - CAP-0001 accepts `revit_get_context` as the first end-to-end read-only Revit capability. It returns bounded instance, active-document, active-view, and selection-count context without exposing paths or enumerating selection contents.
 - Bridge specifications are recorded under `docs/bridge/` when accepted ADRs require concrete versioned technical contracts.
 - BRIDGE-0001 defines the stable `bridge.handshake` bootstrap contract, identity validation, and integer bridge-protocol version negotiation. The handshake uses cached add-in/process metadata and must not invoke `ExternalEvent` or inspect the Revit model.
+- Execution specifications are recorded under `docs/execution/`.
+- EXEC-0001 defines one serialized FIFO Revit execution dispatcher per Revit process, backed by one long-lived `ExternalEvent`, asynchronous completion, queued cancellation, non-destructive timeout semantics, failure isolation, and explicit transaction ownership outside the dispatcher.
 - The initial MCP transport is `stdio`; Streamable HTTP, MCP Apps, WebMCP, Azure/cloud gateways, and other remote deployment paths remain extensions rather than core dependencies.
 - Product UI considerations are recorded separately; universal access, conversational use inside or adjacent to Revit, and reduced context switching remain open product goals rather than settled architecture.
 
@@ -32,9 +34,8 @@ Architecture foundation / Revit execution queue design.
 - no MCP server implementation;
 - no solution/project skeleton committed yet;
 - no selected concrete compile-time Revit API package/provider;
-- no defined Revit execution queue behavior for capability requests;
 - no explicit document identity/addressing model;
-- no request scheduling/fairness policy for multiple clients beyond what is required for the first capability;
+- no request scheduling/fairness policy for multiple clients beyond FIFO serialization required by EXEC-0001;
 - no write-locking or transaction concurrency policy;
 - no automated tests;
 - no deployment or packaging model;
@@ -42,11 +43,11 @@ Architecture foundation / Revit execution queue design.
 
 ## Current priorities
 
-1. Define the minimum Revit execution queue behavior required by CAP-0001.
-2. Create a small Cursor implementation task for the initial solution/project skeleton and first vertical slice.
-3. Let the implementation agent build the agreed slice and automated tests.
-4. Review the implementation independently.
-5. Validate the vertical slice in real Revit, including supported-version coverage appropriate to the change.
+1. Create the first small Cursor implementation task for the initial solution/project skeleton and CAP-0001 vertical slice, constrained by ADR-0001 through ADR-0004, BRIDGE-0001, and EXEC-0001.
+2. Let Cursor inspect the repository and implement only the agreed scope with automated tests where practical.
+3. Review the implementation independently for contract compliance, architecture boundaries, cross-version build behavior, and failure handling.
+4. Validate the vertical slice in real Revit, including supported-version coverage appropriate to the change.
+5. Update project state and specifications from observed implementation/validation results before expanding the capability surface.
 
 ## Known constraints
 
@@ -59,6 +60,10 @@ Architecture foundation / Revit execution queue design.
 - Instance discovery records are candidates only; a validated BRIDGE-0001 handshake is required before an instance is considered ready.
 - The handshake is a stable bootstrap contract and must not depend on negotiated capability traffic in order to negotiate a compatible bridge protocol version.
 - The handshake must not invoke the Revit execution queue or `ExternalEvent`; it is answered from cached add-in/process metadata.
+- Capability requests requiring Revit API access must be dispatched through EXEC-0001 rather than executed on bridge/background threads.
+- Revit API work is serialized FIFO in the initial dispatcher. Multiple bridge connections do not imply concurrent Revit API execution.
+- Cancellation/timeout before execution prevents queued work from starting; a caller timeout after Revit execution begins must not forcibly abort the Revit thread or an active Revit API operation.
+- The execution dispatcher must not automatically create Revit transactions. Transaction policy belongs to capability/application logic and future accepted write specifications.
 - Revit instance identity is distinct from document identity.
 - Revit-version-specific API differences should be confined to a compatibility boundary rather than scattered throughout capability or MCP-facing code.
 - Cross-version compatibility requires all supported Revit add-in variants to compile in CI; local compilation against one Revit release is insufficient.
@@ -69,6 +74,6 @@ Architecture foundation / Revit execution queue design.
 - Arbitrary AI-generated code execution inside Revit is not part of the normal production capability surface.
 - The Revit UI strategy remains open. A future control/approval surface or richer conversational experience may be considered without changing the core capability and bridge architecture.
 
-## Next decision
+## Next task
 
-Define the minimum Revit execution queue and `ExternalEvent` behavior needed for CAP-0001, including serialization, completion, timeout/cancellation boundaries, and failure propagation, without prematurely designing write-operation concurrency or a general job scheduler.
+Prepare the first Cursor implementation task. The task must be small and reviewable: Cursor reads the repository first, creates the ADR-0004 solution/project skeleton, implements only the infrastructure needed for ADR-0003 discovery, BRIDGE-0001 handshake, EXEC-0001 dispatch, and CAP-0001 `revit_get_context`, adds focused automated tests where practical, and does not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
