@@ -108,6 +108,7 @@ jobs:
       - name: Missing RevitVersion fails clearly
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           $output = & dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj --configuration Release 2>&1
           $code = $LASTEXITCODE
           $text = $output | Out-String
@@ -121,6 +122,7 @@ jobs:
       - name: Unsupported RevitVersion fails clearly
         shell: pwsh
         run: |
+          $PSNativeCommandUseErrorActionPreference = $false
           $output = & dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj -p:RevitVersion=2024 --configuration Release 2>&1
           $code = $LASTEXITCODE
           $text = $output | Out-String
