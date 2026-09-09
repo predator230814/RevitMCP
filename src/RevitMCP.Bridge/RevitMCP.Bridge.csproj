@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>RevitMCP.Bridge</RootNamespace>
+    <AssemblyName>RevitMCP.Bridge</AssemblyName>
+    <Description>Local bridge abstractions shared by the MCP server and Revit add-in. No Revit API or MCP SDK dependencies.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RevitMCP.Contracts\RevitMCP.Contracts.csproj" />
+  </ItemGroup>
+</Project>

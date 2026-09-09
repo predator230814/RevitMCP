@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>RevitMCP.Contracts</RootNamespace>
+    <AssemblyName>RevitMCP.Contracts</AssemblyName>
+    <Description>Transport-neutral RevitMCP data contracts. No Revit, MCP, or StreamJsonRpc dependencies.</Description>
+  </PropertyGroup>
+</Project>

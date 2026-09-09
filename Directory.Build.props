@@ -1,0 +1,28 @@
+<Project>
+  <!-- Optional local override, for example to set RevitVersion when building the add-in in an IDE. -->
+  <Import Project="$(MSBuildThisFileDirectory)Directory.Build.user.props"
+          Condition="Exists('$(MSBuildThisFileDirectory)Directory.Build.user.props')" />
+
+  <PropertyGroup>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Deterministic>true</Deterministic>
+    <NeutralLanguage>en-US</NeutralLanguage>
+    <IsPackable>false</IsPackable>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <!--
+    These paths must be set before Microsoft.Common.props is imported so 2025/2026
+    (same TFM) and NuGet restore artifacts do not overwrite each other.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'RevitMCP.Addin' AND ('$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027')">
+    <BaseOutputPath>bin\$(RevitVersion)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj\$(RevitVersion)\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(MSBuildProjectDirectory)\obj\$(RevitVersion)\</MSBuildProjectExtensionsPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>
+

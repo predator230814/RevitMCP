@@ -1,0 +1,59 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>RevitMCP.Addin</RootNamespace>
+    <AssemblyName>RevitMCP.Addin</AssemblyName>
+    <Description>In-process Revit capability host. Built once per supported RevitVersion.</Description>
+    <!--
+      Fallback TFM lets MSBuild evaluate the project so ValidateRevitVersion can
+      emit a clear error instead of the generic "TargetFramework not specified" failure.
+    -->
+    <TargetFramework Condition="'$(RevitVersion)' == '2025'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' == '2026'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' == '2027'">net10.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net8.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitVersion)' == '2025'">
+    <DefineConstants>$(DefineConstants);REVIT2025</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitVersion)' == '2026'">
+    <DefineConstants>$(DefineConstants);REVIT2026</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitVersion)' == '2027'">
+    <DefineConstants>$(DefineConstants);REVIT2027</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\RevitMCP.Bridge\RevitMCP.Bridge.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Remove="bin\**" />
+    <Compile Remove="obj\**" />
+    <EmbeddedResource Remove="bin\**" />
+    <EmbeddedResource Remove="obj\**" />
+    <None Remove="bin\**" />
+    <None Remove="obj\**" />
+  </ItemGroup>
+
+  <Target Name="ValidateRevitVersion" BeforeTargets="PrepareForBuild">
+    <Error
+      Text="RevitMCP.Addin requires an explicit RevitVersion MSBuild property. Supported values: 2025, 2026, 2027. Example: dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj -p:RevitVersion=2026"
+      Condition="'$(RevitVersion)' == ''" />
+    <Error
+      Text="Unsupported RevitVersion '$(RevitVersion)'. RevitMCP.Addin supports 2025, 2026, and 2027."
+      Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' != '2025' AND '$(RevitVersion)' != '2026' AND '$(RevitVersion)' != '2027'" />
+  </Target>
+
+  <Target Name="ReportRevitBuild" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
+    <Message
+      Importance="high"
+      Text="RevitMCP.Addin built for Revit $(RevitVersion) targeting $(TargetFramework) ($(DefineConstants))" />
+  </Target>
+</Project>

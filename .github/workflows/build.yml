@@ -1,0 +1,138 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  non-revit:
+    name: Contracts, Bridge, Server
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Restore
+        run: |
+          dotnet restore src/RevitMCP.Contracts/RevitMCP.Contracts.csproj
+          dotnet restore src/RevitMCP.Bridge/RevitMCP.Bridge.csproj
+          dotnet restore src/RevitMCP.Server/RevitMCP.Server.csproj
+          dotnet restore tests/RevitMCP.Contracts.Tests/RevitMCP.Contracts.Tests.csproj
+          dotnet restore tests/RevitMCP.Bridge.Tests/RevitMCP.Bridge.Tests.csproj
+          dotnet restore tests/RevitMCP.Server.Tests/RevitMCP.Server.Tests.csproj
+
+      - name: Build non-Revit projects
+        run: |
+          dotnet build src/RevitMCP.Contracts/RevitMCP.Contracts.csproj --no-restore --configuration Release
+          dotnet build src/RevitMCP.Bridge/RevitMCP.Bridge.csproj --no-restore --configuration Release
+          dotnet build src/RevitMCP.Server/RevitMCP.Server.csproj --no-restore --configuration Release
+          dotnet build tests/RevitMCP.Contracts.Tests/RevitMCP.Contracts.Tests.csproj --no-restore --configuration Release
+          dotnet build tests/RevitMCP.Bridge.Tests/RevitMCP.Bridge.Tests.csproj --no-restore --configuration Release
+          dotnet build tests/RevitMCP.Server.Tests/RevitMCP.Server.Tests.csproj --no-restore --configuration Release
+
+      - name: Test non-Revit projects
+        run: |
+          dotnet test tests/RevitMCP.Contracts.Tests/RevitMCP.Contracts.Tests.csproj --no-build --configuration Release
+          dotnet test tests/RevitMCP.Bridge.Tests/RevitMCP.Bridge.Tests.csproj --no-build --configuration Release
+          dotnet test tests/RevitMCP.Server.Tests/RevitMCP.Server.Tests.csproj --no-build --configuration Release
+
+  addin:
+    name: Addin Revit ${{ matrix.revit-version }}
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - revit-version: 2025
+            target-framework: net8.0-windows
+            define: REVIT2025
+          - revit-version: 2026
+            target-framework: net8.0-windows
+            define: REVIT2026
+          - revit-version: 2027
+            target-framework: net10.0-windows
+            define: REVIT2027
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Verify target framework and version symbol
+        shell: pwsh
+        run: |
+          $project = "src/RevitMCP.Addin/RevitMCP.Addin.csproj"
+          $tfm = (dotnet msbuild $project -nologo -getProperty:TargetFramework -p:RevitVersion=${{ matrix.revit-version }}).Trim()
+          $defines = (dotnet msbuild $project -nologo -getProperty:DefineConstants -p:RevitVersion=${{ matrix.revit-version }}).Trim()
+          if ($tfm -ne "${{ matrix.target-framework }}") {
+            throw "Expected TargetFramework ${{ matrix.target-framework }} for Revit ${{ matrix.revit-version }}, got '$tfm'."
+          }
+          if ($defines -notmatch "(^|;)${{ matrix.define }}($|;)") {
+            throw "Expected DefineConstants to include ${{ matrix.define }} for Revit ${{ matrix.revit-version }}, got '$defines'."
+          }
+          Write-Host "Revit ${{ matrix.revit-version }} -> $tfm with $defines"
+
+      - name: Build add-in
+        run: dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj -p:RevitVersion=${{ matrix.revit-version }} --configuration Release
+
+      - name: Verify version-specific output
+        shell: pwsh
+        run: |
+          $dll = "src/RevitMCP.Addin/bin/${{ matrix.revit-version }}/Release/${{ matrix.target-framework }}/RevitMCP.Addin.dll"
+          if (-not (Test-Path $dll)) {
+            throw "Expected add-in output at $dll"
+          }
+          Write-Host "Found $dll"
+
+  addin-version-validation:
+    name: Addin RevitVersion validation
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Missing RevitVersion fails clearly
+        shell: cmd
+        run: |
+          dotnet build src\RevitMCP.Addin\RevitMCP.Addin.csproj --configuration Release > missing.log 2>&1
+          set BUILD_EXIT=%ERRORLEVEL%
+          type missing.log
+          if %BUILD_EXIT% EQU 0 (
+            echo Expected the add-in build to fail when RevitVersion is missing.
+            exit /b 1
+          )
+          findstr /C:"RevitMCP.Addin requires an explicit RevitVersion" missing.log
+          if errorlevel 1 (
+            echo Missing expected error for an unset RevitVersion.
+            exit /b 1
+          )
+
+      - name: Unsupported RevitVersion fails clearly
+        shell: cmd
+        run: |
+          dotnet build src\RevitMCP.Addin\RevitMCP.Addin.csproj -p:RevitVersion=2024 --configuration Release > unsupported.log 2>&1
+          set BUILD_EXIT=%ERRORLEVEL%
+          type unsupported.log
+          if %BUILD_EXIT% EQU 0 (
+            echo Expected the add-in build to fail when RevitVersion is unsupported.
+            exit /b 1
+          )
+          findstr /C:"Unsupported RevitVersion '2024'" unsupported.log
+          if errorlevel 1 (
+            echo Missing expected error for an unsupported RevitVersion.
+            exit /b 1
+          )
