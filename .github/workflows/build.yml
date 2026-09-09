@@ -91,9 +91,18 @@ jobs:
         shell: pwsh
         run: |
           $outputDir = "src/RevitMCP.Addin/bin/${{ matrix.revit-version }}/Release/${{ matrix.target-framework }}"
-          $dll = Join-Path $outputDir "RevitMCP.Addin.dll"
-          if (-not (Test-Path $dll)) {
-            throw "Expected add-in output at $dll"
+          $required = @(
+            "RevitMCP.Addin.dll",
+            "RevitMCP.Bridge.dll",
+            "RevitMCP.Contracts.dll",
+            "StreamJsonRpc.dll",
+            "Nerdbank.Streams.dll"
+          )
+          foreach ($name in $required) {
+            $path = Join-Path $outputDir $name
+            if (-not (Test-Path $path)) {
+              throw "Expected runtime payload $path"
+            }
           }
           foreach ($name in @("RevitAPI.dll", "RevitAPIUI.dll")) {
             $forbidden = Join-Path $outputDir $name
@@ -101,7 +110,7 @@ jobs:
               throw "$name must not be copied into add-in output at $outputDir"
             }
           }
-          Write-Host "Found $dll without Autodesk Revit API runtime assemblies"
+          Write-Host "Found required bridge runtime payload in $outputDir without Autodesk Revit API runtime assemblies"
 
   addin-version-validation:
     name: Addin RevitVersion validation
