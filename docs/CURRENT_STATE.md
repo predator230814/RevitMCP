@@ -1,6 +1,6 @@
 # RevitMCP Current State
 
-_Last updated: 2026-09-08_
+_Last updated: 2026-09-09_
 
 ## Phase
 
@@ -43,10 +43,10 @@ Implementation started / ADR-0004 solution skeleton.
 
 ## Current priorities
 
-1. Implement the first runtime vertical slice on the ADR-0004 skeleton: ADR-0003 discovery, BRIDGE-0001 handshake, EXEC-0001 dispatch, and CAP-0001 `revit_get_context`.
-2. Keep that slice small and reviewable, with automated tests where practical, and do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
+1. Implement the next small runtime slice on the ADR-0004 skeleton: ADR-0003 local registration/discovery plus the minimum BRIDGE-0001 handshake infrastructure needed to validate discovered instances.
+2. Keep EXEC-0001 dispatch and CAP-0001 `revit_get_context` as subsequent tasks. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
 3. Review the implementation independently for contract compliance, architecture boundaries, cross-version build behavior, and failure handling.
-4. Validate the vertical slice in real Revit, including supported-version coverage appropriate to the change.
+4. Validate the implemented slice in real Revit, including supported-version coverage appropriate to the change.
 5. Update project state and specifications from observed implementation/validation results before expanding the capability surface.
 
 ## Known constraints
@@ -76,4 +76,4 @@ Implementation started / ADR-0004 solution skeleton.
 
 ## Next task
 
-Implement the first runtime vertical slice on top of the ADR-0004 skeleton: only the infrastructure needed for ADR-0003 discovery, BRIDGE-0001 handshake, EXEC-0001 dispatch, and CAP-0001 `revit_get_context`, with focused automated tests where practical. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
+Implement the next small runtime slice on the ADR-0004 skeleton: ADR-0003 local registration/discovery plus the minimum BRIDGE-0001 handshake infrastructure needed to validate discovered instances, with focused automated tests where practical. Keep EXEC-0001 and CAP-0001 as subsequent tasks. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
