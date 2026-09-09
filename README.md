@@ -22,4 +22,7 @@ dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj -p:RevitVersion=2027
 dotnet test tests/RevitMCP.Contracts.Tests/RevitMCP.Contracts.Tests.csproj
 dotnet test tests/RevitMCP.Bridge.Tests/RevitMCP.Bridge.Tests.csproj
 dotnet test tests/RevitMCP.Server.Tests/RevitMCP.Server.Tests.csproj
+dotnet test tests/RevitMCP.Addin.Tests/RevitMCP.Addin.Tests.csproj
 ```
+
+`RevitMCP.Addin.Tests` compiles the add-in with `RevitVersion=2026` by default and does not require Autodesk Revit to be installed. The Nice3point Revit API packages are version-pinned compile-time references and must not appear as `RevitAPI.dll` / `RevitAPIUI.dll` in add-in output.

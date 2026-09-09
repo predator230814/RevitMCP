@@ -34,6 +34,19 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" VersionOverride="$(RevitApiPackageVersion)">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" VersionOverride="$(RevitApiPackageVersion)">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Remove="bin\**" />
     <Compile Remove="obj\**" />
     <EmbeddedResource Remove="bin\**" />
@@ -51,9 +64,25 @@
       Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' != '2025' AND '$(RevitVersion)' != '2026' AND '$(RevitVersion)' != '2027'" />
   </Target>
 
+  <Target Name="RemoveRevitApiFromCopyLocal" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'RevitAPI' OR '%(Filename)' == 'RevitAPIUI'" />
+      <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems)" Condition="'%(Filename)' == 'RevitAPI' OR '%(Filename)' == 'RevitAPIUI'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="AssertNoRevitApiInOutput" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
+    <Error
+      Text="RevitAPI.dll must not be copied into RevitMCP.Addin output. The Nice3point packages are compile-time references only."
+      Condition="Exists('$(OutputPath)RevitAPI.dll')" />
+    <Error
+      Text="RevitAPIUI.dll must not be copied into RevitMCP.Addin output. The Nice3point packages are compile-time references only."
+      Condition="Exists('$(OutputPath)RevitAPIUI.dll')" />
+  </Target>
+
   <Target Name="ReportRevitBuild" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
     <Message
       Importance="high"
-      Text="RevitMCP.Addin built for Revit $(RevitVersion) targeting $(TargetFramework) ($(DefineConstants))" />
+      Text="RevitMCP.Addin built for Revit $(RevitVersion) targeting $(TargetFramework) ($(DefineConstants)) using Nice3point Revit API $(RevitApiPackageVersion)" />
   </Target>
 </Project>

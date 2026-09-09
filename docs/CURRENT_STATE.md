@@ -4,7 +4,7 @@ _Last updated: 2026-09-09_
 
 ## Phase
 
-Implementation started / local discovery and handshake infrastructure.
+Implementation started / execution dispatcher infrastructure.
 
 ## What exists
 
@@ -17,29 +17,31 @@ Implementation started / local discovery and handshake infrastructure.
 - ADR-0002 accepts duplex Windows Named Pipes with JSON-RPC 2.0 for the local bridge, using Microsoft StreamJsonRpc as the initial implementation behind a RevitMCP-owned abstraction.
 - ADR-0003 accepts opaque per-process Revit `instance_id` values, ephemeral LocalAppData registration records, bridge validation, and deterministic multi-instance selection behavior.
 - ADR-0004 accepts a small SDK-style .NET solution with `Contracts`, `Bridge`, `Server`, and one multi-version `Addin` project.
-- The ADR-0004 solution/project skeleton is committed: `RevitMCP.sln`, `global.json`, centralized build/package props, `src/RevitMCP.Contracts`, `src/RevitMCP.Bridge`, `src/RevitMCP.Server`, one multi-version `src/RevitMCP.Addin` project, and corresponding non-Revit test projects.
+- The ADR-0004 solution/project skeleton is committed: `RevitMCP.sln`, `global.json`, centralized build/package props, `src/RevitMCP.Contracts`, `src/RevitMCP.Bridge`, `src/RevitMCP.Server`, one multi-version `src/RevitMCP.Addin` project, and test projects for Contracts, Bridge, Server, and Addin.
 - Revit 2025, 2026, and 2027 are built from the same add-in project using an explicit `RevitVersion` build property; the initial target matrix is `net8.0-windows` for Revit 2025/2026 and `net10.0-windows` for Revit 2027.
 - GitHub Actions compiles the non-Revit projects and the 2025/2026/2027 add-in matrix.
 - `RevitMCP.Contracts` defines transport-neutral registration, handshake, discovery-state, and bridge error contracts.
 - `RevitMCP.Bridge` implements user-local atomic instance registration, current-user Named Pipe hosting, `bridge.handshake` over StreamJsonRpc, and discovery that classifies candidates as `Ready`, `Unavailable`, `Incompatible`, or `Stale`.
 - StreamJsonRpc `2.25.29` is used only inside `RevitMCP.Bridge`, behind RevitMCP-owned abstractions.
-- Revit API references will be externally restored, version-pinned compile-time dependencies; Autodesk Revit API binaries will not be committed to the repository.
+- Autodesk Revit API binaries are not committed to the repository; builds restore version-pinned Nice3point compile-time references instead.
 - Capability specifications are recorded under `docs/capabilities/` before implementation.
 - CAP-0001 accepts `revit_get_context` as the first end-to-end read-only Revit capability. It returns bounded instance, active-document, active-view, and selection-count context without exposing paths or enumerating selection contents.
 - Bridge specifications are recorded under `docs/bridge/` when accepted ADRs require concrete versioned technical contracts.
 - BRIDGE-0001 defines the stable `bridge.handshake` bootstrap contract, identity validation, and integer bridge-protocol version negotiation. The handshake uses cached add-in/process metadata and must not invoke `ExternalEvent` or inspect the Revit model.
 - Execution specifications are recorded under `docs/execution/`.
 - EXEC-0001 defines one serialized FIFO Revit execution dispatcher per Revit process, backed by one long-lived `ExternalEvent`, asynchronous completion, queued cancellation, non-destructive timeout semantics, failure isolation, and explicit transaction ownership outside the dispatcher.
+- The EXEC-0001 queue/state machine is implemented in `src/RevitMCP.Addin/Execution/`. `RevitExecutionQueue<TContext>` is independently testable through `IRevitEventSignal`. `RevitExecutionDispatcher` owns one long-lived `ExternalEvent` / `IExternalEventHandler` pair and is not yet created from `IExternalApplication` startup.
+- Compile-time Revit API references are the version-pinned Nice3point packages: `Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI` `2025.4.60` (Revit 2025), `2026.4.10` (Revit 2026), and `2027.2.0` (Revit 2027). Those assemblies are compile-time only and must not be copied into add-in output.
+- `tests/RevitMCP.Addin.Tests` covers queue FIFO, scheduling, cancellation, failure isolation, shutdown, and output-assembly assertions without launching Revit.
 - The initial MCP transport is `stdio`; Streamable HTTP, MCP Apps, WebMCP, Azure/cloud gateways, and other remote deployment paths remain extensions rather than core dependencies.
 - Product UI considerations are recorded separately; universal access, conversational use inside or adjacent to Revit, and reduced context switching remain open product goals rather than settled architecture.
 
 ## What does not exist yet
 
-- no Revit `IExternalApplication` or Autodesk Revit API integration;
-- no EXEC-0001 execution dispatcher or `ExternalEvent` integration;
+- no Revit `IExternalApplication` startup or shutdown lifecycle wiring;
+- no real-Revit validation of ExternalEvent raise/execute behavior;
 - no CAP-0001 `revit_get_context` implementation;
 - no MCP server runtime, MCP tools, or `revit_list_instances` MCP exposure;
-- no selected concrete compile-time Revit API package/provider;
 - no explicit document identity/addressing model;
 - no request scheduling/fairness policy for multiple clients beyond FIFO serialization required by EXEC-0001;
 - no write-locking or transaction concurrency policy;
@@ -48,10 +50,10 @@ Implementation started / local discovery and handshake infrastructure.
 
 ## Current priorities
 
-1. Implement EXEC-0001 execution dispatch on top of the discovery/handshake infrastructure.
-2. Keep CAP-0001 `revit_get_context` as the following task. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
+1. Keep CAP-0001 `revit_get_context` as the next capability task. Real add-in startup must create the EXEC-0001 dispatcher before publishing a ready discovery registration; that lifecycle wiring is still unimplemented.
+2. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
 3. Review the implementation independently for contract compliance, architecture boundaries, cross-version build behavior, and failure handling.
-4. Validate the implemented slice in real Revit, including supported-version coverage appropriate to the change.
+4. Validate the implemented slice in real Revit, including supported-version coverage appropriate to the change. Passing compile and queue unit tests is not Revit runtime validation.
 5. Update project state and specifications from observed implementation/validation results before expanding the capability surface.
 
 ## Known constraints
@@ -81,4 +83,4 @@ Implementation started / local discovery and handshake infrastructure.
 
 ## Next task
 
-Implement EXEC-0001 execution dispatch, with focused automated tests where practical. Keep CAP-0001 `revit_get_context` as the subsequent task. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
+Implement CAP-0001 `revit_get_context` after the add-in can create the EXEC-0001 dispatcher during real Revit startup. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
