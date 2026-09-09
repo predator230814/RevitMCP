@@ -106,29 +106,33 @@ jobs:
           global-json-file: global.json
 
       - name: Missing RevitVersion fails clearly
-        shell: pwsh
+        shell: cmd
         run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          $output = & dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj --configuration Release 2>&1
-          $code = $LASTEXITCODE
-          $text = $output | Out-String
-          if ($code -eq 0) {
-            throw "Expected the add-in build to fail when RevitVersion is missing.`n$text"
-          }
-          if ($text -notmatch "RevitMCP.Addin requires an explicit RevitVersion") {
-            throw "Missing expected error for an unset RevitVersion.`n$text"
-          }
+          dotnet build src\RevitMCP.Addin\RevitMCP.Addin.csproj --configuration Release > missing.log 2>&1
+          set BUILD_EXIT=%ERRORLEVEL%
+          type missing.log
+          if %BUILD_EXIT% EQU 0 (
+            echo Expected the add-in build to fail when RevitVersion is missing.
+            exit /b 1
+          )
+          findstr /C:"RevitMCP.Addin requires an explicit RevitVersion" missing.log
+          if errorlevel 1 (
+            echo Missing expected error for an unset RevitVersion.
+            exit /b 1
+          )
 
       - name: Unsupported RevitVersion fails clearly
-        shell: pwsh
+        shell: cmd
         run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          $output = & dotnet build src/RevitMCP.Addin/RevitMCP.Addin.csproj -p:RevitVersion=2024 --configuration Release 2>&1
-          $code = $LASTEXITCODE
-          $text = $output | Out-String
-          if ($code -eq 0) {
-            throw "Expected the add-in build to fail when RevitVersion is unsupported.`n$text"
-          }
-          if ($text -notmatch "Unsupported RevitVersion '2024'") {
-            throw "Missing expected error for an unsupported RevitVersion.`n$text"
-          }
+          dotnet build src\RevitMCP.Addin\RevitMCP.Addin.csproj -p:RevitVersion=2024 --configuration Release > unsupported.log 2>&1
+          set BUILD_EXIT=%ERRORLEVEL%
+          type unsupported.log
+          if %BUILD_EXIT% EQU 0 (
+            echo Expected the add-in build to fail when RevitVersion is unsupported.
+            exit /b 1
+          )
+          findstr /C:"Unsupported RevitVersion '2024'" unsupported.log
+          if errorlevel 1 (
+            echo Missing expected error for an unsupported RevitVersion.
+            exit /b 1
+          )
