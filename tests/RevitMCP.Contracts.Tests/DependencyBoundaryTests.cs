@@ -17,6 +17,8 @@ public sealed class DependencyBoundaryTests
     public void Contracts_has_no_revit_mcp_or_streamjsonrpc_references()
     {
         AssertNoForbiddenReferences(typeof(ContractsInfo).Assembly, ForbiddenNames);
+        AssertNoForbiddenReferences(typeof(RevitInstanceRegistration).Assembly, ForbiddenNames);
+        AssertNoForbiddenReferences(typeof(BridgeHandshakeRequest).Assembly, ForbiddenNames);
     }
 
     internal static void AssertNoForbiddenReferences(Assembly assembly, IReadOnlyList<string> forbiddenNames)

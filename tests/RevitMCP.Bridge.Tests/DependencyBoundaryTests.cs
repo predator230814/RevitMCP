@@ -8,7 +8,8 @@ public sealed class DependencyBoundaryTests
     [
         "RevitAPI",
         "RevitAPIUI",
-        "ModelContextProtocol"
+        "ModelContextProtocol",
+        "Autodesk"
     ];
 
     [Fact]
