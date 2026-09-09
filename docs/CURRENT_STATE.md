@@ -4,7 +4,7 @@ _Last updated: 2026-09-09_
 
 ## Phase
 
-Implementation started / execution dispatcher infrastructure.
+Implementation started / add-in lifecycle wiring.
 
 ## What exists
 
@@ -29,17 +29,18 @@ Implementation started / execution dispatcher infrastructure.
 - Bridge specifications are recorded under `docs/bridge/` when accepted ADRs require concrete versioned technical contracts.
 - BRIDGE-0001 defines the stable `bridge.handshake` bootstrap contract, identity validation, and integer bridge-protocol version negotiation. The handshake uses cached add-in/process metadata and must not invoke `ExternalEvent` or inspect the Revit model.
 - Execution specifications are recorded under `docs/execution/`.
+- Lifecycle specifications are recorded under `docs/lifecycle/`. LIFECYCLE-0001 is accepted.
 - EXEC-0001 defines one serialized FIFO Revit execution dispatcher per Revit process, backed by one long-lived `ExternalEvent`, asynchronous completion, queued cancellation, non-destructive timeout semantics, failure isolation, and explicit transaction ownership outside the dispatcher.
-- The EXEC-0001 queue/state machine is implemented in `src/RevitMCP.Addin/Execution/`. `RevitExecutionQueue<TContext>` is independently testable through `IRevitEventSignal`. `RevitExecutionDispatcher` owns one long-lived `ExternalEvent` / `IExternalEventHandler` pair and is not yet created from `IExternalApplication` startup.
+- The EXEC-0001 queue/state machine is implemented in `src/RevitMCP.Addin/Execution/`. `RevitExecutionQueue<TContext>` is independently testable through `IRevitEventSignal`. `RevitExecutionDispatcher` owns one long-lived `ExternalEvent` / `IExternalEventHandler` pair.
+- LIFECYCLE-0001 is accepted. `RevitMcpApplication` implements `IExternalApplication`, generates one process-lifetime `instance_id` in `OnStartup`, and bootstraps on the first eligible `Idling` callback: runtime metadata, EXEC-0001 dispatcher, Named Pipe listener ready, then ADR-0003 registration. Registration-first bridge teardown is implemented. Real-Revit lifecycle validation is still pending.
 - Compile-time Revit API references are the version-pinned Nice3point packages: `Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI` `2025.4.60` (Revit 2025), `2026.4.10` (Revit 2026), and `2027.2.0` (Revit 2027). Those assemblies are compile-time only and must not be copied into add-in output.
-- `tests/RevitMCP.Addin.Tests` covers queue FIFO, scheduling, cancellation, failure isolation, shutdown, and output-assembly assertions without launching Revit.
+- `tests/RevitMCP.Addin.Tests` covers EXEC-0001 queue behavior and LIFECYCLE-0001 coordination without launching Revit.
 - The initial MCP transport is `stdio`; Streamable HTTP, MCP Apps, WebMCP, Azure/cloud gateways, and other remote deployment paths remain extensions rather than core dependencies.
 - Product UI considerations are recorded separately; universal access, conversational use inside or adjacent to Revit, and reduced context switching remain open product goals rather than settled architecture.
 
 ## What does not exist yet
 
-- no accepted design or wiring for the synchronous Revit lifecycle to async bridge/registration boundary;
-- no Revit `IExternalApplication` startup or shutdown lifecycle wiring;
+- no real-Revit validation of first-Idling bootstrap, handshake against a live add-in, or shutdown registration withdrawal;
 - no real-Revit validation of ExternalEvent raise/execute behavior;
 - no CAP-0001 `revit_get_context` implementation;
 - no MCP server runtime, MCP tools, or `revit_list_instances` MCP exposure;
@@ -51,11 +52,10 @@ Implementation started / execution dispatcher infrastructure.
 
 ## Current priorities
 
-1. Decide the minimal add-in lifecycle design/wiring: create the EXEC-0001 dispatcher before publishing a ready discovery registration, define safe startup/shutdown ordering, and start the async bridge from the synchronous Revit lifecycle. This boundary is a separate Tech Lead decision and is not implemented in the dispatcher slice.
-2. Keep CAP-0001 `revit_get_context` after that lifecycle boundary is decided. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
-3. Review the implementation independently for contract compliance, architecture boundaries, cross-version build behavior, and failure handling.
-4. Validate the implemented slice in real Revit, including supported-version coverage appropriate to the change. Passing compile and queue unit tests is not Revit runtime validation.
-5. Update project state and specifications from observed implementation/validation results before expanding the capability surface.
+1. Tech Lead review of the LIFECYCLE-0001 implementation.
+2. Real-Revit validation of lifecycle/handshake behavior. Passing compile and unit tests is not Revit runtime validation.
+3. Only then implement CAP-0001 `revit_get_context`. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
+4. Update project state and specifications from observed implementation/validation results before expanding the capability surface.
 
 ## Known constraints
 
@@ -84,4 +84,4 @@ Implementation started / execution dispatcher infrastructure.
 
 ## Next task
 
-Decide the minimal add-in lifecycle design/wiring (dispatcher creation before ready registration, startup/shutdown ordering, and async bridge startup from the Revit lifecycle). Keep CAP-0001 after that decision. Do not implement that lifecycle wiring or CAP-0001 in the dispatcher slice, and do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
+Review LIFECYCLE-0001, then validate bootstrap/handshake/shutdown in real Revit. Implement CAP-0001 only after that validation. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
