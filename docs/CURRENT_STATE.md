@@ -4,7 +4,7 @@ _Last updated: 2026-09-09_
 
 ## Phase
 
-Implementation started / ADR-0004 solution skeleton.
+Implementation started / local discovery and handshake infrastructure.
 
 ## What exists
 
@@ -20,6 +20,9 @@ Implementation started / ADR-0004 solution skeleton.
 - The ADR-0004 solution/project skeleton is committed: `RevitMCP.sln`, `global.json`, centralized build/package props, `src/RevitMCP.Contracts`, `src/RevitMCP.Bridge`, `src/RevitMCP.Server`, one multi-version `src/RevitMCP.Addin` project, and corresponding non-Revit test projects.
 - Revit 2025, 2026, and 2027 are built from the same add-in project using an explicit `RevitVersion` build property; the initial target matrix is `net8.0-windows` for Revit 2025/2026 and `net10.0-windows` for Revit 2027.
 - GitHub Actions compiles the non-Revit projects and the 2025/2026/2027 add-in matrix.
+- `RevitMCP.Contracts` defines transport-neutral registration, handshake, discovery-state, and bridge error contracts.
+- `RevitMCP.Bridge` implements user-local atomic instance registration, current-user Named Pipe hosting, `bridge.handshake` over StreamJsonRpc, and discovery that classifies candidates as `Ready`, `Unavailable`, `Incompatible`, or `Stale`.
+- StreamJsonRpc `2.25.29` is used only inside `RevitMCP.Bridge`, behind RevitMCP-owned abstractions.
 - Revit API references will be externally restored, version-pinned compile-time dependencies; Autodesk Revit API binaries will not be committed to the repository.
 - Capability specifications are recorded under `docs/capabilities/` before implementation.
 - CAP-0001 accepts `revit_get_context` as the first end-to-end read-only Revit capability. It returns bounded instance, active-document, active-view, and selection-count context without exposing paths or enumerating selection contents.
@@ -32,8 +35,10 @@ Implementation started / ADR-0004 solution skeleton.
 
 ## What does not exist yet
 
-- no Revit add-in runtime implementation;
-- no MCP server runtime implementation;
+- no Revit `IExternalApplication` or Autodesk Revit API integration;
+- no EXEC-0001 execution dispatcher or `ExternalEvent` integration;
+- no CAP-0001 `revit_get_context` implementation;
+- no MCP server runtime, MCP tools, or `revit_list_instances` MCP exposure;
 - no selected concrete compile-time Revit API package/provider;
 - no explicit document identity/addressing model;
 - no request scheduling/fairness policy for multiple clients beyond FIFO serialization required by EXEC-0001;
@@ -43,8 +48,8 @@ Implementation started / ADR-0004 solution skeleton.
 
 ## Current priorities
 
-1. Implement the next small runtime slice on the ADR-0004 skeleton: ADR-0003 local registration/discovery plus the minimum BRIDGE-0001 handshake infrastructure needed to validate discovered instances.
-2. Keep EXEC-0001 dispatch and CAP-0001 `revit_get_context` as subsequent tasks. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
+1. Implement EXEC-0001 execution dispatch on top of the discovery/handshake infrastructure.
+2. Keep CAP-0001 `revit_get_context` as the following task. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
 3. Review the implementation independently for contract compliance, architecture boundaries, cross-version build behavior, and failure handling.
 4. Validate the implemented slice in real Revit, including supported-version coverage appropriate to the change.
 5. Update project state and specifications from observed implementation/validation results before expanding the capability surface.
@@ -76,4 +81,4 @@ Implementation started / ADR-0004 solution skeleton.
 
 ## Next task
 
-Implement the next small runtime slice on the ADR-0004 skeleton: ADR-0003 local registration/discovery plus the minimum BRIDGE-0001 handshake infrastructure needed to validate discovered instances, with focused automated tests where practical. Keep EXEC-0001 and CAP-0001 as subsequent tasks. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
+Implement EXEC-0001 execution dispatch, with focused automated tests where practical. Keep CAP-0001 `revit_get_context` as the subsequent task. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
