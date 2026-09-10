@@ -54,6 +54,15 @@ public sealed class GetContextRoutingTests
     }
 
     [Fact]
+    public void Get_context_eligibility_is_an_explicit_protocol_set()
+    {
+        Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v2", "pipe-v2", protocolVersion: 2)));
+        Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v3", "pipe-v3", protocolVersion: 3)));
+        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v1", "pipe-v1", protocolVersion: 1)));
+        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v4", "pipe-v4", protocolVersion: 4)));
+    }
+
+    [Fact]
     public void Ambiguity_candidates_are_sorted_by_opaque_instance_id()
     {
         var discovered = new[]

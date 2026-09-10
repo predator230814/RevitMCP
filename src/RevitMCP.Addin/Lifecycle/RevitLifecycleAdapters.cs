@@ -2,6 +2,7 @@ using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
 using RevitMCP.Addin.Capabilities;
 using RevitMCP.Addin.Execution;
+using RevitMCP.Addin.Identity;
 using RevitMCP.Bridge;
 
 namespace RevitMCP.Addin.Lifecycle;
@@ -58,28 +59,49 @@ internal sealed class RevitIdlingSubscription : IBootstrapSubscription
 internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
 {
     private readonly RevitExecutionDispatcher _dispatcher;
+    private readonly OpenDocumentIdentityService _identity;
+    private readonly IDisposable? _closeCleanup;
 
-    public RevitExecutionDispatcherLifetime(RevitExecutionDispatcher dispatcher)
+    public RevitExecutionDispatcherLifetime(
+        RevitExecutionDispatcher dispatcher,
+        IDocumentCloseEventSource? closeEvents = null)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         _dispatcher = dispatcher;
+        _identity = new OpenDocumentIdentityService();
+        if (closeEvents is not null)
+        {
+            _closeCleanup = closeEvents.Subscribe(new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(_identity.Forget));
+        }
     }
 
     public void Stop() => _dispatcher.Stop();
 
-    public void Dispose() => _dispatcher.Dispose();
+    public void Dispose()
+    {
+        _closeCleanup?.Dispose();
+        _dispatcher.Dispose();
+    }
 
     public IRevitCapabilityService CreateCapability(BridgeInstanceMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         return new RevitGetContextService(_dispatcher, metadata);
     }
+
+    public IRevitQueryElementsService CreateQuery(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitQueryElementsService(_dispatcher, metadata, _identity);
+    }
 }
 
 internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFactory
 {
+    public IDocumentCloseEventSource? CloseEvents { get; set; }
+
     public ILifecycleDispatcher Create() =>
-        new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create());
+        new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents);
 }
 
 internal sealed class NamedPipeLifecycleBridge : ILifecycleBridge
@@ -109,10 +131,11 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
+        IRevitQueryElementsService? query,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);

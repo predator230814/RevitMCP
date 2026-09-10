@@ -20,7 +20,8 @@ internal static class InstanceTargetResolver
     {
         return instance.State == DiscoveryState.Ready
             && instance.Registration is not null
-            && instance.Handshake is { SelectedProtocolVersion: BridgeProtocol.GetContextVersion };
+            && instance.Handshake is { } handshake
+            && BridgeProtocol.SupportsGetContext(handshake.SelectedProtocolVersion);
     }
 
     private static TargetResolution ResolveUnspecified(IReadOnlyList<DiscoveredInstance> discovered)

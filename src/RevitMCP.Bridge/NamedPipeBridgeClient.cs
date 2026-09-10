@@ -105,52 +105,37 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
         }
 
-        EnsureCapabilityAllowed();
+        return await InvokeCapabilityAsync<GetContextResult>(
+                "revit.get_context",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureGetContextAllowed,
+                "The Revit context request timed out.",
+                "The Revit context could not be collected.")
+            .ConfigureAwait(false);
+    }
 
-        // Local WaitAsync bounds the caller. StreamJsonRpc 2.25.29 has no
-        // OutboundRequestTimeout; cancelling the invoke token tells the remote
-        // EXEC queue to skip still-queued work, but we must not await the
-        // cancellation acknowledgement or a silent peer can hang the caller.
-        using var invokeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var invoke = _rpc.InvokeWithCancellationAsync<GetContextResult>(
-            "revit.get_context",
-            [request],
-            invokeCts.Token);
-        try
+    public async Task<QueryElementsResult> QueryElementsAsync(
+        QueryElementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
         {
-            return await invoke.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
         }
-        catch (TimeoutException exception)
-        {
-            CancelUnusableCapabilityRequest(invokeCts, invoke);
-            throw new BridgeException(CapabilityErrorCodes.ExecutionTimeout, "The Revit context request timed out.", exception);
-        }
-        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
-        {
-            CancelUnusableCapabilityRequest(invokeCts, invoke);
-            throw new BridgeException(CapabilityErrorCodes.ExecutionTimeout, "The Revit context request timed out.", exception);
-        }
-        catch (OperationCanceledException)
-        {
-            ObserveIncomplete(invoke);
-            throw;
-        }
-        catch (RemoteInvocationException exception)
-        {
-            throw StreamJsonRpcExceptionMapper.FromRemote(exception, CapabilityErrorCodes.ExecutionFailed);
-        }
-        catch (ConnectionLostException exception)
-        {
-            throw new BridgeException(CapabilityErrorCodes.ExecutionFailed, "The bridge connection was lost during the context request.", exception);
-        }
-        catch (BridgeException)
-        {
-            throw;
-        }
-        catch (IOException exception)
-        {
-            throw new BridgeException(CapabilityErrorCodes.ExecutionFailed, "The Revit context could not be collected.", exception);
-        }
+
+        return await InvokeCapabilityAsync<QueryElementsResult>(
+                "revit.query_elements",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureQueryElementsAllowed,
+                "The Revit query request timed out.",
+                "The Revit query could not be executed.")
+            .ConfigureAwait(false);
     }
 
     public async ValueTask DisposeAsync()
@@ -166,7 +151,83 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         ObserveIncomplete(invoke);
     }
 
-    private void EnsureCapabilityAllowed()
+    private async Task<T> InvokeCapabilityAsync<T>(
+        string method,
+        object request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken,
+        Action ensureAllowed,
+        string timeoutMessage,
+        string failedMessage)
+    {
+        ensureAllowed();
+
+        // Local WaitAsync bounds the caller. StreamJsonRpc 2.25.29 has no
+        // OutboundRequestTimeout; cancelling the invoke token tells the remote
+        // EXEC queue to skip still-queued work, but we must not await the
+        // cancellation acknowledgement or a silent peer can hang the caller.
+        using var invokeCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        var invoke = _rpc.InvokeWithCancellationAsync<T>(method, [request], invokeCts.Token);
+        try
+        {
+            return await invoke.WaitAsync(timeout, cancellationToken).ConfigureAwait(false);
+        }
+        catch (TimeoutException exception)
+        {
+            CancelUnusableCapabilityRequest(invokeCts, invoke);
+            throw new BridgeException(CapabilityErrorCodes.ExecutionTimeout, timeoutMessage, exception);
+        }
+        catch (OperationCanceledException exception) when (!cancellationToken.IsCancellationRequested)
+        {
+            CancelUnusableCapabilityRequest(invokeCts, invoke);
+            throw new BridgeException(CapabilityErrorCodes.ExecutionTimeout, timeoutMessage, exception);
+        }
+        catch (OperationCanceledException)
+        {
+            ObserveIncomplete(invoke);
+            throw;
+        }
+        catch (RemoteInvocationException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.FromRemote(exception, CapabilityErrorCodes.ExecutionFailed);
+        }
+        catch (ConnectionLostException exception)
+        {
+            throw new BridgeException(CapabilityErrorCodes.ExecutionFailed, failedMessage, exception);
+        }
+        catch (BridgeException)
+        {
+            throw;
+        }
+        catch (IOException exception)
+        {
+            throw new BridgeException(CapabilityErrorCodes.ExecutionFailed, failedMessage, exception);
+        }
+    }
+
+    private void EnsureGetContextAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsGetContext(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.get_context requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsureQueryElementsAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsQueryElements(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.query_elements requires negotiated bridge protocol version 3.");
+        }
+    }
+
+    private void EnsureCapabilityReady()
     {
         if (_capabilityUnusable)
         {
@@ -180,13 +241,6 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             throw new BridgeException(
                 BridgeErrorCodes.HandshakeFailed,
                 "A successful handshake is required before capability requests.");
-        }
-
-        if (_selectedProtocolVersion is null || _selectedProtocolVersion.Value < BridgeProtocol.GetContextVersion)
-        {
-            throw new BridgeException(
-                BridgeErrorCodes.ProtocolIncompatible,
-                "revit.get_context requires negotiated bridge protocol version 2.");
         }
     }
 

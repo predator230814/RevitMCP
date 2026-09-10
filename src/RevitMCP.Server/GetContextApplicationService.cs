@@ -57,7 +57,7 @@ internal sealed class GetContextApplicationService
                 .ConfigureAwait(false);
 
             if (!string.Equals(handshake.InstanceId, registration.InstanceId, StringComparison.Ordinal)
-                || handshake.SelectedProtocolVersion != BridgeProtocol.GetContextVersion)
+                || !BridgeProtocol.SupportsGetContext(handshake.SelectedProtocolVersion))
             {
                 return GetContextOutcome.Failure(
                     McpToolErrorCodes.InstanceUnavailable,

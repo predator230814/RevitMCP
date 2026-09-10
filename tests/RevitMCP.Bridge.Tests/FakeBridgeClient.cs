@@ -24,5 +24,13 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         throw new NotSupportedException("This fake client does not implement revit.get_context.");
     }
 
+    public Task<QueryElementsResult> QueryElementsAsync(QueryElementsRequest request, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.query_elements.");
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

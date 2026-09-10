@@ -1,19 +1,21 @@
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Identity;
 using RevitMCP.Addin.Lifecycle;
 
 namespace RevitMCP.Addin;
 
 public sealed class RevitMcpApplication : IExternalApplication
 {
+    private readonly RevitExecutionDispatcherFactory? _productionDispatchers;
     private readonly AddinLifecycleCoordinator _lifecycle;
 
     public RevitMcpApplication()
-        : this(
-            new AddinLifecycleCoordinator(
-                new RevitExecutionDispatcherFactory(),
-                new NamedPipeLifecycleBridgeFactory(),
-                new ProcessRuntimeMetadataSource()))
     {
+        _productionDispatchers = new RevitExecutionDispatcherFactory();
+        _lifecycle = new AddinLifecycleCoordinator(
+            _productionDispatchers,
+            new NamedPipeLifecycleBridgeFactory(),
+            new ProcessRuntimeMetadataSource());
     }
 
     internal RevitMcpApplication(AddinLifecycleCoordinator lifecycle)
@@ -47,6 +49,12 @@ public sealed class RevitMcpApplication : IExternalApplication
 
         try
         {
+            if (_productionDispatchers is not null)
+            {
+                _productionDispatchers.CloseEvents =
+                    new RevitDocumentCloseEventSource(application.ControlledApplication);
+            }
+
             BeginStartup(new RevitIdlingScheduler(application));
             return Result.Succeeded;
         }

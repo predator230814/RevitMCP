@@ -75,7 +75,7 @@ public sealed class GetContextBridgeTests
         await using var context = await StartHostAsync(new FakeCapabilityService(), metadata);
 
         Assert.Equal(2, context.Host.Registration?.BridgeProtocolVersion);
-        Assert.Equal(BridgeProtocol.SupportedVersions, context.Host.Metadata.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.GetContextVersions, context.Host.Metadata.SupportedProtocolVersions);
     }
 
     [Fact]
