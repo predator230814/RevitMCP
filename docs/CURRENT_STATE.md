@@ -1,10 +1,10 @@
 # RevitMCP Current State
 
-_Last updated: 2026-09-09_
+_Last updated: 2026-09-10_
 
 ## Phase
 
-Implementation started / first live MCP-client-to-Revit 2026.5 CAP-0001 path validated.
+Implementation started / CAP-0001 live-validated on Revit 2026.5 for Home (no document) and an open disposable project with changing UI selection.
 
 ## What exists
 
@@ -42,7 +42,7 @@ Implementation started / first live MCP-client-to-Revit 2026.5 CAP-0001 path val
 
 ## CAP-0001 / SERVER-0001 implementation status
 
-CAP-0001 is implemented end-to-end for the accepted base contract. Active-project, family-document, live Revit 2025, and live Revit 2027 checks remain pending compatibility validation. No additional capability is implemented.
+CAP-0001 is implemented end-to-end for the accepted base contract. Active-project live validation on Revit 2026.5 is **PASS**. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validation. No additional capability is implemented.
 
 ### Implemented
 
@@ -90,17 +90,52 @@ real MCP client -> stdio -> RevitMCP.Server -> revit_get_context
 -> CAP-0001 structuredContent
 ```
 
+Active-project live validation on Autodesk Revit 2026.5 (`26.5.0.55`), registration `bridge_protocol_version = 2`, disposable local project only (generic titles `Default_M_ENU` then `Project1`; no production model, no local path recorded):
+
+```text
+CAP-0001 active-project live validation on Revit 2026.5: PASS
+selection count 0: PASS
+selection count 1: PASS
+selection count N: PASS (count = 2)
+active view: PASS
+active-view switch: NOT RUN
+explicit instance retry: PASS
+modern content duplication: none
+forbidden fields absent: PASS
+```
+
+Official `ModelContextProtocol` `2.2.0` client (`McpClient` / `StdioClientTransport`) launched the actual Release `RevitMCP.Server` over stdio. `tools/list` exposed exactly `revit_get_context`. Omitted `instance_id` auto-selected the single eligible instance. Success: `isError = false`, `content = []`, `structuredContent` present.
+
+Observed document (non-null): `kind = project`. Document booleans deserialized as booleans and were all `false` on the disposable unsaved projects (`is_workshared`, `is_model_in_cloud`, `is_read_only`, `is_modified`). Those values were not hard-coded as acceptance criteria.
+
+Observed active view (non-null): `element_id` remained a JSON string, `name` and `view_type` non-empty. Example: `element_id = "32"`, `name = L1 - Architectural`, `view_type = FloorPlan`. No Server restart and no RevitMCP reconnect were required between selection-state calls on the same Server process.
+
+Selection sequence observed: `0 -> 1 -> 2`. Each successful payload contained only the accepted CAP-0001 fields (`instance`, `document`, `active_view`, `selection`). No `path` / `file_path` / `central_path` / `username` / `user` / `cloud_project_id` / `project_guid` / `pipe_name` / `process_id` / `session_id` / `selected_ids` / `element_ids` / `elements` / `parameters` / `diagnostics` and no generic property bag. `selection` exposed `count` only.
+
+UTF-8 sizes:
+
+| State | structuredContent | content |
+| --- | ---: | ---: |
+| disposable project + selection 0 | 361 | 0 |
+| disposable project + selection 1 | 364 | 0 |
+| disposable project + selection 2 | 364 | 0 |
+
+The 361-byte and 364-byte measurements were taken in different disposable project/view contexts, so that cross-context difference is not attributed to selection. On the same open project, selection `1` and `2` produced identical **364**-byte structured payloads; only `selection.count` changed. Payload size did not grow with selected element count.
+
+Explicit `instance_id` retry on the returned id succeeded against the same instance and returned the same active project context. CAP-0001 collection does not create a Revit `Transaction`, `SubTransaction`, or `TransactionGroup`. UI selection changes used for validation are not RevitMCP model writes.
+
 ### Still pending
 
-- Active-project and selection-count live validation: **NOT RUN**. No disposable local/sample model was opened in this environment.
 - Family-document live validation: **NOT RUN**.
-- Live multi-instance `INSTANCE_REQUIRED` routing: **NOT RUN**. Automated 0/1/many coverage remains in Server tests.
-- Live Revit 2025 and Revit 2027 compatibility.
+- Live Revit 2025 validation: **NOT RUN**.
+- Live Revit 2027 validation: **NOT RUN**.
+- Live multi-instance routing: **NOT RUN**. Automated 0/1/many coverage remains in Server tests.
 
 ## What does not exist yet
 
-- no live CAP-0001 validation against an open project or changed selection;
+- no live CAP-0001 family-document validation;
 - no live lifecycle/handshake/capability validation on Revit 2025 or Revit 2027;
+- no live multi-instance routing validation;
 - no second MCP tool and no `revit_list_instances` MCP exposure;
 - no explicit document identity/addressing model;
 - no request scheduling/fairness policy for multiple clients beyond FIFO serialization required by EXEC-0001;
@@ -110,9 +145,8 @@ real MCP client -> stdio -> RevitMCP.Server -> revit_get_context
 
 ## Current priorities
 
-1. Tech Lead review of SERVER-0001.
-2. Complete active-project/selection live validation on a disposable local or Autodesk sample model when it can be done safely.
-3. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
+1. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
+2. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
 
 ## Known constraints
 
@@ -143,4 +177,4 @@ real MCP client -> stdio -> RevitMCP.Server -> revit_get_context
 
 ## Next task
 
-Review SERVER-0001. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
+Do not start CAP-0002. Remaining compatibility work is family-document live validation, live Revit 2025, live Revit 2027, and live multi-instance routing. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
