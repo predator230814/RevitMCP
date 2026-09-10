@@ -46,6 +46,48 @@ public sealed class OpenDocumentIdentityMapTests
     }
 
     [Fact]
+    public void Distinct_wrappers_with_the_same_logical_equality_share_one_id()
+    {
+        var map = new OpenDocumentIdentityMap<LogicalDocumentKey>();
+        var firstWrapper = new LogicalDocumentKey(7);
+        var secondWrapper = new LogicalDocumentKey(7);
+
+        Assert.False(ReferenceEquals(firstWrapper, secondWrapper));
+        Assert.Equal(firstWrapper, secondWrapper);
+
+        var first = map.GetOrAssign(firstWrapper);
+        var second = map.GetOrAssign(secondWrapper);
+
+        Assert.Equal(first, second);
+        Assert.True(map.TryGet(secondWrapper, out var lookedUp));
+        Assert.Equal(first, lookedUp);
+    }
+
+    [Fact]
+    public void Removal_through_an_equal_wrapper_forgets_the_mapping()
+    {
+        var map = new OpenDocumentIdentityMap<LogicalDocumentKey>();
+        var original = map.GetOrAssign(new LogicalDocumentKey(3));
+
+        Assert.True(map.Remove(new LogicalDocumentKey(3)));
+        Assert.False(map.TryGet(new LogicalDocumentKey(3), out _));
+
+        var replacement = map.GetOrAssign(new LogicalDocumentKey(3));
+        Assert.NotEqual(original, replacement);
+    }
+
+    [Fact]
+    public void Different_logical_documents_receive_different_ids()
+    {
+        var map = new OpenDocumentIdentityMap<LogicalDocumentKey>();
+
+        var first = map.GetOrAssign(new LogicalDocumentKey(1));
+        var second = map.GetOrAssign(new LogicalDocumentKey(2));
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
     public void Obsolete_keys_can_be_released_and_are_not_retained()
     {
         var map = new OpenDocumentIdentityMap<object>();
@@ -79,6 +121,7 @@ public sealed class OpenDocumentIdentityMapTests
             Assert.DoesNotContain("Username", text, StringComparison.Ordinal);
             Assert.DoesNotContain("ProcessId", text, StringComparison.Ordinal);
             Assert.DoesNotContain("ExtensibleStorage", text, StringComparison.Ordinal);
+            Assert.DoesNotContain("ConditionalWeakTable", text, StringComparison.Ordinal);
         }
     }
 
@@ -96,6 +139,21 @@ public sealed class OpenDocumentIdentityMapTests
         }
 
         throw new InvalidOperationException("Could not locate RevitMCP.sln from the test output directory.");
+    }
+
+    private sealed class LogicalDocumentKey
+    {
+        public LogicalDocumentKey(int sessionToken)
+        {
+            SessionToken = sessionToken;
+        }
+
+        public int SessionToken { get; }
+
+        public override bool Equals(object? obj) =>
+            obj is LogicalDocumentKey other && SessionToken == other.SessionToken;
+
+        public override int GetHashCode() => SessionToken;
     }
 
     private sealed class NamedKey

@@ -68,9 +68,9 @@ CAP-0001 is implemented end-to-end for the accepted base contract. Active-projec
 
 - Contracts: empty request, snake_case, project/family kinds, string `element_id`, explicit null document/view, selection `count` only, no selected IDs/paths/user/cloud/property bags, round-trip, exact accepted field set. CAP-0002 query contracts: exact snake_case and accepted request/filter/result fields, opaque `document_id` / `element_ref` strings without GUID/UUID schema, both scopes, zero and bounded refs, no per-element metadata.
 - Bridge: `[2,1]+[2,1] -> 2`, `[2,1]+[1] -> 1`, handshake-only host does not advertise v2, capability host advertises v2, Named Pipe `revit.get_context` with a fake service, local rejection before handshake and after v1, v2 success, structured `REVIT_EXECUTION_FAILED`, silent capability timeout, client timeout cancels the server request token, caller cancellation, existing silent handshake timeout, existing discovery/handshake/teardown tests.
-- Addin/lifecycle: existing EXEC-0001 and LIFECYCLE-0001 tests, capability created before bridge start, handshake-only capability remains nullable, no v2 advertisement without a service at the host, no extra metadata fields. ADR-0006 identity bookkeeping: same key/same id, different keys, opaque generated ids, explicit release of obsolete mappings, no path/title/transaction usage.
+- Addin/lifecycle: existing EXEC-0001 and LIFECYCLE-0001 tests, capability created before bridge start, handshake-only capability remains nullable, no v2 advertisement without a service at the host, no extra metadata fields. ADR-0006 identity bookkeeping: same key/same id, different keys, opaque generated ids, distinct equal wrappers share one id, removal through an equal wrapper, explicit release of obsolete mappings, no path/title/transaction usage, no `ConditionalWeakTable`.
 - Server: 0/1/many routing, deterministic candidate ordering/fields, explicit unknown/unavailable/incompatible/stale/v1 mapping, no alternate after explicit failure, no mass `get_context` during ambiguity, handshake `[2,1]` and pipe targeting, capability timeout/failure codes, caller cancellation, dispose, MCP tool metadata/schemas, modern structuredContent, legacy compact JSON fallback for pre-2025-06-18 revisions, error `isError` without structuredContent, process-level stdio `tools/list` against the built Server executable, no Autodesk Revit API / AspNetCore MCP package.
-- Solution tests: Contracts 28, Bridge 39, Addin 43, Server 46. All passed.
+- Solution tests: Contracts 28, Bridge 39, Addin 46, Server 46. All passed.
 - Server Release `net10.0` build succeeded.
 - Addin Release builds: Revit 2025 `net8.0-windows`, Revit 2026 `net8.0-windows`, Revit 2027 `net10.0-windows`. Each output has `StreamJsonRpc.dll` and `Nerdbank.Streams.dll` present; `RevitAPI.dll` and `RevitAPIUI.dll` absent.
 
@@ -156,7 +156,7 @@ live CAP-0002 validation: not run
 - Transport-neutral `QueryElementsRequest`, `QueryElementFilters`, `QueryElementsResult`, `QueryElementsContext`, and `QueryScope` (`document` | `active_view`) in `RevitMCP.Contracts`.
 - Accepted capability error codes `NO_ACTIVE_DOCUMENT`, `DOCUMENT_CONTEXT_CHANGED`, `NO_ACTIVE_VIEW`, and `INVALID_QUERY`, preserving `REVIT_EXECUTION_TIMEOUT` / `REVIT_EXECUTION_FAILED`.
 - Addin-owned `OpenDocumentIdentityService` / `OpenDocumentIdentityMap<TKey>`: same live key yields the same opaque `document_id`; a different key yields a different id; ids are generated internally and are not derived from title, path, cloud identity, username, or process id; no model write or Extensible Storage.
-- Closed/obsolete mappings can be released explicitly (`Remove` / `Forget`) and are held with `ConditionalWeakTable` so closed `Document` objects are not retained indefinitely.
+- Closed/obsolete mappings must be released explicitly (`Remove` / `Forget`). The map uses `EqualityComparer<TKey>.Default` so distinct wrappers that represent the same open document share one id. The dictionary holds strong references; future query/lifecycle wiring must forget ids on Revit document close.
 - Identity lookup is intended only for valid Revit API execution context. This slice does not invoke it from Bridge RPC.
 
 Accepted v1 design (unchanged):
@@ -191,10 +191,9 @@ Accepted v1 design (unchanged):
 
 ## Current priorities
 
-1. Tech Lead review of the CAP-0002 contracts + ADR-0006 identity foundation slice.
-2. After review, implement BRIDGE-0003 / query execution / SERVER-0002 in small reviewable steps. Do not start that work in this slice.
-3. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
-4. Do not expand into CAP-0003, writes, Azure/cloud, WebMCP implementation, or UI work.
+1. Implement the next reviewed CAP-0002 slice: Revit query execution and BRIDGE-0003, including mandatory `document_id` cleanup on document close.
+2. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
+3. Do not expand into CAP-0003, writes, Azure/cloud, WebMCP implementation, or UI work.
 
 ## Known constraints
 
@@ -230,4 +229,4 @@ Accepted v1 design (unchanged):
 
 ## Next task
 
-Review the CAP-0002 contracts and ADR-0006 document-identity foundation. Do not implement BRIDGE-0003, query execution, or SERVER-0002 until that review. Do not start CAP-0003, write operations, Azure/cloud, WebMCP implementation, or UI work.
+The CAP-0002 contracts and ADR-0006 document-identity foundation slice is complete. The next reviewed slice is Revit query execution / BRIDGE-0003. Do not start CAP-0003, write operations, Azure/cloud, WebMCP implementation, or UI work.

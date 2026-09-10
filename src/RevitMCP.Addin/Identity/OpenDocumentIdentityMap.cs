@@ -1,16 +1,17 @@
-using System.Runtime.CompilerServices;
-
 namespace RevitMCP.Addin.Identity;
 
 /// <summary>
 /// Process-lifetime bookkeeping for opaque open-document identities.
-/// Keys are held weakly so obsolete mappings can be collected; <see cref="Remove"/>
-/// releases a mapping explicitly when a document is known to be closed.
+/// Uses <see cref="EqualityComparer{T}.Default"/> so logically equal keys
+/// (including distinct Revit <c>Document</c> wrappers for the same open document)
+/// share one id. The dictionary holds strong references; <see cref="Remove"/>
+/// must be called when a document is closed. There is no automatic weak-key
+/// collection.
 /// </summary>
 internal sealed class OpenDocumentIdentityMap<TKey>
     where TKey : class
 {
-    private readonly ConditionalWeakTable<TKey, IdentityHolder> _ids = new();
+    private readonly Dictionary<TKey, string> _ids = new(EqualityComparer<TKey>.Default);
     private readonly Func<string> _createId;
 
     public OpenDocumentIdentityMap(Func<string>? createId = null)
@@ -21,15 +22,22 @@ internal sealed class OpenDocumentIdentityMap<TKey>
     public string GetOrAssign(TKey key)
     {
         ArgumentNullException.ThrowIfNull(key);
-        return _ids.GetValue(key, _ => new IdentityHolder(_createId())).Value;
+        if (_ids.TryGetValue(key, out var existing))
+        {
+            return existing;
+        }
+
+        var id = _createId();
+        _ids.Add(key, id);
+        return id;
     }
 
     public bool TryGet(TKey key, out string documentId)
     {
         ArgumentNullException.ThrowIfNull(key);
-        if (_ids.TryGetValue(key, out var holder))
+        if (_ids.TryGetValue(key, out var existing))
         {
-            documentId = holder.Value;
+            documentId = existing;
             return true;
         }
 
@@ -44,14 +52,4 @@ internal sealed class OpenDocumentIdentityMap<TKey>
     }
 
     private static string CreateOpaqueId() => Guid.NewGuid().ToString("D");
-
-    private sealed class IdentityHolder
-    {
-        public IdentityHolder(string value)
-        {
-            Value = value;
-        }
-
-        public string Value { get; }
-    }
 }
