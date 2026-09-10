@@ -15,6 +15,7 @@ BRIDGE-0001-short-name.md
 ## Current specifications
 
 - `BRIDGE-0001-handshake-and-version-negotiation.md` — minimum bootstrap handshake used to validate a discovered Revit instance and select a compatible bridge protocol version.
+- `BRIDGE-0002-get-context-capability-rpc.md` — first Revit capability RPC (`revit.get_context`) on bridge protocol version 2, with version 1 handshake compatibility.
 
 ## Principles
 

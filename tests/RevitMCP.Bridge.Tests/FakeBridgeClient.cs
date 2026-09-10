@@ -16,5 +16,13 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         return _handshake(request, cancellationToken);
     }
 
+    public Task<GetContextResult> GetContextAsync(GetContextRequest request, TimeSpan timeout, CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.get_context.");
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

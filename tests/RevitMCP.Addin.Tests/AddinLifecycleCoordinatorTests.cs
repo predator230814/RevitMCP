@@ -39,7 +39,7 @@ public sealed class AddinLifecycleCoordinatorTests
 
         Assert.Equal(AddinLifecycleState.Ready, coordinator.State);
         Assert.Equal(1, dispatchers.CreateCount);
-        Assert.Equal(new[] { "dispatcher.create", "bridge.start", "registration.publish" }, events);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "bridge.start", "registration.publish" }, events);
     }
 
     [Fact]
@@ -54,10 +54,12 @@ public sealed class AddinLifecycleCoordinatorTests
 
         Assert.Equal(AddinLifecycleState.Ready, coordinator.State);
         Assert.Equal("dispatcher.create", events[0]);
-        Assert.Equal("bridge.start", events[1]);
-        Assert.Equal("registration.publish", events[2]);
+        Assert.Equal("capability.create", events[1]);
+        Assert.Equal("bridge.start", events[2]);
+        Assert.Equal("registration.publish", events[3]);
         Assert.True(bridges.Published);
         Assert.True(bridges.LastBridge?.HasRegistration);
+        Assert.NotNull(bridges.LastCapability);
         Assert.NotNull(coordinator.Metadata);
         Assert.Equal(coordinator.InstanceId, coordinator.Metadata!.InstanceId);
         Assert.Equal("2026", coordinator.Metadata.RevitVersion);
@@ -128,6 +130,7 @@ public sealed class AddinLifecycleCoordinatorTests
             new[]
             {
                 "dispatcher.create",
+                "capability.create",
                 "bridge.start",
                 "registration.publish",
                 "dispatcher.stop",
