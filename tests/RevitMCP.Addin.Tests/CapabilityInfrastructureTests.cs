@@ -45,9 +45,11 @@ public sealed class CapabilityInfrastructureTests
         var coordinator = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "RevitMCP.Addin", "Lifecycle", "AddinLifecycleCoordinator.cs"));
 
         Assert.Contains("new RevitGetContextService(_dispatcher, metadata)", adapters, StringComparison.Ordinal);
-        Assert.Contains("StartAsync(metadata, _store, capability, cancellationToken)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitQueryElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
+        Assert.Contains("StartAsync(metadata, _store, capability, query, cancellationToken)", adapters, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateCapability(metadata)", coordinator, StringComparison.Ordinal);
-        Assert.Contains("_bridges.Start(metadata, capability, startup.Token)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("dispatcher.CreateQuery(metadata)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("_bridges.Start(metadata, capability, query, startup.Token)", coordinator, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextRequest", adapters, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextResult", adapters, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextRequest", coordinator, StringComparison.Ordinal);
@@ -72,7 +74,8 @@ public sealed class CapabilityInfrastructureTests
 
         Assert.Equal(AddinLifecycleState.Ready, coordinator.State);
         Assert.Null(bridges.LastCapability);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "bridge.start", "registration.publish" }, events);
+        Assert.Null(bridges.LastQuery);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "bridge.start", "registration.publish" }, events);
     }
 
     private static string FindRepoRoot()
@@ -125,6 +128,13 @@ internal sealed class NullCapabilityDispatcher : ILifecycleDispatcher
     {
         _ = metadata;
         _events.Add("capability.create");
+        return null;
+    }
+
+    public IRevitQueryElementsService? CreateQuery(BridgeInstanceMetadata metadata)
+    {
+        _ = metadata;
+        _events.Add("query.create");
         return null;
     }
 }

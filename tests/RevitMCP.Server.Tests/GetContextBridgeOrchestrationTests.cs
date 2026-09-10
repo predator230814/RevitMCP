@@ -25,7 +25,7 @@ public sealed class GetContextBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -36,6 +36,36 @@ public sealed class GetContextBridgeOrchestrationTests
 
         Assert.True(context.Outcome.IsSuccess);
         Assert.Equal(1, context.Client.GetContextCalls);
+    }
+
+    [Fact]
+    public async Task Protocol_v3_permits_get_context()
+    {
+        var context = await InvokeReadyAsync("id-v3", "revitmcp-pipe-v3", selectedProtocolVersion: 3);
+
+        Assert.True(context.Outcome.IsSuccess);
+        Assert.Equal(1, context.Client.GetContextCalls);
+    }
+
+    [Fact]
+    public async Task Unknown_v4_does_not_permit_get_context()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("id-v4", "pipe-v4"));
+        var factory = Factory((pipe, _, _) =>
+        {
+            var registration = TestSupport.CreateRegistration("id-v4", pipe);
+            return Task.FromResult(new RecordingBridgeClient
+            {
+                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 4)),
+                GetContext = (_, _, _) => throw new InvalidOperationException("GetContext must not run for protocol v4.")
+            });
+        });
+
+        var outcome = await CreateService(discovery, factory).ExecuteAsync(null, CancellationToken.None);
+
+        Assert.Equal(McpToolErrorCodes.InstanceUnavailable, outcome.ErrorCode);
+        Assert.Equal(0, factory.Clients[0].GetContextCalls);
     }
 
     [Fact]
@@ -181,10 +211,13 @@ public sealed class GetContextBridgeOrchestrationTests
         Assert.True(factory.Clients[0].Disposed);
     }
 
-    private static async Task<InvocationContext> InvokeReadyAsync(string instanceId, string pipeName)
+    private static async Task<InvocationContext> InvokeReadyAsync(
+        string instanceId,
+        string pipeName,
+        int selectedProtocolVersion = BridgeProtocol.GetContextVersion)
     {
         var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready(instanceId, pipeName));
+        discovery.Instances.Add(TestSupport.Ready(instanceId, pipeName, selectedProtocolVersion));
         var factory = Factory((pipe, _, _) =>
         {
             var registration = TestSupport.CreateRegistration(instanceId, pipe);
@@ -193,7 +226,7 @@ public sealed class GetContextBridgeOrchestrationTests
                 Handshake = (request, _) =>
                 {
                     Assert.Equal(instanceId, request.ExpectedInstanceId);
-                    return Task.FromResult(TestSupport.CreateHandshake(registration));
+                    return Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion));
                 },
                 GetContext = (_, _, _) => Task.FromResult(TestSupport.ZeroDocument(instanceId))
             });

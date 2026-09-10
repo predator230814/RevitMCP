@@ -8,8 +8,8 @@ namespace RevitMCP.Addin.Identity;
 /// <c>Equals</c>/<c>GetHashCode</c>, not managed reference identity. Call only
 /// from valid Revit API execution context. Does not read title, path, cloud
 /// identity, username, or process id, and does not write into the model.
-/// <see cref="Forget"/> must be used on close; this slice does not subscribe
-/// to document-close events.
+/// Successful document close forgets the mapping through two-phase
+/// Closing/Closed correlation; cancelled or failed closes keep the id.
 /// </summary>
 internal sealed class OpenDocumentIdentityService
 {

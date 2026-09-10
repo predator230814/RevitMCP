@@ -57,6 +57,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("capability.create");
         return new RecordingCapabilityService();
     }
+
+    public IRevitQueryElementsService? CreateQuery(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("query.create");
+        return new RecordingQueryElementsService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -66,6 +73,16 @@ internal sealed class RecordingCapabilityService : IRevitCapabilityService
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording capability does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingQueryElementsService : IRevitQueryElementsService
+{
+    public Task<QueryElementsResult> QueryElementsAsync(QueryElementsRequest request, CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording query does not execute Revit work.");
     }
 }
 
@@ -154,13 +171,17 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitCapabilityService? LastCapability { get; private set; }
 
+    public IRevitQueryElementsService? LastQuery { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
+        IRevitQueryElementsService? query,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         LastCapability = capability;
+        LastQuery = query;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

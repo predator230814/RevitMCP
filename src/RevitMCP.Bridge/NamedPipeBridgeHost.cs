@@ -10,17 +10,23 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
     private readonly CancellationTokenSource _lifetime = new();
     private readonly IRevitBridgeService _handshake;
     private readonly IRevitCapabilityService? _capability;
+    private readonly IRevitQueryElementsService? _query;
     private readonly TaskCompletionSource _listenerReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Task _acceptLoop;
     private IRegistrationLease? _lease;
     private int _disposed;
 
-    private NamedPipeBridgeHost(BridgeInstanceMetadata metadata, string pipeName, IRevitCapabilityService? capability)
+    private NamedPipeBridgeHost(
+        BridgeInstanceMetadata metadata,
+        string pipeName,
+        IRevitCapabilityService? capability,
+        IRevitQueryElementsService? query)
     {
         Metadata = metadata;
         PipeName = pipeName;
         _handshake = new BridgeHandshakeService(metadata);
         _capability = capability;
+        _query = query;
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_lifetime.Token));
     }
 
@@ -35,21 +41,31 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRegistrationStore store,
         CancellationToken cancellationToken)
     {
-        return StartAsync(metadata, store, capability: null, cancellationToken);
+        return StartAsync(metadata, store, capability: null, query: null, cancellationToken);
+    }
+
+    public static Task<NamedPipeBridgeHost> StartAsync(
+        BridgeInstanceMetadata metadata,
+        IRegistrationStore store,
+        IRevitCapabilityService? capability,
+        CancellationToken cancellationToken)
+    {
+        return StartAsync(metadata, store, capability, query: null, cancellationToken);
     }
 
     public static async Task<NamedPipeBridgeHost> StartAsync(
         BridgeInstanceMetadata metadata,
         IRegistrationStore store,
         IRevitCapabilityService? capability,
+        IRevitQueryElementsService? query,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         ArgumentNullException.ThrowIfNull(store);
 
-        var advertised = WithAdvertisedProtocol(metadata, capability);
+        var advertised = WithAdvertisedProtocol(metadata, capability, query);
         var pipeName = BridgePipeNames.Create(advertised.WindowsSessionId, advertised.InstanceId);
-        var host = new NamedPipeBridgeHost(advertised, pipeName, capability);
+        var host = new NamedPipeBridgeHost(advertised, pipeName, capability, query);
         try
         {
             await host._listenerReady.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -140,11 +156,22 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
 
     internal static BridgeInstanceMetadata WithAdvertisedProtocol(
         BridgeInstanceMetadata metadata,
-        IRevitCapabilityService? capability)
+        IRevitCapabilityService? capability,
+        IRevitQueryElementsService? query = null)
     {
-        var versions = capability is null
-            ? BridgeProtocol.HandshakeOnlyVersions
-            : BridgeProtocol.SupportedVersions;
+        IReadOnlyList<int> versions;
+        if (capability is not null && query is not null)
+        {
+            versions = BridgeProtocol.SupportedVersions;
+        }
+        else if (capability is not null)
+        {
+            versions = BridgeProtocol.GetContextVersions;
+        }
+        else
+        {
+            versions = BridgeProtocol.HandshakeOnlyVersions;
+        }
 
         return new BridgeInstanceMetadata
         {
@@ -197,7 +224,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         JsonRpc? rpc = null;
         try
         {
-            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcBridgeAdapter(_handshake, _capability));
+            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcBridgeAdapter(_handshake, _capability, _query));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             await rpc.Completion.WaitAsync(linked.Token).ConfigureAwait(false);
         }

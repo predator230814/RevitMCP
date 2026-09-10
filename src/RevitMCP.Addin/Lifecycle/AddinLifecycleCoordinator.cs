@@ -97,8 +97,11 @@ internal sealed class AddinLifecycleCoordinator
             var capability = dispatcher.CreateCapability(metadata);
             EnsureNotStopping();
 
+            var query = dispatcher.CreateQuery(metadata);
+            EnsureNotStopping();
+
             using var startup = new CancellationTokenSource(_startupTimeout);
-            bridge = _bridges.Start(metadata, capability, startup.Token);
+            bridge = _bridges.Start(metadata, capability, query, startup.Token);
 
             lock (_gate)
             {

@@ -40,9 +40,12 @@ internal static class TestSupport
             RevitVersion = registration.RevitVersion,
             RevitBuild = registration.RevitBuild,
             AddinVersion = registration.AddinVersion,
-            SupportedProtocolVersions = selectedProtocolVersion == BridgeProtocol.GetContextVersion
-                ? BridgeProtocol.SupportedVersions
-                : BridgeProtocol.HandshakeOnlyVersions,
+            SupportedProtocolVersions = selectedProtocolVersion switch
+            {
+                BridgeProtocol.QueryElementsVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.GetContextVersion => BridgeProtocol.GetContextVersions,
+                _ => BridgeProtocol.HandshakeOnlyVersions
+            },
             SelectedProtocolVersion = selectedProtocolVersion
         };
     }
@@ -121,6 +124,8 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
 
     public Func<GetContextRequest, TimeSpan, CancellationToken, Task<GetContextResult>>? GetContext { get; set; }
 
+    public Func<QueryElementsRequest, TimeSpan, CancellationToken, Task<QueryElementsResult>>? QueryElements { get; set; }
+
     public Task<BridgeHandshakeResult> HandshakeAsync(BridgeHandshakeRequest request, CancellationToken cancellationToken)
     {
         HandshakeRequest = request;
@@ -138,6 +143,16 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return GetContext is null
             ? throw new InvalidOperationException("GetContext handler was not configured.")
             : GetContext(request, timeout, cancellationToken);
+    }
+
+    public Task<QueryElementsResult> QueryElementsAsync(
+        QueryElementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        return QueryElements is null
+            ? throw new NotSupportedException("This recording client does not implement revit.query_elements.")
+            : QueryElements(request, timeout, cancellationToken);
     }
 
     public ValueTask DisposeAsync()
