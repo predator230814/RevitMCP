@@ -65,7 +65,7 @@ CAP-0001 is implemented end-to-end for the accepted base contract. Active-projec
 - Bridge: `[2,1]+[2,1] -> 2`, `[2,1]+[1] -> 1`, handshake-only host does not advertise v2, capability host advertises v2, Named Pipe `revit.get_context` with a fake service, local rejection before handshake and after v1, v2 success, structured `REVIT_EXECUTION_FAILED`, silent capability timeout, client timeout cancels the server request token, caller cancellation, existing silent handshake timeout, existing discovery/handshake/teardown tests.
 - Addin/lifecycle: existing EXEC-0001 and LIFECYCLE-0001 tests, capability created before bridge start, handshake-only capability remains nullable, no v2 advertisement without a service at the host, no extra metadata fields.
 - Server: 0/1/many routing, deterministic candidate ordering/fields, explicit unknown/unavailable/incompatible/stale/v1 mapping, no alternate after explicit failure, no mass `get_context` during ambiguity, handshake `[2,1]` and pipe targeting, capability timeout/failure codes, caller cancellation, dispose, MCP tool metadata/schemas, modern structuredContent, legacy compact JSON fallback for pre-2025-06-18 revisions, error `isError` without structuredContent, process-level stdio `tools/list` against the built Server executable, no Autodesk Revit API / AspNetCore MCP package.
-- Solution tests: Contracts 15, Bridge 39, Addin 38, Server 40. All passed.
+- Solution tests: Contracts 15, Bridge 39, Addin 38, Server 46. All passed.
 - Server Release `net10.0` build succeeded.
 - Addin Release builds: Revit 2025 `net8.0-windows`, Revit 2026 `net8.0-windows`, Revit 2027 `net10.0-windows`. Each output has `StreamJsonRpc.dll` and `Nerdbank.Streams.dll` present; `RevitAPI.dll` and `RevitAPIUI.dll` absent.
 
