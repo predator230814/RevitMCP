@@ -4,7 +4,7 @@ _Last updated: 2026-09-09_
 
 ## Phase
 
-Implementation started / first live Revit 2026.5 ExternalEvent-backed capability validation.
+Implementation started / first live MCP-client-to-Revit 2026.5 CAP-0001 path validated.
 
 ## What exists
 
@@ -37,12 +37,12 @@ Implementation started / first live Revit 2026.5 ExternalEvent-backed capability
 - The Addin project sets `CopyLocalLockFileAssemblies` so Revit 2025/2026/2027 plugin output includes the Bridge NuGet runtime graph (`StreamJsonRpc.dll` and its resolved dependencies). Nice3point Revit API assemblies remain compile-time only and are still asserted absent from output.
 - Compile-time Revit API references are the version-pinned Nice3point packages: `Nice3point.Revit.Api.RevitAPI` / `RevitAPIUI` `2025.4.60` (Revit 2025), `2026.4.10` (Revit 2026), and `2027.2.0` (Revit 2027). Those assemblies are compile-time only and must not be copied into add-in output.
 - `tests/RevitMCP.Addin.Tests` covers EXEC-0001 queue behavior and LIFECYCLE-0001 coordination without launching Revit.
-- The initial MCP transport is `stdio`; Streamable HTTP, MCP Apps, WebMCP, Azure/cloud gateways, and other remote deployment paths remain extensions rather than core dependencies.
+- The initial MCP transport is `stdio`. `RevitMCP.Server` now hosts a real stdio MCP process using official `ModelContextProtocol` `2.2.0`. Streamable HTTP, MCP Apps, WebMCP, Azure/cloud gateways, and other remote deployment paths remain extensions rather than core dependencies.
 - Product UI considerations are recorded separately; universal access, conversational use inside or adjacent to Revit, and reduced context switching remain open product goals rather than settled architecture.
 
-## CAP-0001 / BRIDGE-0002 implementation status
+## CAP-0001 / SERVER-0001 implementation status
 
-CAP-0001 as a whole is **not complete**. The MCP Server/tool slice is intentionally unimplemented.
+CAP-0001 is implemented end-to-end for the accepted base contract. Active-project, family-document, live Revit 2025, and live Revit 2027 checks remain pending compatibility validation. No additional capability is implemented.
 
 ### Implemented
 
@@ -54,44 +54,54 @@ CAP-0001 as a whole is **not complete**. The MCP Server/tool slice is intentiona
 - Typed `NamedPipeBridgeClient.GetContextAsync` with explicit capability timeout, local protocol gating, and RPC cancellation on local timeout so queued EXEC-0001 work is not started after the caller has already timed out.
 - Addin `RevitGetContextService` that dispatches through the process-lifetime EXEC-0001 dispatcher and collects only CAP-0001 fields.
 - Lifecycle wiring: metadata -> dispatcher -> capability service -> bridge start. Shutdown order remains dispatcher.Stop -> registration withdrawal/bridge -> dispatcher dispose.
+- SERVER-0001: `RevitMCP.Server` is a real stdio MCP process using official `ModelContextProtocol` `2.2.0` only inside the Server boundary.
+- `tools/list` exposes exactly one Revit tool: `revit_get_context`.
+- Fresh current-session discovery, deterministic 0/1/many routing, and a fresh typed bridge invocation (`handshake [2,1]`, require selected protocol exactly `2`) on every MCP call.
+- Modern MCP success uses CAP-0001 `structuredContent` with empty `content`. Errors use `isError: true` and one compact JSON text block without violating the success `outputSchema`.
 
 ### Automated-tested
 
 - Contracts: empty request, snake_case, project/family kinds, string `element_id`, explicit null document/view, selection `count` only, no selected IDs/paths/user/cloud/property bags, round-trip, exact accepted field set.
 - Bridge: `[2,1]+[2,1] -> 2`, `[2,1]+[1] -> 1`, handshake-only host does not advertise v2, capability host advertises v2, Named Pipe `revit.get_context` with a fake service, local rejection before handshake and after v1, v2 success, structured `REVIT_EXECUTION_FAILED`, silent capability timeout, client timeout cancels the server request token, caller cancellation, existing silent handshake timeout, existing discovery/handshake/teardown tests.
 - Addin/lifecycle: existing EXEC-0001 and LIFECYCLE-0001 tests, capability created before bridge start, handshake-only capability remains nullable, no v2 advertisement without a service at the host, no extra metadata fields.
-- Solution tests: Contracts 15, Bridge 39, Addin 38, Server 2. All passed.
+- Server: 0/1/many routing, deterministic candidate ordering/fields, explicit unknown/unavailable/incompatible/stale/v1 mapping, no alternate after explicit failure, no mass `get_context` during ambiguity, handshake `[2,1]` and pipe targeting, capability timeout/failure codes, caller cancellation, dispose, MCP tool metadata/schemas, modern structuredContent, legacy compact JSON fallback for pre-2025-06-18 revisions, error `isError` without structuredContent, process-level stdio `tools/list` against the built Server executable, no Autodesk Revit API / AspNetCore MCP package.
+- Solution tests: Contracts 15, Bridge 39, Addin 38, Server 40. All passed.
+- Server Release `net10.0` build succeeded.
 - Addin Release builds: Revit 2025 `net8.0-windows`, Revit 2026 `net8.0-windows`, Revit 2027 `net10.0-windows`. Each output has `StreamJsonRpc.dll` and `Nerdbank.Streams.dll` present; `RevitAPI.dll` and `RevitAPIUI.dll` absent.
 
 ### Live-tested on Autodesk Revit 2026.5 (`26.5.0.55`)
 
-Zero-document Home state, no model open:
+Zero-document Home state, no model open, one eligible instance, registration `bridge_protocol_version = 2`:
 
-- Registration published `bridge_protocol_version = 2`.
-- Real `NamedPipeBridgeClient` handshake with supported versions `[2, 1]` selected protocol `2`.
-- Real `GetContextAsync` returned matching `instance_id`, `revit_version = 2026`, `revit_build = 26.5.0.55`, `document = null`, `active_view = null`, `selection.count = 0`.
-- Request completed through EXEC-0001 / ExternalEvent without a Revit API context exception.
-- Serialized zero-document result: **233 UTF-8 bytes**. Fields: `instance.instance_id`, `instance.revit_version`, `instance.revit_build`, `document`, `active_view`, `selection.count`.
-- Normal Revit close withdrew the registration and shut down the Named Pipe.
+- Official `ModelContextProtocol` `2.2.0` client launched the actual Release `RevitMCP.Server` over stdio. The Server process was not restarted between calls.
+- `tools/list` exposed exactly `revit_get_context`.
+- Omitted `instance_id` auto-selected the single eligible instance and returned success.
+- Structured result: matching `instance_id`, `revit_version = 2026`, `revit_build = 26.5.0.55`, `document = null`, `active_view = null`, `selection.count = 0`.
+- Modern success `structuredContent` = **175 UTF-8 bytes**. `content` = **0 bytes**. Fields: `instance`, `document`, `active_view`, `selection`.
+- Explicit returned `instance_id` retried against the same instance and succeeded.
+- After normal Revit close, the same MCP Server process returned a tool execution error. Fresh discovery settled on `NO_REVIT_INSTANCE` (`isError: true`, no structuredContent, no protocol crash). One intermediate poll during teardown mapped to `REVIT_EXECUTION_FAILED` before registration withdrawal completed.
 
-This is the first live proof of:
+This is live proof of:
 
 ```text
-bridge thread -> dispatcher -> ExternalEvent.Raise -> ExternalEvent.Execute -> UIApplication -> response
+real MCP client -> stdio -> RevitMCP.Server -> revit_get_context
+-> discovery -> Named Pipe -> bridge.handshake [2,1]
+-> revit.get_context -> EXEC-0001 / ExternalEvent -> UIApplication
+-> CAP-0001 structuredContent
 ```
 
 ### Still pending
 
 - Active-project and selection-count live validation: **NOT RUN**. No disposable local/sample model was opened in this environment.
-- Family-document live validation.
+- Family-document live validation: **NOT RUN**.
+- Live multi-instance `INSTANCE_REQUIRED` routing: **NOT RUN**. Automated 0/1/many coverage remains in Server tests.
 - Live Revit 2025 and Revit 2027 compatibility.
-- MCP Server `revit_get_context` tool, structuredContent, and zero/one/many instance routing.
 
 ## What does not exist yet
 
 - no live CAP-0001 validation against an open project or changed selection;
 - no live lifecycle/handshake/capability validation on Revit 2025 or Revit 2027;
-- no MCP server runtime, MCP tools, or `revit_list_instances` MCP exposure;
+- no second MCP tool and no `revit_list_instances` MCP exposure;
 - no explicit document identity/addressing model;
 - no request scheduling/fairness policy for multiple clients beyond FIFO serialization required by EXEC-0001;
 - no write-locking or transaction concurrency policy;
@@ -100,10 +110,9 @@ bridge thread -> dispatcher -> ExternalEvent.Raise -> ExternalEvent.Execute -> U
 
 ## Current priorities
 
-1. Tech Lead review of the Addin + Bridge CAP-0001 slice.
-2. Implement the MCP Server `revit_get_context` tool only after that review. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
-3. Complete active-project/selection live validation on a disposable local or Autodesk sample model when it can be done safely.
-4. Update project state from observed implementation/validation results before expanding the capability surface.
+1. Tech Lead review of SERVER-0001.
+2. Complete active-project/selection live validation on a disposable local or Autodesk sample model when it can be done safely.
+3. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
 
 ## Known constraints
 
@@ -134,4 +143,4 @@ bridge thread -> dispatcher -> ExternalEvent.Raise -> ExternalEvent.Execute -> U
 
 ## Next task
 
-Review the Addin + Bridge CAP-0001 slice, then implement the MCP Server tool. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
+Review SERVER-0001. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
