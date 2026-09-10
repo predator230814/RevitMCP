@@ -16,6 +16,7 @@ BRIDGE-0001-short-name.md
 
 - `BRIDGE-0001-handshake-and-version-negotiation.md` — minimum bootstrap handshake used to validate a discovered Revit instance and select a compatible bridge protocol version.
 - `BRIDGE-0002-get-context-capability-rpc.md` — first Revit capability RPC (`revit.get_context`) on bridge protocol version 2, with version 1 handshake compatibility.
+- `BRIDGE-0003-query-elements-capability-rpc.md` — CAP-0002 query RPC (`revit.query_elements`) on bridge protocol version 3; v3 explicitly preserves the v2 `revit.get_context` guarantee.
 
 ## Principles
 
@@ -23,3 +24,4 @@ BRIDGE-0001-short-name.md
 - Bootstrap contracts remain intentionally small and stable.
 - Revit model access is not performed merely to establish bridge liveness.
 - New protocol surface is added only when a capability or operational requirement justifies it.
+- Capability support is tied to explicitly documented protocol-version sets; numeric version ordering alone is never treated as a capability guarantee.
