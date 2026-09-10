@@ -10,4 +10,8 @@
     <PackageReference Include="StreamJsonRpc" />
     <ProjectReference Include="..\RevitMCP.Contracts\RevitMCP.Contracts.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RevitMCP.Bridge.Tests" />
+  </ItemGroup>
 </Project>

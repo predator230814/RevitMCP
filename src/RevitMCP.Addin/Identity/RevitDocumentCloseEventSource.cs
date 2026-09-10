@@ -56,17 +56,13 @@ internal sealed class RevitDocumentCloseEventSource : IDocumentCloseEventSource
 
         private static DocumentCloseOutcome Map(RevitAPIEventStatus status)
         {
-            if (status == RevitAPIEventStatus.Cancelled)
+            return status switch
             {
-                return DocumentCloseOutcome.Cancelled;
-            }
-
-            if (status == RevitAPIEventStatus.Failed)
-            {
-                return DocumentCloseOutcome.Failed;
-            }
-
-            return DocumentCloseOutcome.Succeeded;
+                RevitAPIEventStatus.Succeeded => DocumentCloseOutcome.Succeeded,
+                RevitAPIEventStatus.Cancelled => DocumentCloseOutcome.Cancelled,
+                RevitAPIEventStatus.Failed => DocumentCloseOutcome.Failed,
+                _ => DocumentCloseOutcome.Failed
+            };
         }
     }
 }
