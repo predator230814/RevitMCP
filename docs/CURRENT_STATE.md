@@ -120,7 +120,7 @@ UTF-8 sizes:
 | disposable project + selection 1 | 364 | 0 |
 | disposable project + selection 2 | 364 | 0 |
 
-The 361 vs 364 difference is document/view title length across two disposable projects, not selection contents. On the same open project, selection `1` and `2` produced identical **364** byte structured payloads: only the integer `selection.count` changed. Payload size did not grow with selected element count.
+The 361-byte and 364-byte measurements were taken in different disposable project/view contexts, so that cross-context difference is not attributed to selection. On the same open project, selection `1` and `2` produced identical **364**-byte structured payloads; only `selection.count` changed. Payload size did not grow with selected element count.
 
 Explicit `instance_id` retry on the returned id succeeded against the same instance and returned the same active project context. CAP-0001 collection does not create a Revit `Transaction`, `SubTransaction`, or `TransactionGroup`. UI selection changes used for validation are not RevitMCP model writes.
 
