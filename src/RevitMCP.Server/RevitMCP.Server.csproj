@@ -8,6 +8,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="ModelContextProtocol" />
     <ProjectReference Include="..\RevitMCP.Bridge\RevitMCP.Bridge.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="RevitMCP.Server.Tests" />
   </ItemGroup>
 </Project>
