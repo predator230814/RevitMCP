@@ -96,6 +96,41 @@ internal static class TestSupport
             Selection = new GetContextSelection { Count = 0 }
         };
     }
+
+    public static QueryElementsRequest CreateQueryRequest(
+        QueryScope scope = QueryScope.Document,
+        string? documentId = null,
+        int limit = 50,
+        QueryElementFilters? filters = null)
+    {
+        return new QueryElementsRequest
+        {
+            DocumentId = documentId,
+            Scope = scope,
+            Filters = filters ?? new QueryElementFilters { CategoryNames = ["Mechanical Equipment"] },
+            Limit = limit
+        };
+    }
+
+    public static QueryElementsResult CreateQueryResult(
+        string instanceId,
+        string documentId,
+        int matchedCount,
+        bool truncated,
+        params string[] elementRefs)
+    {
+        return new QueryElementsResult
+        {
+            Context = new QueryElementsContext
+            {
+                InstanceId = instanceId,
+                DocumentId = documentId
+            },
+            MatchedCount = matchedCount,
+            Truncated = truncated,
+            ElementRefs = elementRefs
+        };
+    }
 }
 
 internal sealed class FakeDiscovery : IRevitInstanceDiscovery
@@ -124,6 +159,10 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
 
     public Func<GetContextRequest, TimeSpan, CancellationToken, Task<GetContextResult>>? GetContext { get; set; }
 
+    public int QueryElementsCalls { get; private set; }
+
+    public QueryElementsRequest? LastQueryRequest { get; private set; }
+
     public Func<QueryElementsRequest, TimeSpan, CancellationToken, Task<QueryElementsResult>>? QueryElements { get; set; }
 
     public Task<BridgeHandshakeResult> HandshakeAsync(BridgeHandshakeRequest request, CancellationToken cancellationToken)
@@ -150,6 +189,8 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
+        QueryElementsCalls++;
+        LastQueryRequest = request;
         return QueryElements is null
             ? throw new NotSupportedException("This recording client does not implement revit.query_elements.")
             : QueryElements(request, timeout, cancellationToken);

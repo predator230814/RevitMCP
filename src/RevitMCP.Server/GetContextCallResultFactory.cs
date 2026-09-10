@@ -1,4 +1,3 @@
-using System.Text.Json;
 using ModelContextProtocol.Protocol;
 using RevitMCP.Contracts;
 
@@ -6,7 +5,8 @@ namespace RevitMCP.Server;
 
 internal static class GetContextCallResultFactory
 {
-    internal const string StructuredOutputSinceProtocolVersion = "2025-06-18";
+    internal const string StructuredOutputSinceProtocolVersion =
+        McpCallResultFactory.StructuredOutputSinceProtocolVersion;
 
     public static CallToolResult FromOutcome(GetContextOutcome outcome, string? protocolVersion)
     {
@@ -18,23 +18,7 @@ internal static class GetContextCallResultFactory
 
     public static CallToolResult Success(GetContextResult result, string? protocolVersion)
     {
-        ArgumentNullException.ThrowIfNull(result);
-        var json = JsonSerializer.SerializeToElement(result, McpJson.Options);
-        if (SupportsStructuredOutput(protocolVersion))
-        {
-            return new CallToolResult
-            {
-                IsError = false,
-                StructuredContent = json,
-                Content = []
-            };
-        }
-
-        return new CallToolResult
-        {
-            IsError = false,
-            Content = [new TextContentBlock { Text = json.GetRawText() }]
-        };
+        return McpCallResultFactory.Success(result, protocolVersion);
     }
 
     public static CallToolResult Error(
@@ -42,35 +26,11 @@ internal static class GetContextCallResultFactory
         string message,
         IReadOnlyList<InstanceCandidate>? candidates = null)
     {
-        var payload = candidates is null
-            ? JsonSerializer.SerializeToElement(new McpToolError { Code = code, Message = message }, McpJson.Options)
-            : JsonSerializer.SerializeToElement(
-                new McpToolError { Code = code, Message = message, Candidates = candidates },
-                McpJson.Options);
-
-        return new CallToolResult
-        {
-            IsError = true,
-            Content = [new TextContentBlock { Text = payload.GetRawText() }]
-        };
+        return McpCallResultFactory.Error(code, message, candidates);
     }
 
     public static bool SupportsStructuredOutput(string? protocolVersion)
     {
-        if (string.IsNullOrWhiteSpace(protocolVersion))
-        {
-            return true;
-        }
-
-        return string.CompareOrdinal(protocolVersion, StructuredOutputSinceProtocolVersion) >= 0;
-    }
-
-    private sealed class McpToolError
-    {
-        public required string Code { get; init; }
-
-        public required string Message { get; init; }
-
-        public IReadOnlyList<InstanceCandidate>? Candidates { get; init; }
+        return McpCallResultFactory.SupportsStructuredOutput(protocolVersion);
     }
 }

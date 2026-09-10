@@ -27,13 +27,24 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        var tool = Assert.Single(tools);
-        Assert.Equal(GetContextToolMetadata.Name, tool.Name);
-        Assert.Equal(GetContextToolMetadata.Title, tool.Title);
-        Assert.Equal(GetContextToolMetadata.Description, tool.Description);
-        Assert.NotNull(tool.ProtocolTool.Annotations);
-        Assert.True(tool.ProtocolTool.Annotations.ReadOnlyHint);
-        Assert.False(tool.ProtocolTool.Annotations.OpenWorldHint);
+        Assert.Equal(2, tools.Count);
+        Assert.Equal(
+            new[] { GetContextToolMetadata.Name, QueryElementsToolMetadata.Name },
+            tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
+        Assert.DoesNotContain(tools, tool => tool.Name.Contains("handshake", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.get_", StringComparison.Ordinal));
+        Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.query_", StringComparison.Ordinal));
+
+        var getContext = Assert.Single(tools, tool => tool.Name == GetContextToolMetadata.Name);
+        Assert.Equal(GetContextToolMetadata.Title, getContext.Title);
+        Assert.True(getContext.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(getContext.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var query = Assert.Single(tools, tool => tool.Name == QueryElementsToolMetadata.Name);
+        Assert.Equal(QueryElementsToolMetadata.Title, query.Title);
+        Assert.Equal(QueryElementsToolMetadata.Description, query.Description);
+        Assert.True(query.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(query.ProtocolTool.Annotations?.OpenWorldHint);
     }
 
     private static (string FileName, IList<string> Arguments)? ResolveServerCommand()
