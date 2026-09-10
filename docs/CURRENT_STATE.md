@@ -4,7 +4,7 @@ _Last updated: 2026-09-10_
 
 ## Phase
 
-Implementation started / CAP-0001 live-validated on Revit 2026.5 for Home (no document) and an open disposable project with changing UI selection.
+Implementation started / CAP-0001 live-validated on Revit 2026.5 for Home (no document) and an open disposable project with changing UI selection. CAP-0002 `revit_query_elements` is accepted as the next bounded read-only capability and is not yet implemented.
 
 ## What exists
 
@@ -17,6 +17,8 @@ Implementation started / CAP-0001 live-validated on Revit 2026.5 for Home (no do
 - ADR-0002 accepts duplex Windows Named Pipes with JSON-RPC 2.0 for the local bridge, using Microsoft StreamJsonRpc as the initial implementation behind a RevitMCP-owned abstraction.
 - ADR-0003 accepts opaque per-process Revit `instance_id` values, ephemeral LocalAppData registration records, bridge validation, and deterministic multi-instance selection behavior.
 - ADR-0004 accepts a small SDK-style .NET solution with `Contracts`, `Bridge`, `Server`, and one multi-version `Addin` project.
+- ADR-0005 makes bounded, filtered, deterministic agent context and token efficiency a first-class capability-design requirement.
+- ADR-0006 accepts an opaque process-scoped `document_id` for each open-document lifetime and opaque cross-call `element_ref` values based initially on Revit `Element.UniqueId`; `document_id` may be generated from a GUID internally but remains an opaque string contractually.
 - The ADR-0004 solution/project skeleton is committed: `RevitMCP.sln`, `global.json`, centralized build/package props, `src/RevitMCP.Contracts`, `src/RevitMCP.Bridge`, `src/RevitMCP.Server`, one multi-version `src/RevitMCP.Addin` project, and test projects for Contracts, Bridge, Server, and Addin.
 - Revit 2025, 2026, and 2027 are built from the same add-in project using an explicit `RevitVersion` build property; the initial target matrix is `net8.0-windows` for Revit 2025/2026 and `net10.0-windows` for Revit 2027.
 - GitHub Actions compiles the non-Revit projects and the 2025/2026/2027 add-in matrix.
@@ -26,9 +28,12 @@ Implementation started / CAP-0001 live-validated on Revit 2026.5 for Home (no do
 - Autodesk Revit API binaries are not committed to the repository; builds restore version-pinned Nice3point compile-time references instead.
 - Capability specifications are recorded under `docs/capabilities/` before implementation.
 - CAP-0001 accepts `revit_get_context` as the first end-to-end read-only Revit capability. It returns bounded instance, active-document, active-view, and selection-count context without exposing paths or enumerating selection contents.
+- CAP-0002 accepts `revit_query_elements` as the next read-only capability. It requires intentional scope plus at least one bounded filter and returns exact `matched_count`, `truncated`, and at most 100 opaque `element_ref` values rather than element bodies.
 - Bridge specifications are recorded under `docs/bridge/` when accepted ADRs require concrete versioned technical contracts.
 - BRIDGE-0001 defines the stable `bridge.handshake` bootstrap contract, identity validation, and integer bridge-protocol version negotiation. The handshake uses cached add-in/process metadata and must not invoke `ExternalEvent` or inspect the Revit model.
 - BRIDGE-0002 is accepted. It introduces bridge protocol version `2` for `revit.get_context` while keeping version `1` handshake-compatible. A host advertises `[2, 1]` only when a functional CAP-0001 capability service is attached.
+- BRIDGE-0003 is accepted for CAP-0002. It introduces bridge protocol version `3`, which explicitly guarantees both `revit.get_context` and `revit.query_elements`; current capability sets are get-context `{2,3}` and query-elements `{3}`, never a numeric `>=` rule.
+- SERVER-0002 is accepted as the stdio MCP exposure contract for CAP-0002. Once implemented, `tools/list` will expose exactly `revit_get_context` and `revit_query_elements` with explicit registration and strict structured schemas.
 - Execution specifications are recorded under `docs/execution/`.
 - Lifecycle specifications are recorded under `docs/lifecycle/`. LIFECYCLE-0001 is accepted.
 - EXEC-0001 defines one serialized FIFO Revit execution dispatcher per Revit process, backed by one long-lived `ExternalEvent`, asynchronous completion, queued cancellation, non-destructive timeout semantics, failure isolation, and explicit transaction ownership outside the dispatcher.
@@ -42,7 +47,7 @@ Implementation started / CAP-0001 live-validated on Revit 2026.5 for Home (no do
 
 ## CAP-0001 / SERVER-0001 implementation status
 
-CAP-0001 is implemented end-to-end for the accepted base contract. Active-project live validation on Revit 2026.5 is **PASS**. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validation. No additional capability is implemented.
+CAP-0001 is implemented end-to-end for the accepted base contract. Active-project live validation on Revit 2026.5 is **PASS**. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validation. No additional capability is implemented yet.
 
 ### Implemented
 
@@ -55,7 +60,7 @@ CAP-0001 is implemented end-to-end for the accepted base contract. Active-projec
 - Addin `RevitGetContextService` that dispatches through the process-lifetime EXEC-0001 dispatcher and collects only CAP-0001 fields.
 - Lifecycle wiring: metadata -> dispatcher -> capability service -> bridge start. Shutdown order remains dispatcher.Stop -> registration withdrawal/bridge -> dispatcher dispose.
 - SERVER-0001: `RevitMCP.Server` is a real stdio MCP process using official `ModelContextProtocol` `2.2.0` only inside the Server boundary.
-- `tools/list` exposes exactly one Revit tool: `revit_get_context`.
+- `tools/list` exposes exactly one Revit tool today: `revit_get_context`.
 - Fresh current-session discovery, deterministic 0/1/many routing, and a fresh typed bridge invocation (`handshake [2,1]`, require selected protocol exactly `2`) on every MCP call.
 - Modern MCP success uses CAP-0001 `structuredContent` with empty `content`. Errors use `isError: true` and one compact JSON text block without violating the success `outputSchema`.
 
@@ -124,20 +129,42 @@ The 361-byte and 364-byte measurements were taken in different disposable projec
 
 Explicit `instance_id` retry on the returned id succeeded against the same instance and returned the same active project context. CAP-0001 collection does not create a Revit `Transaction`, `SubTransaction`, or `TransactionGroup`. UI selection changes used for validation are not RevitMCP model writes.
 
-### Still pending
+### Still pending compatibility validation
 
 - Family-document live validation: **NOT RUN**.
 - Live Revit 2025 validation: **NOT RUN**.
 - Live Revit 2027 validation: **NOT RUN**.
 - Live multi-instance routing: **NOT RUN**. Automated 0/1/many coverage remains in Server tests.
 
+## CAP-0002 design status
+
+CAP-0002 `revit_query_elements` is **Accepted / NOT IMPLEMENTED**.
+
+Accepted v1 design:
+
+- Read-only query of the active document only.
+- Required `scope = document | active_view`.
+- At least one filter required from category name, family name, type name, level name, or name text substring.
+- Filter arrays use OR within the array; different filter dimensions are ANDed.
+- Revit `ElementType` objects are not returned as query population.
+- Linked-document contents, parameter filters, bounding boxes, arbitrary view ids, geometry, worksets, phases, design options, and pagination are deferred.
+- `limit` defaults to 50 and is capped at 100.
+- Result is only `context { instance_id, document_id }`, exact `matched_count`, `truncated`, and bounded opaque `element_refs`.
+- `document_id` is an opaque active-document lifetime guard from ADR-0006; explicit mismatch returns `DOCUMENT_CONTEXT_CHANGED` rather than silently using another active document.
+- `element_ref` is opaque and initially based on Revit `Element.UniqueId`, not a numeric `ElementId` intended for retention.
+- BRIDGE-0003 protocol v3 guarantees both `revit.get_context` and `revit.query_elements`; get-context support is explicitly `{2,3}`, query-elements support is `{3}`.
+- SERVER-0002 extends the existing stdio host to exactly two MCP tools while preserving fresh discovery, typed Bridge calls, strict structured output, and empty modern text content.
+
 ## What does not exist yet
 
+- no implemented CAP-0002 code yet;
+- no implemented process-lifetime `document_id` service yet; ADR-0006 defines the accepted semantics;
+- no second MCP tool yet; `revit_query_elements` is specified but not implemented;
 - no live CAP-0001 family-document validation;
 - no live lifecycle/handshake/capability validation on Revit 2025 or Revit 2027;
 - no live multi-instance routing validation;
-- no second MCP tool and no `revit_list_instances` MCP exposure;
-- no explicit document identity/addressing model;
+- no CAP-0003 element-inspection capability;
+- no persistent cross-session document identity/addressing model;
 - no request scheduling/fairness policy for multiple clients beyond FIFO serialization required by EXEC-0001;
 - no write-locking or transaction concurrency policy;
 - no deployment or packaging model;
@@ -145,8 +172,10 @@ Explicit `instance_id` retry on the returned id succeeded against the same insta
 
 ## Current priorities
 
-1. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
-2. Do not expand into additional capabilities, writes, Azure/cloud, WebMCP, or UI work.
+1. Review and merge ADR-0006, CAP-0002, BRIDGE-0003, and SERVER-0002 as the accepted source of truth for the next read-only slice.
+2. Implement CAP-0002 in small reviewable steps without introducing CAP-0003 or a generic capability framework.
+3. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations; they are not blockers for starting CAP-0002.
+4. Do not expand into writes, Azure/cloud, WebMCP implementation, or UI work during the CAP-0002 slice.
 
 ## Known constraints
 
@@ -164,12 +193,17 @@ Explicit `instance_id` retry on the returned id succeeded against the same insta
 - Cancellation/timeout before execution prevents queued work from starting; a caller timeout after Revit execution begins must not forcibly abort the Revit thread or an active Revit API operation.
 - The execution dispatcher must not automatically create Revit transactions. Transaction policy belongs to capability/application logic and future accepted write specifications.
 - Revit instance identity is distinct from document identity.
+- ADR-0006 `document_id` is opaque, process/open-document-lifetime scoped, and may use a generated GUID internally without exposing UUID semantics in the contract.
+- Cross-call element handles for new query/inspection capabilities use opaque `element_ref` semantics based initially on Revit `Element.UniqueId`; numeric `ElementId` must not become the durable chaining contract.
+- CAP-0001 `active_view.element_id` remains unchanged because it describes current context rather than a durable element handle.
 - Revit-version-specific API differences should be confined to a compatibility boundary rather than scattered throughout capability or MCP-facing code.
 - Autodesk Revit 2026.5 (`26.5.0.55`) preloads a .NET 10 generation host and RevitAPI `26.5.0.0` while the current 2026 add-in remains `net8.0-windows` compiled against Nice3point `2026.4.10`. The add-in loaded and completed handshake plus ExternalEvent-backed `revit.get_context` on that host; this is recorded compatibility evidence, not authorization to change the accepted TFM/API matrix.
 - Cross-version compatibility requires all supported Revit add-in variants to compile in CI; local compilation against one Revit release is insufficient.
 - Capability contracts are transport-neutral below the MCP adapter and must not depend on a specific LLM/client.
 - `revit_get_context` is bounded by design: no model enumeration, selection enumeration, file paths, usernames, or cloud project identifiers in the base result.
-- A host must not advertise bridge protocol version 2 unless a functional `revit.get_context` capability service is attached.
+- CAP-0002 must remain bounded by intentional filters, a maximum of 100 returned references, exact server-side match counting, and no per-element detail payload.
+- Bridge capability compatibility is explicit, not numeric: current accepted guarantees are handshake `{1,2,3}`, get-context `{2,3}`, query-elements `{3}`. Future versions must be documented before being treated as compatible.
+- A host must not advertise bridge protocol version 2 unless a functional `revit.get_context` capability service is attached; a host must not advertise version 3 unless both `revit.get_context` and `revit.query_elements` are functional.
 - WebMCP must remain in scope as an emerging integration surface.
 - The public repository must not contain confidential internal discussions, project information, credentials, or organization-specific sensitive details.
 - Arbitrary AI-generated code execution inside Revit is not part of the normal production capability surface.
@@ -177,4 +211,4 @@ Explicit `instance_id` retry on the returned id succeeded against the same insta
 
 ## Next task
 
-Do not start CAP-0002. Remaining compatibility work is family-document live validation, live Revit 2025, live Revit 2027, and live multi-instance routing. Do not expand into additional Revit capabilities, writes, Azure/cloud, WebMCP, or UI work.
+After the CAP-0002 specification PR is merged, implement ADR-0006 + CAP-0002 + BRIDGE-0003 + SERVER-0002 in small reviewable slices. Do not start CAP-0003, write operations, Azure/cloud, WebMCP implementation, or UI work as part of that task.
