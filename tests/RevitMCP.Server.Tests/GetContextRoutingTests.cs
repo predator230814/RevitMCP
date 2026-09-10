@@ -103,6 +103,38 @@ public sealed class GetContextRoutingTests
     }
 
     [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task Explicit_empty_or_whitespace_id_returns_not_found_when_one_instance_is_eligible(string instanceId)
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("only", "pipe-only"));
+        var factory = UnusedFactory();
+        var outcome = await CreateService(discovery, factory).ExecuteAsync(instanceId, CancellationToken.None);
+
+        Assert.Equal(McpToolErrorCodes.InstanceNotFound, outcome.ErrorCode);
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData(" ")]
+    [InlineData("\t")]
+    public async Task Explicit_empty_or_whitespace_id_returns_not_found_when_multiple_instances_are_eligible(string instanceId)
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("alpha", "pipe-alpha"));
+        discovery.Instances.Add(TestSupport.Ready("beta", "pipe-beta"));
+        var factory = UnusedFactory();
+        var outcome = await CreateService(discovery, factory).ExecuteAsync(instanceId, CancellationToken.None);
+
+        Assert.Equal(McpToolErrorCodes.InstanceNotFound, outcome.ErrorCode);
+        Assert.Empty(factory.RequestedPipes);
+        Assert.Null(outcome.Candidates);
+    }
+
+    [Theory]
     [InlineData(DiscoveryState.Unavailable, null)]
     [InlineData(DiscoveryState.Incompatible, null)]
     [InlineData(DiscoveryState.Stale, null)]

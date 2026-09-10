@@ -8,7 +8,7 @@ internal static class InstanceTargetResolver
     {
         ArgumentNullException.ThrowIfNull(discovered);
 
-        if (string.IsNullOrWhiteSpace(instanceId))
+        if (instanceId is null)
         {
             return ResolveUnspecified(discovered);
         }
