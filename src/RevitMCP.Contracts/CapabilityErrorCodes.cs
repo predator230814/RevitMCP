@@ -13,4 +13,6 @@ public static class CapabilityErrorCodes
     public const string NoActiveView = "NO_ACTIVE_VIEW";
 
     public const string InvalidQuery = "INVALID_QUERY";
+
+    public const string InvalidInspection = "INVALID_INSPECTION";
 }
