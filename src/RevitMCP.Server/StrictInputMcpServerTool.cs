@@ -23,7 +23,7 @@ internal sealed class StrictInputMcpServerTool : DelegatingMcpServerTool
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (ClosedSchemaArgumentValidator.HasUnexpectedProperties(
+        if (ClosedSchemaArgumentValidator.IsInvalid(
                 request.Params?.Arguments,
                 ProtocolTool.InputSchema))
         {

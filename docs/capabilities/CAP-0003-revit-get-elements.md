@@ -277,11 +277,12 @@ No raw storage value, parameter id/GUID, unit id, definition object, writeabilit
 Required conversion intent:
 
 - parameter has no assigned value -> `null`;
-- string storage -> use the stored string representation;
-- non-string storage -> prefer Revit's formatted `AsValueString()` representation when available;
-- integer storage with no formatted value -> invariant integer text is an acceptable fallback;
-- `ElementId` storage with no formatted value -> a resolvable referenced element name may be used; never expose the numeric `ElementId` merely as a fallback;
-- double storage with no safe formatted representation -> `null`; do not expose raw Revit internal-unit doubles;
+- string storage -> use the stored string representation exactly;
+- Integer and Double storage -> prefer Revit's formatted `AsValueString()` when Revit supplies a usable formatted value;
+- Integer storage with no formatted value -> invariant integer text is an acceptable fallback;
+- Double storage with no safe formatted representation -> `null`; never expose `AsDouble()` or a raw Revit internal-unit double as `value_text`;
+- ElementId storage -> resolve to the referenced element's display name in the active document when possible; otherwise `null`;
+- never expose the numeric ElementId, `ElementId.Value`, or `ElementId.ToString()` as `value_text`;
 - unsupported/unrepresentable value -> `null`.
 
 This deliberately avoids making an unqualified raw Revit double part of the agent contract. Future quantitative/analytical capabilities should define explicit machine-readable unit semantics rather than asking the LLM to infer them from internal Revit units.

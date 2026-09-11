@@ -113,7 +113,7 @@ Top-level `additionalProperties` is false.
 
 Do not advertise UUID/GUID formats or parse them in Server code.
 
-For `instance_id` and `document_id`, empty/whitespace values remain explicit values; only omitted optional `instance_id` is unspecified.
+For `instance_id` and `document_id`, empty/whitespace values remain explicit values. Optional `instance_id` omitted or JSON `null` both mean unspecified, matching CAP-0003 routing. Required MCP fields that are missing, JSON `null`, or an uninterpretable JSON type are `INVALID_REQUEST` at the Server boundary.
 
 `document_id` is required for CAP-0003 and is not defaulted from another MCP call or hidden Server state.
 
