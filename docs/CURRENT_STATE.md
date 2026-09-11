@@ -4,7 +4,7 @@ _Last updated: 2026-09-11_
 
 ## Phase
 
-Implementation started / CAP-0001 and CAP-0002 are live-validated end-to-end on Revit 2026.5. CAP-0003 Revit inspection and BRIDGE-0004 protocol v4 are implemented and live-validated through the typed Bridge. SERVER-0003 registers `revit_get_elements` as the third stdio MCP tool; official-MCP-client-to-Revit live CAP-0003 validation has **not** been run in this slice.
+Implementation started / CAP-0001, CAP-0002, and CAP-0003 are live-validated end-to-end on Revit 2026.5 through the official stdio MCP client. CAP-0003 Revit inspection and BRIDGE-0004 protocol v4 remain live-validated through the typed Bridge as well.
 
 ## What exists
 
@@ -36,7 +36,7 @@ Implementation started / CAP-0001 and CAP-0002 are live-validated end-to-end on 
 - BRIDGE-0003 is accepted and implemented for CAP-0002. It introduces bridge protocol version `3`, which explicitly guarantees both `revit.get_context` and `revit.query_elements`.
 - BRIDGE-0004 is accepted and implemented. Protocol version `4` adds `revit.get_elements` and explicitly preserves get-context `{2,3,4}` and query-elements `{3,4}`. Get-elements is `{4}` only. Unknown v5 remains unsupported for all three.
 - SERVER-0002 is implemented. `revit_query_elements` remains eligible on a v4 host.
-- SERVER-0003 is implemented for the stdio MCP surface. `tools/list` exposes exactly `revit_get_context`, `revit_query_elements`, and `revit_get_elements` with explicit registration and strict structured schemas. CAP-0003 routing requires protocol `{4}`. Official-MCP-client-to-Revit 2026.5 live CAP-0003 validation remains pending.
+- SERVER-0003 is implemented for the stdio MCP surface. `tools/list` exposes exactly `revit_get_context`, `revit_query_elements`, and `revit_get_elements` with explicit registration and strict structured schemas. CAP-0003 routing requires protocol `{4}`. Official-MCP-client-to-Revit 2026.5 live CAP-0003 validation is **PASS**.
 - Execution specifications are recorded under `docs/execution/`.
 - Lifecycle specifications are recorded under `docs/lifecycle/`. LIFECYCLE-0001 is accepted.
 - EXEC-0001 defines one serialized FIFO Revit execution dispatcher per Revit process, backed by one long-lived `ExternalEvent`, asynchronous completion, queued cancellation, non-destructive timeout semantics, failure isolation, and explicit transaction ownership outside the dispatcher.
@@ -223,14 +223,16 @@ CAP-0003 visible parameter extraction: implemented
 BRIDGE-0004 runtime/v4: implemented
 typed Bridge CAP-0003 live Revit 2026.5: PASS
 
-SERVER-0003 MCP tool: implemented (automated)
-CAP-0003 end-to-end MCP live Revit: NOT RUN
+SERVER-0003 MCP tool: implemented
+CAP-0003 official MCP-client-to-Revit 2026.5 live validation: PASS
+SERVER-0003 end-to-end MCP validation: PASS
+CAP-0001 and CAP-0002 regression on the same v4 host: PASS
 
 current runtime Bridge: v4
 current MCP tools: 3
 ```
 
-CAP-0003 Revit inspection is implemented through the typed local Bridge. SERVER-0003 now registers `revit_get_elements` as the third stdio MCP tool. Official-MCP-client-to-Revit live CAP-0003 validation has not been run in this slice.
+CAP-0003 Revit inspection is implemented through the typed local Bridge and exposed as the third stdio MCP tool. Official `ModelContextProtocol` `2.2.0` `McpClient` / `StdioClientTransport` reached live Autodesk Revit 2026.5 through Release `RevitMCP.Server.exe`.
 
 Accepted v1 design:
 
@@ -268,7 +270,7 @@ get_elements   = {4}
 
 A host may advertise `[4,3,2,1]` only when get-context + query-elements + get-elements are all functional.
 
-Accepted SERVER-0003 design adds exactly one third MCP tool, `revit_get_elements`, through the existing stdio Server. It preserves fresh routing, strict MCP closed-input enforcement, authoritative structured output with empty modern `content`, and explicit v4 capability gating. The MCP tool is implemented; live Revit validation of that MCP path is still pending.
+Accepted SERVER-0003 design adds exactly one third MCP tool, `revit_get_elements`, through the existing stdio Server. It preserves fresh routing, strict MCP closed-input enforcement, authoritative structured output with empty modern `content`, and explicit v4 capability gating. The MCP tool is implemented and live-validated on Revit 2026.5.
 
 ### Implemented in this slice
 
@@ -311,24 +313,44 @@ Populated parameter payloads: Mark/Type Mark **692** bytes; Flow/Manufacturer ba
 
 Document guard: `GetElementsAsync` with an explicit non-matching `document_id` while HVAC remained active returned top-level `DOCUMENT_CONTEXT_CHANGED` and did not inspect items. No fallback. A subsequent inspection with the live HVAC `document_id` (`6dd3fbcc-5cbc-4d3c-8785-fc989993ec95`) continued to succeed. Disposable Project1 activation was not required for this guard proof.
 
-Official `ModelContextProtocol` `2.2.0` `McpClient` / `StdioClientTransport` launched Release `RevitMCP.Server.exe` against that v4 host:
+A later official-MCP-client-to-Revit 2026.5 CAP-0003 validation used the same Snowdon Towers Sample HVAC session (`bridge_protocol_version = 4`, `revit_build = 26.5.0.55`) and Release `RevitMCP.Server.exe` built from `main` `1958091`. Official `ModelContextProtocol` `2.2.0` `McpClient` / `StdioClientTransport`:
 
 ```text
-tools/list count = 2
+tools/list count = 3
 revit_get_context
+revit_get_elements
 revit_query_elements
-revit_get_elements NOT present
 ```
 
-`revit_get_context` success: `content = []`, structuredContent **383** bytes. `revit_query_elements` Mechanical Equipment: `matched_count = 37`, `content = []`, structuredContent **1949** bytes. Truncation and zero-match CAP-0002 paths remained green.
+No Bridge/internal `revit.get_*` / `revit.query_*` / handshake tools.
 
-Forbidden CAP-0003 fields (paths, username, cloud ids, PID, pipe, session, numeric element/parameter ids, GUIDs, raw doubles, geometry, bounding boxes, connectors, stack traces) were absent from successful Bridge inspection payloads.
+```text
+CAP-0001 official MCP on the v4 host: PASS
+CAP-0002 official MCP on the v4 host: PASS
+CAP-0003 official MCP basic / parameters / mixed / partial not_found: PASS
+CAP-0003 official MCP active-document switch -> DOCUMENT_CONTEXT_CHANGED: PASS
+```
+
+`revit_get_context` success: Snowdon Towers Sample HVAC, Cover Sheet, `content = []`, structuredContent **383** bytes. `revit_query_elements` Mechanical Equipment: `matched_count = 37`, `content = []`, structuredContent **1949** bytes. Two real refs were reused for inspection (`163dfb52-e8ff-4ce3-8c1c-c35b84917839-0016579f`, `163dfb52-e8ff-4ce3-8c1c-c35b84917839-001659cf`).
+
+MCP `revit_get_elements` evidence (modern success `isError = false`, `content = []`):
+
+- basic five-field projection of both refs: two `ok` items in request order, same instance/document ids, `name = Heat Recovery Unit (HRU)`, `category_name = Mechanical Equipment`, `family_name = HeatRecoveryUnit`, `type_name = Heat Recovery Unit (HRU)`, `level_name = L4`. UTF-8 **614** bytes. No unrequested fields.
+- parameter-only `Mark` / `Type Mark`: instance `Mark` = `HRU409` / `HRU407`; type `Type Mark` present with explicit `value_text = null`. UTF-8 **698** bytes.
+- mixed `fields=["name"]` + `parameter_names=["Mark"]`: only `name` plus the parameter pair. UTF-8 **608** bytes.
+- partial `[valid-ref, "not-a-revit-element-ref"]`: `ok` then `not_found` (`element_ref` + `status` only). UTF-8 **307** bytes.
+- Supply Air Terminal observation: instance `Flow` = `100 CFM` (formatted, not a raw double); instance `Schedule Level` = `L2` (referenced name, not a numeric ElementId); requested `Width` produced no entries on that first Supply ref. UTF-8 **425** bytes.
+
+Document guard: MCP `revit_get_elements` with an explicit non-matching `document_id` while HVAC remained active returned top-level `DOCUMENT_CONTEXT_CHANGED` (`isError = true`, no structuredContent, one compact JSON text block). No fallback.
+
+Active-document switch on the same official MCP path: after activating disposable `Project1` in the same Revit 2026.5 process, `revit_get_context` returned `title = Project1` (`structuredContent` **364** bytes, `content = []`). `revit_get_elements` with the previous HVAC `document_id` (`6dd3fbcc-5cbc-4d3c-8785-fc989993ec95`) and a previously real HVAC `element_ref` then returned top-level `DOCUMENT_CONTEXT_CHANGED` (`isError = true`, no structuredContent, one compact JSON text block). No retry or fallback onto Project1. Switching back to still-open HVAC reused the same `document_id`; `revit_get_context` returned Snowdon Towers Sample HVAC / Cover Sheet (**383** bytes) and `revit_get_elements` on that same HVAC ref succeeded (`status = ok`, `name = Heat Recovery Unit (HRU)`, **244** bytes).
+
+Forbidden CAP-0003 fields (paths, username, cloud ids, PID, pipe, session, numeric element/parameter ids, GUIDs, raw doubles, geometry, bounding boxes, connectors, stack traces) were absent from successful MCP inspection payloads.
 
 CAP-0003 inspection creates no Revit `Transaction`, `SubTransaction`, or `TransactionGroup`.
 
 ## What does not exist yet
 
-- no official-MCP-client-to-Revit 2026.5 live CAP-0003 validation;
 - no full/all-parameter element dump or parameter-name discovery mode;
 - no language-independent parameter identity suitable for writes;
 - no machine-readable quantity/unit contract for raw numeric parameter analytics;
@@ -343,8 +365,8 @@ CAP-0003 inspection creates no Revit `Transaction`, `SubTransaction`, or `Transa
 
 ## Current priorities
 
-1. After Tech Lead review of SERVER-0003, run official-MCP-client-to-Revit 2026.5 CAP-0003 live validation. Do not begin CAP-0004 or writes until review.
-2. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations rather than CAP-0003 blockers.
+1. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations rather than CAP-0003 blockers.
+2. Do not begin CAP-0004 or writes until Tech Lead review of this live MCP evidence.
 3. Do not expand into writes, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work during CAP-0003.
 
 ## Known constraints
@@ -384,4 +406,4 @@ CAP-0003 inspection creates no Revit `Transaction`, `SubTransaction`, or `Transa
 
 ## Next task
 
-The next slice after Tech Lead review of SERVER-0003 is official-MCP-client-to-Revit 2026.5 CAP-0003 live validation. Do not start CAP-0004, write operations, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work until review.
+CAP-0003 / SERVER-0003 official MCP live validation on Revit 2026.5 is recorded. Do not start CAP-0004, write operations, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work until Tech Lead review.
