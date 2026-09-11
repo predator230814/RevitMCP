@@ -17,7 +17,7 @@ public sealed class QueryElementsBridgeTests
         await using var context = await StartFullHostAsync();
 
         Assert.Equal(3, context.Host.Registration?.BridgeProtocolVersion);
-        Assert.Equal(BridgeProtocol.SupportedVersions, context.Host.Metadata.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.QueryElementsVersions, context.Host.Metadata.SupportedProtocolVersions);
     }
 
     [Fact]
@@ -98,10 +98,10 @@ public sealed class QueryElementsBridgeTests
     }
 
     [Fact]
-    public void Unknown_v4_does_not_allow_get_context_or_query()
+    public void Unknown_v5_does_not_allow_get_context_or_query()
     {
-        Assert.False(BridgeProtocol.SupportsGetContext(4));
-        Assert.False(BridgeProtocol.SupportsQueryElements(4));
+        Assert.False(BridgeProtocol.SupportsGetContext(5));
+        Assert.False(BridgeProtocol.SupportsQueryElements(5));
     }
 
     [Fact]

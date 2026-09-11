@@ -24,7 +24,7 @@ public sealed class HandshakeServiceTests
     }
 
     [Fact]
-    public async Task Current_peers_select_protocol_3()
+    public async Task Current_peers_select_protocol_4()
     {
         var metadata = TestSupport.CreateMetadata(protocolVersions: BridgeProtocol.SupportedVersions);
         var service = new BridgeHandshakeService(metadata);
@@ -37,7 +37,7 @@ public sealed class HandshakeServiceTests
             },
             CancellationToken.None);
 
-        Assert.Equal(BridgeProtocol.QueryElementsVersion, result.SelectedProtocolVersion);
+        Assert.Equal(BridgeProtocol.GetElementsVersion, result.SelectedProtocolVersion);
         Assert.Equal(BridgeProtocol.SupportedVersions, result.SupportedProtocolVersions);
     }
 

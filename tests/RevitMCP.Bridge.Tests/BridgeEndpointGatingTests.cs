@@ -149,12 +149,12 @@ public sealed class BridgeEndpointGatingTests
     {
         var capability = new FakeCapabilityService();
         var query = new FakeQueryElementsService();
-        var adapter = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(4), capability, query);
+        var adapter = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(5), capability, query);
         await adapter.HandshakeAsync(
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [4],
+                SupportedProtocolVersions = [5],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);
@@ -168,6 +168,166 @@ public sealed class BridgeEndpointGatingTests
         AssertProtocolIncompatible(contextException);
         Assert.Equal(0, query.InvokeCount);
         Assert.Equal(0, capability.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Get_elements_before_handshake_does_not_invoke_the_service()
+    {
+        var getElements = new FakeGetElementsService();
+        var fixture = CreateFullAdapter(getElements: getElements);
+
+        var exception = await Assert.ThrowsAsync<LocalRpcException>(() =>
+            fixture.Adapter.GetElementsAsync(FakeGetElementsService.CreateValidRequest(), CancellationToken.None));
+
+        AssertHandshakeRequired(exception);
+        Assert.Equal(0, getElements.InvokeCount);
+    }
+
+    [Theory]
+    [InlineData(new[] { 1 })]
+    [InlineData(new[] { 2, 1 })]
+    [InlineData(new[] { 3, 2, 1 })]
+    public async Task Get_elements_after_incompatible_version_does_not_invoke_the_service(int[] versions)
+    {
+        var getElements = new FakeGetElementsService();
+        var fixture = CreateFullAdapter(getElements: getElements);
+        await HandshakeAsync(fixture, versions);
+
+        var exception = await Assert.ThrowsAsync<LocalRpcException>(() =>
+            fixture.Adapter.GetElementsAsync(FakeGetElementsService.CreateValidRequest(), CancellationToken.None));
+
+        AssertProtocolIncompatible(exception);
+        Assert.Equal(0, getElements.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Get_elements_after_v4_invokes_the_service()
+    {
+        var getElements = new FakeGetElementsService { Result = FakeGetElementsService.CreateOkResult() };
+        var fixture = CreateFullAdapter(getElements: getElements);
+        await HandshakeAsync(fixture, [4, 3, 2, 1]);
+
+        var result = await fixture.Adapter.GetElementsAsync(FakeGetElementsService.CreateValidRequest(), CancellationToken.None);
+
+        Assert.Equal(1, getElements.InvokeCount);
+        Assert.Equal(GetElementResultStatus.Ok, Assert.Single(result.Elements).Status);
+    }
+
+    [Fact]
+    public async Task Get_context_and_query_still_execute_after_v4()
+    {
+        var capability = new FakeCapabilityService { Result = FakeCapabilityService.CreateZeroDocumentResult() };
+        var query = new FakeQueryElementsService { Result = FakeQueryElementsService.CreateBoundedResult() };
+        var fixture = CreateFullAdapter(capability, query);
+        await HandshakeAsync(fixture, [4, 3, 2, 1]);
+
+        Assert.Null((await fixture.Adapter.GetContextAsync(new GetContextRequest(), CancellationToken.None)).Document);
+        Assert.Equal(2, (await fixture.Adapter.QueryElementsAsync(FakeQueryElementsService.CreateValidRequest(), CancellationToken.None)).MatchedCount);
+        Assert.Equal(1, capability.InvokeCount);
+        Assert.Equal(1, query.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Unknown_selected_v5_does_not_invoke_get_elements()
+    {
+        var getElements = new FakeGetElementsService();
+        var adapter = new StreamJsonRpcBridgeAdapter(
+            new SelectedVersionHandshake(5),
+            new FakeCapabilityService(),
+            new FakeQueryElementsService(),
+            getElements);
+        await adapter.HandshakeAsync(
+            new BridgeHandshakeRequest
+            {
+                ExpectedInstanceId = "any",
+                SupportedProtocolVersions = [5],
+                ClientName = "RevitMCP.Tests"
+            },
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<LocalRpcException>(() =>
+            adapter.GetElementsAsync(FakeGetElementsService.CreateValidRequest(), CancellationToken.None));
+
+        AssertProtocolIncompatible(exception);
+        Assert.Equal(0, getElements.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Raw_rpc_get_elements_before_handshake_does_not_invoke_the_service()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var getElements = new FakeGetElementsService();
+        await using var context = await StartV4HostAsync(getElements);
+        await using var raw = await RawRpc.ConnectAsync(context.Host.PipeName);
+
+        var exception = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
+            raw.InvokeWithCancellationAsync<GetElementsResult>(
+                "revit.get_elements",
+                [FakeGetElementsService.CreateValidRequest()],
+                CancellationToken.None));
+
+        var mapped = StreamJsonRpcExceptionMapper.FromRemote(exception);
+        Assert.Equal(BridgeErrorCodes.HandshakeFailed, mapped.ErrorCode);
+        Assert.Equal(0, getElements.InvokeCount);
+    }
+
+    [Theory]
+    [InlineData(new[] { 1 })]
+    [InlineData(new[] { 2, 1 })]
+    [InlineData(new[] { 3, 2, 1 })]
+    public async Task Raw_rpc_get_elements_after_incompatible_version_does_not_invoke_the_service(int[] versions)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var getElements = new FakeGetElementsService();
+        await using var context = await StartV4HostAsync(getElements);
+        await using var raw = await RawRpc.ConnectAsync(context.Host.PipeName);
+        await raw.InvokeWithCancellationAsync<BridgeHandshakeResult>(
+            "bridge.handshake",
+            [CreateHandshakeRequest(context.Metadata.InstanceId, versions)],
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
+            raw.InvokeWithCancellationAsync<GetElementsResult>(
+                "revit.get_elements",
+                [FakeGetElementsService.CreateValidRequest()],
+                CancellationToken.None));
+
+        var mapped = StreamJsonRpcExceptionMapper.FromRemote(exception);
+        Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, mapped.ErrorCode);
+        Assert.Equal(0, getElements.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Raw_rpc_get_elements_after_v4_invokes_the_service()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var getElements = new FakeGetElementsService { Result = FakeGetElementsService.CreateOkResult() };
+        await using var context = await StartV4HostAsync(getElements);
+        await using var raw = await RawRpc.ConnectAsync(context.Host.PipeName);
+        await raw.InvokeWithCancellationAsync<BridgeHandshakeResult>(
+            "bridge.handshake",
+            [CreateHandshakeRequest(context.Metadata.InstanceId, [4, 3, 2, 1])],
+            CancellationToken.None);
+
+        var result = await raw.InvokeWithCancellationAsync<GetElementsResult>(
+            "revit.get_elements",
+            [FakeGetElementsService.CreateValidRequest()],
+            CancellationToken.None);
+
+        Assert.Equal(1, getElements.InvokeCount);
+        Assert.Equal(GetElementResultStatus.Ok, Assert.Single(result.Elements).Status);
     }
 
     [Fact]
@@ -222,14 +382,16 @@ public sealed class BridgeEndpointGatingTests
 
     private static AdapterFixture CreateFullAdapter(
         IRevitCapabilityService? capability = null,
-        IRevitQueryElementsService? query = null)
+        IRevitQueryElementsService? query = null,
+        IRevitGetElementsService? getElements = null)
     {
         var metadata = TestSupport.CreateMetadata();
         return new AdapterFixture(
             new StreamJsonRpcBridgeAdapter(
                 new BridgeHandshakeService(metadata),
                 capability ?? new FakeCapabilityService(),
-                query ?? new FakeQueryElementsService()),
+                query ?? new FakeQueryElementsService(),
+                getElements),
             metadata.InstanceId);
     }
 
@@ -272,6 +434,21 @@ public sealed class BridgeEndpointGatingTests
             store,
             new FakeCapabilityService(),
             query,
+            CancellationToken.None);
+        return new HostContext(host, metadata);
+    }
+
+    private static async Task<HostContext> StartV4HostAsync(IRevitGetElementsService getElements)
+    {
+        var metadata = CreateLiveMetadata();
+        var root = Path.Combine(Path.GetTempPath(), "RevitMCP.Tests", Guid.NewGuid().ToString("N"));
+        var store = new FileRegistrationStore(root);
+        var host = await NamedPipeBridgeHost.StartAsync(
+            metadata,
+            store,
+            new FakeCapabilityService(),
+            new FakeQueryElementsService(),
+            getElements,
             CancellationToken.None);
         return new HostContext(host, metadata);
     }
