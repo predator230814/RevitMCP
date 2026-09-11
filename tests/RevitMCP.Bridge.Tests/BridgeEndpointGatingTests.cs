@@ -380,10 +380,162 @@ public sealed class BridgeEndpointGatingTests
         Assert.Equal(0, query.InvokeCount);
     }
 
+    [Fact]
+    public async Task Describe_parameters_before_handshake_does_not_invoke_the_service()
+    {
+        var describe = new FakeDescribeParametersService();
+        var fixture = CreateFullAdapter(describeParameters: describe);
+
+        var exception = await Assert.ThrowsAsync<LocalRpcException>(() =>
+            fixture.Adapter.DescribeParametersAsync(FakeDescribeParametersService.CreateValidRequest(), CancellationToken.None));
+
+        AssertHandshakeRequired(exception);
+        Assert.Equal(0, describe.InvokeCount);
+    }
+
+    [Theory]
+    [InlineData(new[] { 1 })]
+    [InlineData(new[] { 2, 1 })]
+    [InlineData(new[] { 3, 2, 1 })]
+    [InlineData(new[] { 4, 3, 2, 1 })]
+    public async Task Describe_parameters_after_incompatible_version_does_not_invoke_the_service(int[] versions)
+    {
+        var describe = new FakeDescribeParametersService();
+        var fixture = CreateFullAdapter(describeParameters: describe);
+        await HandshakeAsync(fixture, versions);
+
+        var exception = await Assert.ThrowsAsync<LocalRpcException>(() =>
+            fixture.Adapter.DescribeParametersAsync(FakeDescribeParametersService.CreateValidRequest(), CancellationToken.None));
+
+        AssertProtocolIncompatible(exception);
+        Assert.Equal(0, describe.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Describe_parameters_after_v5_invokes_the_service()
+    {
+        var describe = new FakeDescribeParametersService { Result = FakeDescribeParametersService.CreateOkResult() };
+        var fixture = CreateFullAdapter(describeParameters: describe);
+        await HandshakeAsync(fixture, [5, 4, 3, 2, 1]);
+
+        var result = await fixture.Adapter.DescribeParametersAsync(
+            FakeDescribeParametersService.CreateValidRequest(),
+            CancellationToken.None);
+
+        Assert.Equal(1, describe.InvokeCount);
+        Assert.Equal("opaque-parameter-ref", Assert.Single(result.Parameters).ParameterRef);
+    }
+
+    [Fact]
+    public async Task Unknown_selected_v6_does_not_invoke_describe_parameters()
+    {
+        var describe = new FakeDescribeParametersService();
+        var adapter = new StreamJsonRpcBridgeAdapter(
+            new SelectedVersionHandshake(6),
+            new FakeCapabilityService(),
+            new FakeQueryElementsService(),
+            new FakeGetElementsService(),
+            describe);
+        await adapter.HandshakeAsync(
+            new BridgeHandshakeRequest
+            {
+                ExpectedInstanceId = "any",
+                SupportedProtocolVersions = [6],
+                ClientName = "RevitMCP.Tests"
+            },
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<LocalRpcException>(() =>
+            adapter.DescribeParametersAsync(FakeDescribeParametersService.CreateValidRequest(), CancellationToken.None));
+
+        AssertProtocolIncompatible(exception);
+        Assert.Equal(0, describe.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Raw_rpc_describe_parameters_before_handshake_does_not_invoke_the_service()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var describe = new FakeDescribeParametersService();
+        await using var context = await StartV5HostAsync(describe);
+        await using var raw = await RawRpc.ConnectAsync(context.Host.PipeName);
+
+        var exception = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
+            raw.InvokeWithCancellationAsync<DescribeParametersResult>(
+                "revit.describe_parameters",
+                [FakeDescribeParametersService.CreateValidRequest()],
+                CancellationToken.None));
+
+        var mapped = StreamJsonRpcExceptionMapper.FromRemote(exception);
+        Assert.Equal(BridgeErrorCodes.HandshakeFailed, mapped.ErrorCode);
+        Assert.Equal(0, describe.InvokeCount);
+    }
+
+    [Theory]
+    [InlineData(new[] { 1 })]
+    [InlineData(new[] { 2, 1 })]
+    [InlineData(new[] { 3, 2, 1 })]
+    [InlineData(new[] { 4, 3, 2, 1 })]
+    public async Task Raw_rpc_describe_parameters_after_incompatible_version_does_not_invoke_the_service(int[] versions)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var describe = new FakeDescribeParametersService();
+        await using var context = await StartV5HostAsync(describe);
+        await using var raw = await RawRpc.ConnectAsync(context.Host.PipeName);
+        await raw.InvokeWithCancellationAsync<BridgeHandshakeResult>(
+            "bridge.handshake",
+            [CreateHandshakeRequest(context.Metadata.InstanceId, versions)],
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
+            raw.InvokeWithCancellationAsync<DescribeParametersResult>(
+                "revit.describe_parameters",
+                [FakeDescribeParametersService.CreateValidRequest()],
+                CancellationToken.None));
+
+        var mapped = StreamJsonRpcExceptionMapper.FromRemote(exception);
+        Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, mapped.ErrorCode);
+        Assert.Equal(0, describe.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Raw_rpc_describe_parameters_after_v5_invokes_the_service()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var describe = new FakeDescribeParametersService { Result = FakeDescribeParametersService.CreateOkResult() };
+        await using var context = await StartV5HostAsync(describe);
+        await using var raw = await RawRpc.ConnectAsync(context.Host.PipeName);
+        await raw.InvokeWithCancellationAsync<BridgeHandshakeResult>(
+            "bridge.handshake",
+            [CreateHandshakeRequest(context.Metadata.InstanceId, [5, 4, 3, 2, 1])],
+            CancellationToken.None);
+
+        var result = await raw.InvokeWithCancellationAsync<DescribeParametersResult>(
+            "revit.describe_parameters",
+            [FakeDescribeParametersService.CreateValidRequest()],
+            CancellationToken.None);
+
+        Assert.Equal(1, describe.InvokeCount);
+        Assert.Equal("opaque-parameter-ref", Assert.Single(result.Parameters).ParameterRef);
+    }
+
     private static AdapterFixture CreateFullAdapter(
         IRevitCapabilityService? capability = null,
         IRevitQueryElementsService? query = null,
-        IRevitGetElementsService? getElements = null)
+        IRevitGetElementsService? getElements = null,
+        IRevitDescribeParametersService? describeParameters = null)
     {
         var metadata = TestSupport.CreateMetadata();
         return new AdapterFixture(
@@ -391,7 +543,8 @@ public sealed class BridgeEndpointGatingTests
                 new BridgeHandshakeService(metadata),
                 capability ?? new FakeCapabilityService(),
                 query ?? new FakeQueryElementsService(),
-                getElements),
+                getElements,
+                describeParameters),
             metadata.InstanceId);
     }
 
@@ -449,6 +602,22 @@ public sealed class BridgeEndpointGatingTests
             new FakeCapabilityService(),
             new FakeQueryElementsService(),
             getElements,
+            CancellationToken.None);
+        return new HostContext(host, metadata);
+    }
+
+    private static async Task<HostContext> StartV5HostAsync(IRevitDescribeParametersService describe)
+    {
+        var metadata = CreateLiveMetadata();
+        var root = Path.Combine(Path.GetTempPath(), "RevitMCP.Tests", Guid.NewGuid().ToString("N"));
+        var store = new FileRegistrationStore(root);
+        var host = await NamedPipeBridgeHost.StartAsync(
+            metadata,
+            store,
+            new FakeCapabilityService(),
+            new FakeQueryElementsService(),
+            new FakeGetElementsService(),
+            describe,
             CancellationToken.None);
         return new HostContext(host, metadata);
     }
