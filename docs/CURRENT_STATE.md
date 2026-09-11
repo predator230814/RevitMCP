@@ -328,6 +328,7 @@ No Bridge/internal `revit.get_*` / `revit.query_*` / handshake tools.
 CAP-0001 official MCP on the v4 host: PASS
 CAP-0002 official MCP on the v4 host: PASS
 CAP-0003 official MCP basic / parameters / mixed / partial not_found: PASS
+CAP-0003 official MCP active-document switch -> DOCUMENT_CONTEXT_CHANGED: PASS
 ```
 
 `revit_get_context` success: Snowdon Towers Sample HVAC, Cover Sheet, `content = []`, structuredContent **383** bytes. `revit_query_elements` Mechanical Equipment: `matched_count = 37`, `content = []`, structuredContent **1949** bytes. Two real refs were reused for inspection (`163dfb52-e8ff-4ce3-8c1c-c35b84917839-0016579f`, `163dfb52-e8ff-4ce3-8c1c-c35b84917839-001659cf`).
@@ -340,7 +341,9 @@ MCP `revit_get_elements` evidence (modern success `isError = false`, `content = 
 - partial `[valid-ref, "not-a-revit-element-ref"]`: `ok` then `not_found` (`element_ref` + `status` only). UTF-8 **307** bytes.
 - Supply Air Terminal observation: instance `Flow` = `100 CFM` (formatted, not a raw double); instance `Schedule Level` = `L2` (referenced name, not a numeric ElementId); requested `Width` produced no entries on that first Supply ref. UTF-8 **425** bytes.
 
-Document guard: MCP `revit_get_elements` with an explicit non-matching `document_id` while HVAC remained active returned top-level `DOCUMENT_CONTEXT_CHANGED` (`isError = true`, no structuredContent, one compact JSON text block). No fallback. Disposable Project1 activation was not automated.
+Document guard: MCP `revit_get_elements` with an explicit non-matching `document_id` while HVAC remained active returned top-level `DOCUMENT_CONTEXT_CHANGED` (`isError = true`, no structuredContent, one compact JSON text block). No fallback.
+
+Active-document switch on the same official MCP path: after activating disposable `Project1` in the same Revit 2026.5 process, `revit_get_context` returned `title = Project1` (`structuredContent` **364** bytes, `content = []`). `revit_get_elements` with the previous HVAC `document_id` (`6dd3fbcc-5cbc-4d3c-8785-fc989993ec95`) and a previously real HVAC `element_ref` then returned top-level `DOCUMENT_CONTEXT_CHANGED` (`isError = true`, no structuredContent, one compact JSON text block). No retry or fallback onto Project1. Switching back to still-open HVAC reused the same `document_id`; `revit_get_context` returned Snowdon Towers Sample HVAC / Cover Sheet (**383** bytes) and `revit_get_elements` on that same HVAC ref succeeded (`status = ok`, `name = Heat Recovery Unit (HRU)`, **244** bytes).
 
 Forbidden CAP-0003 fields (paths, username, cloud ids, PID, pipe, session, numeric element/parameter ids, GUIDs, raw doubles, geometry, bounding boxes, connectors, stack traces) were absent from successful MCP inspection payloads.
 
