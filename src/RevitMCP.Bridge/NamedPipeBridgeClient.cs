@@ -138,6 +138,28 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             .ConfigureAwait(false);
     }
 
+    public async Task<GetElementsResult> GetElementsAsync(
+        GetElementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<GetElementsResult>(
+                "revit.get_elements",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureGetElementsAllowed,
+                "The Revit inspection request timed out.",
+                "The Revit inspection could not be executed.")
+            .ConfigureAwait(false);
+    }
+
     public async ValueTask DisposeAsync()
     {
         _rpc.Dispose();
@@ -223,7 +245,18 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         {
             throw new BridgeException(
                 BridgeErrorCodes.ProtocolIncompatible,
-                "revit.query_elements requires negotiated bridge protocol version 3.");
+                "revit.query_elements requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsureGetElementsAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsGetElements(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.get_elements requires a negotiated bridge protocol version that explicitly supports it.");
         }
     }
 

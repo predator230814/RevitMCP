@@ -18,6 +18,8 @@ internal interface ILifecycleDispatcher : IDisposable
     IRevitCapabilityService? CreateCapability(BridgeInstanceMetadata metadata);
 
     IRevitQueryElementsService? CreateQuery(BridgeInstanceMetadata metadata);
+
+    IRevitGetElementsService? CreateGetElements(BridgeInstanceMetadata metadata);
 }
 
 internal interface ILifecycleBridge : IAsyncDisposable
@@ -36,6 +38,7 @@ internal interface ILifecycleBridgeFactory
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query,
+        IRevitGetElementsService? getElements,
         CancellationToken cancellationToken);
 }
 

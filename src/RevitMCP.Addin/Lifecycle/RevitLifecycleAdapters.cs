@@ -94,6 +94,12 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         ArgumentNullException.ThrowIfNull(metadata);
         return new RevitQueryElementsService(_dispatcher, metadata, _identity);
     }
+
+    public IRevitGetElementsService CreateGetElements(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitGetElementsService(_dispatcher, metadata, _identity);
+    }
 }
 
 internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFactory
@@ -132,10 +138,11 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query,
+        IRevitGetElementsService? getElements,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, query, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, getElements, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);

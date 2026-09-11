@@ -24,8 +24,34 @@ public sealed class QueryElementsBridgeOrchestrationTests
         var request = context.Client.HandshakeRequest;
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
-        Assert.Equal(new[] { 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
+    }
+
+    [Fact]
+    public async Task Handshake_v4_executes_query()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("id-v4", "pipe-v4", protocolVersion: 4));
+        var factory = Factory((pipe, _, _) =>
+        {
+            var registration = TestSupport.CreateRegistration("id-v4", pipe);
+            return Task.FromResult(new RecordingBridgeClient
+            {
+                Handshake = (handshake, _) =>
+                {
+                    Assert.Equal(BridgeProtocol.SupportedVersions, handshake.SupportedProtocolVersions);
+                    return Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 4));
+                },
+                QueryElements = (_, _, _) => Task.FromResult(TestSupport.CreateQueryResult("id-v4", "doc", 0, false))
+            });
+        });
+
+        var outcome = await CreateService(discovery, factory).ExecuteAsync(null, TestSupport.CreateQueryRequest(), CancellationToken.None);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(1, factory.Clients[0].QueryElementsCalls);
     }
 
     [Fact]

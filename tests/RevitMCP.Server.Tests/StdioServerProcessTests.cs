@@ -34,6 +34,7 @@ public sealed class StdioServerProcessTests
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("handshake", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.get_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.query_", StringComparison.Ordinal));
+        Assert.DoesNotContain(tools, tool => tool.Name == "revit_get_elements");
 
         var getContext = Assert.Single(tools, tool => tool.Name == GetContextToolMetadata.Name);
         Assert.Equal(GetContextToolMetadata.Title, getContext.Title);

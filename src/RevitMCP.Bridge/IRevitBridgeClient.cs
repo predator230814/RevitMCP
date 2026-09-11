@@ -9,4 +9,6 @@ public interface IRevitBridgeClient : IAsyncDisposable
     Task<GetContextResult> GetContextAsync(GetContextRequest request, TimeSpan timeout, CancellationToken cancellationToken);
 
     Task<QueryElementsResult> QueryElementsAsync(QueryElementsRequest request, TimeSpan timeout, CancellationToken cancellationToken);
+
+    Task<GetElementsResult> GetElementsAsync(GetElementsRequest request, TimeSpan timeout, CancellationToken cancellationToken);
 }

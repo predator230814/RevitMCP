@@ -46,7 +46,8 @@ internal static class TestSupport
             AddinVersion = registration.AddinVersion,
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
-                BridgeProtocol.QueryElementsVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.GetElementsVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.QueryElementsVersion => BridgeProtocol.QueryElementsVersions,
                 BridgeProtocol.GetContextVersion => BridgeProtocol.GetContextVersions,
                 _ => BridgeProtocol.HandshakeOnlyVersions
             },
@@ -262,6 +263,17 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return QueryElements is null
             ? throw new NotSupportedException("This recording client does not implement revit.query_elements.")
             : QueryElements(request, timeout, cancellationToken);
+    }
+
+    public Task<GetElementsResult> GetElementsAsync(
+        GetElementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.get_elements.");
     }
 
     public ValueTask DisposeAsync()

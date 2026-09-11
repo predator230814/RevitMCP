@@ -82,13 +82,12 @@ internal sealed class RevitQueryElementsService : IRevitQueryElementsService
         }
 
         var collector = CreateCollector(document, uiDocument, request.Scope);
-        var typeCache = new Dictionary<ElementId, ElementType?>();
-        var levelCache = new Dictionary<ElementId, Level?>();
+        var metadata = new ElementBasicMetadataResolver(document);
         var matches = new List<string>();
 
         foreach (var element in collector.WhereElementIsNotElementType())
         {
-            var candidate = Project(document, element, typeCache, levelCache);
+            var candidate = Project(element, metadata);
             if (QueryElementMatcher.Matches(candidate, request.Filters))
             {
                 matches.Add(candidate.ElementRef);
@@ -135,66 +134,17 @@ internal sealed class RevitQueryElementsService : IRevitQueryElementsService
         return new FilteredElementCollector(document, view.Id);
     }
 
-    private static QueryElementCandidate Project(
-        Document document,
-        Element element,
-        Dictionary<ElementId, ElementType?> typeCache,
-        Dictionary<ElementId, Level?> levelCache)
+    private static QueryElementCandidate Project(Element element, ElementBasicMetadataResolver metadata)
     {
-        var type = ResolveType(document, element.GetTypeId(), typeCache);
-        var level = ResolveLevel(document, element.LevelId, levelCache);
-
+        var basic = metadata.Read(element);
         return new QueryElementCandidate
         {
             ElementRef = element.UniqueId,
-            ElementName = NullIfEmpty(element.Name),
-            CategoryName = NullIfEmpty(element.Category?.Name),
-            FamilyName = NullIfEmpty(type?.FamilyName),
-            TypeName = NullIfEmpty(type?.Name),
-            LevelName = NullIfEmpty(level?.Name)
+            ElementName = basic.Name,
+            CategoryName = basic.CategoryName,
+            FamilyName = basic.FamilyName,
+            TypeName = basic.TypeName,
+            LevelName = basic.LevelName
         };
     }
-
-    private static ElementType? ResolveType(
-        Document document,
-        ElementId typeId,
-        Dictionary<ElementId, ElementType?> cache)
-    {
-        if (typeId == ElementId.InvalidElementId)
-        {
-            return null;
-        }
-
-        if (cache.TryGetValue(typeId, out var cached))
-        {
-            return cached;
-        }
-
-        var type = document.GetElement(typeId) as ElementType;
-        cache[typeId] = type;
-        return type;
-    }
-
-    private static Level? ResolveLevel(
-        Document document,
-        ElementId levelId,
-        Dictionary<ElementId, Level?> cache)
-    {
-        if (levelId == ElementId.InvalidElementId)
-        {
-            return null;
-        }
-
-        if (cache.TryGetValue(levelId, out var cached))
-        {
-            return cached;
-        }
-
-        var level = document.GetElement(levelId) as Level;
-        cache[levelId] = level;
-        return level;
-    }
-
-    private static string? NullIfEmpty(string? value) =>
-        string.IsNullOrEmpty(value) ? null : value;
 }

@@ -8,16 +8,19 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitBridgeService _handshake;
     private readonly IRevitCapabilityService? _capability;
     private readonly IRevitQueryElementsService? _query;
+    private readonly IRevitGetElementsService? _getElements;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
         IRevitBridgeService handshake,
         IRevitCapabilityService? capability,
-        IRevitQueryElementsService? query = null)
+        IRevitQueryElementsService? query = null,
+        IRevitGetElementsService? getElements = null)
     {
         _handshake = handshake;
         _capability = capability;
         _query = query;
+        _getElements = getElements;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -98,6 +101,39 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit query could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.get_elements")]
+    public async Task<GetElementsResult> GetElementsAsync(GetElementsRequest request, CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(BridgeProtocol.SupportsGetElements, "revit.get_elements is not available on this connection.");
+        if (_getElements is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.get_elements is not available on this endpoint."));
+        }
+
+        try
+        {
+            return await _getElements.GetElementsAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The Revit inspection could not be executed."));
         }
     }
 
