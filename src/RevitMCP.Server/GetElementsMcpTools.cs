@@ -34,8 +34,8 @@ internal sealed class GetElementsMcpTools
         if (document_id is null || element_refs is null || projection is null)
         {
             return McpCallResultFactory.Error(
-                CapabilityErrorCodes.InvalidInspection,
-                "The element inspection request is invalid.");
+                McpToolErrorCodes.InvalidRequest,
+                ToolErrorMessages.InvalidRequest);
         }
 
         var request = new GetElementsRequest

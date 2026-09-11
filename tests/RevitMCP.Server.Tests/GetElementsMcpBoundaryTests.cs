@@ -336,6 +336,76 @@ public sealed class GetElementsMcpBoundaryTests
         Assert.Empty(factory.RequestedPipes);
     }
 
+    [Theory]
+    [InlineData("document_id")]
+    [InlineData("element_refs")]
+    [InlineData("projection")]
+    public async Task Omitted_required_field_is_rejected_before_discovery(string requiredName)
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var arguments = ValidGetElementsArguments();
+        arguments.Remove(requiredName);
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        AssertInvalidRequest(result);
+        Assert.DoesNotContain("INVALID_INSPECTION", Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text, StringComparison.Ordinal);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+        Assert.Empty(factory.Clients);
+    }
+
+    [Theory]
+    [InlineData("document_id")]
+    [InlineData("element_refs")]
+    [InlineData("projection")]
+    public async Task Explicit_null_required_field_is_rejected_before_discovery(string requiredName)
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var arguments = ValidGetElementsArguments();
+        arguments[requiredName] = TestSupport.JsonValue("null");
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        AssertInvalidRequest(result);
+        Assert.DoesNotContain("INVALID_INSPECTION", Assert.IsType<TextContentBlock>(Assert.Single(result.Content)).Text, StringComparison.Ordinal);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+        Assert.Empty(factory.Clients);
+    }
+
+    [Theory]
+    [InlineData("document_id", "1")]
+    [InlineData("element_refs", "\"ref-1\"")]
+    [InlineData("projection", "\"name\"")]
+    public async Task Uninterpretable_required_field_shape_is_rejected_before_discovery(string requiredName, string json)
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var arguments = ValidGetElementsArguments();
+        arguments[requiredName] = TestSupport.JsonValue(json);
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        AssertInvalidRequest(result);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+        Assert.Empty(factory.Clients);
+    }
+
+    [Fact]
+    public async Task Explicit_null_instance_id_means_unspecified_and_still_executes()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var arguments = ValidGetElementsArguments();
+        arguments["instance_id"] = TestSupport.JsonValue("null");
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        Assert.False(result.IsError);
+        Assert.Equal(1, discovery.CallCount);
+        Assert.Equal(new[] { "pipe-only" }, factory.RequestedPipes);
+    }
+
     [Fact]
     public async Task Valid_get_elements_arguments_still_execute()
     {

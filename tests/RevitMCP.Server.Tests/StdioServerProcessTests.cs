@@ -66,6 +66,19 @@ public sealed class StdioServerProcessTests
         var text = Assert.IsType<TextContentBlock>(Assert.Single(rejected.Content)).Text;
         Assert.Contains(McpToolErrorCodes.InvalidRequest, text, StringComparison.Ordinal);
         Assert.DoesNotContain("NO_REVIT_INSTANCE", text, StringComparison.Ordinal);
+
+        var missingRequired = await client.CallToolAsync(
+            GetElementsToolMetadata.Name,
+            new Dictionary<string, object?>
+            {
+                ["element_refs"] = new[] { "ref-1" },
+                ["projection"] = new Dictionary<string, object?> { ["fields"] = new[] { "name" } }
+            });
+        Assert.True(missingRequired.IsError);
+        var missingText = Assert.IsType<TextContentBlock>(Assert.Single(missingRequired.Content)).Text;
+        Assert.Contains(McpToolErrorCodes.InvalidRequest, missingText, StringComparison.Ordinal);
+        Assert.DoesNotContain("NO_REVIT_INSTANCE", missingText, StringComparison.Ordinal);
+        Assert.DoesNotContain("INVALID_INSPECTION", missingText, StringComparison.Ordinal);
     }
 
     private static (string FileName, IList<string> Arguments)? ResolveServerCommand()
