@@ -142,6 +142,63 @@ internal static class TestSupport
         using var document = JsonDocument.Parse(json);
         return document.RootElement.Clone();
     }
+
+    public static GetElementsRequest CreateGetElementsRequest(
+        string documentId = "doc-1",
+        IReadOnlyList<string>? elementRefs = null,
+        GetElementsProjection? projection = null)
+    {
+        return new GetElementsRequest
+        {
+            DocumentId = documentId,
+            ElementRefs = elementRefs ?? ["ref-1"],
+            Projection = projection ?? new GetElementsProjection
+            {
+                Fields = [GetElementField.Name]
+            }
+        };
+    }
+
+    public static GetElementsResult CreateGetElementsResult(
+        string instanceId,
+        string documentId,
+        params GetElementResult[] elements)
+    {
+        return new GetElementsResult
+        {
+            Context = new GetElementsContext
+            {
+                InstanceId = instanceId,
+                DocumentId = documentId
+            },
+            Elements = elements
+        };
+    }
+
+    public static GetElementResult CreateOkElement(
+        string elementRef,
+        ProjectedString? name = null,
+        IReadOnlyList<GetElementParameter>? parameters = null,
+        bool? parametersTruncated = null)
+    {
+        return new GetElementResult
+        {
+            ElementRef = elementRef,
+            Status = GetElementResultStatus.Ok,
+            Name = name ?? ProjectedString.Omitted,
+            Parameters = parameters,
+            ParametersTruncated = parametersTruncated
+        };
+    }
+
+    public static GetElementResult CreateNotFoundElement(string elementRef)
+    {
+        return new GetElementResult
+        {
+            ElementRef = elementRef,
+            Status = GetElementResultStatus.NotFound
+        };
+    }
 }
 
 internal static class McpToolInvoke
@@ -265,15 +322,22 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
             : QueryElements(request, timeout, cancellationToken);
     }
 
+    public int GetElementsCalls { get; private set; }
+
+    public GetElementsRequest? LastGetElementsRequest { get; private set; }
+
+    public Func<GetElementsRequest, TimeSpan, CancellationToken, Task<GetElementsResult>>? GetElements { get; set; }
+
     public Task<GetElementsResult> GetElementsAsync(
         GetElementsRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        _ = request;
-        _ = timeout;
-        _ = cancellationToken;
-        throw new NotSupportedException("This recording client does not implement revit.get_elements.");
+        GetElementsCalls++;
+        LastGetElementsRequest = request;
+        return GetElements is null
+            ? throw new NotSupportedException("This recording client does not implement revit.get_elements.")
+            : GetElements(request, timeout, cancellationToken);
     }
 
     public ValueTask DisposeAsync()

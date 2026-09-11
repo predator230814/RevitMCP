@@ -1,4 +1,5 @@
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 using RevitMCP.Server;
 using Xunit;
 
@@ -27,14 +28,13 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(2, tools.Count);
+        Assert.Equal(3, tools.Count);
         Assert.Equal(
-            new[] { GetContextToolMetadata.Name, QueryElementsToolMetadata.Name },
+            new[] { GetContextToolMetadata.Name, GetElementsToolMetadata.Name, QueryElementsToolMetadata.Name },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("handshake", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.get_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.query_", StringComparison.Ordinal));
-        Assert.DoesNotContain(tools, tool => tool.Name == "revit_get_elements");
 
         var getContext = Assert.Single(tools, tool => tool.Name == GetContextToolMetadata.Name);
         Assert.Equal(GetContextToolMetadata.Title, getContext.Title);
@@ -46,6 +46,26 @@ public sealed class StdioServerProcessTests
         Assert.Equal(QueryElementsToolMetadata.Description, query.Description);
         Assert.True(query.ProtocolTool.Annotations?.ReadOnlyHint);
         Assert.False(query.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var getElements = Assert.Single(tools, tool => tool.Name == GetElementsToolMetadata.Name);
+        Assert.Equal(GetElementsToolMetadata.Title, getElements.Title);
+        Assert.Equal(GetElementsToolMetadata.Description, getElements.Description);
+        Assert.True(getElements.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(getElements.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var rejected = await client.CallToolAsync(
+            GetElementsToolMetadata.Name,
+            new Dictionary<string, object?>
+            {
+                ["document_id"] = "doc-1",
+                ["element_refs"] = new[] { "ref-1" },
+                ["projection"] = new Dictionary<string, object?> { ["fields"] = new[] { "name" } },
+                ["unexpected"] = true
+            });
+        Assert.True(rejected.IsError);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(rejected.Content)).Text;
+        Assert.Contains(McpToolErrorCodes.InvalidRequest, text, StringComparison.Ordinal);
+        Assert.DoesNotContain("NO_REVIT_INSTANCE", text, StringComparison.Ordinal);
     }
 
     private static (string FileName, IList<string> Arguments)? ResolveServerCommand()

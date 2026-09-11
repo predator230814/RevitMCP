@@ -42,6 +42,8 @@ internal static class ServerHost
         services.AddSingleton<GetContextMcpTools>();
         services.AddSingleton<QueryElementsApplicationService>();
         services.AddSingleton<QueryElementsMcpTools>();
+        services.AddSingleton<GetElementsApplicationService>();
+        services.AddSingleton<GetElementsMcpTools>();
         services.AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
@@ -52,6 +54,7 @@ internal static class ServerHost
             })
             .WithStdioServerTransport()
             .WithGetContextTool()
-            .WithQueryElementsTool();
+            .WithQueryElementsTool()
+            .WithGetElementsTool();
     }
 }
