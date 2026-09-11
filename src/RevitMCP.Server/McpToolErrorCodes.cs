@@ -8,4 +8,5 @@ internal static class McpToolErrorCodes
     public const string InstanceUnavailable = "INSTANCE_UNAVAILABLE";
     public const string ExecutionTimeout = "REVIT_EXECUTION_TIMEOUT";
     public const string ExecutionFailed = "REVIT_EXECUTION_FAILED";
+    public const string InvalidRequest = "INVALID_REQUEST";
 }

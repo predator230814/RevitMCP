@@ -1,5 +1,6 @@
 using System.Text.Json;
 using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using RevitMCP.Contracts;
 using RevitMCP.Server;
 using Xunit;
@@ -178,6 +179,7 @@ public sealed class QueryElementsMcpBoundaryTests
     [InlineData(CapabilityErrorCodes.ExecutionTimeout, "The Revit query timed out.")]
     [InlineData(CapabilityErrorCodes.ExecutionFailed, "The Revit query could not be executed.")]
     [InlineData(McpToolErrorCodes.NoRevitInstance, ToolErrorMessages.NoRevitInstance)]
+    [InlineData(McpToolErrorCodes.InvalidRequest, ToolErrorMessages.InvalidRequest)]
     public void Error_result_is_compact_json_text_without_structured_content(string code, string message)
     {
         var result = McpCallResultFactory.Error(code, message);
@@ -209,14 +211,149 @@ public sealed class QueryElementsMcpBoundaryTests
             candidate.EnumerateObject().Select(property => property.Name).ToArray());
     }
 
+    [Fact]
+    public async Task Unexpected_top_level_property_is_rejected_without_discovery()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool();
+        var result = await McpToolInvoke.InvokeAsync(
+            tool,
+            ValidQueryArguments(extra: ("unexpected", TestSupport.JsonValue("true"))));
+
+        AssertInvalidRequest(result);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Document_id_typo_is_rejected_and_not_treated_as_omitted_guard()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var arguments = ValidQueryArguments();
+        arguments["documentId"] = TestSupport.JsonValue("\"doc-1\"");
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        AssertInvalidRequest(result);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+        Assert.Empty(factory.Clients);
+    }
+
+    [Fact]
+    public async Task Instance_id_typo_is_rejected_and_not_auto_selected()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var arguments = ValidQueryArguments();
+        arguments["instanceId"] = TestSupport.JsonValue("\"only\"");
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        AssertInvalidRequest(result);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Unexpected_nested_filter_property_is_rejected()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool();
+        var arguments = ValidQueryArguments();
+        arguments["filters"] = TestSupport.JsonValue(
+            """{"category_names":["Mechanical Equipment"],"parameter_name":"Mark"}""");
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        AssertInvalidRequest(result);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Valid_query_arguments_still_execute()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var result = await McpToolInvoke.InvokeAsync(tool, ValidQueryArguments());
+
+        Assert.False(result.IsError);
+        Assert.Equal(1, discovery.CallCount);
+        Assert.Equal(new[] { "pipe-only" }, factory.RequestedPipes);
+        Assert.Equal(1, factory.Clients[0].QueryElementsCalls);
+        Assert.Equal("doc-1", factory.Clients[0].LastQueryRequest!.DocumentId);
+    }
+
     private static Tool CreateProtocolTool()
     {
+        return CreateInvocableTool().Tool.ProtocolTool;
+    }
+
+    private static (
+        McpServerTool Tool,
+        FakeDiscovery Discovery,
+        RecordingBridgeClientFactory Factory) CreateInvocableTool(bool readyInstance = false)
+    {
         var discovery = new FakeDiscovery();
-        var factory = new RecordingBridgeClientFactory
+        RecordingBridgeClientFactory factory;
+        if (readyInstance)
         {
-            Connect = (_, _, _) => throw new InvalidOperationException("unused")
-        };
+            discovery.Instances.Add(TestSupport.Ready("only", "pipe-only", protocolVersion: 3));
+            factory = new RecordingBridgeClientFactory
+            {
+                Connect = (pipe, _, _) =>
+                {
+                    Assert.Equal("pipe-only", pipe);
+                    var registration = TestSupport.CreateRegistration("only", "pipe-only");
+                    return Task.FromResult(new RecordingBridgeClient
+                    {
+                        Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, 3)),
+                        QueryElements = (request, _, _) => Task.FromResult(
+                            TestSupport.CreateQueryResult("only", request.DocumentId ?? "doc", 0, false))
+                    });
+                }
+            };
+        }
+        else
+        {
+            factory = new RecordingBridgeClientFactory
+            {
+                Connect = (_, _, _) => throw new InvalidOperationException("Bridge invocation should not occur.")
+            };
+        }
+
         var application = new QueryElementsApplicationService(discovery, factory, new ServerTimeouts());
-        return QueryElementsToolRegistration.Create(new QueryElementsMcpTools(application)).ProtocolTool;
+        var tool = QueryElementsToolRegistration.Create(new QueryElementsMcpTools(application));
+        return (tool, discovery, factory);
+    }
+
+    private static Dictionary<string, JsonElement> ValidQueryArguments(
+        params (string Name, JsonElement Value)[] extra)
+    {
+        var arguments = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        {
+            ["scope"] = TestSupport.JsonValue("\"document\""),
+            ["filters"] = TestSupport.JsonValue("""{"category_names":["Mechanical Equipment"]}"""),
+            ["document_id"] = TestSupport.JsonValue("\"doc-1\""),
+            ["limit"] = TestSupport.JsonValue("10")
+        };
+
+        foreach (var (name, value) in extra)
+        {
+            arguments[name] = value;
+        }
+
+        return arguments;
+    }
+
+    private static void AssertInvalidRequest(CallToolResult result)
+    {
+        Assert.True(result.IsError);
+        Assert.False(result.StructuredContent.HasValue);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
+        using var document = JsonDocument.Parse(text.Text);
+        Assert.Equal(McpToolErrorCodes.InvalidRequest, document.RootElement.GetProperty("code").GetString());
+        Assert.Equal(ToolErrorMessages.InvalidRequest, document.RootElement.GetProperty("message").GetString());
+        Assert.DoesNotContain("JsonException", text.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("at RevitMCP", text.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("documentId", text.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("instanceId", text.Text, StringComparison.Ordinal);
     }
 }

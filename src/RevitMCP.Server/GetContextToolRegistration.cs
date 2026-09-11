@@ -36,6 +36,6 @@ internal static class GetContextToolRegistration
                 Services = services
             });
         tool.ProtocolTool.InputSchema = Cap0001JsonSchemas.Input;
-        return tool;
+        return StrictInputMcpServerTool.Wrap(tool);
     }
 }

@@ -334,7 +334,10 @@ INSTANCE_NOT_FOUND
 INSTANCE_UNAVAILABLE
 REVIT_EXECUTION_TIMEOUT
 REVIT_EXECUTION_FAILED
+INVALID_REQUEST
 ```
+
+`INVALID_REQUEST` is a Server MCP-boundary code. Unexpected top-level properties, including `instance_id` typos, are rejected before discovery or Bridge invocation. Do not leak binder or serializer exception detail.
 
 For `INSTANCE_REQUIRED`, a bounded `candidates` field may be included as defined above.
 

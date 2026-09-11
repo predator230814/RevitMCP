@@ -1,3 +1,7 @@
+using System.Text.Json;
+using System.Threading.Channels;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using RevitMCP.Bridge;
 using RevitMCP.Contracts;
 using RevitMCP.Server;
@@ -130,6 +134,70 @@ internal static class TestSupport
             Truncated = truncated,
             ElementRefs = elementRefs
         };
+    }
+
+    public static JsonElement JsonValue(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
+}
+
+internal static class McpToolInvoke
+{
+    public static async Task<CallToolResult> InvokeAsync(
+        McpServerTool tool,
+        IDictionary<string, JsonElement>? arguments)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        await using var transport = new UnusedTransport();
+        await using var server = McpServer.Create(
+            transport,
+            new McpServerOptions
+            {
+                ServerInfo = new Implementation
+                {
+                    Name = "RevitMCP.Server.Tests",
+                    Version = "0.1.0"
+                }
+            });
+
+        var request = new RequestContext<CallToolRequestParams>(
+            server,
+            new JsonRpcRequest
+            {
+                Method = "tools/call",
+                Id = new RequestId("strict-input")
+            },
+            new CallToolRequestParams
+            {
+                Name = tool.ProtocolTool.Name,
+                Arguments = arguments
+            });
+
+        return await tool.InvokeAsync(request, CancellationToken.None);
+    }
+}
+
+internal sealed class UnusedTransport : ITransport
+{
+    private readonly Channel<JsonRpcMessage> _messages = Channel.CreateUnbounded<JsonRpcMessage>();
+
+    public ChannelReader<JsonRpcMessage> MessageReader => _messages.Reader;
+
+    public string? SessionId => null;
+
+    public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken)
+    {
+        _ = message;
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.CompletedTask;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _messages.Writer.TryComplete();
+        return ValueTask.CompletedTask;
     }
 }
 

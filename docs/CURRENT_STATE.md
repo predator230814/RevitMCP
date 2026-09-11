@@ -69,8 +69,8 @@ CAP-0001 is implemented end-to-end for the accepted base contract. Active-projec
 - Contracts: empty request, snake_case, project/family kinds, string `element_id`, explicit null document/view, selection `count` only, no selected IDs/paths/user/cloud/property bags, round-trip, exact accepted field set. CAP-0002 query contracts: exact snake_case and accepted request/filter/result fields, opaque `document_id` / `element_ref` strings without GUID/UUID schema, both scopes, zero and bounded refs, no per-element metadata.
 - Bridge: `[3,2,1]+[3,2,1] -> 3`, CAP-0001-only host still `[2,1]`, handshake-only `[1]`, query-only never advertises v3, get-context allowed after v2 and v3, rejected after v1 and unknown v4, query allowed after v3 only, Named Pipe query round-trip, capability errors survive StreamJsonRpc, query timeout / remote-token cancel / caller cancellation, existing handshake/get-context tests remain green. Endpoint adapter gating: query/get-context before handshake and after incompatible selected versions do not invoke the underlying service, including raw StreamJsonRpc peers; query-only `[1]` hosts cannot execute query; v3 query and v2/v3 get-context still execute.
 - Addin/lifecycle: existing EXEC-0001 and LIFECYCLE-0001 tests, capability and query created before bridge start, handshake-only services remain nullable, no v3 advertisement without both services. ADR-0006 identity bookkeeping plus Closing/Closed cleanup: succeeded forgets, cancelled/failed preserve, unmatched Closed is harmless. CAP-0002 request/filter tests: scope/bounds, OR/AND, ordinal case-insensitive matching, no trimming, text substring, unavailable metadata cannot match, exact count/order/truncation.
-- Server: 0/1/many routing remains deterministic for both tools, get-context eligibility is explicitly `{2,3}`, query eligibility is `{3}`, v1/v2/unknown v4 are query-ineligible, v3 handshake followed by `QueryElementsAsync` succeeds, CAP-0001 routing remains green, process-level stdio `tools/list` exposes exactly `revit_get_context` and `revit_query_elements`, no Autodesk Revit API / AspNetCore MCP package.
-- Solution tests: Contracts 37, Bridge 66, Addin 70, Server 92. All passed.
+- Server: 0/1/many routing remains deterministic for both tools, get-context eligibility is explicitly `{2,3}`, query eligibility is `{3}`, v1/v2/unknown v4 are query-ineligible, v3 handshake followed by `QueryElementsAsync` succeeds, CAP-0001 routing remains green, process-level stdio `tools/list` exposes exactly `revit_get_context` and `revit_query_elements`, advertised closed input schemas are enforced at the MCP tool boundary before discovery/Bridge, no Autodesk Revit API / AspNetCore MCP package.
+- Solution tests: Contracts 37, Bridge 66, Addin 70, Server 101. All passed.
 - Server Release `net10.0` build succeeded.
 - Addin Release builds: Revit 2025 `net8.0-windows`, Revit 2026 `net8.0-windows`, Revit 2027 `net10.0-windows`. Each output has `StreamJsonRpc.dll` and `Nerdbank.Streams.dll` present; `RevitAPI.dll` and `RevitAPIUI.dll` absent.
 
@@ -158,6 +158,7 @@ CAP-0001 regression on same v3 host: PASS
 - Direct level matching uses only `element.LevelId` -> `Level.Name`. No geometry/host/room inference.
 - Typed `NamedPipeBridgeClient.QueryElementsAsync` gated to protocol `{3}`.
 - SERVER-0002 MCP tool `revit_query_elements` is registered explicitly beside `revit_get_context`. Agent input maps to transport-neutral `QueryElementsRequest` (`instance_id` stays a Server routing field). Query routing uses `ResolveForQueryElements` with the same opaque-id / 0/1/many algorithm as CAP-0001 and explicit `{3}` eligibility.
+- MCP tool input is closed at runtime, not only in advertised schemas. Unexpected top-level names, `instance_id` / `document_id` typos, and unexpected nested `filters` properties return `INVALID_REQUEST` (`isError: true`, compact `{code,message}`) before discovery or Bridge work. This is a Server MCP-boundary code, not CAP-0002 `INVALID_QUERY`.
 
 Accepted v1 design (unchanged):
 
@@ -263,4 +264,4 @@ CAP-0002 query collection does not create a Revit `Transaction`, `SubTransaction
 
 ## Next task
 
-SERVER-0002 is complete and live-validated. The next architectural task is to define CAP-0003 element inspection/details. Do not implement CAP-0003, write operations, Azure/cloud, WebMCP implementation, or UI work until Tech Lead review.
+SERVER-0002 is complete and live-validated. Closed input-schema enforcement was added after Tech Lead review; automated Server boundary tests plus a normal stdio smoke were used for the fix (no Snowdon matrix rerun). The next architectural task is to define CAP-0003 element inspection/details. Do not implement CAP-0003, write operations, Azure/cloud, WebMCP implementation, or UI work until Tech Lead review.

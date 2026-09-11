@@ -36,6 +36,6 @@ internal static class QueryElementsToolRegistration
                 Services = services
             });
         tool.ProtocolTool.InputSchema = Cap0002JsonSchemas.Input;
-        return tool;
+        return StrictInputMcpServerTool.Wrap(tool);
     }
 }
