@@ -40,6 +40,8 @@ internal static class ServerHost
         services.AddSingleton<IRevitInstanceDiscovery, LocalRevitInstanceDiscovery>();
         services.AddSingleton<GetContextApplicationService>();
         services.AddSingleton<GetContextMcpTools>();
+        services.AddSingleton<QueryElementsApplicationService>();
+        services.AddSingleton<QueryElementsMcpTools>();
         services.AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
@@ -49,6 +51,7 @@ internal static class ServerHost
                 };
             })
             .WithStdioServerTransport()
-            .WithGetContextTool();
+            .WithGetContextTool()
+            .WithQueryElementsTool();
     }
 }

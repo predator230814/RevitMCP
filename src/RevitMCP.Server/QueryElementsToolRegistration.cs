@@ -3,9 +3,9 @@ using ModelContextProtocol.Server;
 
 namespace RevitMCP.Server;
 
-internal static class GetContextToolRegistration
+internal static class QueryElementsToolRegistration
 {
-    public static IMcpServerBuilder WithGetContextTool(this IMcpServerBuilder builder)
+    public static IMcpServerBuilder WithQueryElementsTool(this IMcpServerBuilder builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
         builder.Services.AddSingleton<McpServerTool>(Create);
@@ -15,27 +15,27 @@ internal static class GetContextToolRegistration
     public static McpServerTool Create(IServiceProvider services)
     {
         ArgumentNullException.ThrowIfNull(services);
-        return Create(services.GetRequiredService<GetContextMcpTools>(), services);
+        return Create(services.GetRequiredService<QueryElementsMcpTools>(), services);
     }
 
-    public static McpServerTool Create(GetContextMcpTools tools, IServiceProvider? services = null)
+    public static McpServerTool Create(QueryElementsMcpTools tools, IServiceProvider? services = null)
     {
         ArgumentNullException.ThrowIfNull(tools);
         var tool = McpServerTool.Create(
-            tools.GetContextAsync,
+            tools.QueryElementsAsync,
             new McpServerToolCreateOptions
             {
-                Name = GetContextToolMetadata.Name,
-                Title = GetContextToolMetadata.Title,
-                Description = GetContextToolMetadata.Description,
+                Name = QueryElementsToolMetadata.Name,
+                Title = QueryElementsToolMetadata.Title,
+                Description = QueryElementsToolMetadata.Description,
                 ReadOnly = true,
                 OpenWorld = false,
                 UseStructuredContent = true,
-                OutputSchema = Cap0001JsonSchemas.Output,
+                OutputSchema = Cap0002JsonSchemas.Output,
                 SerializerOptions = McpJson.Options,
                 Services = services
             });
-        tool.ProtocolTool.InputSchema = Cap0001JsonSchemas.Input;
+        tool.ProtocolTool.InputSchema = Cap0002JsonSchemas.Input;
         return StrictInputMcpServerTool.Wrap(tool);
     }
 }

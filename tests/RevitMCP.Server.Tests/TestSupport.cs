@@ -1,3 +1,7 @@
+using System.Text.Json;
+using System.Threading.Channels;
+using ModelContextProtocol.Protocol;
+using ModelContextProtocol.Server;
 using RevitMCP.Bridge;
 using RevitMCP.Contracts;
 using RevitMCP.Server;
@@ -96,6 +100,105 @@ internal static class TestSupport
             Selection = new GetContextSelection { Count = 0 }
         };
     }
+
+    public static QueryElementsRequest CreateQueryRequest(
+        QueryScope scope = QueryScope.Document,
+        string? documentId = null,
+        int limit = 50,
+        QueryElementFilters? filters = null)
+    {
+        return new QueryElementsRequest
+        {
+            DocumentId = documentId,
+            Scope = scope,
+            Filters = filters ?? new QueryElementFilters { CategoryNames = ["Mechanical Equipment"] },
+            Limit = limit
+        };
+    }
+
+    public static QueryElementsResult CreateQueryResult(
+        string instanceId,
+        string documentId,
+        int matchedCount,
+        bool truncated,
+        params string[] elementRefs)
+    {
+        return new QueryElementsResult
+        {
+            Context = new QueryElementsContext
+            {
+                InstanceId = instanceId,
+                DocumentId = documentId
+            },
+            MatchedCount = matchedCount,
+            Truncated = truncated,
+            ElementRefs = elementRefs
+        };
+    }
+
+    public static JsonElement JsonValue(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
+    }
+}
+
+internal static class McpToolInvoke
+{
+    public static async Task<CallToolResult> InvokeAsync(
+        McpServerTool tool,
+        IDictionary<string, JsonElement>? arguments)
+    {
+        ArgumentNullException.ThrowIfNull(tool);
+        await using var transport = new UnusedTransport();
+        await using var server = McpServer.Create(
+            transport,
+            new McpServerOptions
+            {
+                ServerInfo = new Implementation
+                {
+                    Name = "RevitMCP.Server.Tests",
+                    Version = "0.1.0"
+                }
+            });
+
+        var request = new RequestContext<CallToolRequestParams>(
+            server,
+            new JsonRpcRequest
+            {
+                Method = "tools/call",
+                Id = new RequestId("strict-input")
+            },
+            new CallToolRequestParams
+            {
+                Name = tool.ProtocolTool.Name,
+                Arguments = arguments
+            });
+
+        return await tool.InvokeAsync(request, CancellationToken.None);
+    }
+}
+
+internal sealed class UnusedTransport : ITransport
+{
+    private readonly Channel<JsonRpcMessage> _messages = Channel.CreateUnbounded<JsonRpcMessage>();
+
+    public ChannelReader<JsonRpcMessage> MessageReader => _messages.Reader;
+
+    public string? SessionId => null;
+
+    public Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken)
+    {
+        _ = message;
+        cancellationToken.ThrowIfCancellationRequested();
+        return Task.CompletedTask;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        _messages.Writer.TryComplete();
+        return ValueTask.CompletedTask;
+    }
 }
 
 internal sealed class FakeDiscovery : IRevitInstanceDiscovery
@@ -124,6 +227,10 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
 
     public Func<GetContextRequest, TimeSpan, CancellationToken, Task<GetContextResult>>? GetContext { get; set; }
 
+    public int QueryElementsCalls { get; private set; }
+
+    public QueryElementsRequest? LastQueryRequest { get; private set; }
+
     public Func<QueryElementsRequest, TimeSpan, CancellationToken, Task<QueryElementsResult>>? QueryElements { get; set; }
 
     public Task<BridgeHandshakeResult> HandshakeAsync(BridgeHandshakeRequest request, CancellationToken cancellationToken)
@@ -150,6 +257,8 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
+        QueryElementsCalls++;
+        LastQueryRequest = request;
         return QueryElements is null
             ? throw new NotSupportedException("This recording client does not implement revit.query_elements.")
             : QueryElements(request, timeout, cancellationToken);

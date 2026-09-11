@@ -308,6 +308,14 @@ REVIT_EXECUTION_TIMEOUT
 REVIT_EXECUTION_FAILED
 ```
 
+MCP input-boundary:
+
+```text
+INVALID_REQUEST
+```
+
+Advertised closed input schemas are enforced at the MCP tool boundary for both `revit_query_elements` and `revit_get_context`. Unexpected top-level names, `instance_id` / `document_id` typos, and unexpected nested `filters` properties are rejected before discovery or Bridge invocation. This is not `INVALID_QUERY`; that code remains CAP-0002 business validation. Do not leak binder or serializer exception detail.
+
 Bridge bootstrap errors remain internal and map to the established agent-facing instance availability model where appropriate.
 
 Unknown filter values returning zero matches are success, not errors.
@@ -345,6 +353,8 @@ At minimum cover:
 - handshake uses `[3,2,1]` and expected instance identity;
 - no fallback after explicit target failure;
 - strict input schema and filter set;
+- unexpected top-level and nested input properties are rejected before discovery/Bridge;
+- `documentId` / `instanceId` typos are rejected rather than treated as omitted identifiers;
 - strict output schema;
 - modern success has structuredContent and empty content;
 - errors have `isError=true` and no success structuredContent;

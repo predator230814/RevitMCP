@@ -6,28 +6,58 @@ internal static class InstanceTargetResolver
 {
     public static TargetResolution Resolve(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
     {
-        ArgumentNullException.ThrowIfNull(discovered);
+        return ResolveForGetContext(discovered, instanceId);
+    }
 
-        if (instanceId is null)
-        {
-            return ResolveUnspecified(discovered);
-        }
+    public static TargetResolution ResolveForGetContext(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        return Resolve(discovered, instanceId, IsGetContextEligible);
+    }
 
-        return ResolveExplicit(discovered, instanceId);
+    public static TargetResolution ResolveForQueryElements(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        return Resolve(discovered, instanceId, IsQueryElementsEligible);
     }
 
     public static bool IsGetContextEligible(DiscoveredInstance instance)
     {
+        return IsEligible(instance, BridgeProtocol.SupportsGetContext);
+    }
+
+    public static bool IsQueryElementsEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsQueryElements);
+    }
+
+    private static bool IsEligible(DiscoveredInstance instance, Func<int, bool> supportsCapability)
+    {
         return instance.State == DiscoveryState.Ready
             && instance.Registration is not null
             && instance.Handshake is { } handshake
-            && BridgeProtocol.SupportsGetContext(handshake.SelectedProtocolVersion);
+            && supportsCapability(handshake.SelectedProtocolVersion);
     }
 
-    private static TargetResolution ResolveUnspecified(IReadOnlyList<DiscoveredInstance> discovered)
+    private static TargetResolution Resolve(
+        IReadOnlyList<DiscoveredInstance> discovered,
+        string? instanceId,
+        Func<DiscoveredInstance, bool> isEligible)
+    {
+        ArgumentNullException.ThrowIfNull(discovered);
+
+        if (instanceId is null)
+        {
+            return ResolveUnspecified(discovered, isEligible);
+        }
+
+        return ResolveExplicit(discovered, instanceId, isEligible);
+    }
+
+    private static TargetResolution ResolveUnspecified(
+        IReadOnlyList<DiscoveredInstance> discovered,
+        Func<DiscoveredInstance, bool> isEligible)
     {
         var eligible = discovered
-            .Where(IsGetContextEligible)
+            .Where(isEligible)
             .OrderBy(instance => instance.Registration!.InstanceId, StringComparer.Ordinal)
             .ToArray();
 
@@ -49,7 +79,10 @@ internal static class InstanceTargetResolver
             eligible.Select(ToCandidate).ToArray());
     }
 
-    private static TargetResolution ResolveExplicit(IReadOnlyList<DiscoveredInstance> discovered, string instanceId)
+    private static TargetResolution ResolveExplicit(
+        IReadOnlyList<DiscoveredInstance> discovered,
+        string instanceId,
+        Func<DiscoveredInstance, bool> isEligible)
     {
         var match = discovered.FirstOrDefault(instance =>
             instance.Registration is not null
@@ -62,7 +95,7 @@ internal static class InstanceTargetResolver
                 ToolErrorMessages.InstanceNotFound);
         }
 
-        if (!IsGetContextEligible(match))
+        if (!isEligible(match))
         {
             return TargetResolution.Failure(
                 McpToolErrorCodes.InstanceUnavailable,

@@ -181,16 +181,109 @@ public sealed class GetContextMcpBoundaryTests
         Assert.False(error.StructuredContent.HasValue);
     }
 
+    [Fact]
+    public async Task Unexpected_or_typo_instance_id_property_is_rejected_without_discovery()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool();
+        var result = await McpToolInvoke.InvokeAsync(
+            tool,
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+            {
+                ["instanceId"] = TestSupport.JsonValue("\"only\"")
+            });
+
+        AssertInvalidRequest(result);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Unexpected_top_level_property_is_rejected_without_discovery()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var result = await McpToolInvoke.InvokeAsync(
+            tool,
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+            {
+                ["instance_id"] = TestSupport.JsonValue("\"only\""),
+                ["debug"] = TestSupport.JsonValue("true")
+            });
+
+        AssertInvalidRequest(result);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Valid_get_context_arguments_still_execute()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var result = await McpToolInvoke.InvokeAsync(
+            tool,
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+            {
+                ["instance_id"] = TestSupport.JsonValue("\"only\"")
+            });
+
+        Assert.False(result.IsError);
+        Assert.Equal(1, discovery.CallCount);
+        Assert.Equal(new[] { "pipe-only" }, factory.RequestedPipes);
+        Assert.Equal(1, factory.Clients[0].GetContextCalls);
+    }
+
     private static Tool CreateProtocolTool()
     {
+        return CreateInvocableTool().Tool.ProtocolTool;
+    }
+
+    private static (
+        McpServerTool Tool,
+        FakeDiscovery Discovery,
+        RecordingBridgeClientFactory Factory) CreateInvocableTool(bool readyInstance = false)
+    {
         var discovery = new FakeDiscovery();
-        var factory = new RecordingBridgeClientFactory
+        RecordingBridgeClientFactory factory;
+        if (readyInstance)
         {
-            Connect = (_, _, _) => throw new InvalidOperationException("unused")
-        };
+            discovery.Instances.Add(TestSupport.Ready("only", "pipe-only"));
+            factory = new RecordingBridgeClientFactory
+            {
+                Connect = (pipe, _, _) =>
+                {
+                    Assert.Equal("pipe-only", pipe);
+                    var registration = TestSupport.CreateRegistration("only", "pipe-only");
+                    return Task.FromResult(new RecordingBridgeClient
+                    {
+                        Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration)),
+                        GetContext = (_, _, _) => Task.FromResult(TestSupport.ZeroDocument("only"))
+                    });
+                }
+            };
+        }
+        else
+        {
+            factory = new RecordingBridgeClientFactory
+            {
+                Connect = (_, _, _) => throw new InvalidOperationException("Bridge invocation should not occur.")
+            };
+        }
+
         var application = new GetContextApplicationService(discovery, factory, new ServerTimeouts());
-        var tools = new GetContextMcpTools(application);
-        return GetContextToolRegistration.Create(tools).ProtocolTool;
+        var tool = GetContextToolRegistration.Create(new GetContextMcpTools(application));
+        return (tool, discovery, factory);
+    }
+
+    private static void AssertInvalidRequest(CallToolResult result)
+    {
+        Assert.True(result.IsError);
+        Assert.False(result.StructuredContent.HasValue);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
+        using var document = JsonDocument.Parse(text.Text);
+        Assert.Equal(McpToolErrorCodes.InvalidRequest, document.RootElement.GetProperty("code").GetString());
+        Assert.Equal(ToolErrorMessages.InvalidRequest, document.RootElement.GetProperty("message").GetString());
+        Assert.DoesNotContain("JsonException", text.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("at RevitMCP", text.Text, StringComparison.Ordinal);
+        Assert.DoesNotContain("instanceId", text.Text, StringComparison.Ordinal);
     }
 
     private static void AssertNullableObject(JsonElement property)

@@ -4,7 +4,7 @@ _Last updated: 2026-09-10_
 
 ## Phase
 
-Implementation started / CAP-0001 live-validated on Revit 2026.5. CAP-0002 contracts, ADR-0006 document-identity runtime with successful-close cleanup, Revit query execution, and BRIDGE-0003 protocol v3 are implemented and live-validated through the typed Bridge. The SERVER-0002 MCP tool is not implemented.
+Implementation started / CAP-0001 live-validated on Revit 2026.5. CAP-0002 `revit_query_elements` is implemented end-to-end, including SERVER-0002 MCP exposure. Official MCP client to Revit 2026.5 is **PASS**. CAP-0003 is specified next, not implemented.
 
 ## What exists
 
@@ -33,7 +33,7 @@ Implementation started / CAP-0001 live-validated on Revit 2026.5. CAP-0002 contr
 - BRIDGE-0001 defines the stable `bridge.handshake` bootstrap contract, identity validation, and integer bridge-protocol version negotiation. The handshake uses cached add-in/process metadata and must not invoke `ExternalEvent` or inspect the Revit model.
 - BRIDGE-0002 is accepted. It introduces bridge protocol version `2` for `revit.get_context` while keeping version `1` handshake-compatible. A host advertises `[2, 1]` only when a functional CAP-0001 capability service is attached.
 - BRIDGE-0003 is accepted for CAP-0002. It introduces bridge protocol version `3`, which explicitly guarantees both `revit.get_context` and `revit.query_elements`; current capability sets are get-context `{2,3}` and query-elements `{3}`, never a numeric `>=` rule.
-- SERVER-0002 is accepted as the stdio MCP exposure contract for CAP-0002. Once implemented, `tools/list` will expose exactly `revit_get_context` and `revit_query_elements` with explicit registration and strict structured schemas.
+- SERVER-0002 is implemented. `tools/list` exposes exactly `revit_get_context` and `revit_query_elements` with explicit registration and strict structured schemas.
 - Execution specifications are recorded under `docs/execution/`.
 - Lifecycle specifications are recorded under `docs/lifecycle/`. LIFECYCLE-0001 is accepted.
 - EXEC-0001 defines one serialized FIFO Revit execution dispatcher per Revit process, backed by one long-lived `ExternalEvent`, asynchronous completion, queued cancellation, non-destructive timeout semantics, failure isolation, and explicit transaction ownership outside the dispatcher.
@@ -60,8 +60,8 @@ CAP-0001 is implemented end-to-end for the accepted base contract. Active-projec
 - Addin `RevitGetContextService` and `RevitQueryElementsService` dispatch through the process-lifetime EXEC-0001 dispatcher.
 - Lifecycle wiring: metadata -> dispatcher -> get-context + query services + document-close cleanup -> bridge start. Shutdown order remains dispatcher.Stop -> registration withdrawal/bridge -> cleanup unsubscribe / dispatcher dispose.
 - SERVER-0001: `RevitMCP.Server` is a real stdio MCP process using official `ModelContextProtocol` `2.2.0` only inside the Server boundary.
-- `tools/list` exposes exactly one Revit tool today: `revit_get_context`.
-- Fresh current-session discovery, deterministic 0/1/many routing, and a fresh typed bridge invocation (`handshake [3,2,1]`, require selected protocol explicitly in `{2,3}`) on every MCP `revit_get_context` call.
+- `tools/list` exposes exactly two Revit tools: `revit_get_context` and `revit_query_elements`.
+- Fresh current-session discovery, deterministic 0/1/many routing, and a fresh typed bridge invocation (`handshake [3,2,1]`, require selected protocol explicitly in `{2,3}` for get-context and `{3}` for query) on every MCP capability call.
 - Modern MCP success uses CAP-0001 `structuredContent` with empty `content`. Errors use `isError: true` and one compact JSON text block without violating the success `outputSchema`.
 
 ### Automated-tested
@@ -69,8 +69,8 @@ CAP-0001 is implemented end-to-end for the accepted base contract. Active-projec
 - Contracts: empty request, snake_case, project/family kinds, string `element_id`, explicit null document/view, selection `count` only, no selected IDs/paths/user/cloud/property bags, round-trip, exact accepted field set. CAP-0002 query contracts: exact snake_case and accepted request/filter/result fields, opaque `document_id` / `element_ref` strings without GUID/UUID schema, both scopes, zero and bounded refs, no per-element metadata.
 - Bridge: `[3,2,1]+[3,2,1] -> 3`, CAP-0001-only host still `[2,1]`, handshake-only `[1]`, query-only never advertises v3, get-context allowed after v2 and v3, rejected after v1 and unknown v4, query allowed after v3 only, Named Pipe query round-trip, capability errors survive StreamJsonRpc, query timeout / remote-token cancel / caller cancellation, existing handshake/get-context tests remain green. Endpoint adapter gating: query/get-context before handshake and after incompatible selected versions do not invoke the underlying service, including raw StreamJsonRpc peers; query-only `[1]` hosts cannot execute query; v3 query and v2/v3 get-context still execute.
 - Addin/lifecycle: existing EXEC-0001 and LIFECYCLE-0001 tests, capability and query created before bridge start, handshake-only services remain nullable, no v3 advertisement without both services. ADR-0006 identity bookkeeping plus Closing/Closed cleanup: succeeded forgets, cancelled/failed preserve, unmatched Closed is harmless. CAP-0002 request/filter tests: scope/bounds, OR/AND, ordinal case-insensitive matching, no trimming, text substring, unavailable metadata cannot match, exact count/order/truncation.
-- Server: 0/1/many routing remains deterministic, get-context eligibility is explicitly `{2,3}`, v1 and unknown v4 ineligible, v3 handshake followed by `GetContextAsync` succeeds, MCP tool metadata/schemas unchanged, process-level stdio `tools/list` still exposes exactly `revit_get_context`, no Autodesk Revit API / AspNetCore MCP package.
-- Solution tests: Contracts 37, Bridge 66, Addin 70, Server 49. All passed.
+- Server: 0/1/many routing remains deterministic for both tools, get-context eligibility is explicitly `{2,3}`, query eligibility is `{3}`, v1/v2/unknown v4 are query-ineligible, v3 handshake followed by `QueryElementsAsync` succeeds, CAP-0001 routing remains green, process-level stdio `tools/list` exposes exactly `revit_get_context` and `revit_query_elements`, advertised closed input schemas are enforced at the MCP tool boundary before discovery/Bridge, no Autodesk Revit API / AspNetCore MCP package.
+- Solution tests: Contracts 37, Bridge 66, Addin 70, Server 101. All passed.
 - Server Release `net10.0` build succeeded.
 - Addin Release builds: Revit 2025 `net8.0-windows`, Revit 2026 `net8.0-windows`, Revit 2027 `net10.0-windows`. Each output has `StreamJsonRpc.dll` and `Nerdbank.Streams.dll` present; `RevitAPI.dll` and `RevitAPIUI.dll` absent.
 
@@ -138,19 +138,15 @@ Explicit `instance_id` retry on the returned id succeeded against the same insta
 
 ## CAP-0002 implementation status
 
-CAP-0002 `revit_query_elements` is **Accepted / NOT end-to-end MCP-complete**. Typed Bridge query execution and BRIDGE-0003 are implemented and live-validated. The MCP tool is not.
+CAP-0002 `revit_query_elements` is implemented end-to-end.
 
 ```text
-CAP-0002 contracts: implemented
-ADR-0006 document identity runtime + successful-close cleanup: implemented
-CAP-0002 Revit query execution: implemented
-BRIDGE-0003 protocol v3: implemented/live validated
-typed Bridge query: live PASS on Autodesk sample / Revit 2026.5
-CAP-0001 on Bridge v3: regression PASS
-SERVER-0002 revit_query_elements MCP tool: NOT IMPLEMENTED
+CAP-0002 revit_query_elements: implemented end-to-end
+SERVER-0002: implemented
+tools/list: exactly two tools
+CAP-0002 official MCP client -> Revit 2026.5: PASS
+CAP-0001 regression on same v3 host: PASS
 ```
-
-`tools/list` still exposes exactly one MCP tool: `revit_get_context`.
 
 ### Implemented in this slice
 
@@ -161,6 +157,8 @@ SERVER-0002 revit_query_elements MCP tool: NOT IMPLEMENTED
 - `RevitQueryElementsService` validates the request off-thread, then executes through EXEC-0001: active document, document_id guard, scope collector, `WhereElementIsNotElementType()`, ordinal-insensitive filters, exact `matched_count`, `Element.UniqueId` refs, ordinal sort, limit, `truncated`.
 - Direct level matching uses only `element.LevelId` -> `Level.Name`. No geometry/host/room inference.
 - Typed `NamedPipeBridgeClient.QueryElementsAsync` gated to protocol `{3}`.
+- SERVER-0002 MCP tool `revit_query_elements` is registered explicitly beside `revit_get_context`. Agent input maps to transport-neutral `QueryElementsRequest` (`instance_id` stays a Server routing field). Query routing uses `ResolveForQueryElements` with the same opaque-id / 0/1/many algorithm as CAP-0001 and explicit `{3}` eligibility.
+- MCP tool input is closed at runtime, not only in advertised schemas. Unexpected top-level names, `instance_id` / `document_id` typos, and unexpected nested `filters` properties return `INVALID_REQUEST` (`isError: true`, compact `{code,message}`) before discovery or Bridge work. This is a Server MCP-boundary code, not CAP-0002 `INVALID_QUERY`.
 
 Accepted v1 design (unchanged):
 
@@ -196,14 +194,26 @@ Observed document-scope evidence (`scope=document`, category `Mechanical Equipme
 
 Invalid empty filters over the real Bridge returned `INVALID_QUERY`. Activating disposable `Project1` in the same Revit process with the previous HVAC `document_id` returned `DOCUMENT_CONTEXT_CHANGED` and did not query Project1. Switching back to still-open HVAC reused the same `document_id`. Closing HVAC without saving and reopening the same Autodesk sample assigned a new `document_id`; the previous id then returned `DOCUMENT_CONTEXT_CHANGED`.
 
-Official `ModelContextProtocol` `2.2.0` `McpClient` / `StdioClientTransport` launched Release `RevitMCP.Server.exe` against that v3 host: `tools/list` exposed exactly `revit_get_context`; `revit_get_context` succeeded with `structuredContent` **383** UTF-8 bytes and `content` **0** bytes.
+Official `ModelContextProtocol` `2.2.0` `McpClient` / `StdioClientTransport` launched Release `RevitMCP.Server.exe` against that v3 host and called `revit_query_elements` (not the application service directly):
+
+```text
+tools/list count = 2
+revit_get_context
+revit_query_elements
+```
+
+Observed MCP document-scope Mechanical Equipment: `matched_count = 37`, `structuredContent` **1949** UTF-8 bytes, `content` **0**. Explicit `document_id` retry returned the same id and the same 37 refs. Truncation `limit=1`: `matched_count = 37`, one ref, `truncated=true`, **220** bytes. Zero-match unknown category: count 0 / empty refs / `truncated=false` / **173** bytes / `isError=false`. Multi-filter `Air Terminals` AND `L2`: `matched_count = 37`, **1949** bytes.
+
+Cover Sheet `active_view` returned **0** Mechanical Equipment refs (did not widen). Floor plan `L2` (`FloorPlan`) returned **9** refs, a subset of the 37, **604** bytes.
+
+Activating disposable `Project1` and querying with the HVAC `document_id` returned `DOCUMENT_CONTEXT_CHANGED` (`isError=true`, no structuredContent, one compact JSON text block). CAP-0001 `revit_get_context` on the same Server/v3 host remained success with empty `content` (HVAC Cover Sheet **383** bytes; HVAC L2 **368** bytes; Project1 **364** bytes).
+
+Forbidden fields (paths, username, cloud ids, PID, pipe, session, per-element names/ids/parameters/geometry/diagnostics) were absent from successful query structured content.
 
 CAP-0002 query collection does not create a Revit `Transaction`, `SubTransaction`, or `TransactionGroup`.
 
 ## What does not exist yet
 
-- no SERVER-0002 MCP tool yet; `revit_query_elements` is specified but not implemented;
-- no CAP-0002 MCP input/output schemas or second `tools/list` entry;
 - no live CAP-0001 family-document validation;
 - no live lifecycle/handshake/capability validation on Revit 2025 or Revit 2027;
 - no live multi-instance routing validation;
@@ -216,9 +226,9 @@ CAP-0002 query collection does not create a Revit `Transaction`, `SubTransaction
 
 ## Current priorities
 
-1. Implement the next reviewed slice: SERVER-0002 MCP exposure of `revit_query_elements`.
+1. Define CAP-0003 element inspection/details. Do not implement it until Tech Lead review/design.
 2. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
-3. Do not expand into CAP-0003, writes, Azure/cloud, WebMCP implementation, or UI work.
+3. Do not expand into writes, Azure/cloud, WebMCP implementation, or UI work.
 
 ## Known constraints
 
@@ -254,4 +264,4 @@ CAP-0002 query collection does not create a Revit `Transaction`, `SubTransaction
 
 ## Next task
 
-The CAP-0002 query execution / BRIDGE-0003 slice is complete and live-validated. The next reviewed slice is SERVER-0002 MCP exposure of `revit_query_elements`. Do not start CAP-0003, write operations, Azure/cloud, WebMCP implementation, or UI work.
+SERVER-0002 is complete and live-validated. Closed input-schema enforcement was added after Tech Lead review; automated Server boundary tests plus a normal stdio smoke were used for the fix (no Snowdon matrix rerun). The next architectural task is to define CAP-0003 element inspection/details. Do not implement CAP-0003, write operations, Azure/cloud, WebMCP implementation, or UI work until Tech Lead review.
