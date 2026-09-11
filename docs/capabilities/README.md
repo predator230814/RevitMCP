@@ -4,6 +4,12 @@ This directory contains product and technical specifications for RevitMCP capabi
 
 Capability specifications define behavior before implementation. They are not Architecture Decision Records: ADRs record durable architectural choices, while capability specifications define individual agent-usable behaviors within the accepted architecture.
 
+## Current specifications
+
+- `CAP-0001-revit-get-context.md` — bounded current Revit application/document/view/selection context.
+- `CAP-0002-revit-query-elements.md` — bounded active-document/view element query returning opaque `element_ref` values.
+- `CAP-0003-revit-get-elements.md` — bounded inspection of known `element_ref` values with explicit basic-field and named-parameter projection.
+
 ## Required sections
 
 A capability specification should define, where applicable:
