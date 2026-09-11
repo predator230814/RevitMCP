@@ -59,8 +59,9 @@ public sealed class GetContextRoutingTests
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v2", "pipe-v2", protocolVersion: 2)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v3", "pipe-v3", protocolVersion: 3)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v4", "pipe-v4", protocolVersion: 4)));
+        Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v5", "pipe-v5", protocolVersion: 5)));
         Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v1", "pipe-v1", protocolVersion: 1)));
-        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v5", "pipe-v5", protocolVersion: 5)));
+        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v6", "pipe-v6", protocolVersion: 6)));
     }
 
     [Fact]

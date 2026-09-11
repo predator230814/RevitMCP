@@ -149,12 +149,12 @@ public sealed class BridgeEndpointGatingTests
     {
         var capability = new FakeCapabilityService();
         var query = new FakeQueryElementsService();
-        var adapter = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(5), capability, query);
+        var adapter = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(6), capability, query);
         await adapter.HandshakeAsync(
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [5],
+                SupportedProtocolVersions = [6],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);
@@ -232,7 +232,7 @@ public sealed class BridgeEndpointGatingTests
     {
         var getElements = new FakeGetElementsService();
         var adapter = new StreamJsonRpcBridgeAdapter(
-            new SelectedVersionHandshake(5),
+            new SelectedVersionHandshake(6),
             new FakeCapabilityService(),
             new FakeQueryElementsService(),
             getElements);
@@ -240,7 +240,7 @@ public sealed class BridgeEndpointGatingTests
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [5],
+                SupportedProtocolVersions = [6],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);

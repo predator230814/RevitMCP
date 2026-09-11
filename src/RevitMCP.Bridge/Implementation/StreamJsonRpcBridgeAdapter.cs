@@ -9,18 +9,21 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitCapabilityService? _capability;
     private readonly IRevitQueryElementsService? _query;
     private readonly IRevitGetElementsService? _getElements;
+    private readonly IRevitDescribeParametersService? _describeParameters;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
         IRevitBridgeService handshake,
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query = null,
-        IRevitGetElementsService? getElements = null)
+        IRevitGetElementsService? getElements = null,
+        IRevitDescribeParametersService? describeParameters = null)
     {
         _handshake = handshake;
         _capability = capability;
         _query = query;
         _getElements = getElements;
+        _describeParameters = describeParameters;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -134,6 +137,43 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit inspection could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.describe_parameters")]
+    public async Task<DescribeParametersResult> DescribeParametersAsync(
+        DescribeParametersRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsDescribeParameters,
+            "revit.describe_parameters is not available on this connection.");
+        if (_describeParameters is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.describe_parameters is not available on this endpoint."));
+        }
+
+        try
+        {
+            return await _describeParameters.DescribeParametersAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The Revit parameter discovery could not be executed."));
         }
     }
 

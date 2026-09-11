@@ -12,6 +12,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
     private readonly IRevitCapabilityService? _capability;
     private readonly IRevitQueryElementsService? _query;
     private readonly IRevitGetElementsService? _getElements;
+    private readonly IRevitDescribeParametersService? _describeParameters;
     private readonly TaskCompletionSource _listenerReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Task _acceptLoop;
     private IRegistrationLease? _lease;
@@ -22,7 +23,8 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         string pipeName,
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query,
-        IRevitGetElementsService? getElements)
+        IRevitGetElementsService? getElements,
+        IRevitDescribeParametersService? describeParameters)
     {
         Metadata = metadata;
         PipeName = pipeName;
@@ -30,6 +32,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         _capability = capability;
         _query = query;
         _getElements = getElements;
+        _describeParameters = describeParameters;
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_lifetime.Token));
     }
 
@@ -44,7 +47,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRegistrationStore store,
         CancellationToken cancellationToken)
     {
-        return StartAsync(metadata, store, capability: null, query: null, getElements: null, cancellationToken);
+        return StartAsync(metadata, store, capability: null, query: null, getElements: null, describeParameters: null, cancellationToken);
     }
 
     public static Task<NamedPipeBridgeHost> StartAsync(
@@ -53,7 +56,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitCapabilityService? capability,
         CancellationToken cancellationToken)
     {
-        return StartAsync(metadata, store, capability, query: null, getElements: null, cancellationToken);
+        return StartAsync(metadata, store, capability, query: null, getElements: null, describeParameters: null, cancellationToken);
     }
 
     public static Task<NamedPipeBridgeHost> StartAsync(
@@ -63,7 +66,18 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitQueryElementsService? query,
         CancellationToken cancellationToken)
     {
-        return StartAsync(metadata, store, capability, query, getElements: null, cancellationToken);
+        return StartAsync(metadata, store, capability, query, getElements: null, describeParameters: null, cancellationToken);
+    }
+
+    public static Task<NamedPipeBridgeHost> StartAsync(
+        BridgeInstanceMetadata metadata,
+        IRegistrationStore store,
+        IRevitCapabilityService? capability,
+        IRevitQueryElementsService? query,
+        IRevitGetElementsService? getElements,
+        CancellationToken cancellationToken)
+    {
+        return StartAsync(metadata, store, capability, query, getElements, describeParameters: null, cancellationToken);
     }
 
     public static async Task<NamedPipeBridgeHost> StartAsync(
@@ -72,14 +86,15 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query,
         IRevitGetElementsService? getElements,
+        IRevitDescribeParametersService? describeParameters,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         ArgumentNullException.ThrowIfNull(store);
 
-        var advertised = WithAdvertisedProtocol(metadata, capability, query, getElements);
+        var advertised = WithAdvertisedProtocol(metadata, capability, query, getElements, describeParameters);
         var pipeName = BridgePipeNames.Create(advertised.WindowsSessionId, advertised.InstanceId);
-        var host = new NamedPipeBridgeHost(advertised, pipeName, capability, query, getElements);
+        var host = new NamedPipeBridgeHost(advertised, pipeName, capability, query, getElements, describeParameters);
         try
         {
             await host._listenerReady.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -172,12 +187,17 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability = null,
         IRevitQueryElementsService? query = null,
-        IRevitGetElementsService? getElements = null)
+        IRevitGetElementsService? getElements = null,
+        IRevitDescribeParametersService? describeParameters = null)
     {
         IReadOnlyList<int> versions;
-        if (capability is not null && query is not null && getElements is not null)
+        if (capability is not null && query is not null && getElements is not null && describeParameters is not null)
         {
             versions = BridgeProtocol.SupportedVersions;
+        }
+        else if (capability is not null && query is not null && getElements is not null)
+        {
+            versions = BridgeProtocol.GetElementsVersions;
         }
         else if (capability is not null && query is not null)
         {
@@ -243,7 +263,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         JsonRpc? rpc = null;
         try
         {
-            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcBridgeAdapter(_handshake, _capability, _query, _getElements));
+            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcBridgeAdapter(_handshake, _capability, _query, _getElements, _describeParameters));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             await rpc.Completion.WaitAsync(linked.Token).ConfigureAwait(false);
         }

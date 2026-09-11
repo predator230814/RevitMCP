@@ -60,6 +60,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
 {
     private readonly RevitExecutionDispatcher _dispatcher;
     private readonly OpenDocumentIdentityService _identity;
+    private readonly OpenDocumentParameterIdentityService _parameterRefs;
     private readonly IDisposable? _closeCleanup;
 
     public RevitExecutionDispatcherLifetime(
@@ -69,10 +70,18 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         ArgumentNullException.ThrowIfNull(dispatcher);
         _dispatcher = dispatcher;
         _identity = new OpenDocumentIdentityService();
+        _parameterRefs = new OpenDocumentParameterIdentityService();
         if (closeEvents is not null)
         {
-            _closeCleanup = closeEvents.Subscribe(new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(_identity.Forget));
+            _closeCleanup = closeEvents.Subscribe(new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(ForgetDocument));
         }
+    }
+
+    private bool ForgetDocument(Autodesk.Revit.DB.Document document)
+    {
+        var forgottenId = _identity.Forget(document);
+        var forgottenRefs = _parameterRefs.Forget(document);
+        return forgottenId || forgottenRefs;
     }
 
     public void Stop() => _dispatcher.Stop();
@@ -99,6 +108,12 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     {
         ArgumentNullException.ThrowIfNull(metadata);
         return new RevitGetElementsService(_dispatcher, metadata, _identity);
+    }
+
+    public IRevitDescribeParametersService CreateDescribeParameters(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitDescribeParametersService(_dispatcher, metadata, _identity, _parameterRefs);
     }
 }
 
@@ -139,10 +154,11 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query,
         IRevitGetElementsService? getElements,
+        IRevitDescribeParametersService? describeParameters,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, query, getElements, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);

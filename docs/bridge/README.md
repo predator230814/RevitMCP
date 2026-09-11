@@ -18,6 +18,7 @@ BRIDGE-0001-short-name.md
 - `BRIDGE-0002-get-context-capability-rpc.md` — first Revit capability RPC (`revit.get_context`) on bridge protocol version 2, with version 1 handshake compatibility.
 - `BRIDGE-0003-query-elements-capability-rpc.md` — CAP-0002 query RPC (`revit.query_elements`) on bridge protocol version 3; v3 explicitly preserves the v2 `revit.get_context` guarantee.
 - `BRIDGE-0004-get-elements-capability-rpc.md` — CAP-0003 inspection RPC (`revit.get_elements`) on bridge protocol version 4; v4 explicitly preserves the v2/v3 capability guarantees.
+- `BRIDGE-0005-describe-parameters-capability-rpc.md` — CAP-0004 discovery RPC (`revit.describe_parameters`) on bridge protocol version 5; v5 explicitly preserves the v2/v3/v4 capability guarantees.
 
 ## Principles
 

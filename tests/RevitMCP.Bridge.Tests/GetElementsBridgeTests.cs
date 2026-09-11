@@ -16,7 +16,7 @@ public sealed class GetElementsBridgeTests
             new FakeQueryElementsService(),
             new FakeGetElementsService());
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, advertised.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.GetElementsVersions, advertised.SupportedProtocolVersions);
         Assert.Equal(4, advertised.SupportedProtocolVersions.Max());
     }
 
@@ -116,11 +116,12 @@ public sealed class GetElementsBridgeTests
     }
 
     [Fact]
-    public void Unknown_v5_does_not_allow_any_current_capability()
+    public void Unknown_v6_does_not_allow_any_current_capability()
     {
-        Assert.False(BridgeProtocol.SupportsGetContext(5));
-        Assert.False(BridgeProtocol.SupportsQueryElements(5));
-        Assert.False(BridgeProtocol.SupportsGetElements(5));
+        Assert.False(BridgeProtocol.SupportsGetContext(6));
+        Assert.False(BridgeProtocol.SupportsQueryElements(6));
+        Assert.False(BridgeProtocol.SupportsGetElements(6));
+        Assert.False(BridgeProtocol.SupportsDescribeParameters(6));
     }
 
     [Fact]

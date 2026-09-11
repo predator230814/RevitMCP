@@ -25,7 +25,7 @@ public sealed class QueryElementsBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
