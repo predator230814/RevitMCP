@@ -271,7 +271,30 @@ public sealed class GetElementInspectionShaperTests
             new GetElementsProjection { Fields = [GetElementField.Name] });
 
         Assert.Equal(GetElementResultStatus.NotFound, result.Elements[0].Status);
+        Assert.Equal("ref-a", result.Elements[0].ElementRef);
         Assert.Equal(GetElementResultStatus.Ok, result.Elements[1].Status);
+        Assert.Equal("Ref-A", result.Elements[1].ElementRef);
+    }
+
+    [Fact]
+    public void Batch_ok_item_echoes_the_requested_ref_not_the_candidate_ref()
+    {
+        var resolved = new Dictionary<string, ElementInspectionCandidate>(StringComparer.Ordinal)
+        {
+            ["requested-ref"] = Candidate(elementRef: "canonical-ref", name: "VAV")
+        };
+
+        var result = GetElementInspectionShaper.Shape(
+            new GetElementsContext { InstanceId = "i", DocumentId = "d" },
+            ["requested-ref"],
+            resolved,
+            new GetElementsProjection { Fields = [GetElementField.Name] });
+
+        var item = Assert.Single(result.Elements);
+        Assert.Equal(GetElementResultStatus.Ok, item.Status);
+        Assert.Equal("requested-ref", item.ElementRef);
+        Assert.NotEqual("canonical-ref", item.ElementRef);
+        Assert.Equal("VAV", item.Name.Value);
     }
 
     private static GetElementsProjection ParametersOnly(params string[] names)

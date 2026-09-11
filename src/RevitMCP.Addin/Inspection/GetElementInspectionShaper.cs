@@ -22,7 +22,7 @@ internal static class GetElementInspectionShaper
         {
             var elementRef = elementRefs[index];
             elements[index] = resolved.TryGetValue(elementRef, out var candidate)
-                ? Ok(candidate, projection)
+                ? Ok(elementRef, candidate, projection)
                 : NotFound(elementRef);
         }
 
@@ -35,6 +35,16 @@ internal static class GetElementInspectionShaper
 
     public static GetElementResult Ok(ElementInspectionCandidate candidate, GetElementsProjection projection)
     {
+        ArgumentNullException.ThrowIfNull(candidate);
+        return Ok(candidate.ElementRef, candidate, projection);
+    }
+
+    public static GetElementResult Ok(
+        string elementRef,
+        ElementInspectionCandidate candidate,
+        GetElementsProjection projection)
+    {
+        ArgumentNullException.ThrowIfNull(elementRef);
         ArgumentNullException.ThrowIfNull(candidate);
         ArgumentNullException.ThrowIfNull(projection);
 
@@ -52,7 +62,7 @@ internal static class GetElementInspectionShaper
 
         return new GetElementResult
         {
-            ElementRef = candidate.ElementRef,
+            ElementRef = elementRef,
             Status = GetElementResultStatus.Ok,
             Name = ProjectField(projection.Fields, GetElementField.Name, candidate.Name),
             CategoryName = ProjectField(projection.Fields, GetElementField.CategoryName, candidate.CategoryName),
