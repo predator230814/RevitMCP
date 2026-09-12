@@ -71,6 +71,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("getelements.create");
         return new RecordingGetElementsService();
     }
+
+    public IRevitDescribeParametersService? CreateDescribeParameters(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("describe.create");
+        return new RecordingDescribeParametersService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -100,6 +107,18 @@ internal sealed class RecordingGetElementsService : IRevitGetElementsService
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording get-elements does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingDescribeParametersService : IRevitDescribeParametersService
+{
+    public Task<DescribeParametersResult> DescribeParametersAsync(
+        DescribeParametersRequest request,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording describe-parameters does not execute Revit work.");
     }
 }
 
@@ -192,17 +211,21 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitGetElementsService? LastGetElements { get; private set; }
 
+    public IRevitDescribeParametersService? LastDescribeParameters { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query,
         IRevitGetElementsService? getElements,
+        IRevitDescribeParametersService? describeParameters,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         LastCapability = capability;
         LastQuery = query;
         LastGetElements = getElements;
+        LastDescribeParameters = describeParameters;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

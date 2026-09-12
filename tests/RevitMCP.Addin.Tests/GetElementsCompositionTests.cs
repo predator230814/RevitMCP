@@ -14,7 +14,9 @@ public sealed class GetElementsCompositionTests
         var adapters = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "RevitMCP.Addin", "Lifecycle", "RevitLifecycleAdapters.cs"));
         Assert.Contains("new RevitQueryElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitDescribeParametersService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
         Assert.Equal(1, CountOccurrences(adapters, "new OpenDocumentIdentityService()"));
+        Assert.Equal(1, CountOccurrences(adapters, "new OpenDocumentParameterIdentityService()"));
         Assert.Contains("private readonly OpenDocumentIdentityService _identity;", adapters, StringComparison.Ordinal);
     }
 
@@ -26,6 +28,11 @@ public sealed class GetElementsCompositionTests
             return;
         }
 
+        await using var describe = await StartAsync(
+            new RecordingCapabilityService(),
+            new RecordingQueryElementsService(),
+            new RecordingGetElementsService(),
+            new RecordingDescribeParametersService());
         await using var full = await StartAsync(new RecordingCapabilityService(), new RecordingQueryElementsService(), new RecordingGetElementsService());
         await using var query = await StartAsync(new RecordingCapabilityService(), new RecordingQueryElementsService(), getElements: null);
         await using var context = await StartAsync(new RecordingCapabilityService(), query: null, getElements: null);
@@ -33,8 +40,15 @@ public sealed class GetElementsCompositionTests
         await using var getOnly = await StartAsync(capability: null, query: null, getElements: new RecordingGetElementsService());
         await using var contextGet = await StartAsync(new RecordingCapabilityService(), query: null, getElements: new RecordingGetElementsService());
         await using var queryGet = await StartAsync(capability: null, query: new RecordingQueryElementsService(), getElements: new RecordingGetElementsService());
+        await using var describeOnly = await StartAsync(
+            capability: null,
+            query: null,
+            getElements: null,
+            describeParameters: new RecordingDescribeParametersService());
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, full.Metadata.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.SupportedVersions, describe.Metadata.SupportedProtocolVersions);
+        Assert.Equal(5, describe.Registration?.BridgeProtocolVersion);
+        Assert.Equal(BridgeProtocol.GetElementsVersions, full.Metadata.SupportedProtocolVersions);
         Assert.Equal(4, full.Registration?.BridgeProtocolVersion);
         Assert.Equal(BridgeProtocol.QueryElementsVersions, query.Metadata.SupportedProtocolVersions);
         Assert.Equal(3, query.Registration?.BridgeProtocolVersion);
@@ -48,12 +62,15 @@ public sealed class GetElementsCompositionTests
         Assert.Equal(2, contextGet.Registration?.BridgeProtocolVersion);
         Assert.Equal(BridgeProtocol.HandshakeOnlyVersions, queryGet.Metadata.SupportedProtocolVersions);
         Assert.Equal(1, queryGet.Registration?.BridgeProtocolVersion);
+        Assert.Equal(BridgeProtocol.HandshakeOnlyVersions, describeOnly.Metadata.SupportedProtocolVersions);
+        Assert.Equal(1, describeOnly.Registration?.BridgeProtocolVersion);
     }
 
     private static async Task<NamedPipeBridgeHost> StartAsync(
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query,
-        IRevitGetElementsService? getElements)
+        IRevitGetElementsService? getElements,
+        IRevitDescribeParametersService? describeParameters = null)
     {
         var process = Process.GetCurrentProcess();
         var metadata = new BridgeInstanceMetadata
@@ -74,6 +91,7 @@ public sealed class GetElementsCompositionTests
             capability,
             query,
             getElements,
+            describeParameters,
             CancellationToken.None);
     }
 

@@ -10,7 +10,9 @@ public static class BridgeProtocol
 
     public const int GetElementsVersion = 4;
 
-    public const int CurrentVersion = GetElementsVersion;
+    public const int DescribeParametersVersion = 5;
+
+    public const int CurrentVersion = DescribeParametersVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -19,15 +21,21 @@ public static class BridgeProtocol
     public static IReadOnlyList<int> QueryElementsVersions { get; } =
         [QueryElementsVersion, GetContextVersion, HandshakeVersion];
 
-    public static IReadOnlyList<int> SupportedVersions { get; } =
+    public static IReadOnlyList<int> GetElementsVersions { get; } =
         [GetElementsVersion, QueryElementsVersion, GetContextVersion, HandshakeVersion];
 
+    public static IReadOnlyList<int> SupportedVersions { get; } =
+        [DescribeParametersVersion, GetElementsVersion, QueryElementsVersion, GetContextVersion, HandshakeVersion];
+
     public static bool SupportsGetContext(int version) =>
-        version is GetContextVersion or QueryElementsVersion or GetElementsVersion;
+        version is GetContextVersion or QueryElementsVersion or GetElementsVersion or DescribeParametersVersion;
 
     public static bool SupportsQueryElements(int version) =>
-        version is QueryElementsVersion or GetElementsVersion;
+        version is QueryElementsVersion or GetElementsVersion or DescribeParametersVersion;
 
     public static bool SupportsGetElements(int version) =>
-        version is GetElementsVersion;
+        version is GetElementsVersion or DescribeParametersVersion;
+
+    public static bool SupportsDescribeParameters(int version) =>
+        version is DescribeParametersVersion;
 }

@@ -15,4 +15,6 @@ public static class CapabilityErrorCodes
     public const string InvalidQuery = "INVALID_QUERY";
 
     public const string InvalidInspection = "INVALID_INSPECTION";
+
+    public const string InvalidParameterDiscovery = "INVALID_PARAMETER_DISCOVERY";
 }
