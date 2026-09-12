@@ -4,7 +4,7 @@ _Last updated: 2026-09-12_
 
 ## Phase
 
-Implementation started / CAP-0001, CAP-0002, and CAP-0003 are live-validated end-to-end on Revit 2026.5 through the official stdio MCP client. CAP-0004 / BRIDGE-0005 typed Bridge live validation on Revit 2026.5 is **PASS**. Official MCP-client CAP-0004 live validation is not started. SERVER-0004 is not implemented.
+Implementation started / CAP-0001, CAP-0002, and CAP-0003 are live-validated end-to-end on Revit 2026.5 through the official stdio MCP client. CAP-0004 / BRIDGE-0005 typed Bridge live validation on Revit 2026.5 is **PASS**. SERVER-0004 is accepted as a specification and is not implemented. Official MCP-client CAP-0004 live validation is not started. Current MCP tools remain 3.
 
 ## What exists
 
@@ -38,7 +38,7 @@ Implementation started / CAP-0001, CAP-0002, and CAP-0003 are live-validated end
 - BRIDGE-0004 is accepted and implemented. Protocol version `4` adds `revit.get_elements` and explicitly preserves get-context `{2,3,4}` and query-elements `{3,4}`. Get-elements is `{4,5}` after BRIDGE-0005.
 - BRIDGE-0005 is accepted and implemented. Protocol version `5` adds `revit.describe_parameters` and explicitly preserves get-context `{2,3,4,5}`, query-elements `{3,4,5}`, and get-elements `{4,5}`. Describe-parameters is `{5}` only. Unknown v6 remains unsupported. Typed Bridge live validation on Revit 2026.5 is **PASS**.
 - SERVER-0002 is implemented. `revit_query_elements` remains eligible on a v4 or v5 host.
-- SERVER-0003 is implemented for the stdio MCP surface. `tools/list` still exposes exactly `revit_get_context`, `revit_query_elements`, and `revit_get_elements`. CAP-0003 routing requires protocol `{4,5}`. Official-MCP-client-to-Revit 2026.5 live CAP-0003 validation is **PASS**. SERVER-0004 is not implemented yet.
+- SERVER-0003 is implemented for the stdio MCP surface. `tools/list` still exposes exactly `revit_get_context`, `revit_query_elements`, and `revit_get_elements`. CAP-0003 routing requires protocol `{4,5}`. Official-MCP-client-to-Revit 2026.5 live CAP-0003 validation is **PASS**. SERVER-0004 is accepted as a specification and is not implemented.
 - Execution specifications are recorded under `docs/execution/`.
 - Lifecycle specifications are recorded under `docs/lifecycle/`. LIFECYCLE-0001 is accepted.
 - EXEC-0001 defines one serialized FIFO Revit execution dispatcher per Revit process, backed by one long-lived `ExternalEvent`, asynchronous completion, queued cancellation, non-destructive timeout semantics, failure isolation, and explicit transaction ownership outside the dispatcher.
@@ -359,13 +359,14 @@ CAP-0004 Revit parameter discovery: COMPLETE
 BRIDGE-0005 runtime/v5: COMPLETE
 typed Bridge CAP-0004 live Revit 2026.5: PASS
 
-SERVER-0004 MCP tool: NOT IMPLEMENTED
+SERVER-0004 spec: accepted
+SERVER-0004 MCP tool: NOT STARTED / NOT IMPLEMENTED
 official MCP CAP-0004 live validation: NOT RUN
 current implemented Bridge protocol: v5
 current MCP tools: 3
 ```
 
-CAP-0004 Revit discovery is implemented through the typed local Bridge. BRIDGE-0005 is implemented: typed-Bridge live validation on Revit 2026.5 is **PASS**. The fourth stdio MCP tool remains deferred to SERVER-0004. Official MCP-client CAP-0004 live validation is **NOT RUN**.
+CAP-0004 Revit discovery is implemented through the typed local Bridge. BRIDGE-0005 is implemented: typed-Bridge live validation on Revit 2026.5 is **PASS**. SERVER-0004 is accepted in `docs/server/SERVER-0004-stdio-describe-parameters-tool.md` and is not implemented. `tools/list` still exposes exactly three tools. Official MCP-client CAP-0004 live validation is **NOT RUN**.
 
 Accepted v1 design remains as specified in `docs/capabilities/CAP-0004-revit-describe-parameters.md`. `parameter_ref` is Addin-owned, document-scoped, and forgotten on successful document close. Identity kind uses Revit built-in / shared / local APIs rather than ForgeTypeId string parsing. Data-type kind uses `Definition.GetDataType()` plus `UnitUtils.IsMeasurableSpec`, `Category.IsBuiltInCategory`, and `SpecUtils.IsSpec`.
 
@@ -406,9 +407,9 @@ Observed on Cover Sheet / two live Air Terminal refs: built-in identity with `pa
 
 ## Current priorities
 
-1. Define SERVER-0004 after this typed-Bridge live gate. Do not start it in this CAP-0004 / BRIDGE-0005 slice.
+1. Implement accepted SERVER-0004. Do not claim a fourth MCP tool until that implementation is complete.
 2. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
-3. Do not begin writes, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work during CAP-0004.
+3. Do not begin writes, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work during SERVER-0004.
 
 ## Known constraints
 
@@ -447,4 +448,4 @@ Observed on Cover Sheet / two live Air Terminal refs: built-in identity with `pa
 
 ## Next task
 
-CAP-0004 / BRIDGE-0005 typed Bridge live validation on Revit 2026.5 is PASS. Define SERVER-0004 next. Do not start writes. Official MCP-client CAP-0004 live validation remains NOT RUN.
+SERVER-0004 is accepted and not implemented. Implement `revit_describe_parameters` as the fourth stdio MCP tool next. Current MCP tools remain 3. Do not start writes. Official MCP-client CAP-0004 live validation remains NOT RUN.
