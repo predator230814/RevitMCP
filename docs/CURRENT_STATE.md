@@ -485,8 +485,9 @@ This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented a
 
 ## Current priorities
 
-1. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
-2. Do not begin writes, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work.
+1. Hold an architecture/design checkpoint using the Autodesk University documentation Dave will provide, before choosing or implementing the next capability.
+2. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
+3. Do not begin writes, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work.
 
 ## Known constraints
 
@@ -525,4 +526,4 @@ This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented a
 
 ## Next task
 
-SERVER-0004 is complete for the Revit 2026.5 reference environment: `revit_describe_parameters` is the fourth stdio MCP tool and official MCP live validation is **PASS**. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations. Do not start writes.
+SERVER-0004 is complete for the Revit 2026.5 reference environment. The next project step is an architecture/design checkpoint using the Autodesk University documentation Dave will provide, before choosing or implementing the next capability. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validations. Do not start writes.
