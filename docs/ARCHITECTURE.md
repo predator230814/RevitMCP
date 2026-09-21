@@ -46,7 +46,7 @@ Target conceptual layers:
 - Capability overlap with an existing MCP is acceptable when RevitMCP has a clear reason such as broader Revit-version support, stronger agent usability, controlled write operations, deployment flexibility, workflow specialization, security, or reliability.
 - The core should not assume that either local-only or cloud-only deployment is universally available; deployment topology must remain separable from Revit capability logic.
 - WebMCP, MCP Apps, remote MCP scenarios, and other emerging integration surfaces should remain possible without forcing the core architecture to depend on them.
-- RevitMCP remains a specialized Revit capability service. Cloud Autodesk capabilities such as APS, ACC, and Forma belong behind separate logical MCP service boundaries when implemented (ADR-0007).
+- RevitMCP remains a specialized Revit capability service. Autodesk cloud capability such as APS, ACC, and Forma is logically separated from the Revit-local MCP boundary when implemented. ADR-0007 does not decide whether those cloud capabilities use one MCP service or several.
 - Multi-service workflow orchestration, if introduced, is external and optional. Ordinary MCP clients must be able to use RevitMCP without an orchestrator.
 - The agent-facing tool surface for a workflow should remain small and coherent as the capability catalogue grows. The scoping mechanism is deferred; a hard tool-count limit is not an invariant.
 

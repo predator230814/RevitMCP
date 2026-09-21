@@ -9,7 +9,7 @@ After SERVER-0004, RevitMCP exposes four read-only stdio MCP tools against a loc
 
 A post-SERVER-0004 architecture review, informed by Autodesk University 2026 material, asked how RevitMCP should grow if later work includes Autodesk cloud services, multi-system workflows, or a larger capability catalogue. The review itself is not reproduced here. This ADR records the project decision using RevitMCP reasoning and public MCP references.
 
-The risk is that later Autodesk/AEC work could turn `RevitMCP.Server` into a general mega-server: mixing local Revit execution with APS, ACC, Forma, workflow state, project memory, and an ever-growing tool list. Those domains do not share the same process, security, identity, deployment, or failure model.
+The risk is that later Autodesk/AEC work could turn `RevitMCP.Server` into a general mega-server: mixing local Revit execution with APS, ACC, Forma, workflow state, project memory, and an ever-growing tool list. Those Autodesk cloud concerns do not share the same process, security, identity, deployment, or failure model as local Revit.
 
 This ADR does **not** implement a second MCP server, APS/Forma integration, an orchestrator, dynamic tool registration, write tools, authentication, or UI. It does **not** choose the next Revit capability.
 
@@ -45,7 +45,7 @@ Rejected as the default architecture.
 
 ### Option B: Specialized MCP services with optional external orchestration
 
-RevitMCP remains a specialized Revit capability service. Cloud Autodesk capabilities such as APS, ACC, and Forma belong behind separate logical MCP service boundaries when implemented. A workflow orchestrator may compose those services, but it is not part of the Revit core and is not required to use RevitMCP.
+RevitMCP remains a specialized Revit capability service. Autodesk cloud capability such as APS, ACC, and Forma is logically separated from the Revit-local MCP boundary when implemented. This option does not decide whether those cloud capabilities are exposed through one coherent Autodesk-cloud MCP service or several specialized services. A workflow orchestrator may compose RevitMCP with one or more cloud MCP services, but it is not part of the Revit core and is not required to use RevitMCP.
 
 Advantages:
 
@@ -99,7 +99,7 @@ MCP client
 
 Do not turn `RevitMCP.Server` into a general Autodesk/AEC mega-server.
 
-Cloud Autodesk capabilities such as APS, ACC, and Forma belong behind **separate logical MCP service boundaries** when implemented. Those services may eventually live in the same broader product or repository. This ADR does **not** decide repository topology, process count, packaging, or deployment topology. Multiple MCP processes are not required now.
+Autodesk cloud capability such as APS, ACC, and Forma is logically separated from the Revit-local MCP boundary when implemented. ADR-0007 does **not** decide whether APS/ACC/Forma are exposed through one coherent Autodesk-cloud MCP service or several specialized services. That split remains deferred based on auth, lifecycle, capability cohesion, deployment, and failure semantics. Those cloud capabilities may eventually live in the same broader product or repository. This ADR does **not** decide repository topology, process count, packaging, or deployment topology. Multiple MCP processes are not required now.
 
 This ADR does not supersede ADR-0001 through ADR-0006.
 
@@ -118,7 +118,7 @@ read/write transaction safety
 local instance discovery
 ```
 
-APS / ACC / Forma MCP, when implemented, owns:
+Autodesk cloud MCP (APS / ACC / Forma), when implemented, owns:
 
 ```text
 Autodesk cloud APIs
@@ -143,7 +143,7 @@ Agent / Host
 Workflow / Orchestration
    |
    +-- Revit MCP
-   +-- APS / ACC / Forma MCP
+   +-- Autodesk cloud MCP (APS / ACC / Forma)
    +-- future validation/rules MCP
    +-- future project-memory MCP
 ```
@@ -208,7 +208,7 @@ Tool scoping must preserve:
 
 Illustrative future domains such as `core read`, `parameters`, `MEP`, `structural`, and `writes` may be discussed as examples. They are **not** accepted profile names or contracts.
 
-The official MCP 2026-07-28 specification treats Streamable HTTP as a stateless remote transport, requires deterministic `tools/list` ordering, and supports cacheable list results plus list-change notifications. Those public protocol features are relevant when a future scoping mechanism is designed. They do not implement scoping in RevitMCP now.
+The official MCP 2026-07-28 specification has a stateless protocol core over Streamable HTTP, says servers SHOULD return `tools/list` results in deterministic order, and supports cacheable list results plus opt-in list-change notifications delivered through client-opted `subscriptions/listen`. Those public protocol features are relevant when a future scoping mechanism is designed. They do not implement scoping in RevitMCP now.
 
 ### 5. Writes
 
