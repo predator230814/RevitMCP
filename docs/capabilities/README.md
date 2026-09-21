@@ -10,6 +10,7 @@ Capability specifications define behavior before implementation. They are not Ar
 - `CAP-0002-revit-query-elements.md` — bounded active-document/view element query returning opaque `element_ref` values.
 - `CAP-0003-revit-get-elements.md` — bounded inspection of known `element_ref` values with explicit basic-field and named-parameter projection.
 - `CAP-0004-revit-describe-parameters.md` — bounded visible-parameter discovery returning opaque `parameter_ref` identity and data-type semantics, without values.
+- `CAP-0005-revit-get-parameter-values.md` — bounded typed reads of explicit `element_ref + parameter_ref` pairs. Not implemented.
 
 ## Required sections
 
