@@ -10,7 +10,7 @@ internal static class Cap0001JsonSchemas
           "type": "object",
           "properties": {
             "instance_id": {
-              "type": "string"
+              "type": ["string", "null"]
             }
           },
           "additionalProperties": false

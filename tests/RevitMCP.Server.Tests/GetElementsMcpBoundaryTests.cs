@@ -35,13 +35,8 @@ public sealed class GetElementsMcpBoundaryTests
         var names = schema.GetProperty("properties").EnumerateObject().Select(property => property.Name).ToArray();
         Assert.Equal(new[] { "instance_id", "document_id", "element_refs", "projection" }, names);
 
-        foreach (var idName in new[] { "instance_id", "document_id" })
-        {
-            var id = schema.GetProperty("properties").GetProperty(idName);
-            Assert.Equal("string", id.GetProperty("type").GetString());
-            Assert.False(id.TryGetProperty("format", out var format) && format.GetString() is "uuid" or "guid");
-            Assert.False(id.TryGetProperty("minLength", out _));
-        }
+        TestSupport.AssertOptionalNullableInstanceId(schema.GetProperty("properties").GetProperty("instance_id"));
+        TestSupport.AssertRequiredOpaqueString(schema.GetProperty("properties").GetProperty("document_id"));
 
         var refs = schema.GetProperty("properties").GetProperty("element_refs");
         Assert.Equal(1, refs.GetProperty("minItems").GetInt32());

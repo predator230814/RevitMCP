@@ -35,7 +35,7 @@ public sealed class GetContextMcpBoundaryTests
         Assert.Equal(new[] { "instance_id" }, names);
 
         var instanceId = schema.GetProperty("properties").GetProperty("instance_id");
-        Assert.Equal("string", instanceId.GetProperty("type").GetString());
+        TestSupport.AssertOptionalNullableInstanceId(instanceId);
         Assert.False(instanceId.TryGetProperty("format", out var format) && format.GetString() is "uuid" or "guid");
     }
 
@@ -229,6 +229,33 @@ public sealed class GetContextMcpBoundaryTests
         Assert.Equal(1, discovery.CallCount);
         Assert.Equal(new[] { "pipe-only" }, factory.RequestedPipes);
         Assert.Equal(1, factory.Clients[0].GetContextCalls);
+    }
+
+    [Fact]
+    public async Task Omitted_instance_id_still_executes_as_unspecified()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var result = await McpToolInvoke.InvokeAsync(tool, new Dictionary<string, JsonElement>(StringComparer.Ordinal));
+
+        Assert.False(result.IsError);
+        Assert.Equal(1, discovery.CallCount);
+        Assert.Equal(new[] { "pipe-only" }, factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Explicit_null_instance_id_means_unspecified_and_still_executes()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var result = await McpToolInvoke.InvokeAsync(
+            tool,
+            new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+            {
+                ["instance_id"] = TestSupport.JsonValue("null")
+            });
+
+        Assert.False(result.IsError);
+        Assert.Equal(1, discovery.CallCount);
+        Assert.Equal(new[] { "pipe-only" }, factory.RequestedPipes);
     }
 
     private static Tool CreateProtocolTool()
