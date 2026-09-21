@@ -82,13 +82,18 @@ It must not enter the transport-neutral capability request.
 
 ### `document_id`
 
-Required.
+Required opaque string defined by ADR-0006.
 
-Same ADR-0006 active-document guard used by CAP-0003 and CAP-0004.
+Same active-document guard used by CAP-0003 and CAP-0004.
 
-A mismatch returns `DOCUMENT_CONTEXT_CHANGED`.
+Required behavior:
 
-No fallback to another document.
+- absent/null at a layer where the field is required -> `INVALID_PARAMETER_READ`;
+- no active document -> `NO_ACTIVE_DOCUMENT`;
+- a present string is opaque and is never trimmed, normalized, parsed, or treated as omitted;
+- exact match against the active open-document lifetime -> continue;
+- exact mismatch, including empty or whitespace strings, -> `DOCUMENT_CONTEXT_CHANGED`;
+- never fall back to another open document.
 
 ### `reads`
 
@@ -101,7 +106,13 @@ element_ref: required opaque string
 parameter_ref: required opaque string
 ```
 
-Pairs must be unique using ordinal string equality on both refs.
+Each pair must contain non-null string fields. String content remains opaque and is not trimmed, normalized, or parsed.
+
+Pairs must be unique using ordinal string equality on the raw strings.
+
+An arbitrary, empty, or whitespace `element_ref` that cannot resolve becomes item-level `element_not_found`.
+
+An arbitrary, empty, or whitespace `parameter_ref` not known to the document-lifetime reverse map becomes item-level `parameter_ref_not_found`.
 
 The same `element_ref` may appear with several parameter refs.
 
@@ -386,11 +397,12 @@ It contains no:
 
 Transport-neutral validation must reject with `INVALID_PARAMETER_READ` when, at minimum:
 
-- `document_id` is missing, empty, or whitespace;
+- `document_id` is absent or null;
 - `reads` is missing, empty, or longer than 50;
-- any pair is missing `element_ref` or `parameter_ref`;
-- any ref is empty or whitespace;
-- pairs are not unique under ordinal equality of both refs.
+- any pair is missing a non-null `element_ref` or `parameter_ref` string field;
+- pairs are not unique under ordinal equality of the raw strings.
+
+Do not treat empty or whitespace `document_id`, `element_ref`, or `parameter_ref` strings as omitted or as a special representation. Those present strings remain opaque and are handled by the document guard or item statuses.
 
 ## Errors
 
@@ -482,16 +494,16 @@ Do not treat compile-time availability as live proof.
 CAP-0005 is acceptable as a capability contract when:
 
 1. It is one coherent read-only capability.
-2. `document_id` is mandatory.
+2. `document_id` is required as a present string. Absent/null is `INVALID_PARAMETER_READ`. A present string is opaque, is never trimmed or normalized, and is compared exactly to the active document id. Empty or whitespace therefore yields `DOCUMENT_CONTEXT_CHANGED`.
 3. `reads` contains 1..50 unique explicit `element_ref + parameter_ref` pairs.
-4. Pair uniqueness uses ordinal equality on both refs.
+4. Pair uniqueness uses ordinal equality on the raw strings. Ref content is opaque and is not trimmed or normalized.
 5. The request is not a Cartesian product of element and parameter arrays.
 6. `instance_id` remains Server routing-only.
 7. `parameter_ref` is resolved through the CAP-0004 Addin identity service, with optional reverse-lookup extension only.
 8. Resolution re-finds the current visible parameter by CAP-0004 identity and source.
 9. No `LookupParameter(name)` or display-name identity fallback is used.
 10. Result order matches request order with exactly one item per pair.
-11. Item statuses are `ok`, `element_not_found`, `parameter_ref_not_found`, `parameter_not_present`, and `unsupported_value` with the meanings above.
+11. Item statuses are `ok`, `element_not_found`, `parameter_ref_not_found`, `parameter_not_present`, and `unsupported_value` with the meanings above. Arbitrary, empty, or whitespace `element_ref` values that cannot resolve are `element_not_found`. Arbitrary, empty, or whitespace `parameter_ref` values unknown to the document-lifetime reverse map are `parameter_ref_not_found`.
 12. `ok` items include CAP-0004-style `data_type`, `has_value`, and `value` only when `has_value` is true.
 13. `HasValue == false` is `ok` with `has_value = false` and omitted `value`.
 14. String values use `AsString()` and are bounded to 512 characters with explicit truncation.
