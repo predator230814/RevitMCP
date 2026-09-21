@@ -26,6 +26,7 @@ revit_describe_parameters
 - ADR-0004 accepts a small SDK-style .NET solution with `Contracts`, `Bridge`, `Server`, and one multi-version `Addin` project.
 - ADR-0005 makes bounded, filtered, deterministic agent context and token efficiency a first-class capability-design requirement.
 - ADR-0006 accepts an opaque process-scoped `document_id` for each open-document lifetime and opaque cross-call `element_ref` values based initially on Revit `Element.UniqueId`; `document_id` may be generated from a GUID internally but remains an opaque string contractually.
+- The post-SERVER-0004 architecture checkpoint is complete. ADR-0007 is accepted: RevitMCP remains a specialized Revit capability service; APS/ACC/Forma belong behind separate logical MCP boundaries when implemented; orchestration is external and optional. No implementation change. The next capability is not selected.
 - The ADR-0004 solution/project skeleton is committed: `RevitMCP.sln`, `global.json`, centralized build/package props, `src/RevitMCP.Contracts`, `src/RevitMCP.Bridge`, `src/RevitMCP.Server`, one multi-version `src/RevitMCP.Addin` project, and test projects for Contracts, Bridge, Server, and Addin.
 - Revit 2025, 2026, and 2027 are built from the same add-in project using an explicit `RevitVersion` build property; the initial target matrix is `net8.0-windows` for Revit 2025/2026 and `net10.0-windows` for Revit 2027.
 - GitHub Actions compiles the non-Revit projects and the 2025/2026/2027 add-in matrix.
@@ -471,6 +472,7 @@ This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented a
 ## What does not exist yet
 
 - no write capability or write authorization;
+- no APS/ACC/Forma MCP, orchestrator, or dynamic tool-list exposure;
 - no full/all-parameter element dump or whole-document parameter catalog;
 - local parameter identity remains document-scoped; built-in/shared canonical identity and opaque `parameter_ref` now exist for later read/write chaining;
 - no machine-readable quantity/unit contract for raw numeric parameter analytics;
@@ -485,7 +487,7 @@ This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented a
 
 ## Current priorities
 
-1. Hold an architecture/design checkpoint using the Autodesk University documentation Dave will provide, before choosing or implementing the next capability.
+1. Choose the next Revit capability based on product value and the accepted architecture. Do not implement an orchestrator, APS/Forma MCP, or dynamic tool scoping next.
 2. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
 3. Do not begin writes, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work.
 
@@ -526,4 +528,4 @@ This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented a
 
 ## Next task
 
-SERVER-0004 is complete for the Revit 2026.5 reference environment. The next project step is an architecture/design checkpoint using the Autodesk University documentation Dave will provide, before choosing or implementing the next capability. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validations. Do not start writes.
+SERVER-0004 remains complete for the Revit 2026.5 reference environment. ADR-0007 is accepted and records federated MCP boundaries; it does not change implementation. The next step is to choose the next Revit capability based on product value and that architecture, not to implement the orchestrator or APS immediately. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validations. Do not start writes.
