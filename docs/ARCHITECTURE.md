@@ -17,7 +17,7 @@ Target conceptual layers:
 
 2. **Application / capability layer**
    - coherent Revit capabilities exposed to agents
-   - validation and orchestration
+   - validation and capability/request coordination
    - structured results and error handling
 
 3. **Revit integration layer**
@@ -52,19 +52,18 @@ Target conceptual layers:
 
 ## Decisions intentionally not made yet
 
-The following are open architectural questions and must not be treated as settled:
+The following remain open architectural questions and must not be treated as settled:
 
-- implementation language and MCP SDK;
-- process topology between MCP host and Revit;
-- local IPC mechanism, if any;
-- supported MCP transports and hosting model;
+- remote/additional MCP transports, gateways, and hosting model beyond the accepted initial local `stdio` transport;
 - authentication and authorization model, except that passing tokens through model context is not an acceptable design direction (ADR-0007);
 - packaging and deployment strategy;
-- supported Revit versions;
 - exact interoperability and overlap strategy with Autodesk and third-party Revit MCP implementations;
-- extent and form of WebMCP integration.
+- extent and form of WebMCP integration;
+- Autodesk-cloud MCP service topology (one coherent service vs several specialized services);
+- multi-service orchestration implementation technology, if introduced;
+- future tool-surface scoping mechanism.
 
-These decisions should be made through research, discussion, and ADRs.
+These remaining decisions should be made through research, discussion, and ADRs. Do not treat them as implementation work authorized by this document.
 
 ## Ecosystem evaluation rule
 
