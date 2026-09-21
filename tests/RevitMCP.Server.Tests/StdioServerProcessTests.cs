@@ -28,13 +28,20 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(3, tools.Count);
+        Assert.Equal(4, tools.Count);
         Assert.Equal(
-            new[] { GetContextToolMetadata.Name, GetElementsToolMetadata.Name, QueryElementsToolMetadata.Name },
+            new[]
+            {
+                DescribeParametersToolMetadata.Name,
+                GetContextToolMetadata.Name,
+                GetElementsToolMetadata.Name,
+                QueryElementsToolMetadata.Name
+            },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("handshake", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.get_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.query_", StringComparison.Ordinal));
+        Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.describe_", StringComparison.Ordinal));
 
         var getContext = Assert.Single(tools, tool => tool.Name == GetContextToolMetadata.Name);
         Assert.Equal(GetContextToolMetadata.Title, getContext.Title);
@@ -52,6 +59,12 @@ public sealed class StdioServerProcessTests
         Assert.Equal(GetElementsToolMetadata.Description, getElements.Description);
         Assert.True(getElements.ProtocolTool.Annotations?.ReadOnlyHint);
         Assert.False(getElements.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var describe = Assert.Single(tools, tool => tool.Name == DescribeParametersToolMetadata.Name);
+        Assert.Equal(DescribeParametersToolMetadata.Title, describe.Title);
+        Assert.Equal(DescribeParametersToolMetadata.Description, describe.Description);
+        Assert.True(describe.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(describe.ProtocolTool.Annotations?.OpenWorldHint);
 
         var rejected = await client.CallToolAsync(
             GetElementsToolMetadata.Name,
@@ -79,6 +92,20 @@ public sealed class StdioServerProcessTests
         Assert.Contains(McpToolErrorCodes.InvalidRequest, missingText, StringComparison.Ordinal);
         Assert.DoesNotContain("NO_REVIT_INSTANCE", missingText, StringComparison.Ordinal);
         Assert.DoesNotContain("INVALID_INSPECTION", missingText, StringComparison.Ordinal);
+
+        var malformedDescribe = await client.CallToolAsync(
+            DescribeParametersToolMetadata.Name,
+            new Dictionary<string, object?>
+            {
+                ["document_id"] = "doc-1",
+                ["element_refs"] = new[] { "ref-1" },
+                ["unexpected"] = true
+            });
+        Assert.True(malformedDescribe.IsError);
+        var describeText = Assert.IsType<TextContentBlock>(Assert.Single(malformedDescribe.Content)).Text;
+        Assert.Contains(McpToolErrorCodes.InvalidRequest, describeText, StringComparison.Ordinal);
+        Assert.DoesNotContain("NO_REVIT_INSTANCE", describeText, StringComparison.Ordinal);
+        Assert.DoesNotContain("INVALID_PARAMETER_DISCOVERY", describeText, StringComparison.Ordinal);
     }
 
     private static (string FileName, IList<string> Arguments)? ResolveServerCommand()

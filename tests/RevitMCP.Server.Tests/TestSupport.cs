@@ -5,6 +5,7 @@ using ModelContextProtocol.Server;
 using RevitMCP.Bridge;
 using RevitMCP.Contracts;
 using RevitMCP.Server;
+using Xunit;
 
 namespace RevitMCP.Server.Tests;
 
@@ -199,6 +200,109 @@ internal static class TestSupport
             ElementRef = elementRef,
             Status = GetElementResultStatus.NotFound
         };
+    }
+
+    public static DescribeParametersRequest CreateDescribeParametersRequest(
+        string documentId = "doc-1",
+        IReadOnlyList<string>? elementRefs = null,
+        DescribeParameterSource source = DescribeParameterSource.Both,
+        string? nameContains = null,
+        int limit = 50)
+    {
+        return new DescribeParametersRequest
+        {
+            DocumentId = documentId,
+            ElementRefs = elementRefs ?? ["ref-1"],
+            Source = source,
+            NameContains = nameContains,
+            Limit = limit
+        };
+    }
+
+    public static DescribeParametersResult CreateDescribeParametersResult(
+        string instanceId,
+        string documentId,
+        IReadOnlyList<DescribeParameterElementResult> elements,
+        int matchedCount,
+        bool truncated,
+        params DescribeParameterDescriptor[] parameters)
+    {
+        return new DescribeParametersResult
+        {
+            Context = new DescribeParametersContext
+            {
+                InstanceId = instanceId,
+                DocumentId = documentId
+            },
+            Elements = elements,
+            MatchedCount = matchedCount,
+            Truncated = truncated,
+            Parameters = parameters
+        };
+    }
+
+    public static DescribeParameterElementResult CreateDescribeOkElement(string elementRef)
+    {
+        return new DescribeParameterElementResult
+        {
+            ElementRef = elementRef,
+            Status = GetElementResultStatus.Ok
+        };
+    }
+
+    public static DescribeParameterElementResult CreateDescribeNotFoundElement(string elementRef)
+    {
+        return new DescribeParameterElementResult
+        {
+            ElementRef = elementRef,
+            Status = GetElementResultStatus.NotFound
+        };
+    }
+
+    public static DescribeParameterDescriptor CreateBuiltInDescriptor(
+        string parameterRef = "pref-1",
+        string name = "Flow",
+        GetElementParameterSource source = GetElementParameterSource.Instance,
+        string parameterTypeId = "autodesk.revit.parameter:rbsPipeFlowParam",
+        string forgeTypeId = "autodesk.spec.aec.piping:flow",
+        DescribeParameterDataTypeKind dataTypeKind = DescribeParameterDataTypeKind.MeasurableSpec,
+        int presentOnCount = 1,
+        int readOnlyOnCount = 0)
+    {
+        return new DescribeParameterDescriptor
+        {
+            ParameterRef = parameterRef,
+            Name = name,
+            Source = source,
+            Identity = new DescribeParameterIdentity
+            {
+                Kind = DescribeParameterIdentityKind.BuiltIn,
+                ParameterTypeId = parameterTypeId
+            },
+            DataType = new DescribeParameterDataType
+            {
+                Kind = dataTypeKind,
+                ForgeTypeId = forgeTypeId
+            },
+            PresentOnCount = presentOnCount,
+            ReadOnlyOnCount = readOnlyOnCount
+        };
+    }
+
+    public static void AssertOptionalNullableInstanceId(JsonElement property)
+    {
+        Assert.Equal(
+            new[] { "string", "null" },
+            property.GetProperty("type").EnumerateArray().Select(value => value.GetString()).ToArray());
+        Assert.False(property.TryGetProperty("format", out var format) && format.GetString() is "uuid" or "guid");
+        Assert.False(property.TryGetProperty("minLength", out _));
+    }
+
+    public static void AssertRequiredOpaqueString(JsonElement property)
+    {
+        Assert.Equal("string", property.GetProperty("type").GetString());
+        Assert.False(property.TryGetProperty("format", out var format) && format.GetString() is "uuid" or "guid");
+        Assert.False(property.TryGetProperty("minLength", out _));
     }
 }
 

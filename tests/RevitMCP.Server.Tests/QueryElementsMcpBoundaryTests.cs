@@ -45,13 +45,8 @@ public sealed class QueryElementsMcpBoundaryTests
         Assert.Equal(1, limit.GetProperty("minimum").GetInt32());
         Assert.Equal(100, limit.GetProperty("maximum").GetInt32());
 
-        foreach (var idName in new[] { "instance_id", "document_id" })
-        {
-            var id = schema.GetProperty("properties").GetProperty(idName);
-            Assert.Equal("string", id.GetProperty("type").GetString());
-            Assert.False(id.TryGetProperty("format", out var format) && format.GetString() is "uuid" or "guid");
-            Assert.False(id.TryGetProperty("minLength", out _));
-        }
+        TestSupport.AssertOptionalNullableInstanceId(schema.GetProperty("properties").GetProperty("instance_id"));
+        TestSupport.AssertRequiredOpaqueString(schema.GetProperty("properties").GetProperty("document_id"));
     }
 
     [Fact]
@@ -279,6 +274,35 @@ public sealed class QueryElementsMcpBoundaryTests
         Assert.Equal(new[] { "pipe-only" }, factory.RequestedPipes);
         Assert.Equal(1, factory.Clients[0].QueryElementsCalls);
         Assert.Equal("doc-1", factory.Clients[0].LastQueryRequest!.DocumentId);
+    }
+
+    [Fact]
+    public async Task Explicit_null_instance_id_means_unspecified_and_still_executes()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var arguments = ValidQueryArguments();
+        arguments["instance_id"] = TestSupport.JsonValue("null");
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        Assert.False(result.IsError);
+        Assert.Equal(1, discovery.CallCount);
+        Assert.Equal(new[] { "pipe-only" }, factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Omitted_limit_still_executes_with_valid_query_shape()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var arguments = ValidQueryArguments();
+        arguments.Remove("limit");
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        Assert.False(result.IsError);
+        Assert.Equal(1, discovery.CallCount);
+        Assert.Equal(new[] { "pipe-only" }, factory.RequestedPipes);
+        Assert.Equal(QueryElementsToolMetadata.DefaultLimit, factory.Clients[0].LastQueryRequest!.Limit);
     }
 
     private static Tool CreateProtocolTool()

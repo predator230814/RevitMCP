@@ -12,7 +12,7 @@ internal static class Cap0003JsonSchemas
           "required": ["document_id", "element_refs", "projection"],
           "properties": {
             "instance_id": {
-              "type": "string"
+              "type": ["string", "null"]
             },
             "document_id": {
               "type": "string"
