@@ -16,7 +16,7 @@ public sealed class DescribeParametersBridgeTests
             new FakeGetElementsService(),
             new FakeDescribeParametersService());
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, advertised.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.DescribeParametersVersions, advertised.SupportedProtocolVersions);
         Assert.Equal(5, advertised.SupportedProtocolVersions.Max());
     }
 

@@ -12,7 +12,9 @@ public static class BridgeProtocol
 
     public const int DescribeParametersVersion = 5;
 
-    public const int CurrentVersion = DescribeParametersVersion;
+    public const int GetParameterValuesVersion = 6;
+
+    public const int CurrentVersion = GetParameterValuesVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -24,18 +26,38 @@ public static class BridgeProtocol
     public static IReadOnlyList<int> GetElementsVersions { get; } =
         [GetElementsVersion, QueryElementsVersion, GetContextVersion, HandshakeVersion];
 
-    public static IReadOnlyList<int> SupportedVersions { get; } =
+    public static IReadOnlyList<int> DescribeParametersVersions { get; } =
         [DescribeParametersVersion, GetElementsVersion, QueryElementsVersion, GetContextVersion, HandshakeVersion];
 
+    public static IReadOnlyList<int> SupportedVersions { get; } =
+        [
+            GetParameterValuesVersion,
+            DescribeParametersVersion,
+            GetElementsVersion,
+            QueryElementsVersion,
+            GetContextVersion,
+            HandshakeVersion
+        ];
+
     public static bool SupportsGetContext(int version) =>
-        version is GetContextVersion or QueryElementsVersion or GetElementsVersion or DescribeParametersVersion;
+        version is GetContextVersion
+            or QueryElementsVersion
+            or GetElementsVersion
+            or DescribeParametersVersion
+            or GetParameterValuesVersion;
 
     public static bool SupportsQueryElements(int version) =>
-        version is QueryElementsVersion or GetElementsVersion or DescribeParametersVersion;
+        version is QueryElementsVersion
+            or GetElementsVersion
+            or DescribeParametersVersion
+            or GetParameterValuesVersion;
 
     public static bool SupportsGetElements(int version) =>
-        version is GetElementsVersion or DescribeParametersVersion;
+        version is GetElementsVersion or DescribeParametersVersion or GetParameterValuesVersion;
 
     public static bool SupportsDescribeParameters(int version) =>
-        version is DescribeParametersVersion;
+        version is DescribeParametersVersion or GetParameterValuesVersion;
+
+    public static bool SupportsGetParameterValues(int version) =>
+        version is GetParameterValuesVersion;
 }

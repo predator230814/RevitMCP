@@ -1,4 +1,3 @@
-using System.Globalization;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 using RevitMCP.Addin.Execution;
@@ -144,7 +143,7 @@ internal sealed class RevitDescribeParametersService : IRevitDescribeParametersS
                 continue;
             }
 
-            var classified = ClassifyIdentity(parameter, document);
+            var classified = RevitParameterIdentity.Classify(parameter, document);
             var parameterRef = _parameterRefs.GetRef(document, source, classified);
             if (!seen.Add(parameterRef))
             {
@@ -157,53 +156,10 @@ internal sealed class RevitDescribeParametersService : IRevitDescribeParametersS
                 Name = name,
                 Source = source,
                 Identity = ParameterIdentityClassifier.ToContract(classified),
-                DataType = ClassifyDataType(parameter),
+                DataType = RevitParameterIdentity.ClassifyDataType(parameter),
                 ElementRef = elementRef,
                 IsReadOnly = parameter.IsReadOnly
             });
         }
-    }
-
-    private static ClassifiedParameterIdentity ClassifyIdentity(Parameter parameter, Document document)
-    {
-        var typeId = parameter.GetTypeId();
-        var isBuiltIn = !typeId.Empty() && ParameterUtils.IsBuiltInParameter(typeId);
-        return ParameterIdentityClassifier.Classify(
-            isBuiltIn,
-            isBuiltIn ? typeId.TypeId : null,
-            parameter.IsShared,
-            parameter.IsShared ? parameter.GUID : Guid.Empty,
-            ResolveLocalKey(parameter, document));
-    }
-
-    private static string ResolveLocalKey(Parameter parameter, Document document)
-    {
-        if (parameter.Definition is InternalDefinition definition)
-        {
-            if (document.GetElement(definition.Id) is ParameterElement parameterElement
-                && !string.IsNullOrEmpty(parameterElement.UniqueId))
-            {
-                return parameterElement.UniqueId;
-            }
-
-            return "local:" + definition.Id.Value.ToString(CultureInfo.InvariantCulture);
-        }
-
-        return "local:" + parameter.Id.Value.ToString(CultureInfo.InvariantCulture);
-    }
-
-    private static DescribeParameterDataType ClassifyDataType(Parameter parameter)
-    {
-        var dataType = parameter.Definition?.GetDataType();
-        if (dataType is null || dataType.Empty())
-        {
-            return ParameterDataTypeClassifier.Classify(null, false, false, false);
-        }
-
-        return ParameterDataTypeClassifier.Classify(
-            dataType.TypeId,
-            UnitUtils.IsMeasurableSpec(dataType),
-            Category.IsBuiltInCategory(dataType),
-            SpecUtils.IsSpec(dataType));
     }
 }

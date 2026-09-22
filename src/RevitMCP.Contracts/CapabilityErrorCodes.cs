@@ -17,4 +17,6 @@ public static class CapabilityErrorCodes
     public const string InvalidInspection = "INVALID_INSPECTION";
 
     public const string InvalidParameterDiscovery = "INVALID_PARAMETER_DISCOVERY";
+
+    public const string InvalidParameterRead = "INVALID_PARAMETER_READ";
 }

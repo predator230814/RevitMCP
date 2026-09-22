@@ -39,7 +39,7 @@ public sealed class AddinLifecycleCoordinatorTests
 
         Assert.Equal(AddinLifecycleState.Ready, coordinator.State);
         Assert.Equal(1, dispatchers.CreateCount);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "bridge.start", "registration.publish" }, events);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "bridge.start", "registration.publish" }, events);
     }
 
     [Fact]
@@ -58,14 +58,16 @@ public sealed class AddinLifecycleCoordinatorTests
         Assert.Equal("query.create", events[2]);
         Assert.Equal("getelements.create", events[3]);
         Assert.Equal("describe.create", events[4]);
-        Assert.Equal("bridge.start", events[5]);
-        Assert.Equal("registration.publish", events[6]);
+        Assert.Equal("getparametervalues.create", events[5]);
+        Assert.Equal("bridge.start", events[6]);
+        Assert.Equal("registration.publish", events[7]);
         Assert.True(bridges.Published);
         Assert.True(bridges.LastBridge?.HasRegistration);
         Assert.NotNull(bridges.LastCapability);
         Assert.NotNull(bridges.LastQuery);
         Assert.NotNull(bridges.LastGetElements);
         Assert.NotNull(bridges.LastDescribeParameters);
+        Assert.NotNull(bridges.LastGetParameterValues);
         Assert.NotNull(coordinator.Metadata);
         Assert.Equal(coordinator.InstanceId, coordinator.Metadata!.InstanceId);
         Assert.Equal("2026", coordinator.Metadata.RevitVersion);
@@ -140,6 +142,7 @@ public sealed class AddinLifecycleCoordinatorTests
                 "query.create",
                 "getelements.create",
                 "describe.create",
+                "getparametervalues.create",
                 "bridge.start",
                 "registration.publish",
                 "dispatcher.stop",

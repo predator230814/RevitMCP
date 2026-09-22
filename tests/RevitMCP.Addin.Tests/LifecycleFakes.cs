@@ -78,6 +78,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("describe.create");
         return new RecordingDescribeParametersService();
     }
+
+    public IRevitGetParameterValuesService? CreateGetParameterValues(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("getparametervalues.create");
+        return new RecordingGetParameterValuesService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -119,6 +126,18 @@ internal sealed class RecordingDescribeParametersService : IRevitDescribeParamet
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording describe-parameters does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingGetParameterValuesService : IRevitGetParameterValuesService
+{
+    public Task<GetParameterValuesResult> GetParameterValuesAsync(
+        GetParameterValuesRequest request,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording get-parameter-values does not execute Revit work.");
     }
 }
 
@@ -213,12 +232,15 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitDescribeParametersService? LastDescribeParameters { get; private set; }
 
+    public IRevitGetParameterValuesService? LastGetParameterValues { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query,
         IRevitGetElementsService? getElements,
         IRevitDescribeParametersService? describeParameters,
+        IRevitGetParameterValuesService? getParameterValues,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -226,6 +248,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         LastQuery = query;
         LastGetElements = getElements;
         LastDescribeParameters = describeParameters;
+        LastGetParameterValues = getParameterValues;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

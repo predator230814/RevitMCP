@@ -48,12 +48,14 @@ public sealed class CapabilityInfrastructureTests
         Assert.Contains("new RevitQueryElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitDescribeParametersService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
-        Assert.Contains("StartAsync(metadata, _store, capability, query, getElements, describeParameters, cancellationToken)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitGetParameterValuesService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
+        Assert.Contains("StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, cancellationToken)", adapters, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateCapability(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateQuery(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateGetElements(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateDescribeParameters(metadata)", coordinator, StringComparison.Ordinal);
-        Assert.Contains("_bridges.Start(metadata, capability, query, getElements, describeParameters, startup.Token)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("dispatcher.CreateGetParameterValues(metadata)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("_bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, startup.Token)", coordinator, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextRequest", adapters, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextResult", adapters, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextRequest", coordinator, StringComparison.Ordinal);
@@ -81,7 +83,8 @@ public sealed class CapabilityInfrastructureTests
         Assert.Null(bridges.LastQuery);
         Assert.Null(bridges.LastGetElements);
         Assert.Null(bridges.LastDescribeParameters);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "bridge.start", "registration.publish" }, events);
+        Assert.Null(bridges.LastGetParameterValues);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "bridge.start", "registration.publish" }, events);
     }
 
     private static string FindRepoRoot()
@@ -155,6 +158,13 @@ internal sealed class NullCapabilityDispatcher : ILifecycleDispatcher
     {
         _ = metadata;
         _events.Add("describe.create");
+        return null;
+    }
+
+    public IRevitGetParameterValuesService? CreateGetParameterValues(BridgeInstanceMetadata metadata)
+    {
+        _ = metadata;
+        _events.Add("getparametervalues.create");
         return null;
     }
 }

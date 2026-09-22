@@ -25,7 +25,7 @@ public sealed class GetElementsBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -76,17 +76,17 @@ public sealed class GetElementsBridgeOrchestrationTests
     }
 
     [Fact]
-    public async Task Handshake_unknown_v6_maps_to_unavailable()
+    public async Task Handshake_unknown_v7_maps_to_unavailable()
     {
         var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready("id-v6", "pipe-v6", protocolVersion: 4));
+        discovery.Instances.Add(TestSupport.Ready("id-v7", "pipe-v7", protocolVersion: 4));
         var factory = Factory((pipe, _, _) =>
         {
-            var registration = TestSupport.CreateRegistration("id-v6", pipe);
+            var registration = TestSupport.CreateRegistration("id-v7", pipe);
             return Task.FromResult(new RecordingBridgeClient
             {
-                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 6)),
-                GetElements = (_, _, _) => throw new InvalidOperationException("GetElements must not run for unknown v6.")
+                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 7)),
+                GetElements = (_, _, _) => throw new InvalidOperationException("GetElements must not run for unknown v7.")
             });
         });
 
