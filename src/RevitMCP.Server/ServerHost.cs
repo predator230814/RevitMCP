@@ -46,6 +46,8 @@ internal static class ServerHost
         services.AddSingleton<GetElementsMcpTools>();
         services.AddSingleton<DescribeParametersApplicationService>();
         services.AddSingleton<DescribeParametersMcpTools>();
+        services.AddSingleton<GetParameterValuesApplicationService>();
+        services.AddSingleton<GetParameterValuesMcpTools>();
         services.AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
@@ -58,6 +60,7 @@ internal static class ServerHost
             .WithGetContextTool()
             .WithQueryElementsTool()
             .WithGetElementsTool()
-            .WithDescribeParametersTool();
+            .WithDescribeParametersTool()
+            .WithGetParameterValuesTool();
     }
 }

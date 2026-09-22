@@ -290,6 +290,74 @@ internal static class TestSupport
         };
     }
 
+    public static GetParameterValuesRequest CreateGetParameterValuesRequest(
+        string documentId = "doc-1",
+        IReadOnlyList<GetParameterValueRead>? reads = null)
+    {
+        return new GetParameterValuesRequest
+        {
+            DocumentId = documentId,
+            Reads = reads ??
+            [
+                new GetParameterValueRead
+                {
+                    ElementRef = "ref-1",
+                    ParameterRef = "pref-1"
+                }
+            ]
+        };
+    }
+
+    public static GetParameterValuesResult CreateGetParameterValuesResult(
+        string instanceId,
+        string documentId,
+        params GetParameterValueItem[] items)
+    {
+        return new GetParameterValuesResult
+        {
+            Context = new DescribeParametersContext
+            {
+                InstanceId = instanceId,
+                DocumentId = documentId
+            },
+            Items = items
+        };
+    }
+
+    public static GetParameterValueItem CreateParameterValueFailure(
+        string elementRef,
+        string parameterRef,
+        GetParameterValueStatus status)
+    {
+        return new GetParameterValueItem
+        {
+            ElementRef = elementRef,
+            ParameterRef = parameterRef,
+            Status = status
+        };
+    }
+
+    public static GetParameterValueItem CreateParameterValueOk(
+        string elementRef,
+        string parameterRef,
+        DescribeParameterDataType? dataType = null,
+        bool hasValue = false,
+        GetParameterValue? value = null)
+    {
+        return new GetParameterValueItem
+        {
+            ElementRef = elementRef,
+            ParameterRef = parameterRef,
+            Status = GetParameterValueStatus.Ok,
+            DataType = dataType ?? new DescribeParameterDataType
+            {
+                Kind = DescribeParameterDataTypeKind.Unknown
+            },
+            HasValue = hasValue,
+            Value = value
+        };
+    }
+
     public static void AssertOptionalNullableInstanceId(JsonElement property)
     {
         Assert.Equal(
