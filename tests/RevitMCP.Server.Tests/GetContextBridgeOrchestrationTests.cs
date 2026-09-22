@@ -25,7 +25,7 @@ public sealed class GetContextBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -57,17 +57,17 @@ public sealed class GetContextBridgeOrchestrationTests
     }
 
     [Fact]
-    public async Task Unknown_v6_does_not_permit_get_context()
+    public async Task Unknown_v7_does_not_permit_get_context()
     {
         var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready("id-v6", "pipe-v6"));
+        discovery.Instances.Add(TestSupport.Ready("id-v7", "pipe-v7"));
         var factory = Factory((pipe, _, _) =>
         {
-            var registration = TestSupport.CreateRegistration("id-v6", pipe);
+            var registration = TestSupport.CreateRegistration("id-v7", pipe);
             return Task.FromResult(new RecordingBridgeClient
             {
-                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 6)),
-                GetContext = (_, _, _) => throw new InvalidOperationException("GetContext must not run for protocol v6.")
+                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 7)),
+                GetContext = (_, _, _) => throw new InvalidOperationException("GetContext must not run for protocol v7.")
             });
         });
 

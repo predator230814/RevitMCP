@@ -47,7 +47,8 @@ internal static class TestSupport
             AddinVersion = registration.AddinVersion,
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
-                BridgeProtocol.DescribeParametersVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.GetParameterValuesVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.DescribeParametersVersion => BridgeProtocol.DescribeParametersVersions,
                 BridgeProtocol.GetElementsVersion => BridgeProtocol.GetElementsVersions,
                 BridgeProtocol.QueryElementsVersion => BridgeProtocol.QueryElementsVersions,
                 BridgeProtocol.GetContextVersion => BridgeProtocol.GetContextVersions,
@@ -461,6 +462,24 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return DescribeParameters is null
             ? throw new NotSupportedException("This recording client does not implement revit.describe_parameters.")
             : DescribeParameters(request, timeout, cancellationToken);
+    }
+
+    public int GetParameterValuesCalls { get; private set; }
+
+    public GetParameterValuesRequest? LastGetParameterValuesRequest { get; private set; }
+
+    public Func<GetParameterValuesRequest, TimeSpan, CancellationToken, Task<GetParameterValuesResult>>? GetParameterValues { get; set; }
+
+    public Task<GetParameterValuesResult> GetParameterValuesAsync(
+        GetParameterValuesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        GetParameterValuesCalls++;
+        LastGetParameterValuesRequest = request;
+        return GetParameterValues is null
+            ? throw new NotSupportedException("This recording client does not implement revit.get_parameter_values.")
+            : GetParameterValues(request, timeout, cancellationToken);
     }
 
     public ValueTask DisposeAsync()

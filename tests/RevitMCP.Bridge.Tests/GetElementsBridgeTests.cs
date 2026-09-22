@@ -116,12 +116,13 @@ public sealed class GetElementsBridgeTests
     }
 
     [Fact]
-    public void Unknown_v6_does_not_allow_any_current_capability()
+    public void Unknown_v7_does_not_allow_any_current_capability()
     {
-        Assert.False(BridgeProtocol.SupportsGetContext(6));
-        Assert.False(BridgeProtocol.SupportsQueryElements(6));
-        Assert.False(BridgeProtocol.SupportsGetElements(6));
-        Assert.False(BridgeProtocol.SupportsDescribeParameters(6));
+        Assert.False(BridgeProtocol.SupportsGetContext(7));
+        Assert.False(BridgeProtocol.SupportsQueryElements(7));
+        Assert.False(BridgeProtocol.SupportsGetElements(7));
+        Assert.False(BridgeProtocol.SupportsDescribeParameters(7));
+        Assert.False(BridgeProtocol.SupportsGetParameterValues(7));
     }
 
     [Fact]

@@ -10,6 +10,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitQueryElementsService? _query;
     private readonly IRevitGetElementsService? _getElements;
     private readonly IRevitDescribeParametersService? _describeParameters;
+    private readonly IRevitGetParameterValuesService? _getParameterValues;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -17,13 +18,15 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query = null,
         IRevitGetElementsService? getElements = null,
-        IRevitDescribeParametersService? describeParameters = null)
+        IRevitDescribeParametersService? describeParameters = null,
+        IRevitGetParameterValuesService? getParameterValues = null)
     {
         _handshake = handshake;
         _capability = capability;
         _query = query;
         _getElements = getElements;
         _describeParameters = describeParameters;
+        _getParameterValues = getParameterValues;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -174,6 +177,43 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit parameter discovery could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.get_parameter_values")]
+    public async Task<GetParameterValuesResult> GetParameterValuesAsync(
+        GetParameterValuesRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsGetParameterValues,
+            "revit.get_parameter_values is not available on this connection.");
+        if (_getParameterValues is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.get_parameter_values is not available on this endpoint."));
+        }
+
+        try
+        {
+            return await _getParameterValues.GetParameterValuesAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The Revit parameter value read could not be executed."));
         }
     }
 

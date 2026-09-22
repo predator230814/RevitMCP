@@ -6,7 +6,7 @@ namespace RevitMCP.Addin.Identity;
 
 internal sealed class OpenDocumentParameterIdentityService
 {
-    private readonly Dictionary<Document, Dictionary<string, string>> _refs = new(EqualityComparer<Document>.Default);
+    private readonly Dictionary<Document, ParameterIdentityMap> _maps = new(EqualityComparer<Document>.Default);
 
     public string GetRef(
         Document document,
@@ -14,28 +14,40 @@ internal sealed class OpenDocumentParameterIdentityService
         ClassifiedParameterIdentity identity)
     {
         ArgumentNullException.ThrowIfNull(document);
-        ArgumentNullException.ThrowIfNull(identity.StableKey);
+        return GetMap(document).GetRef(source, identity);
+    }
 
-        if (!_refs.TryGetValue(document, out var map))
+    public bool TryResolve(
+        Document document,
+        string parameterRef,
+        out ParameterIdentityBinding binding)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(parameterRef);
+
+        if (_maps.TryGetValue(document, out var map))
         {
-            map = new Dictionary<string, string>(StringComparer.Ordinal);
-            _refs.Add(document, map);
+            return map.TryResolve(parameterRef, out binding);
         }
 
-        var fingerprint = ((int)source).ToString() + "\n" + ((int)identity.Kind).ToString() + "\n" + identity.StableKey;
-        if (map.TryGetValue(fingerprint, out var existing))
-        {
-            return existing;
-        }
-
-        var assigned = Guid.NewGuid().ToString("D");
-        map.Add(fingerprint, assigned);
-        return assigned;
+        binding = default;
+        return false;
     }
 
     public bool Forget(Document document)
     {
         ArgumentNullException.ThrowIfNull(document);
-        return _refs.Remove(document);
+        return _maps.Remove(document);
+    }
+
+    private ParameterIdentityMap GetMap(Document document)
+    {
+        if (!_maps.TryGetValue(document, out var map))
+        {
+            map = new ParameterIdentityMap();
+            _maps.Add(document, map);
+        }
+
+        return map;
     }
 }

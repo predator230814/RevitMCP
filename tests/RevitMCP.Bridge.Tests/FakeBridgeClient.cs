@@ -51,5 +51,16 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         throw new NotSupportedException("This fake client does not implement revit.describe_parameters.");
     }
 
+    public Task<GetParameterValuesResult> GetParameterValuesAsync(
+        GetParameterValuesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.get_parameter_values.");
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

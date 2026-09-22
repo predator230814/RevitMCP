@@ -24,7 +24,7 @@ public sealed class HandshakeServiceTests
     }
 
     [Fact]
-    public async Task Current_peers_select_protocol_5()
+    public async Task Current_peers_select_protocol_6()
     {
         var metadata = TestSupport.CreateMetadata(protocolVersions: BridgeProtocol.SupportedVersions);
         var service = new BridgeHandshakeService(metadata);

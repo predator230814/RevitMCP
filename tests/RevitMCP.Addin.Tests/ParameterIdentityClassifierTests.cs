@@ -53,4 +53,38 @@ public sealed class ParameterIdentityClassifierTests
         Assert.Null(contract.Guid);
         Assert.Equal("document-local-key", identity.StableKey);
     }
+
+    [Fact]
+    public void Describe_and_get_parameter_values_share_the_same_identity_helper()
+    {
+        var describe = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "RevitMCP.Addin", "Capabilities", "RevitDescribeParametersService.cs"));
+        var values = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "RevitMCP.Addin", "Capabilities", "RevitGetParameterValuesService.cs"));
+        var helper = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "RevitMCP.Addin", "Inspection", "RevitParameterIdentity.cs"));
+
+        Assert.Contains("RevitParameterIdentity.Classify(", describe, StringComparison.Ordinal);
+        Assert.Contains("RevitParameterIdentity.Classify(", values, StringComparison.Ordinal);
+        Assert.Contains("ParameterUtils.IsBuiltInParameter", helper, StringComparison.Ordinal);
+        Assert.DoesNotContain("LookupParameter", helper, StringComparison.Ordinal);
+        Assert.DoesNotContain("ClassifyIdentity", describe, StringComparison.Ordinal);
+        Assert.DoesNotContain("ParameterUtils.IsBuiltInParameter", describe, StringComparison.Ordinal);
+        Assert.DoesNotContain("ParameterUtils.IsBuiltInParameter", values, StringComparison.Ordinal);
+        Assert.DoesNotContain("LookupParameter", describe, StringComparison.Ordinal);
+        Assert.DoesNotContain("LookupParameter", values, StringComparison.Ordinal);
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "RevitMCP.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate RevitMCP.sln from the test output directory.");
+    }
 }

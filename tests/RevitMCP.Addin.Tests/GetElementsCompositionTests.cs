@@ -15,6 +15,7 @@ public sealed class GetElementsCompositionTests
         Assert.Contains("new RevitQueryElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitDescribeParametersService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitGetParameterValuesService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
         Assert.Equal(1, CountOccurrences(adapters, "new OpenDocumentIdentityService()"));
         Assert.Equal(1, CountOccurrences(adapters, "new OpenDocumentParameterIdentityService()"));
         Assert.Contains("private readonly OpenDocumentIdentityService _identity;", adapters, StringComparison.Ordinal);
@@ -28,6 +29,12 @@ public sealed class GetElementsCompositionTests
             return;
         }
 
+        await using var values = await StartAsync(
+            new RecordingCapabilityService(),
+            new RecordingQueryElementsService(),
+            new RecordingGetElementsService(),
+            new RecordingDescribeParametersService(),
+            new RecordingGetParameterValuesService());
         await using var describe = await StartAsync(
             new RecordingCapabilityService(),
             new RecordingQueryElementsService(),
@@ -46,7 +53,9 @@ public sealed class GetElementsCompositionTests
             getElements: null,
             describeParameters: new RecordingDescribeParametersService());
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, describe.Metadata.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.SupportedVersions, values.Metadata.SupportedProtocolVersions);
+        Assert.Equal(6, values.Registration?.BridgeProtocolVersion);
+        Assert.Equal(BridgeProtocol.DescribeParametersVersions, describe.Metadata.SupportedProtocolVersions);
         Assert.Equal(5, describe.Registration?.BridgeProtocolVersion);
         Assert.Equal(BridgeProtocol.GetElementsVersions, full.Metadata.SupportedProtocolVersions);
         Assert.Equal(4, full.Registration?.BridgeProtocolVersion);
@@ -70,7 +79,8 @@ public sealed class GetElementsCompositionTests
         IRevitCapabilityService? capability,
         IRevitQueryElementsService? query,
         IRevitGetElementsService? getElements,
-        IRevitDescribeParametersService? describeParameters = null)
+        IRevitDescribeParametersService? describeParameters = null,
+        IRevitGetParameterValuesService? getParameterValues = null)
     {
         var process = Process.GetCurrentProcess();
         var metadata = new BridgeInstanceMetadata
@@ -92,6 +102,7 @@ public sealed class GetElementsCompositionTests
             query,
             getElements,
             describeParameters,
+            getParameterValues,
             CancellationToken.None);
     }
 

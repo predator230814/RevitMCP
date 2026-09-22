@@ -182,6 +182,28 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             .ConfigureAwait(false);
     }
 
+    public async Task<GetParameterValuesResult> GetParameterValuesAsync(
+        GetParameterValuesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<GetParameterValuesResult>(
+                "revit.get_parameter_values",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureGetParameterValuesAllowed,
+                "The Revit parameter value request timed out.",
+                "The Revit parameter value read could not be executed.")
+            .ConfigureAwait(false);
+    }
+
     public async ValueTask DisposeAsync()
     {
         _rpc.Dispose();
@@ -290,6 +312,17 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             throw new BridgeException(
                 BridgeErrorCodes.ProtocolIncompatible,
                 "revit.describe_parameters requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsureGetParameterValuesAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsGetParameterValues(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.get_parameter_values requires a negotiated bridge protocol version that explicitly supports it.");
         }
     }
 

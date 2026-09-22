@@ -149,12 +149,12 @@ public sealed class BridgeEndpointGatingTests
     {
         var capability = new FakeCapabilityService();
         var query = new FakeQueryElementsService();
-        var adapter = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(6), capability, query);
+        var adapter = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(7), capability, query);
         await adapter.HandshakeAsync(
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [6],
+                SupportedProtocolVersions = [7],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);
@@ -232,7 +232,7 @@ public sealed class BridgeEndpointGatingTests
     {
         var getElements = new FakeGetElementsService();
         var adapter = new StreamJsonRpcBridgeAdapter(
-            new SelectedVersionHandshake(6),
+            new SelectedVersionHandshake(7),
             new FakeCapabilityService(),
             new FakeQueryElementsService(),
             getElements);
@@ -240,7 +240,7 @@ public sealed class BridgeEndpointGatingTests
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [6],
+                SupportedProtocolVersions = [7],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);
@@ -427,11 +427,11 @@ public sealed class BridgeEndpointGatingTests
     }
 
     [Fact]
-    public async Task Unknown_selected_v6_does_not_invoke_describe_parameters()
+    public async Task Unknown_selected_v7_does_not_invoke_describe_parameters()
     {
         var describe = new FakeDescribeParametersService();
         var adapter = new StreamJsonRpcBridgeAdapter(
-            new SelectedVersionHandshake(6),
+            new SelectedVersionHandshake(7),
             new FakeCapabilityService(),
             new FakeQueryElementsService(),
             new FakeGetElementsService(),
@@ -440,7 +440,7 @@ public sealed class BridgeEndpointGatingTests
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [6],
+                SupportedProtocolVersions = [7],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);
@@ -531,11 +531,181 @@ public sealed class BridgeEndpointGatingTests
         Assert.Equal("opaque-parameter-ref", Assert.Single(result.Parameters).ParameterRef);
     }
 
+    [Fact]
+    public async Task Get_parameter_values_before_handshake_does_not_invoke_the_service()
+    {
+        var values = new FakeGetParameterValuesService();
+        var fixture = CreateFullAdapter(getParameterValues: values);
+
+        var exception = await Assert.ThrowsAsync<LocalRpcException>(() =>
+            fixture.Adapter.GetParameterValuesAsync(FakeGetParameterValuesService.CreateValidRequest(), CancellationToken.None));
+
+        AssertHandshakeRequired(exception);
+        Assert.Equal(0, values.InvokeCount);
+    }
+
+    [Theory]
+    [InlineData(new[] { 1 })]
+    [InlineData(new[] { 2, 1 })]
+    [InlineData(new[] { 3, 2, 1 })]
+    [InlineData(new[] { 4, 3, 2, 1 })]
+    [InlineData(new[] { 5, 4, 3, 2, 1 })]
+    public async Task Get_parameter_values_after_incompatible_version_does_not_invoke_the_service(int[] versions)
+    {
+        var values = new FakeGetParameterValuesService();
+        var fixture = CreateFullAdapter(getParameterValues: values);
+        await HandshakeAsync(fixture, versions);
+
+        var exception = await Assert.ThrowsAsync<LocalRpcException>(() =>
+            fixture.Adapter.GetParameterValuesAsync(FakeGetParameterValuesService.CreateValidRequest(), CancellationToken.None));
+
+        AssertProtocolIncompatible(exception);
+        Assert.Equal(0, values.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Get_parameter_values_after_v6_invokes_the_service()
+    {
+        var values = new FakeGetParameterValuesService { Result = FakeGetParameterValuesService.CreateOkResult() };
+        var fixture = CreateFullAdapter(getParameterValues: values);
+        await HandshakeAsync(fixture, [6, 5, 4, 3, 2, 1]);
+
+        var result = await fixture.Adapter.GetParameterValuesAsync(
+            FakeGetParameterValuesService.CreateValidRequest(),
+            CancellationToken.None);
+
+        Assert.Equal(1, values.InvokeCount);
+        Assert.Equal(GetParameterValueStatus.Ok, Assert.Single(result.Items).Status);
+    }
+
+    [Fact]
+    public async Task Unknown_selected_v7_does_not_invoke_get_parameter_values()
+    {
+        var values = new FakeGetParameterValuesService();
+        var adapter = new StreamJsonRpcBridgeAdapter(
+            new SelectedVersionHandshake(7),
+            new FakeCapabilityService(),
+            new FakeQueryElementsService(),
+            new FakeGetElementsService(),
+            new FakeDescribeParametersService(),
+            values);
+        await adapter.HandshakeAsync(
+            new BridgeHandshakeRequest
+            {
+                ExpectedInstanceId = "any",
+                SupportedProtocolVersions = [7],
+                ClientName = "RevitMCP.Tests"
+            },
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<LocalRpcException>(() =>
+            adapter.GetParameterValuesAsync(FakeGetParameterValuesService.CreateValidRequest(), CancellationToken.None));
+
+        AssertProtocolIncompatible(exception);
+        Assert.Equal(0, values.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Raw_rpc_get_parameter_values_before_handshake_does_not_invoke_the_service()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var values = new FakeGetParameterValuesService();
+        await using var context = await StartV6HostAsync(values);
+        await using var raw = await RawRpc.ConnectAsync(context.Host.PipeName);
+
+        var exception = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
+            raw.InvokeWithCancellationAsync<GetParameterValuesResult>(
+                "revit.get_parameter_values",
+                [FakeGetParameterValuesService.CreateValidRequest()],
+                CancellationToken.None));
+
+        var mapped = StreamJsonRpcExceptionMapper.FromRemote(exception);
+        Assert.Equal(BridgeErrorCodes.HandshakeFailed, mapped.ErrorCode);
+        Assert.Equal(0, values.InvokeCount);
+    }
+
+    [Theory]
+    [InlineData(new[] { 1 })]
+    [InlineData(new[] { 2, 1 })]
+    [InlineData(new[] { 3, 2, 1 })]
+    [InlineData(new[] { 4, 3, 2, 1 })]
+    [InlineData(new[] { 5, 4, 3, 2, 1 })]
+    public async Task Raw_rpc_get_parameter_values_after_incompatible_version_does_not_invoke_the_service(int[] versions)
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var values = new FakeGetParameterValuesService();
+        await using var context = await StartV6HostAsync(values);
+        await using var raw = await RawRpc.ConnectAsync(context.Host.PipeName);
+        await raw.InvokeWithCancellationAsync<BridgeHandshakeResult>(
+            "bridge.handshake",
+            [CreateHandshakeRequest(context.Metadata.InstanceId, versions)],
+            CancellationToken.None);
+
+        var exception = await Assert.ThrowsAsync<RemoteInvocationException>(() =>
+            raw.InvokeWithCancellationAsync<GetParameterValuesResult>(
+                "revit.get_parameter_values",
+                [FakeGetParameterValuesService.CreateValidRequest()],
+                CancellationToken.None));
+
+        var mapped = StreamJsonRpcExceptionMapper.FromRemote(exception);
+        Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, mapped.ErrorCode);
+        Assert.Equal(0, values.InvokeCount);
+    }
+
+    [Fact]
+    public async Task Raw_rpc_get_parameter_values_after_v6_invokes_the_service()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var values = new FakeGetParameterValuesService { Result = FakeGetParameterValuesService.CreateOkResult() };
+        await using var context = await StartV6HostAsync(values);
+        await using var raw = await RawRpc.ConnectAsync(context.Host.PipeName);
+        await raw.InvokeWithCancellationAsync<BridgeHandshakeResult>(
+            "bridge.handshake",
+            [CreateHandshakeRequest(context.Metadata.InstanceId, [6, 5, 4, 3, 2, 1])],
+            CancellationToken.None);
+
+        var result = await raw.InvokeWithCancellationAsync<GetParameterValuesResult>(
+            "revit.get_parameter_values",
+            [FakeGetParameterValuesService.CreateValidRequest()],
+            CancellationToken.None);
+
+        Assert.Equal(1, values.InvokeCount);
+        Assert.Equal(GetParameterValueStatus.Ok, Assert.Single(result.Items).Status);
+    }
+
+    [Fact]
+    public async Task Describe_parameters_still_executes_after_v6()
+    {
+        var describe = new FakeDescribeParametersService { Result = FakeDescribeParametersService.CreateOkResult() };
+        var fixture = CreateFullAdapter(describeParameters: describe, getParameterValues: new FakeGetParameterValuesService());
+        await HandshakeAsync(fixture, [6, 5, 4, 3, 2, 1]);
+
+        var result = await fixture.Adapter.DescribeParametersAsync(
+            FakeDescribeParametersService.CreateValidRequest(),
+            CancellationToken.None);
+
+        Assert.Equal(1, describe.InvokeCount);
+        Assert.Equal("opaque-parameter-ref", Assert.Single(result.Parameters).ParameterRef);
+    }
+
     private static AdapterFixture CreateFullAdapter(
         IRevitCapabilityService? capability = null,
         IRevitQueryElementsService? query = null,
         IRevitGetElementsService? getElements = null,
-        IRevitDescribeParametersService? describeParameters = null)
+        IRevitDescribeParametersService? describeParameters = null,
+        IRevitGetParameterValuesService? getParameterValues = null)
     {
         var metadata = TestSupport.CreateMetadata();
         return new AdapterFixture(
@@ -544,7 +714,8 @@ public sealed class BridgeEndpointGatingTests
                 capability ?? new FakeCapabilityService(),
                 query ?? new FakeQueryElementsService(),
                 getElements,
-                describeParameters),
+                describeParameters,
+                getParameterValues),
             metadata.InstanceId);
     }
 
@@ -618,6 +789,23 @@ public sealed class BridgeEndpointGatingTests
             new FakeQueryElementsService(),
             new FakeGetElementsService(),
             describe,
+            CancellationToken.None);
+        return new HostContext(host, metadata);
+    }
+
+    private static async Task<HostContext> StartV6HostAsync(IRevitGetParameterValuesService values)
+    {
+        var metadata = CreateLiveMetadata();
+        var root = Path.Combine(Path.GetTempPath(), "RevitMCP.Tests", Guid.NewGuid().ToString("N"));
+        var store = new FileRegistrationStore(root);
+        var host = await NamedPipeBridgeHost.StartAsync(
+            metadata,
+            store,
+            new FakeCapabilityService(),
+            new FakeQueryElementsService(),
+            new FakeGetElementsService(),
+            new FakeDescribeParametersService(),
+            values,
             CancellationToken.None);
         return new HostContext(host, metadata);
     }
