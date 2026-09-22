@@ -85,6 +85,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("getparametervalues.create");
         return new RecordingGetParameterValuesService();
     }
+
+    public IRevitGetMepTopologyService? CreateGetMepTopology(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("getmep.create");
+        return new RecordingGetMepTopologyService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -138,6 +145,18 @@ internal sealed class RecordingGetParameterValuesService : IRevitGetParameterVal
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording get-parameter-values does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingGetMepTopologyService : IRevitGetMepTopologyService
+{
+    public Task<GetMepTopologyResult> GetMepTopologyAsync(
+        GetMepTopologyRequest request,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording get-mep-topology does not execute Revit work.");
     }
 }
 
@@ -234,6 +253,8 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitGetParameterValuesService? LastGetParameterValues { get; private set; }
 
+    public IRevitGetMepTopologyService? LastGetMepTopology { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
@@ -241,6 +262,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitGetElementsService? getElements,
         IRevitDescribeParametersService? describeParameters,
         IRevitGetParameterValuesService? getParameterValues,
+        IRevitGetMepTopologyService? getMepTopology,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -249,6 +271,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         LastGetElements = getElements;
         LastDescribeParameters = describeParameters;
         LastGetParameterValues = getParameterValues;
+        LastGetMepTopology = getMepTopology;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

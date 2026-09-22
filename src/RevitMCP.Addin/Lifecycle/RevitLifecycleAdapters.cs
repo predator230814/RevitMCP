@@ -121,6 +121,12 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         ArgumentNullException.ThrowIfNull(metadata);
         return new RevitGetParameterValuesService(_dispatcher, metadata, _identity, _parameterRefs);
     }
+
+    public IRevitGetMepTopologyService CreateGetMepTopology(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitGetMepTopologyService(_dispatcher, metadata, _identity);
+    }
 }
 
 internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFactory
@@ -162,10 +168,11 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         IRevitGetElementsService? getElements,
         IRevitDescribeParametersService? describeParameters,
         IRevitGetParameterValuesService? getParameterValues,
+        IRevitGetMepTopologyService? getMepTopology,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);

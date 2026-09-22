@@ -204,6 +204,28 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             .ConfigureAwait(false);
     }
 
+    public async Task<GetMepTopologyResult> GetMepTopologyAsync(
+        GetMepTopologyRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<GetMepTopologyResult>(
+                "revit.get_mep_topology",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureGetMepTopologyAllowed,
+                "The Revit MEP topology request timed out.",
+                "The Revit MEP topology request could not be executed.")
+            .ConfigureAwait(false);
+    }
+
     public async ValueTask DisposeAsync()
     {
         _rpc.Dispose();
@@ -323,6 +345,17 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             throw new BridgeException(
                 BridgeErrorCodes.ProtocolIncompatible,
                 "revit.get_parameter_values requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsureGetMepTopologyAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsGetMepTopology(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.get_mep_topology requires a negotiated bridge protocol version that explicitly supports it.");
         }
     }
 

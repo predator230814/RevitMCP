@@ -25,7 +25,7 @@ public sealed class GetParameterValuesBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -70,7 +70,7 @@ public sealed class GetParameterValuesBridgeOrchestrationTests
     }
 
     [Fact]
-    public async Task Handshake_unknown_v7_does_not_invoke_get_parameter_values()
+    public async Task Handshake_unknown_v8_does_not_invoke_get_parameter_values()
     {
         var discovery = new FakeDiscovery();
         discovery.Instances.Add(TestSupport.Ready("id-v7", "pipe-v7", protocolVersion: 6));
@@ -79,8 +79,8 @@ public sealed class GetParameterValuesBridgeOrchestrationTests
             var registration = TestSupport.CreateRegistration("id-v7", pipe);
             return Task.FromResult(new RecordingBridgeClient
             {
-                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 7)),
-                GetParameterValues = (_, _, _) => throw new InvalidOperationException("GetParameterValues must not run for unknown v7.")
+                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 8)),
+                GetParameterValues = (_, _, _) => throw new InvalidOperationException("GetParameterValues must not run for unknown v8.")
             });
         });
 

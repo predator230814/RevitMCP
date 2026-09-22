@@ -25,7 +25,7 @@ public sealed class DescribeParametersBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -73,7 +73,7 @@ public sealed class DescribeParametersBridgeOrchestrationTests
     }
 
     [Fact]
-    public async Task Handshake_unknown_v7_maps_to_unavailable()
+    public async Task Handshake_unknown_v8_maps_to_unavailable()
     {
         var discovery = new FakeDiscovery();
         discovery.Instances.Add(TestSupport.Ready("id-v7", "pipe-v7", protocolVersion: 5));
@@ -82,8 +82,8 @@ public sealed class DescribeParametersBridgeOrchestrationTests
             var registration = TestSupport.CreateRegistration("id-v7", pipe);
             return Task.FromResult(new RecordingBridgeClient
             {
-                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 7)),
-                DescribeParameters = (_, _, _) => throw new InvalidOperationException("DescribeParameters must not run for unknown v7.")
+                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 8)),
+                DescribeParameters = (_, _, _) => throw new InvalidOperationException("DescribeParameters must not run for unknown v8.")
             });
         });
 

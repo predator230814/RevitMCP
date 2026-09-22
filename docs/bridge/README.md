@@ -20,7 +20,7 @@ BRIDGE-0001-short-name.md
 - `BRIDGE-0004-get-elements-capability-rpc.md` — CAP-0003 inspection RPC (`revit.get_elements`) on bridge protocol version 4; v4 explicitly preserves the v2/v3 capability guarantees.
 - `BRIDGE-0005-describe-parameters-capability-rpc.md` — CAP-0004 discovery RPC (`revit.describe_parameters`) on bridge protocol version 5; v5 explicitly preserves the v2/v3/v4 capability guarantees.
 - `BRIDGE-0006-get-parameter-values-capability-rpc.md` — CAP-0005 typed-read RPC (`revit.get_parameter_values`) on bridge protocol version 6; v6 explicitly preserves the v2/v3/v4/v5 capability guarantees. Implemented. Typed Bridge and official MCP live validation on Revit 2026.5 are **PASS**.
-- `BRIDGE-0007-get-mep-topology-capability-rpc.md` — CAP-0006 topology RPC (`revit.get_mep_topology`) on bridge protocol version 7; v7 explicitly preserves the v2..v6 capability guarantees. Accepted specification; not implemented. Unknown v8 is unsupported.
+- `BRIDGE-0007-get-mep-topology-capability-rpc.md` — CAP-0006 topology RPC (`revit.get_mep_topology`) on bridge protocol version 7; v7 explicitly preserves the v2..v6 capability guarantees. Implemented. Typed Bridge live Revit validation is **PENDING**. Unknown v8 is unsupported.
 
 ## Principles
 

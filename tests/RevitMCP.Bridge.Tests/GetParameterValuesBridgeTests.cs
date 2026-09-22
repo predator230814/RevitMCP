@@ -17,8 +17,9 @@ public sealed class GetParameterValuesBridgeTests
             new FakeDescribeParametersService(),
             new FakeGetParameterValuesService());
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, advertised.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.GetParameterValuesVersions, advertised.SupportedProtocolVersions);
         Assert.Equal(6, advertised.SupportedProtocolVersions.Max());
+        Assert.DoesNotContain(7, advertised.SupportedProtocolVersions);
     }
 
     [Fact]
