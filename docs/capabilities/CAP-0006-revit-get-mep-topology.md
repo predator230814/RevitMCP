@@ -195,8 +195,8 @@ status: ok | not_found | no_connectors
 Meanings:
 
 - `not_found` — the seed cannot be resolved in the active document, including empty/whitespace or arbitrary opaque strings and `ElementType` inputs;
-- `no_connectors` — the element exists but has no connectors eligible for this request after physical/logical and optional domain filtering;
-- `ok` — the element exists and has at least one eligible connector. Degree may still be zero because connectors can exist without a physical connection.
+- `no_connectors` — the element exists but exposes no connector eligible for physical-connection inspection under this request: a supported connector-manager surface, a supported or requested public domain, and a physical connection type. Logical, reference, family, super, and other non-physical connector types do not count;
+- `ok` — the element exists and has at least one such eligible connector. Degree may still be zero because an eligible connector can exist without a current physical connection. `IsConnected = false` does not by itself make the seed `no_connectors`.
 
 Missing seeds are item-level statuses, not whole-call failures.
 
@@ -241,6 +241,8 @@ Canonicalization:
 
 Every edge endpoint must exist in `nodes`.
 
+Every non-seed node has at least one emitted edge to a node whose depth is one less. An `ok` seed may still have degree zero.
+
 Self-loops are omitted.
 
 ### Truncation
@@ -256,19 +258,26 @@ truncation_reasons: unique array of depth | elements | edges
 
 Do not claim `depth` truncation merely because the result contains nodes at `max_depth`. Record `depth` only after observing that a deeper eligible physical neighbor exists and was omitted.
 
-`elements` means an eligible node was omitted because `max_elements` was reached.
+`elements` is reserved for omission caused by `max_elements`. It means an otherwise eligible new node was not admitted because the node budget was exhausted. The connecting edge of that omitted node is not emitted.
 
-`edges` means an eligible canonical edge between already-accepted or otherwise eligible nodes was omitted because `max_edges` was reached.
+`edges` means an otherwise eligible canonical physical adjacency was omitted because `max_edges` was exhausted. An omitted edge is never a hidden traversal path. If that adjacency would have introduced a new neighbor, the neighbor is not admitted and is not expanded. If both endpoints are already accepted, those nodes remain and only the edge is omitted.
 
-More than one reason may be present.
+More than one reason may be present. Duplicate connector pairs on an already accepted canonical edge enrich that edge's domain union and do not consume another edge slot, and they do not by themselves set `edges`.
 
 ## Physical connection semantics
 
-Traversal uses the Revit API physical connection model, not MEP system membership.
+Traversal uses the Revit API physical connection model. An edge exists only when Revit identifies the two elements as physically connected.
 
-Do not treat two elements as adjacent merely because they belong to the same `MEPSystem`.
+MEP system membership is not adjacency. Two elements in the same `MEPSystem` are not neighbors for that reason.
 
-Do not traverse `ConnectorType.Logical` references.
+A non-logical `AllRefs` entry is not sufficient. `ConnectorType` includes values that are neither `Logical` nor physical adjacency, including `Reference`, `Family`, and `Super`.
+
+The public contract does not require one brittle call sequence. Addin interpretation must use Revit's physical-connection semantics:
+
+- `Connector.IsConnected`, which identifies whether a connector is physically connected to a connector on another element;
+- together with `AllRefs` filtered to physical connection references (`End`, `Curve`, `Physical`), or an equivalent API-safe test of that same physical-connection meaning.
+
+Exclude logical, reference, family, super, and other non-physical or system-only relationships from traversal and from edge creation.
 
 The Revit-side connector access boundary must support the normal project-element surfaces used by:
 
@@ -278,14 +287,14 @@ FamilyInstance.MEPModel?.ConnectorManager
 FabricationPart.ConnectorManager
 ```
 
-Elements that expose none of those eligible surfaces, or that expose no remaining connector after filtering, are `no_connectors` when used as seeds and are not expanded.
+Elements that expose none of those surfaces, or that expose no remaining connector of a supported physical connection type in a supported or requested domain, are `no_connectors` when used as seeds and are not expanded.
 
-A physical neighbor is another active-document element reached through a non-logical connector reference (`AllRefs` / equivalent physical connection API) whose owner is a different element.
+A physical neighbor is another active-document element reached only through a connection that passes that physical-connection test, whose owner is a different element.
 
 Skip:
 
 - the connector's own owner;
-- logical connector references;
+- connectors and references that fail the physical-connection test, including `ConnectorType.Logical`, `Reference`, `Family`, `Super`, and any other non-physical type;
 - linked-document owners;
 - owners that cannot produce an opaque `element_ref` compatible with ADR-0006 / CAP-0002 (`ElementType` and special/sentinel targets);
 - connectors whose Revit `Domain` is not one of the four supported public domains.
@@ -312,13 +321,28 @@ Use multi-source BFS from every `ok` seed.
 Rules:
 
 - each node stores the minimum hop distance from any valid seed;
-- seed nodes have depth `0`;
+- `ok` seeds are admitted before traversal as depth-`0` nodes and count toward `max_elements`;
+- a non-seed node may be admitted only through an accepted, emitted physical edge from an already accepted node;
 - expansion from a node at depth `D` produces candidates at depth `D + 1`;
 - do not expand a node whose depth is already `max_depth`;
 - do not enqueue a candidate whose depth would exceed `max_depth`;
-- stop accepting new nodes when `max_elements` is reached;
-- stop accepting new canonical edges when `max_edges` is reached;
-- never emit an edge unless both endpoints are present in `nodes`.
+- every non-seed node therefore has at least one emitted edge to a node at `depth - 1`;
+- never emit an edge unless both endpoints are present in `nodes`;
+- omitted edges are never hidden traversal paths.
+
+When a candidate is not yet a node, apply the bounds in this order:
+
+1. if admitting it would exceed `max_elements`, omit the node and its connecting edge, record `elements`, and do not traverse it;
+2. otherwise, if the new canonical edge cannot be admitted because `max_edges` is exhausted, omit the edge, do not admit or traverse that neighbor through that adjacency, and record `edges`;
+3. otherwise admit the node and emit the edge.
+
+When both endpoints are already accepted nodes:
+
+- if that canonical edge is already emitted, further physical connector pairs only enrich its unique domain union and do not consume another edge slot;
+- if the edge is not yet emitted and `max_edges` is exhausted, omit it and record `edges`;
+- if the edge is not yet emitted and an edge slot remains, emit it.
+
+Continue deterministic processing of already accepted nodes after an edge or node omission. A later connector pair must not revive a neighbor that was refused because the connecting edge could not be emitted.
 
 Traversal must be independent of Revit connector enumeration order.
 
@@ -488,21 +512,22 @@ CAP-0006 is acceptable as a capability contract when:
 11. Nodes are ordered by depth ascending, then `element_ref` ordinal. Depth is the minimum hop distance from any valid seed.
 12. Edges are undirected, canonicalized `element_ref_a < element_ref_b`, sorted `(a,b)`, and collapse connector multiplicity into unique normalized domains.
 13. Every edge endpoint exists in `nodes`. Self-loops are omitted.
-14. Traversal is physical-connector based and independent of Revit connector enumeration order.
-15. Logical connectors, MEP-system membership, linked documents, and public connector identity are out of scope.
-16. `truncated` and `truncation_reasons` report omitted known topology only. Depth truncation requires an observed deeper eligible neighbor.
+14. Traversal uses Revit physical-connection semantics (`IsConnected` plus physical `AllRefs` filtering, or an equivalent API-safe test). Non-logical-but-nonphysical references do not become edges. Enumeration order does not change the result.
+15. Logical, reference, family, super, and other non-physical connector relationships, MEP-system membership, linked documents, and public connector identity are out of scope.
+16. `truncated` and `truncation_reasons` report omitted known topology only. Depth truncation requires an observed deeper eligible neighbor. A non-seed node is admitted only through an emitted edge. An edge omitted for `max_edges` does not admit or traverse its new neighbor. `elements` is reserved for `max_elements`. Domain enrichment of an already emitted edge does not consume another edge slot.
 17. `DOCUMENT_CONTEXT_CHANGED` is a top-level capability error with no document fallback.
 18. All Revit API access executes through EXEC-0001 and creates no transaction.
 19. Contracts remain transport-neutral and expose no Revit API objects.
 20. Server remains Revit-API independent.
 21. Revit 2025, 2026, and 2027 variants compile in CI when implemented.
-22. Automated coverage includes request validation, uniqueness, defaults/ranges, seed statuses, deterministic node/edge ordering, edge canonicalization/domain aggregation, truncation-reason rules, and protocol/Bridge gating. Live typed-Bridge Revit validation covers real physical adjacency, multi-hop depth, deterministic repeat, truncation, missing seed, no-connectors seed if naturally available, and the document guard. Naturally unavailable Revit cases may be recorded rather than manufactured.
+22. Automated coverage includes request validation, uniqueness, defaults/ranges, seed statuses, deterministic node/edge ordering, edge canonicalization/domain aggregation, truncation-reason rules, and protocol/Bridge gating. It must prove that non-logical-but-nonphysical references do not become graph edges. Truncation coverage must include the interaction of `max_edges` with node and depth admission, not only an independent edge-count test. Live typed-Bridge Revit validation covers real physical adjacency, multi-hop depth, deterministic repeat, truncation, missing seed, no-connectors seed if naturally available, and the document guard. Naturally unavailable Revit cases may be recorded rather than manufactured.
 23. Official MCP live validation is a later SERVER-0006 gate, not part of this specification PR.
 24. CAP-0001 through CAP-0005 remain unchanged by this specification.
 
 ## Explicitly deferred
 
 - logical connector traversal and `ConnectorType.Logical`;
+- non-physical connector relationships, including `Reference`, `Family`, and `Super`;
 - MEP system membership as adjacency;
 - public `connector_ref` or connector dump;
 - connector coordinates, orientation, or flow direction;
@@ -540,7 +565,7 @@ Do not implement a later protocol version by numeric `>=` behavior. Existing cap
 - CAP-0002: `revit_query_elements`
 - CAP-0003: `revit_get_elements`
 - EXEC-0001: serialized Revit execution dispatcher
-- Autodesk Revit API `Connector` class
+- Autodesk Revit API `Connector` class, including `IsConnected` and `AllRefs`
 - Autodesk Revit API `ConnectorManager` class
 - Autodesk Revit API `Domain` enumeration
 - Autodesk Revit API `ConnectorType` enumeration

@@ -663,10 +663,10 @@ Then validate a real bounded HVAC topology:
 revit_get_context PASS
 -> query a real HVAC seed PASS
 -> revit_get_mep_topology PASS
--> physical adjacency, not system membership
+-> physical adjacency under CAP-0006 physical-connection semantics, not MEP system membership and not a merely non-logical reference
 -> multi-hop depth
 -> deterministic repeat of the same request
--> truncation behavior when bounds omit known topology
+-> truncation behavior when bounds omit known topology, including that an edge omitted for max_edges does not admit a hidden node
 -> missing seed -> not_found item, whole call remains success
 -> no_connectors seed if naturally available
 -> wrong document_id -> DOCUMENT_CONTEXT_CHANGED
@@ -695,7 +695,7 @@ SERVER-0006 is accepted as a specification when:
 12. Implementation remains explicit SERVER-0005-shaped components. No generic framework, capability registry, or MCP SDK upgrade.
 13. Later automated tests cover the listed schema, uniqueness, routing, handshake, timeout, disposal, and inherited-regression cases without live Revit.
 14. Official MCP-client-to-Revit-2026.5 live validation is required after implementation.
-15. No writes, write authorization, transactions, logical topology, or public connector identity.
+15. No writes, write authorization, transactions, logical or other non-physical topology, or public connector identity. Graph admission and physical-connection rules remain CAP-0006 behavior; the Server does not re-derive them.
 
 SERVER-0006 is accepted as implemented only after a later implementation PR satisfies those criteria, automated coverage, and the official MCP live gate.
 

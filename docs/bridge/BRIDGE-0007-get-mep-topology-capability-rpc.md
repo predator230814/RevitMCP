@@ -168,9 +168,9 @@ CAP-0006 owns the business contract:
 - request validation;
 - exact document guard;
 - seed statuses;
-- physical-connection semantics;
+- physical-connection semantics, including the requirement that an edge comes from a Revit physical connection rather than a merely non-logical reference;
 - domain normalization;
-- deterministic multi-source BFS;
+- deterministic multi-source BFS, including the rule that a non-seed node is admitted only through an emitted edge and that an edge omitted for `max_edges` is not a hidden traversal path;
 - node/edge ordering and edge canonicalization;
 - truncation reasons;
 - result shaping.
@@ -433,8 +433,8 @@ NamedPipeBridgeClient
   -> EXEC-0001
   -> active-document guard
   -> resolve seed_element_refs
-  -> physical connector neighborhood
-  -> deterministic multi-source BFS
+  -> Revit physical-connection neighborhood
+  -> deterministic multi-source BFS with emitted-edge node admission
   -> GetMepTopologyResult
 ```
 
@@ -488,8 +488,8 @@ BRIDGE-0007 is acceptable as a specification when:
 9. Timeouts, cancellation, and no-retry behavior reuse the existing capability model.
 10. Per-seed statuses remain successful structured results.
 11. No generic registry, reflection dispatch, or Revit API leakage into Contracts/Bridge.
-12. Later automated tests cover advertisement, gating, inherited v7 eligibility, unknown v8 rejection, and capability-error survival.
-13. Later typed-Bridge live validation is required before SERVER-0006 official MCP live validation.
+12. Later automated tests cover advertisement, gating, inherited v7 eligibility, unknown v8 rejection, and capability-error survival. Addin coverage required by CAP-0006 proves that non-physical references do not become edges and that `max_edges` interacts with node admission. Bridge tests do not redefine those rules.
+13. Later typed-Bridge live validation is required before SERVER-0006 official MCP live validation. That live gate exercises real physical adjacency under the CAP-0006 physical-connection contract.
 14. This specification PR does not implement Bridge or Addin code.
 
 ## Explicitly deferred
