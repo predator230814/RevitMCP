@@ -239,6 +239,39 @@ public sealed class MepTopologyTraversalTests
         Assert.DoesNotContain("MEPSystem", reader, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Reader_classifies_connector_type_before_IsConnected()
+    {
+        var source = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "RevitMCP.Addin", "Topology", "RevitMepConnectorReader.cs"));
+        var observe = SliceMethod(source, "private static ObservedConnector Observe(");
+
+        var classIndex = observe.IndexOf("MapClass(connector.ConnectorType)", StringComparison.Ordinal);
+        var gateIndex = observe.IndexOf("!PhysicalConnectionFilter.IsPhysicalClass(connectorClass)", StringComparison.Ordinal);
+        var domainIndex = observe.IndexOf("MapDomain(connector.Domain)", StringComparison.Ordinal);
+        var connectedIndex = observe.IndexOf("connector.IsConnected", StringComparison.Ordinal);
+        var allRefsIndex = observe.IndexOf("connector.AllRefs", StringComparison.Ordinal);
+
+        Assert.True(classIndex >= 0 && gateIndex > classIndex);
+        Assert.True(domainIndex > gateIndex);
+        Assert.True(connectedIndex > domainIndex);
+        Assert.True(allRefsIndex > connectedIndex);
+
+        var nonPhysicalPath = observe[gateIndex..domainIndex];
+        Assert.Contains("return ", nonPhysicalPath, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsConnected", nonPhysicalPath, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllRefs", nonPhysicalPath, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Domain", nonPhysicalPath, StringComparison.Ordinal);
+
+        var unsupportedDomainPath = observe[domainIndex..connectedIndex];
+        Assert.Contains("return ", unsupportedDomainPath, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsConnected", unsupportedDomainPath, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllRefs", unsupportedDomainPath, StringComparison.Ordinal);
+
+        var disconnectedPath = observe[connectedIndex..allRefsIndex];
+        Assert.Contains("return ", disconnectedPath, StringComparison.Ordinal);
+        Assert.DoesNotContain("AllRefs", disconnectedPath, StringComparison.Ordinal);
+    }
+
     private static GetMepTopologyResult Traverse(
         IReadOnlyDictionary<string, ElementTopologyFacts> graph,
         IReadOnlyList<string> seeds,
@@ -334,6 +367,15 @@ public sealed class MepTopologyTraversalTests
     private static ObservedConnectorRef Neighbor(string elementRef, ObservedConnectorClass connectorClass)
     {
         return new ObservedConnectorRef(elementRef, connectorClass);
+    }
+
+    private static string SliceMethod(string source, string signature)
+    {
+        var start = source.IndexOf(signature, StringComparison.Ordinal);
+        Assert.True(start >= 0);
+        var next = source.IndexOf("\n    private static ", start + signature.Length, StringComparison.Ordinal);
+        Assert.True(next > start);
+        return source[start..next];
     }
 
     private static string FindRepoRoot()

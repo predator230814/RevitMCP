@@ -25,7 +25,7 @@ internal static class RevitMepConnectorReader
         var observations = new List<ObservedConnector>();
         foreach (var connector in Enumerate(connectors))
         {
-            observations.Add(Observe(document, connector));
+            observations.Add(Observe(document, connector, domain));
         }
 
         return PhysicalConnectionFilter.Describe(elementRef, observations, domain);
@@ -42,22 +42,41 @@ internal static class RevitMepConnectorReader
         };
     }
 
-    private static ObservedConnector Observe(Document document, Connector connector)
+    private static ObservedConnector Observe(Document document, Connector connector, MepTopologyDomain? domainFilter)
     {
+        var connectorClass = MapClass(connector.ConnectorType);
+        if (!PhysicalConnectionFilter.IsPhysicalClass(connectorClass))
+        {
+            return new ObservedConnector(connectorClass, false, null, []);
+        }
+
+        var mappedDomain = MapDomain(connector.Domain);
+        if (mappedDomain is null || (domainFilter is not null && mappedDomain != domainFilter))
+        {
+            return new ObservedConnector(connectorClass, false, null, []);
+        }
+
+        if (!connector.IsConnected)
+        {
+            return new ObservedConnector(connectorClass, false, mappedDomain, []);
+        }
+
         var refs = new List<ObservedConnectorRef>();
         if (connector.AllRefs is ConnectorSet allRefs)
         {
             foreach (var referenced in Enumerate(allRefs))
             {
-                refs.Add(new ObservedConnectorRef(ResolveOwnerRef(document, referenced), MapClass(referenced.ConnectorType)));
+                var referencedClass = MapClass(referenced.ConnectorType);
+                if (!PhysicalConnectionFilter.IsPhysicalClass(referencedClass))
+                {
+                    continue;
+                }
+
+                refs.Add(new ObservedConnectorRef(ResolveOwnerRef(document, referenced), referencedClass));
             }
         }
 
-        return new ObservedConnector(
-            MapClass(connector.ConnectorType),
-            connector.IsConnected,
-            MapDomain(connector.Domain),
-            refs);
+        return new ObservedConnector(connectorClass, true, mappedDomain, refs);
     }
 
     private static string? ResolveOwnerRef(Document document, Connector referenced)
