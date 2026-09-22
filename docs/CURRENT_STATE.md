@@ -4,7 +4,7 @@ _Last updated: 2026-09-22_
 
 ## Phase
 
-CAP-0001 through CAP-0004 are implemented. All four are live-validated end-to-end on Revit 2026.5 through the official stdio MCP client. BRIDGE-0006 / protocol v6 is implemented through the typed local Bridge. CAP-0005 is implemented in Contracts/Addin/Bridge and is reachable as `NamedPipeBridgeClient.GetParameterValuesAsync`. SERVER-0005 does not exist. SERVER-0004 remains implemented and official MCP-client live validation is **PASS**. Current MCP tools are exactly 4:
+CAP-0001 through CAP-0004 are implemented. All four are live-validated end-to-end on Revit 2026.5 through the official stdio MCP client. BRIDGE-0006 / protocol v6 is implemented through the typed local Bridge. CAP-0005 is implemented in Contracts/Addin/Bridge and is reachable as `NamedPipeBridgeClient.GetParameterValuesAsync`. Typed Bridge live validation for CAP-0005 / BRIDGE-0006 on Revit 2026.5 is **PASS**. SERVER-0005 does not exist. SERVER-0004 remains implemented and official MCP-client live validation is **PASS**. Current MCP tools are exactly 4:
 
 ```text
 revit_get_context
@@ -27,7 +27,7 @@ revit_describe_parameters
 - ADR-0005 makes bounded, filtered, deterministic agent context and token efficiency a first-class capability-design requirement.
 - ADR-0006 accepts an opaque process-scoped `document_id` for each open-document lifetime and opaque cross-call `element_ref` values based initially on Revit `Element.UniqueId`; `document_id` may be generated from a GUID internally but remains an opaque string contractually.
 - The post-SERVER-0004 architecture checkpoint is complete. ADR-0007 is accepted: RevitMCP remains a specialized Revit capability service; Autodesk cloud capability is logically separated from the Revit-local MCP boundary; APS/ACC/Forma service topology is deferred; orchestration is external and optional.
-- CAP-0005 accepts `revit_get_parameter_values` as the next read-only capability: explicit `element_ref + parameter_ref` typed reads. Contracts, Addin, and typed Bridge RPC are implemented. SERVER-0005 does not exist yet. Current implemented Bridge protocol is v6. Current MCP tools remain exactly 4. Typed Bridge live validation for CAP-0005 has not been run.
+- CAP-0005 accepts `revit_get_parameter_values` as the next read-only capability: explicit `element_ref + parameter_ref` typed reads. Contracts, Addin, and typed Bridge RPC are implemented. SERVER-0005 does not exist yet. Current implemented Bridge protocol is v6. Current MCP tools remain exactly 4. Typed Bridge live validation for CAP-0005 / BRIDGE-0006 on Revit 2026.5 is **PASS**.
 - The ADR-0004 solution/project skeleton is committed: `RevitMCP.sln`, `global.json`, centralized build/package props, `src/RevitMCP.Contracts`, `src/RevitMCP.Bridge`, `src/RevitMCP.Server`, one multi-version `src/RevitMCP.Addin` project, and test projects for Contracts, Bridge, Server, and Addin.
 - Revit 2025, 2026, and 2027 are built from the same add-in project using an explicit `RevitVersion` build property; the initial target matrix is `net8.0-windows` for Revit 2025/2026 and `net10.0-windows` for Revit 2027.
 - GitHub Actions compiles the non-Revit projects and the 2025/2026/2027 add-in matrix.
@@ -47,7 +47,7 @@ revit_describe_parameters
 - BRIDGE-0003 is accepted and implemented for CAP-0002. It introduces bridge protocol version `3`, which explicitly guarantees both `revit.get_context` and `revit.query_elements`.
 - BRIDGE-0004 is accepted and implemented. Protocol version `4` adds `revit.get_elements` and explicitly preserves get-context `{2,3,4}` and query-elements `{3,4}`. Get-elements is `{4,5}` after BRIDGE-0005.
 - BRIDGE-0005 is accepted and implemented. Protocol version `5` adds `revit.describe_parameters` and explicitly preserves get-context `{2,3,4,5}`, query-elements `{3,4,5}`, and get-elements `{4,5}`. Describe-parameters is `{5,6}` after BRIDGE-0006. Typed Bridge live validation on Revit 2026.5 is **PASS**.
-- BRIDGE-0006 is accepted and implemented. Protocol version `6` adds `revit.get_parameter_values` and explicitly preserves get-context `{2,3,4,5,6}`, query-elements `{3,4,5,6}`, get-elements `{4,5,6}`, and describe-parameters `{5,6}`. Get-parameter-values is `{6}` only. Unknown v7 is unsupported. Typed Bridge live validation for CAP-0005 has not been run. SERVER-0005 must not begin before that live gate.
+- BRIDGE-0006 is accepted and implemented. Protocol version `6` adds `revit.get_parameter_values` and explicitly preserves get-context `{2,3,4,5,6}`, query-elements `{3,4,5,6}`, get-elements `{4,5,6}`, and describe-parameters `{5,6}`. Get-parameter-values is `{6}` only. Unknown v7 is unsupported. Typed Bridge live validation for CAP-0005 / BRIDGE-0006 on Revit 2026.5 is **PASS**. SERVER-0005 does not exist.
 - SERVER-0002 is implemented. `revit_query_elements` remains eligible on a v3, v4, v5, or v6 host.
 - SERVER-0003 is implemented for the stdio MCP surface. CAP-0003 routing requires protocol `{4,5,6}`. Official-MCP-client-to-Revit 2026.5 live CAP-0003 validation is **PASS**.
 - SERVER-0004 is implemented. `tools/list` exposes exactly `revit_get_context`, `revit_query_elements`, `revit_get_elements`, and `revit_describe_parameters`. CAP-0004 routing requires protocol `{5,6}`. Official-MCP-client-to-Revit 2026.5 live CAP-0004 validation is **PASS**.
@@ -472,6 +472,57 @@ Safety: disposable model copy, read-only, no Revit transaction, no parameter mod
 
 This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented and validated for the Revit 2026.5 reference environment. Live Revit 2025 and Revit 2027 compatibility validation remain pending.
 
+## CAP-0005 implementation status
+
+```text
+CAP-0005 contracts/Addin/typed Bridge: implemented
+BRIDGE-0006 runtime/v6: implemented
+typed Bridge CAP-0005 live Revit 2026.5: PASS
+
+SERVER-0005 MCP tool: does not exist
+current implemented Bridge protocol: v6
+current MCP tools: 4
+```
+
+CAP-0005 typed value reads are implemented through the typed local Bridge as `NamedPipeBridgeClient.GetParameterValuesAsync`. SERVER-0005 does not exist. There is no fifth MCP tool, MCP input schema, or Server routing for CAP-0005.
+
+Accepted v1 design remains as specified in `docs/capabilities/CAP-0005-revit-get-parameter-values.md`. Runtime semantics are unchanged by this live-validation record. `parameter_ref` remains Addin-owned, document-scoped, and forgotten on successful document close. CAP-0005 consumes the exact minted CAP-0004 refs; it does not fall back to display-name matching.
+
+### Live-tested typed Bridge values on Autodesk Revit 2026.5 (`26.5.0.55`)
+
+Date: 2026-09-22. Tested SHA `12f45a5946cd502f008693e990ba43559d1c478c`. Production Addin output and real `NamedPipeBridgeClient`. Autodesk-provided modeled sample **Snowdon Towers Sample HVAC**, disposable TEMP copy only. No production/client model. No `.rvt` committed. No save back into the source sample. No writes. The live validation harness remains untracked under `tools/`.
+
+```text
+registration.bridge_protocol_version = 6
+handshake [6,5,4,3,2,1] -> selected 6
+CAP-0001 GetContextAsync regression: PASS
+CAP-0002 QueryElementsAsync regression: PASS
+CAP-0003 GetElementsAsync regression: PASS
+CAP-0004 DescribeParametersAsync regression: PASS
+CAP-0004 parameter_ref -> CAP-0005 GetParameterValuesAsync chaining: PASS
+```
+
+Observed typed values on naturally present Autodesk-sample parameters:
+
+- String (Host, IfcGUID, Mark, System Classification, System Name);
+- Integer (Critical Path, Export to IFC, Export Type to IFC; observed values were `0`);
+- measurable Quantity, including Flow = `100` with `data_type.kind = measurable_spec`, `data_type.forge_type_id = autodesk.spec.aec.hvac:airFlow-2.0.0`, and `unit_type_id = autodesk.unit.unit:cubicFeetPerMinute-1.0.1`. Quantity payload is `{kind, value, unit_type_id}` only; no raw internal-unit double field is exposed;
+- ElementId-backed references: Phase Created resolved to `New Construction` with an eligible `element_ref`; System Type resolved to `Exhaust Air` with no `element_ref` (ElementType-like target). No numeric ElementId;
+- `has_value=false` (Comments, Cost, Max Flow, Min Flow, Type Image).
+
+Observed item statuses: `parameter_ref_not_found`, `element_not_found`, and `parameter_not_present` (valid Flow instance ref on a target that does not carry that parameter).
+
+Document guard: activating disposable `Project1` and retrying the previous HVAC `document_id` returned top-level `DOCUMENT_CONTEXT_CHANGED` with no fallback. Switching back to still-open HVAC reused the same `document_id` and the same minted Flow `parameter_ref`. After close without save and reopen of the same TEMP copy: a new `document_id` was assigned; the old `parameter_ref` returned `parameter_ref_not_found`; a newly minted Flow ref on the same UniqueId resolved to `ok` quantity 100 CFM.
+
+Safety: no `Transaction` / `SubTransaction` / `TransactionGroup`, no parameter modification, no element creation/deletion, no save, `is_modified=false` before and after.
+
+Naturally **not** observed in this Autodesk sample; recorded rather than manufactured:
+
+- `unsupported_value` / unit-conversion-failure path;
+- a clearly non-Boolean non-zero integer.
+
+This means CAP-0005 / BRIDGE-0006 are implemented and live-validated through the typed local Bridge for the Revit 2026.5 reference environment. SERVER-0005 remains unimplemented. Live Revit 2025 and Revit 2027 compatibility validation remain pending.
+
 ## What does not exist yet
 
 - no write capability or write authorization;
@@ -479,7 +530,6 @@ This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented a
 - no full/all-parameter element dump or whole-document parameter catalog;
 - local parameter identity remains document-scoped; built-in/shared canonical identity and opaque `parameter_ref` now exist for later read/write chaining;
 - no SERVER-0005 / `revit_get_parameter_values` MCP tool, MCP input schema, or Server routing for CAP-0005;
-- typed CAP-0005 value extraction exists in the Addin but has not been live-validated in Revit;
 - no live CAP-0001 family-document validation;
 - no live lifecycle/handshake/capability validation on Revit 2025 or Revit 2027;
 - no live multi-instance routing validation;
@@ -491,7 +541,7 @@ This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented a
 
 ## Current priorities
 
-1. Live-validate typed Bridge CAP-0005 / BRIDGE-0006 on Revit. Do not implement SERVER-0005, an orchestrator, APS/Forma MCP, or dynamic tool scoping next.
+1. Keep SERVER-0005 unimplemented. CAP-0005 / BRIDGE-0006 typed-Bridge live validation on Revit 2026.5 is **PASS**. Current MCP tools remain exactly 4. Do not implement a fifth MCP tool, an orchestrator, APS/Forma MCP, or dynamic tool scoping next.
 2. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
 3. Do not begin writes, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work.
 
@@ -532,4 +582,4 @@ This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented a
 
 ## Next task
 
-SERVER-0004 remains complete for the Revit 2026.5 reference environment. CAP-0005 and BRIDGE-0006 are implemented through the typed local Bridge. Current Bridge protocol is v6 and current MCP tools remain exactly 4. Typed Bridge live validation for CAP-0005 has not been run. SERVER-0005 must not begin before that live gate. Do not implement the orchestrator or APS immediately. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validations. Do not start writes.
+SERVER-0004 remains complete for the Revit 2026.5 reference environment. CAP-0005 and BRIDGE-0006 are implemented through the typed local Bridge, and typed-Bridge live validation on Revit 2026.5 is **PASS**. Current Bridge protocol is v6 and current MCP tools remain exactly 4. SERVER-0005 does not exist. Do not implement the orchestrator or APS immediately. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validations. Do not start writes.

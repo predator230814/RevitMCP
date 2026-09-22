@@ -518,7 +518,7 @@ CAP-0005 is acceptable as a capability contract when:
 23. Contracts remain transport-neutral.
 24. Server remains Revit-API independent.
 25. Revit 2025, 2026, and 2027 variants compile in CI when implemented.
-26. Automated tests will cover pair uniqueness, identity reverse lookup, each item status, each value variant, no-value, unit conversion failure, document guard, and dependency boundaries.
+26. Test coverage is split between automated tests and live typed-Bridge Revit validation. Automated coverage includes pair uniqueness and request validation; forward/reverse parameter identity-map behavior; contract, status, and value serialization; protocol and Bridge gating/round-trip; lifecycle/dependency boundaries; and timeout/cancellation behavior. Live typed-Bridge Revit validation covers the active-document guard, real parameter re-resolution, real String / Integer / Double quantity / ElementId extraction, no-value behavior, and Revit-dependent item-status/value semantics. Naturally unavailable Revit cases may be explicitly recorded rather than modifying a disposable model solely to manufacture coverage. This criterion does not weaken any runtime semantics above.
 27. Official MCP live validation is a later SERVER-0005 gate, not part of this specification PR.
 28. CAP-0001 through CAP-0004 remain unchanged by this specification.
 
