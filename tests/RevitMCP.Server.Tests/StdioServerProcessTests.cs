@@ -28,14 +28,25 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(4, tools.Count);
+        Assert.Equal(5, tools.Count);
         Assert.Equal(
             new[]
             {
                 DescribeParametersToolMetadata.Name,
                 GetContextToolMetadata.Name,
                 GetElementsToolMetadata.Name,
+                GetParameterValuesToolMetadata.Name,
                 QueryElementsToolMetadata.Name
+            },
+            tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            new[]
+            {
+                "revit_describe_parameters",
+                "revit_get_context",
+                "revit_get_elements",
+                "revit_get_parameter_values",
+                "revit_query_elements"
             },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("handshake", StringComparison.OrdinalIgnoreCase));
@@ -65,6 +76,12 @@ public sealed class StdioServerProcessTests
         Assert.Equal(DescribeParametersToolMetadata.Description, describe.Description);
         Assert.True(describe.ProtocolTool.Annotations?.ReadOnlyHint);
         Assert.False(describe.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var getParameterValues = Assert.Single(tools, tool => tool.Name == GetParameterValuesToolMetadata.Name);
+        Assert.Equal(GetParameterValuesToolMetadata.Title, getParameterValues.Title);
+        Assert.Equal(GetParameterValuesToolMetadata.Description, getParameterValues.Description);
+        Assert.True(getParameterValues.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(getParameterValues.ProtocolTool.Annotations?.OpenWorldHint);
 
         var rejected = await client.CallToolAsync(
             GetElementsToolMetadata.Name,
@@ -106,6 +123,52 @@ public sealed class StdioServerProcessTests
         Assert.Contains(McpToolErrorCodes.InvalidRequest, describeText, StringComparison.Ordinal);
         Assert.DoesNotContain("NO_REVIT_INSTANCE", describeText, StringComparison.Ordinal);
         Assert.DoesNotContain("INVALID_PARAMETER_DISCOVERY", describeText, StringComparison.Ordinal);
+
+        var malformedValues = await client.CallToolAsync(
+            GetParameterValuesToolMetadata.Name,
+            new Dictionary<string, object?>
+            {
+                ["document_id"] = "doc-1",
+                ["reads"] = new[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["element_ref"] = "ref-1",
+                        ["parameter_ref"] = "pref-1"
+                    }
+                },
+                ["unexpected"] = true
+            });
+        Assert.True(malformedValues.IsError);
+        var valuesText = Assert.IsType<TextContentBlock>(Assert.Single(malformedValues.Content)).Text;
+        Assert.Contains(McpToolErrorCodes.InvalidRequest, valuesText, StringComparison.Ordinal);
+        Assert.DoesNotContain("NO_REVIT_INSTANCE", valuesText, StringComparison.Ordinal);
+        Assert.DoesNotContain("INVALID_PARAMETER_READ", valuesText, StringComparison.Ordinal);
+
+        var duplicatePairs = await client.CallToolAsync(
+            GetParameterValuesToolMetadata.Name,
+            new Dictionary<string, object?>
+            {
+                ["document_id"] = "doc-1",
+                ["reads"] = new object[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["element_ref"] = "e1",
+                        ["parameter_ref"] = "p1"
+                    },
+                    new Dictionary<string, object?>
+                    {
+                        ["parameter_ref"] = "p1",
+                        ["element_ref"] = "e1"
+                    }
+                }
+            });
+        Assert.True(duplicatePairs.IsError);
+        var duplicateText = Assert.IsType<TextContentBlock>(Assert.Single(duplicatePairs.Content)).Text;
+        Assert.Contains(McpToolErrorCodes.InvalidRequest, duplicateText, StringComparison.Ordinal);
+        Assert.DoesNotContain("NO_REVIT_INSTANCE", duplicateText, StringComparison.Ordinal);
+        Assert.DoesNotContain("INVALID_PARAMETER_READ", duplicateText, StringComparison.Ordinal);
     }
 
     private static (string FileName, IList<string> Arguments)? ResolveServerCommand()
