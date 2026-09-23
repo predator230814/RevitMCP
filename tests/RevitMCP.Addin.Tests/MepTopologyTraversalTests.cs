@@ -272,6 +272,18 @@ public sealed class MepTopologyTraversalTests
         Assert.DoesNotContain("AllRefs", disconnectedPath, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void ResolveOwnerRef_uses_revit_document_equality_not_reference_identity()
+    {
+        var source = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "RevitMCP.Addin", "Topology", "RevitMepConnectorReader.cs"));
+        var resolve = SliceMethod(source, "private static string? ResolveOwnerRef(");
+
+        Assert.DoesNotContain("ReferenceEquals", resolve, StringComparison.Ordinal);
+        Assert.Contains("EqualityComparer<Document>.Default.Equals(document, owner.Document)", resolve, StringComparison.Ordinal);
+        Assert.Contains("owner is ElementType", resolve, StringComparison.Ordinal);
+        Assert.Contains("string.IsNullOrEmpty(owner.UniqueId)", resolve, StringComparison.Ordinal);
+    }
+
     private static GetMepTopologyResult Traverse(
         IReadOnlyDictionary<string, ElementTopologyFacts> graph,
         IReadOnlyList<string> seeds,

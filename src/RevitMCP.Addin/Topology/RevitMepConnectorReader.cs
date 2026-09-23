@@ -81,7 +81,9 @@ internal static class RevitMepConnectorReader
 
     private static string? ResolveOwnerRef(Document document, Connector referenced)
     {
-        if (referenced.Owner is not Element owner || !ReferenceEquals(owner.Document, document) || owner is ElementType)
+        if (referenced.Owner is not Element owner
+            || owner is ElementType
+            || !EqualityComparer<Document>.Default.Equals(document, owner.Document))
         {
             return null;
         }
