@@ -53,7 +53,7 @@ public sealed class GetElementsCompositionTests
             getElements: null,
             describeParameters: new RecordingDescribeParametersService());
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, values.Metadata.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.GetParameterValuesVersions, values.Metadata.SupportedProtocolVersions);
         Assert.Equal(6, values.Registration?.BridgeProtocolVersion);
         Assert.Equal(BridgeProtocol.DescribeParametersVersions, describe.Metadata.SupportedProtocolVersions);
         Assert.Equal(5, describe.Registration?.BridgeProtocolVersion);

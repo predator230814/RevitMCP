@@ -19,4 +19,6 @@ public static class CapabilityErrorCodes
     public const string InvalidParameterDiscovery = "INVALID_PARAMETER_DISCOVERY";
 
     public const string InvalidParameterRead = "INVALID_PARAMETER_READ";
+
+    public const string InvalidMepTopology = "INVALID_MEP_TOPOLOGY";
 }

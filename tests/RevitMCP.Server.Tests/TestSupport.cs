@@ -47,7 +47,8 @@ internal static class TestSupport
             AddinVersion = registration.AddinVersion,
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
-                BridgeProtocol.GetParameterValuesVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.GetMepTopologyVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.GetParameterValuesVersion => BridgeProtocol.GetParameterValuesVersions,
                 BridgeProtocol.DescribeParametersVersion => BridgeProtocol.DescribeParametersVersions,
                 BridgeProtocol.GetElementsVersion => BridgeProtocol.GetElementsVersions,
                 BridgeProtocol.QueryElementsVersion => BridgeProtocol.QueryElementsVersions,
@@ -548,6 +549,20 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return GetParameterValues is null
             ? throw new NotSupportedException("This recording client does not implement revit.get_parameter_values.")
             : GetParameterValues(request, timeout, cancellationToken);
+    }
+
+    public int GetMepTopologyCalls { get; private set; }
+
+    public Task<GetMepTopologyResult> GetMepTopologyAsync(
+        GetMepTopologyRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        GetMepTopologyCalls++;
+        throw new NotSupportedException("This recording client does not implement revit.get_mep_topology.");
     }
 
     public ValueTask DisposeAsync()

@@ -11,6 +11,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitGetElementsService? _getElements;
     private readonly IRevitDescribeParametersService? _describeParameters;
     private readonly IRevitGetParameterValuesService? _getParameterValues;
+    private readonly IRevitGetMepTopologyService? _getMepTopology;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -19,7 +20,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitQueryElementsService? query = null,
         IRevitGetElementsService? getElements = null,
         IRevitDescribeParametersService? describeParameters = null,
-        IRevitGetParameterValuesService? getParameterValues = null)
+        IRevitGetParameterValuesService? getParameterValues = null,
+        IRevitGetMepTopologyService? getMepTopology = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -27,6 +29,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _getElements = getElements;
         _describeParameters = describeParameters;
         _getParameterValues = getParameterValues;
+        _getMepTopology = getMepTopology;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -214,6 +217,43 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit parameter value read could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.get_mep_topology")]
+    public async Task<GetMepTopologyResult> GetMepTopologyAsync(
+        GetMepTopologyRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsGetMepTopology,
+            "revit.get_mep_topology is not available on this connection.");
+        if (_getMepTopology is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.get_mep_topology is not available on this endpoint."));
+        }
+
+        try
+        {
+            return await _getMepTopology.GetMepTopologyAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The Revit MEP topology request could not be executed."));
         }
     }
 

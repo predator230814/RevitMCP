@@ -11,7 +11,7 @@ Capability specifications define behavior before implementation. They are not Ar
 - `CAP-0003-revit-get-elements.md` — bounded inspection of known `element_ref` values with explicit basic-field and named-parameter projection.
 - `CAP-0004-revit-describe-parameters.md` — bounded visible-parameter discovery returning opaque `parameter_ref` identity and data-type semantics, without values.
 - `CAP-0005-revit-get-parameter-values.md` — bounded typed reads of explicit `element_ref + parameter_ref` pairs. Implemented. Official MCP-client-to-Revit-2026.5 live validation is **PASS**.
-- `CAP-0006-revit-get-mep-topology.md` — bounded physical MEP element-to-element topology from known seeds. Accepted specification; not implemented.
+- `CAP-0006-revit-get-mep-topology.md` — bounded physical MEP element-to-element topology from known seeds. Implemented through Contracts/Addin/typed Bridge. Typed Bridge live validation on Revit 2026.5 is **PASS**. The MCP tool is not implemented.
 
 ## Required sections
 
