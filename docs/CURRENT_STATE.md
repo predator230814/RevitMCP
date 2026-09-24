@@ -15,6 +15,8 @@ revit_get_parameter_values
 revit_get_mep_topology
 ```
 
+Live compatibility validation of this merged six-tool stack at SHA `5740f0ef9c73e40b471a1047231623b47a88edde` is **PASS** on Revit 2025 (`25.4.30.30`), Revit 2027 (`27.0.10.13`), concurrent multi-instance routing, and a CAP-0001 family document. No production code changed for that validation.
+
 ## What exists
 
 - GitHub repository initialized.
@@ -69,7 +71,7 @@ revit_get_mep_topology
 
 ## CAP-0001 / SERVER-0001 implementation status
 
-CAP-0001 is implemented end-to-end for the accepted base contract. Active-project live validation on Revit 2026.5 is **PASS**, including a later Bridge v3 host regression. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validation.
+CAP-0001 is implemented end-to-end for the accepted base contract. Active-project live validation on Revit 2026.5 is **PASS**, including a later Bridge v3 host regression. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing are **PASS** at SHA `5740f0ef9c73e40b471a1047231623b47a88edde`.
 
 ### Implemented
 
@@ -151,12 +153,9 @@ The 361-byte and 364-byte measurements were taken in different disposable projec
 
 Explicit `instance_id` retry on the returned id succeeded against the same instance and returned the same active project context. CAP-0001 collection does not create a Revit `Transaction`, `SubTransaction`, or `TransactionGroup`. UI selection changes used for validation are not RevitMCP model writes.
 
-### Still pending compatibility validation
+### Compatibility validation
 
-- Family-document live validation: **NOT RUN**.
-- Live Revit 2025 validation: **NOT RUN**.
-- Live Revit 2027 validation: **NOT RUN**.
-- Live multi-instance routing: **NOT RUN**. Automated 0/1/many coverage remains in Server tests.
+Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing are **PASS** at SHA `5740f0ef9c73e40b471a1047231623b47a88edde`. Evidence is in the live compatibility section below. Automated 0/1/many coverage remains in Server tests.
 
 ## CAP-0002 implementation status
 
@@ -475,7 +474,7 @@ Representative live-validation UTF-8 payload sizes (not contractual SLAs):
 
 Safety: disposable model copy, read-only, no Revit transaction, no parameter modification, no element creation/deletion, `is_modified=false`. CAP-0004 results exposed no parameter values, raw numeric values, numeric durable ElementId, `Parameter.Id`, formulas, geometry, connectors, or paths.
 
-This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented and validated for the Revit 2026.5 reference environment. Live Revit 2025 and Revit 2027 compatibility validation remain pending.
+This means CAP-0004 / BRIDGE-0005 / SERVER-0004 are now end-to-end implemented and validated for the Revit 2026.5 reference environment. Live Revit 2025 and Revit 2027 compatibility validation is **PASS** and recorded in the compatibility section.
 
 ## CAP-0005 implementation status
 
@@ -527,7 +526,7 @@ Naturally **not** observed in this Autodesk sample; recorded rather than manufac
 - `unsupported_value` / unit-conversion-failure path;
 - a clearly non-Boolean non-zero integer.
 
-This means CAP-0005 / BRIDGE-0006 are implemented and live-validated through the typed local Bridge for the Revit 2026.5 reference environment. Official MCP-client-to-Revit live validation of SERVER-0005 / CAP-0005 is recorded below. Live Revit 2025 and Revit 2027 compatibility validation remain pending.
+This means CAP-0005 / BRIDGE-0006 are implemented and live-validated through the typed local Bridge for the Revit 2026.5 reference environment. Official MCP-client-to-Revit live validation of SERVER-0005 / CAP-0005 is recorded below. Live Revit 2025 and Revit 2027 compatibility validation is **PASS** and recorded in the compatibility section.
 
 ### Live-tested official MCP SERVER-0005 on Autodesk Revit 2026.5 (`26.5.0.55`)
 
@@ -690,6 +689,82 @@ Naturally **not** observed; recorded rather than manufactured:
 
 - `no_connectors` (the host model query for Walls matched nothing).
 
+## Live compatibility validation at `5740f0e`
+
+Date: 2026-09-24. Tested git SHA `5740f0ef9c73e40b471a1047231623b47a88edde` (`Merge pull request #43`). No production code changed. The live harness stayed untracked under `tools/`.
+
+Client/Server path for every case:
+
+```text
+official ModelContextProtocol 2.2.0 McpClient / StdioClientTransport
+-> Release RevitMCP.Server net10.0 (stdio)
+-> Bridge handshake SupportedVersions [7,6,5,4,3,2,1]
+-> Addin -> EXEC-0001 -> Revit
+```
+
+Each registration advertised `bridge_protocol_version = 7` before the MCP calls. `tools/list` was exactly these six names, in ordinal order, with no Bridge RPC methods:
+
+```text
+revit_describe_parameters
+revit_get_context
+revit_get_elements
+revit_get_mep_topology
+revit_get_parameter_values
+revit_query_elements
+```
+
+Success responses used `isError=false`, authoritative `structuredContent`, and `content=[]`.
+
+### Revit 2025 — PASS
+
+Host: Autodesk Revit 2025, journal `Release: 2025.4.3`, `Build: 20250815_1515(x64)`, `FileVersion` / `revit_build` `25.4.30.30`, language `FRA`. Add-in: existing `net8.0-windows` Release `RevitMCP.Addin.dll`. Journal `AddInLoadFailureMessage: NoError`. Journal also recorded Nice3point `RevitAPI` / `RevitAPIUI` `25.4.60.0` conflicting with preloaded `25.4.30.0`; the add-in still started and served protocol 7.
+
+Disposable project: TEMP copy titled `RevitMCP-COMPAT-2025` (source `DynamoSample_2025.rvt`). Instance `1d259165-7a9d-48fb-a3ac-c15f75668f18`.
+
+- `revit_get_context`: `revit_version=2025`, `revit_build=25.4.30.30`, `document.kind=project`, `document.title=RevitMCP-COMPAT-2025`, `is_modified=false`.
+- `revit_query_elements`: English category names Walls, Doors, Floors, Ducts, Furniture, Generic Models, Columns, and Levels each returned `matched_count=0`. `text_contains=a` returned `matched_count=3071`, 5 refs.
+- Bounded `revit_get_elements`: ref `00c6c04a-12df-4dad-941f-b193ceb216ca-0000225e`, `status=ok`, `name=Phase - New`, `category_name=Matériaux`.
+- After those reads, `is_modified=false` and the title was unchanged. No save.
+
+### Revit 2027 — PASS
+
+Host: Autodesk Revit 2027, journal `Release: 2027.0.1`, `Build: 20260330_1515(x64)`, `FileVersion` / `revit_build` `27.0.10.13`, language `ENU`. Add-in: accepted `net10.0-windows` Release `RevitMCP.Addin.dll`. Journal `AddInLoadFailureMessage: NoError`. Journal also recorded Nice3point `RevitAPI` / `RevitAPIUI` `27.2.0.0` conflicting with preloaded `27.0.10.0`; the add-in still started and served protocol 7.
+
+Disposable project: TEMP copy titled `RevitMCP-COMPAT-2027`, opened from a copy of the 2025 Dynamo sample. The journal recorded an in-memory upgrade from Revit 2025 to Revit 2027 and the host prompt to save afterward. Disk last-modification time reported on open was `19-Dec-2024`. Instance `997fcf5f-b85e-4a43-8b18-386a4f7cd678`.
+
+- `revit_get_context`: `revit_version=2027`, `revit_build=27.0.10.13`, `document.kind=project`, `document.title=RevitMCP-COMPAT-2027`, `is_modified=false`.
+- `revit_query_elements` category Walls: `matched_count=38`, 5 refs.
+- Bounded `revit_get_elements`: ref `17836a3c-e764-47fa-a2e0-08216444f621-0007882c`, `status=ok`, `name=CL_W1`, `category_name=Walls`.
+- After those reads, `is_modified=false` and the title was unchanged. RevitMCP did not save the upgraded model.
+
+### Multi-instance routing — PASS
+
+Concurrent eligible instances: the Revit 2025 project above and the Revit 2027 project above. Both registration files were discovered.
+
+Omitted `instance_id` on `revit_get_context` returned compact `INSTANCE_REQUIRED` (`isError=true`, no `structuredContent`) with candidates already sorted by ordinal `instance_id`:
+
+```text
+1d259165-7a9d-48fb-a3ac-c15f75668f18  2025  25.4.30.30
+997fcf5f-b85e-4a43-8b18-386a4f7cd678  2027  27.0.10.13
+```
+
+Explicit `instance_id` returned that instance only: 2025 title `RevitMCP-COMPAT-2025` / build `25.4.30.30`, and 2027 title `RevitMCP-COMPAT-2027` / build `27.0.10.13`. The two document titles stayed distinct. Unknown id `missing-instance-id` returned `INSTANCE_NOT_FOUND`.
+
+Closing the disposable Revit 2025 process removed its registration file. A later explicit call for `1d259165-7a9d-48fb-a3ac-c15f75668f18` returned `INSTANCE_NOT_FOUND`. The still-open Revit 2027 instance still returned its own title `RevitMCP-COMPAT-2027`.
+
+Naturally **not** observed; recorded rather than manufactured:
+
+- `INSTANCE_UNAVAILABLE` (teardown deleted the registration, so the closed id was `INSTANCE_NOT_FOUND`);
+- an ineligible protocol instance (both live instances advertised protocol 7).
+
+### CAP-0001 family document — PASS
+
+Host: the same Revit 2025 `25.4.30.30` / `20250815_1515(x64)`. Disposable family: TEMP copy of `rac_basic_sample_family.rfa`, title `RevitMCP-COMPAT-Family`. Instance `1b662de0-ae26-44b8-9fde-670566125c57`, protocol 7.
+
+`revit_get_context` returned `document.kind=family`, `document.title=RevitMCP-COMPAT-Family`, `revit_build=25.4.30.30`, `is_modified=false` before and after. `tools/list` remained exactly 6. The accepted CAP-0001 contract already required `kind=family` for an active family document, so the contract was not extended.
+
+A command-line open of a copied Metric Column `.rft` exited before a family document stayed open. The `.rfa` copy is the family document that was validated.
+
 ## What does not exist yet
 
 - no write capability or write authorization;
@@ -698,9 +773,7 @@ Naturally **not** observed; recorded rather than manufactured:
 - local parameter identity remains document-scoped; built-in/shared canonical identity and opaque `parameter_ref` now exist for later read/write chaining;
 - official MCP-client-to-Revit live validation for SERVER-0005 / CAP-0005 on Revit 2026.5 is **PASS**; typed Bridge live validation remains **PASS**;
 - CAP-0006 / BRIDGE-0007 typed Bridge live validation on Revit 2026.5 is **PASS**; SERVER-0006 official MCP live validation of `revit_get_mep_topology` is **PASS**;
-- no live CAP-0001 family-document validation;
-- no live lifecycle/handshake/capability validation on Revit 2025 or Revit 2027;
-- no live multi-instance routing validation;
+- live Revit 2025, live Revit 2027, multi-instance routing, and CAP-0001 family-document validation are **PASS** at SHA `5740f0ef9c73e40b471a1047231623b47a88edde`;
 - no persistent cross-session document identity/addressing model;
 - no request scheduling/fairness policy for multiple clients beyond FIFO serialization required by EXEC-0001;
 - no write-locking or transaction concurrency policy;
@@ -709,9 +782,9 @@ Naturally **not** observed; recorded rather than manufactured:
 
 ## Current priorities
 
-1. Official MCP live validation of SERVER-0006 / `revit_get_mep_topology` on Revit 2026.5 is **PASS**. `tools/list` exposes exactly six tools. Do not implement an orchestrator, APS/Forma MCP, or dynamic tool scoping next. Writes remain out of scope.
-2. Keep family-document, live Revit 2025, live Revit 2027, and live multi-instance routing as pending compatibility validations.
-3. Do not begin writes, Azure/cloud, WebMCP implementation, MCP Apps implementation, or UI work.
+1. Official MCP live validation of SERVER-0006 / `revit_get_mep_topology` on Revit 2026.5 is **PASS**. `tools/list` exposes exactly six tools.
+2. Live Revit 2025, live Revit 2027, multi-instance routing, and CAP-0001 family-document validation are **PASS** at SHA `5740f0ef9c73e40b471a1047231623b47a88edde`.
+3. Do not begin writes, APS, orchestrator, WebMCP, MCP Apps, UI, or dynamic tool scoping.
 
 ## Known constraints
 
@@ -734,6 +807,8 @@ Naturally **not** observed; recorded rather than manufactured:
 - CAP-0001 `active_view.element_id` remains unchanged because it describes current context rather than a durable element handle.
 - Revit-version-specific API differences should be confined to a compatibility boundary rather than scattered throughout capability or MCP-facing code.
 - Autodesk Revit 2026.5 (`26.5.0.55`) preloads a .NET 10 generation host and RevitAPI `26.5.0.0` while the current 2026 add-in remains `net8.0-windows` compiled against Nice3point `2026.4.10`. The add-in loaded and completed handshake plus ExternalEvent-backed capabilities on that host; this is recorded compatibility evidence, not authorization to change the accepted TFM/API matrix.
+- Autodesk Revit 2025 (`25.4.30.30`, build `20250815_1515(x64)`) preloads RevitAPI `25.4.30.0` while the 2025 add-in remains `net8.0-windows` compiled against Nice3point `2025.4.60`. The journal recorded that assembly conflict and `AddInLoadFailureMessage: NoError`. Handshake, `revit_get_context`, query, and bounded inspection completed on that host.
+- Autodesk Revit 2027 (`27.0.10.13`, build `20260330_1515(x64)`) preloads RevitAPI `27.0.10.0` while the 2027 add-in remains `net10.0-windows` compiled against Nice3point `2027.2.0`. The journal recorded that assembly conflict and `AddInLoadFailureMessage: NoError`. Handshake, `revit_get_context`, query, and bounded inspection completed on that host.
 - Cross-version compatibility requires all supported Revit add-in variants to compile in CI; local compilation against one Revit release is insufficient.
 - Capability contracts are transport-neutral below the MCP adapter and must not depend on a specific LLM/client.
 - `revit_get_context` is bounded by design: no model enumeration, selection enumeration, file paths, usernames, or cloud project identifiers in the base result.
@@ -750,4 +825,4 @@ Naturally **not** observed; recorded rather than manufactured:
 
 ## Next task
 
-SERVER-0006 official MCP-client-to-Revit live validation on Revit 2026.5 is **PASS** at SHA `b7be3989b802f8cdb7a960e1a98e290ac7eb1006`. `tools/list` exposes exactly six tools, including `revit_get_mep_topology`. Typed Bridge live validation of CAP-0006 / BRIDGE-0007 remains **PASS**. Do not implement the orchestrator or APS immediately. Family-document, live Revit 2025, live Revit 2027, and live multi-instance routing remain pending compatibility validations. Writes, orchestration, and APS remain out of scope.
+Live compatibility validation of the merged six-tool stack is **PASS** at SHA `5740f0ef9c73e40b471a1047231623b47a88edde` on Revit 2025 (`25.4.30.30`), Revit 2027 (`27.0.10.13`), concurrent multi-instance routing, and a CAP-0001 family document. SERVER-0006 official MCP live validation on Revit 2026.5 remains **PASS**. Do not begin writes, APS, orchestrator, WebMCP, MCP Apps, UI, or dynamic tool scoping.
