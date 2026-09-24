@@ -28,13 +28,14 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(5, tools.Count);
+        Assert.Equal(6, tools.Count);
         Assert.Equal(
             new[]
             {
                 DescribeParametersToolMetadata.Name,
                 GetContextToolMetadata.Name,
                 GetElementsToolMetadata.Name,
+                GetMepTopologyToolMetadata.Name,
                 GetParameterValuesToolMetadata.Name,
                 QueryElementsToolMetadata.Name
             },
@@ -45,6 +46,7 @@ public sealed class StdioServerProcessTests
                 "revit_describe_parameters",
                 "revit_get_context",
                 "revit_get_elements",
+                "revit_get_mep_topology",
                 "revit_get_parameter_values",
                 "revit_query_elements"
             },
@@ -82,6 +84,12 @@ public sealed class StdioServerProcessTests
         Assert.Equal(GetParameterValuesToolMetadata.Description, getParameterValues.Description);
         Assert.True(getParameterValues.ProtocolTool.Annotations?.ReadOnlyHint);
         Assert.False(getParameterValues.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var getMepTopology = Assert.Single(tools, tool => tool.Name == GetMepTopologyToolMetadata.Name);
+        Assert.Equal(GetMepTopologyToolMetadata.Title, getMepTopology.Title);
+        Assert.Equal(GetMepTopologyToolMetadata.Description, getMepTopology.Description);
+        Assert.True(getMepTopology.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(getMepTopology.ProtocolTool.Annotations?.OpenWorldHint);
 
         var rejected = await client.CallToolAsync(
             GetElementsToolMetadata.Name,
@@ -169,6 +177,20 @@ public sealed class StdioServerProcessTests
         Assert.Contains(McpToolErrorCodes.InvalidRequest, duplicateText, StringComparison.Ordinal);
         Assert.DoesNotContain("NO_REVIT_INSTANCE", duplicateText, StringComparison.Ordinal);
         Assert.DoesNotContain("INVALID_PARAMETER_READ", duplicateText, StringComparison.Ordinal);
+
+        var malformedTopology = await client.CallToolAsync(
+            GetMepTopologyToolMetadata.Name,
+            new Dictionary<string, object?>
+            {
+                ["document_id"] = "doc-1",
+                ["seed_element_refs"] = new[] { "ref-1" },
+                ["unexpected"] = true
+            });
+        Assert.True(malformedTopology.IsError);
+        var topologyText = Assert.IsType<TextContentBlock>(Assert.Single(malformedTopology.Content)).Text;
+        Assert.Contains(McpToolErrorCodes.InvalidRequest, topologyText, StringComparison.Ordinal);
+        Assert.DoesNotContain("NO_REVIT_INSTANCE", topologyText, StringComparison.Ordinal);
+        Assert.DoesNotContain("INVALID_MEP_TOPOLOGY", topologyText, StringComparison.Ordinal);
     }
 
     private static (string FileName, IList<string> Arguments)? ResolveServerCommand()

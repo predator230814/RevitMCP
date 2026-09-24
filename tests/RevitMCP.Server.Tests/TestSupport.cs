@@ -359,6 +359,63 @@ internal static class TestSupport
         };
     }
 
+    public static GetMepTopologyRequest CreateGetMepTopologyRequest(
+        string documentId = "doc-1",
+        IReadOnlyList<string>? seedElementRefs = null,
+        MepTopologyDomain? domain = null,
+        int? maxDepth = null,
+        int? maxElements = null,
+        int? maxEdges = null)
+    {
+        return new GetMepTopologyRequest
+        {
+            DocumentId = documentId,
+            SeedElementRefs = seedElementRefs ?? ["ref-1"],
+            Domain = domain,
+            MaxDepth = maxDepth,
+            MaxElements = maxElements,
+            MaxEdges = maxEdges
+        };
+    }
+
+    public static GetMepTopologyResult CreateGetMepTopologyResult(
+        string instanceId,
+        string documentId,
+        IReadOnlyList<GetMepTopologySeed>? seeds = null,
+        IReadOnlyList<GetMepTopologyNode>? nodes = null,
+        IReadOnlyList<GetMepTopologyEdge>? edges = null,
+        bool truncated = false,
+        IReadOnlyList<MepTopologyTruncationReason>? truncationReasons = null)
+    {
+        return new GetMepTopologyResult
+        {
+            Context = new GetMepTopologyContext
+            {
+                InstanceId = instanceId,
+                DocumentId = documentId
+            },
+            Seeds = seeds ??
+            [
+                new GetMepTopologySeed
+                {
+                    ElementRef = "ref-1",
+                    Status = MepTopologySeedStatus.Ok
+                }
+            ],
+            Nodes = nodes ??
+            [
+                new GetMepTopologyNode
+                {
+                    ElementRef = "ref-1",
+                    Depth = 0
+                }
+            ],
+            Edges = edges ?? [],
+            Truncated = truncated,
+            TruncationReasons = truncationReasons ?? []
+        };
+    }
+
     public static void AssertOptionalNullableInstanceId(JsonElement property)
     {
         Assert.Equal(
@@ -553,16 +610,23 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
 
     public int GetMepTopologyCalls { get; private set; }
 
+    public GetMepTopologyRequest? LastGetMepTopologyRequest { get; private set; }
+
+    public TimeSpan? LastGetMepTopologyTimeout { get; private set; }
+
+    public Func<GetMepTopologyRequest, TimeSpan, CancellationToken, Task<GetMepTopologyResult>>? GetMepTopology { get; set; }
+
     public Task<GetMepTopologyResult> GetMepTopologyAsync(
         GetMepTopologyRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        _ = request;
-        _ = timeout;
-        _ = cancellationToken;
         GetMepTopologyCalls++;
-        throw new NotSupportedException("This recording client does not implement revit.get_mep_topology.");
+        LastGetMepTopologyRequest = request;
+        LastGetMepTopologyTimeout = timeout;
+        return GetMepTopology is null
+            ? throw new NotSupportedException("This recording client does not implement revit.get_mep_topology.")
+            : GetMepTopology(request, timeout, cancellationToken);
     }
 
     public ValueTask DisposeAsync()
