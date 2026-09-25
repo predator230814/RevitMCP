@@ -307,7 +307,7 @@ ADR-0008 does not authorize:
 - Revit product UI implementation;
 - an MCP SDK upgrade.
 
-CAP-0007 is not created by this ADR and is not accepted.
+CAP-0007 was not created or accepted by this ADR. It was later accepted separately as a capability specification. That later acceptance does not change this ADR and does not by itself authorize production write implementation.
 
 ### 21. Prior ADR boundaries stay in force
 
