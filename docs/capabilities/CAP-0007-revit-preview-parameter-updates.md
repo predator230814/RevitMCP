@@ -1,6 +1,6 @@
 # CAP-0007: `revit_preview_parameter_updates`
 
-- Status: Proposed
+- Status: Accepted
 - Operation class: Preview
 - Date: 2026-09-25
 
@@ -410,16 +410,15 @@ proposed          // the proposed closed union
 
 Each name is at most **512** characters. If Revit supplies a longer name, return a 512-character prefix and set the matching `*_truncated` flag true. Otherwise the flag is false. Name truncation does not change string parameter values. A string parameter value is never previewed as a truncated prefix.
 
-`data_type` reuses the CAP-0004 classification. Do not invent a second model.
+`data_type` is the complete CAP-0004 object. Do not invent a second model, and do not add a sibling `forge_type_id` field.
 
 ```text
-measurable_spec
-spec
-category
-unknown
+data_type
+  kind              // measurable_spec | spec | category | unknown
+  forge_type_id?    // present only when Revit supplied a non-empty data-type identifier
 ```
 
-`forge_type_id` is present when Revit supplied a non-empty data-type identifier and omitted when Revit reports an empty data type.
+`forge_type_id` is omitted when Revit reports an empty data type.
 
 `before.value`, when present, uses the same closed value shapes as the proposed union, in the proposed kind:
 
@@ -493,12 +492,14 @@ The exact capacity number is deferred to the implementation specification.
 
 When `ready = true`, the intent stores one approval-preview item per `ok` result item, in request order. That ordered payload is the authoritative human preview ADR-0008 binds to approval.
 
-Each item is exactly the human-facing `ok` object returned for that update:
+The public result has no `order` field. The position of each item in the response `items` array is the authoritative human-visible order. `no_change` items use the same public shape and the same array-position rule, and they still do not enter an intent.
+
+Each stored approval-preview item is the exact returned `ok` object plus internal request-position metadata:
 
 ```text
-order                         // 1-based position in the request
 element_ref
 parameter_ref
+status
 element_name
 element_name_truncated
 category_name
@@ -506,16 +507,18 @@ category_name_truncated
 parameter_name
 parameter_name_truncated
 data_type
-forge_type_id?                // present only when the result item includes it
+  kind
+  forge_type_id?
 before
   has_value
   value?                      // present only when has_value = true
 proposed
+request_position              // internal only; 1-based position in the request
 ```
 
-`order` is not a separate client input. It is the request position of that update. The fingerprint covers this ordered sequence, not an unordered set.
+`request_position` is not an MCP result field and not a client input. It records the request position so canonical fingerprinting and a later ordered apply do not depend on an unordered set. Reordering the input still produces a different fingerprint.
 
-The same ordered payload, with the same instance and document binding and the same internal target and parameter identities, produces the same fingerprint. Reordering the updates produces a different fingerprint even when the set of pairs is unchanged.
+The same ordered payload, with the same instance and document binding and the same internal target and parameter identities, produces the same fingerprint.
 
 `no_change` and other non-`ok` items are not stored, because they prevent intent creation.
 
@@ -527,7 +530,7 @@ The encoded contents must include:
 
 - instance and document binding;
 - internal target and parameter identities;
-- the ordered approval-preview payload, including displayed names, truncation flags, `data_type`, exact `before` state, exact `proposed` state, and item order;
+- the ordered approval-preview payload, including displayed names, truncation flags, the nested CAP-0004 `data_type` object, exact `before` state, exact `proposed` state, and the internal request position;
 - a fingerprint schema/version identifier.
 
 The same ordered semantic contents produce the same fingerprint. Any change to that ordered content, including a reordering or a displayed-name change, produces a different fingerprint.
@@ -745,7 +748,7 @@ CAP-0007 is acceptable as a capability contract when:
 16. CAP-0004 `read_only_on_count` is not writeability evidence.
 17. A valued string longer than 512 characters is `unsupported_value`, not a truncated before-state.
 18. Quantity `before` is expressed in the proposed `unit_type_id`.
-19. Result order matches request order, with one item per update.
+19. Result order matches request order, with one item per update. Array position is the human-visible order. There is no public `order` field.
 20. `no_change` is distinct from `ok` and prevents intent creation.
 21. An intent is stored only when every item is `ok`. Otherwise `ready = false` and no intent is stored, except the EXEC-0001 timeout race in criterion 33.
 22. `intent_ref`, `intent_fingerprint`, and `expires_at` are present only when the caller receives `ready = true`.
@@ -760,7 +763,8 @@ CAP-0007 is acceptable as a capability contract when:
 31. CAP-0008/apply, Bridge, Server, MRTR, approval providers, MCP Apps, and UI are not created by this specification.
 32. CAP-0001 through CAP-0006 and ADR-0008 remain unchanged by this specification.
 33. Timeout before EXEC-0001 begins creates no intent. Timeout after execution begins does not abort the Revit thread. A completed preview may leave an unreported intent. That orphan is not listable, expires normally, and a timeout response is not proof that no intent exists. CAP-0007 defines no acknowledgement protocol.
-34. Stored intent order matches request order. Reordered updates produce a different fingerprint. Same ordered semantic contents produce the same fingerprint.
+34. Stored intent order matches request order through internal request-position metadata, not a public `order` field. Reordered updates produce a different fingerprint. Same ordered semantic contents produce the same fingerprint.
+35. `data_type` is the CAP-0004 object. Optional `forge_type_id` is nested inside `data_type`. No sibling `forge_type_id` field exists.
 
 ## Explicitly deferred
 
@@ -783,13 +787,12 @@ CAP-0007 is acceptable as a capability contract when:
 
 ## Sequencing
 
-CAP-0007 itself is transport-neutral and proposed.
+CAP-0007 is accepted as a transport-neutral capability contract only. Acceptance does not authorize implementation.
 
 Expected future sequence, none of which is authorized by this specification:
 
 ```text
-CAP-0007 accepted
--> implementation specification for intent storage
+implementation specification for intent storage
 -> Bridge design/implementation
 -> Server design/implementation
 -> CAP-0008 apply specification
