@@ -12,6 +12,10 @@ Accepted ADRs:
 - [ADR-0006](ADR-0006-document-and-element-reference-identity.md) — document and element reference identity
 - [ADR-0007](ADR-0007-federated-mcp-boundaries-and-orchestration.md) — federated MCP boundaries and optional orchestration
 
+Proposed ADRs:
+
+- [ADR-0008](ADR-0008-controlled-write-safety-model.md) — controlled write safety model
+
 ## When to create an ADR
 
 Create an ADR when a decision materially affects architecture, interoperability, security, deployment, protocol behavior, Revit integration, or long-term maintainability.
