@@ -55,7 +55,7 @@ Validate and preview one bounded batch of proposed instance-parameter updates in
 
 `destructiveHint` is false because the tool does not delete, clear, or irreversibly change Revit elements.
 
-`idempotentHint` is false because repeating a preview may create a distinct `intent_ref`. Equal semantic contents may still produce equal fingerprints.
+`idempotentHint` is false because repeating a preview may create a distinct `intent_ref`. The same ordered semantic contents, including the approval-preview payload below, still produce the same fingerprint. A different order produces a different fingerprint.
 
 `openWorldHint` is false because the tool does not reach outside the addressed Revit document and the RevitMCP intent store.
 
@@ -454,11 +454,15 @@ The stored intent contains only:
 - the executing Revit instance identity;
 - the active open-document identity;
 - the exact target identities and instance parameter identities;
-- the exact typed before snapshots;
-- the exact proposed typed state;
+- the ordered approval-preview payload defined below;
+- the exact typed before snapshots and proposed typed state inside that payload;
 - fingerprint schema/version metadata.
 
-It does not retain live Revit API wrapper objects (`Element`, `Parameter`, `Connector`, or similar). Preview may use those objects only while executing inside a valid EXEC-0001 context. A later apply, which this specification does not define, must re-resolve current Revit objects in a fresh EXEC-0001 context.
+Request order is semantic. The stored intent preserves the exact order of the requested updates. A later apply, which this specification does not define, must consume that ordered batch. Applying A then B is not treated as equivalent to B then A. A future accepted specification may prove order-independence; until then, order stays part of the intent.
+
+It does not retain live Revit API wrapper objects (`Element`, `Parameter`, `Connector`, or similar). The approval-preview payload is an immutable RevitMCP-owned snapshot of strings and typed values. Preview may use live Revit objects only while executing inside a valid EXEC-0001 context. A later apply must re-resolve current Revit objects in a fresh EXEC-0001 context and compare the re-resolved human-facing fields with the stored approval-preview payload. A mismatch, including a renamed element, category, or parameter, requires a new preview and a new approval. Apply must not silently use an element whose human-facing identity no longer matches the approved preview.
+
+`intent_ref` is opaque and high-entropy. Clients cannot enumerate intents.
 
 The intent is:
 
@@ -485,25 +489,56 @@ If every item would be `ok` but storing a new intent would require evicting an u
 
 The exact capacity number is deferred to the implementation specification.
 
+### Approval-preview payload
+
+When `ready = true`, the intent stores one approval-preview item per `ok` result item, in request order. That ordered payload is the authoritative human preview ADR-0008 binds to approval.
+
+Each item is exactly the human-facing `ok` object returned for that update:
+
+```text
+order                         // 1-based position in the request
+element_ref
+parameter_ref
+element_name
+element_name_truncated
+category_name
+category_name_truncated
+parameter_name
+parameter_name_truncated
+data_type
+forge_type_id?                // present only when the result item includes it
+before
+  has_value
+  value?                      // present only when has_value = true
+proposed
+```
+
+`order` is not a separate client input. It is the request position of that update. The fingerprint covers this ordered sequence, not an unordered set.
+
+The same ordered payload, with the same instance and document binding and the same internal target and parameter identities, produces the same fingerprint. Reordering the updates produces a different fingerprint even when the set of pairs is unchanged.
+
+`no_change` and other non-`ok` items are not stored, because they prevent intent creation.
+
 ### Fingerprint
 
-`intent_fingerprint` is deterministic over the immutable semantic contents of that intent.
+`intent_fingerprint` is a collision-resistant cryptographic digest over an unambiguous, versioned canonical encoding of the immutable semantic contents of that intent.
 
-It must include:
+The encoded contents must include:
 
 - instance and document binding;
-- target and parameter identities;
-- the exact before-state;
-- the exact proposed state;
+- internal target and parameter identities;
+- the ordered approval-preview payload, including displayed names, truncation flags, `data_type`, exact `before` state, exact `proposed` state, and item order;
 - a fingerprint schema/version identifier.
 
-It must not be treated as authorization or approval.
+The same ordered semantic contents produce the same fingerprint. Any change to that ordered content, including a reordering or a displayed-name change, produces a different fingerprint.
 
-Clients treat `intent_ref` and `intent_fingerprint` as opaque. They may compare a fingerprint for equality. They must not parse it or rebuild an intent from it.
+The exact digest algorithm and canonical encoding may remain implementation-level, provided tests can repeat the same encoding and the same digest. Weak or runtime hashes, including `GetHashCode()`, are not acceptable.
 
-The exact hash and canonical serialization algorithm may remain implementation-level, provided the same semantic contents produce the same fingerprint in tests and a semantic change produces a different fingerprint.
+The fingerprint is not authorization and not approval. ADR-0008 binds later human approval to this fingerprint; possession of the fingerprint does not grant that approval.
 
-A repeated preview is not required to reuse an existing `intent_ref`.
+Clients treat `intent_ref` and `intent_fingerprint` as opaque equality material. They must not parse either value or rebuild an intent from it.
+
+A repeated preview is not required to reuse an existing `intent_ref`. It must reuse the fingerprint when the ordered semantic contents match.
 
 ## What this capability does not do
 
@@ -590,6 +625,8 @@ Expected per-item misses and ineligible updates remain item statuses on a succes
 
 `INTENT_CAPACITY_REACHED` is the exception: the batch was otherwise ready, but the store refused to evict a live intent. That is a capability error, not `ready = false`.
 
+`REVIT_EXECUTION_TIMEOUT` means the caller stopped waiting. It is not proof that no intent was created. See Execution.
+
 ## Execution
 
 Follow the existing capability pattern:
@@ -604,7 +641,19 @@ Follow the existing capability pattern:
 
 No Revit API object escapes into Contracts or into stored intent state.
 
-Caller cancellation or timeout before EXEC-0001 begins must not create an intent. Timeout after execution has begun follows EXEC-0001: do not abort the Revit thread. Because this capability does not mutate the model, a timed-out caller must not observe a partial intent. Store the intent only after the full preview result is known, and do not leave a stored intent that the timed-out response did not report. If the outcome is uncertain, do not store.
+Timeout and cancellation follow EXEC-0001. The Bridge bounds the caller with a local wait. On timeout it stops waiting. The Addin cannot know whether the MCP caller received the response, and intent storage can race response delivery. CAP-0007 does not add an acknowledgement or claim protocol to close that race.
+
+The achievable invariant is:
+
+- cancellation or timeout before the EXEC-0001 work item begins: the preview does not run and no intent is created;
+- once execution has begun inside `Execute`, do not interrupt the Revit thread and do not abort the running preview;
+- if the caller times out or cancels while that running preview then completes successfully, an otherwise-valid intent may be stored and remain unreported to that caller;
+- that orphan is not discoverable or listable by any caller;
+- it remains usable only by a later caller that already possesses its opaque high-entropy `intent_ref`, and only together with the later approval requirements ADR-0008 defines;
+- it expires and is purged on the same 10-minute lifetime, document close, and process exit as any other intent;
+- `REVIT_EXECUTION_TIMEOUT` must not be reported as proof that no intent was created.
+
+Store an intent only after the full preview is known and every item is `ok`. Do not store a partial intent. Do not store an intent when the preview itself fails.
 
 ## Bounds / context efficiency
 
@@ -618,7 +667,7 @@ This capability satisfies ADR-0005 by previewing only the requested batch:
 - no whole-document scan;
 - no raw internal-unit doubles;
 - compact item statuses for expected misses;
-- `intent_ref` and `intent_fingerprint` instead of echoing the stored before/proposed snapshots a second time as a hidden blob. The human-facing before and proposed values on `ok` items are the authoritative preview content.
+- `intent_ref` and `intent_fingerprint` instead of echoing the stored before/proposed snapshots a second time as a hidden blob. The ordered approval-preview payload is the authoritative preview content, and the fingerprint binds that payload.
 
 ## Context / security boundaries
 
@@ -698,25 +747,29 @@ CAP-0007 is acceptable as a capability contract when:
 18. Quantity `before` is expressed in the proposed `unit_type_id`.
 19. Result order matches request order, with one item per update.
 20. `no_change` is distinct from `ok` and prevents intent creation.
-21. An intent is stored only when every item is `ok`. Otherwise `ready = false` and no intent is stored.
-22. `intent_ref`, `intent_fingerprint`, and `expires_at` are present only when `ready = true`.
+21. An intent is stored only when every item is `ok`. Otherwise `ready = false` and no intent is stored, except the EXEC-0001 timeout race in criterion 33.
+22. `intent_ref`, `intent_fingerprint`, and `expires_at` are present only when the caller receives `ready = true`.
 23. TTL is fixed at 10 minutes and is not caller-extendable.
-24. Stored state is ephemeral, immutable, process- and open-document-scoped, and free of live Revit API wrappers.
+24. Stored state is ephemeral, immutable, process- and open-document-scoped, and free of live Revit API wrappers. It retains the ordered approval-preview payload as RevitMCP-owned snapshots.
 25. The store fails closed with `INTENT_CAPACITY_REACHED` instead of evicting a still-valid intent.
-26. The fingerprint is deterministic over the semantic intent contents and is not approval.
+26. The fingerprint is a collision-resistant cryptographic digest of a versioned canonical encoding of the ordered semantic contents, including the approval-preview payload. `GetHashCode()` is not acceptable. The fingerprint is not approval.
 27. MCP hints are `readOnlyHint=false`, `destructiveHint=false`, `idempotentHint=false`, and `openWorldHint=false`, with the no-model-write explanation above.
 28. All Revit API access executes through EXEC-0001.
 29. No Revit transaction, save, synchronize, or worksharing checkout occurs.
 30. Contracts remain transport-neutral. Server remains Revit-API independent.
 31. CAP-0008/apply, Bridge, Server, MRTR, approval providers, MCP Apps, and UI are not created by this specification.
 32. CAP-0001 through CAP-0006 and ADR-0008 remain unchanged by this specification.
+33. Timeout before EXEC-0001 begins creates no intent. Timeout after execution begins does not abort the Revit thread. A completed preview may leave an unreported intent. That orphan is not listable, expires normally, and a timeout response is not proof that no intent exists. CAP-0007 defines no acknowledgement protocol.
+34. Stored intent order matches request order. Reordered updates produce a different fingerprint. Same ordered semantic contents produce the same fingerprint.
 
 ## Explicitly deferred
 
 - CAP-0008 and every apply path;
 - approval providers, MRTR, MCP Apps, and Revit product UI;
 - Bridge and Server specifications for this tool;
-- intent-store capacity number, persistence technology, and hash algorithm;
+- intent-store capacity number and persistence technology;
+- the concrete cryptographic digest and canonical encoding, within the collision-resistance requirement above;
+- an acknowledgement or claim protocol for the EXEC-0001 timeout race;
 - type-parameter updates;
 - ElementId and reference-parameter updates;
 - clear, unset, and null;
