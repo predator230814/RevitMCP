@@ -1,6 +1,6 @@
 # LIFECYCLE-0002: Ephemeral write-intent store
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-25
 
 ## Purpose
@@ -9,7 +9,7 @@ Define the Addin-owned ephemeral store required by accepted ADR-0008 and accepte
 
 The store holds one immutable preview intent until it expires, the document closes successfully, or the Revit process ends. It performs no Revit model mutation. It does not start a transaction, call `Parameter.Set`, save, or synchronize.
 
-This specification does not implement the store. While it remains Proposed, it does not authorize production code.
+This specification does not implement the store. Acceptance records the contract only. It does not authorize a Revit model write, a Bridge or Server specification, or CAP-0008.
 
 ## Ownership
 
