@@ -107,7 +107,7 @@ Controlled writes require explicit human approval for every write batch in v1. T
 
 ### 2. One approval covers one bounded immutable batch
 
-One approval covers one batch, not each individual parameter inside that batch. The batch is bounded and immutable after the preview creates it. Changing any target, parameter, or proposed value requires a new preview and a new approval.
+One approval covers one batch, not each individual parameter inside that batch. The batch is bounded and immutable after the preview creates it. Any change to targets, parameter identities, proposed values, or preview content requires a new preview, a new intent, and a new approval.
 
 ### 3. Authorization and approval are separate
 
@@ -123,7 +123,11 @@ Never treat any of the following as approval:
 - arbitrary confirmation text;
 - MCP tool annotations;
 - model or provider identity;
-- self-reported client metadata.
+- self-reported client metadata, including `clientInfo`;
+- MRTR `inputResponses`, including an elicitation result with `action=accept`;
+- `requestState`;
+- arbitrary request fields;
+- the MCP response itself.
 
 The MCP tools specification says clients must consider tool annotations untrusted unless they come from trusted servers. Annotations remain descriptive hints. They are not a human approval of a batch.
 
@@ -172,26 +176,44 @@ The intent internally binds:
 - proposed typed state;
 - deterministic fingerprint/version metadata needed for stale-state checking.
 
-The Addin may use Revit API objects inside that boundary. Those raw internal representations stay inside the Addin. Storing them internally does not authorize exposing `ElementId`, parameter ids, storage doubles, or other non-contract representations to clients. Agent-facing identity remains the opaque refs already accepted for reads (`document_id`, `element_ref`, `parameter_ref`) plus `intent_ref`.
+Preview may use Revit API objects while it executes inside a valid EXEC-0001 context.
+
+Stored intent state must not retain live Revit API wrapper objects between calls. Persisted ephemeral intent state contains only immutable RevitMCP-owned identities, typed snapshots, fingerprints, and metadata. It does not retain live `Element`, `Parameter`, `Connector`, or similar native-wrapper objects.
+
+Apply re-resolves the current Revit objects from those identities inside a fresh valid EXEC-0001 execution context before stale-state validation and mutation.
+
+Autodesk documents that if the corresponding native object is destroyed, or creation of that object is undone, the managed API wrapper is no longer valid and API methods cannot be called on it. Intent state must not depend on wrapper lifetime.
+
+Raw Revit representations used during a single EXEC-0001 execution stay inside the Addin. Storing snapshots internally does not authorize exposing `ElementId`, parameter ids, storage doubles, or other non-contract representations to clients. Agent-facing identity remains the opaque refs already accepted for reads (`document_id`, `element_ref`, `parameter_ref`) plus `intent_ref`.
 
 `parameter_ref` remains a definition/source binding, not an authorization token, as CAP-0004 already requires.
 
 ### 10. Approval comes from a trusted approval-provider boundary
 
-Approval is supplied through a trusted approval-provider boundary. The architecture must allow:
+Approval is supplied through a trusted approval-provider boundary. The architecture must allow these interaction paths:
 
-- MCP `2026-07-28` MRTR / `input_required`;
+- MCP `2026-07-28` MRTR / `input_required` as a way to carry an interaction round trip;
 - a future MCP App approval UI;
 - a future Revit-local approval UI;
 - other vendor-neutral trusted providers.
 
+MRTR, `input_required`, and `inputResponses` are an interaction mechanism only. They are not an approval authority and they are not proof that a person approved. `inputResponses`, including an elicitation response with `action=accept`, are client-supplied input. The MRTR specification says the client gathers the requested information from the user or from other sources, then retries the original request. The tools specification does not mandate a particular UI interaction model. A human in the loop, confirmation prompts, and showing tool inputs before the call are SHOULD guidance for applications, not a protocol guarantee that a person saw or approved a batch.
+
+Tier-1 SDK clients can satisfy `input_required` automatically through registered handlers and reissue the call. The official MCP C# SDK client resolves MRTR automatically once those handlers are registered, and it also retries `requestState`-only results without resolving an input request. A bare accepted response therefore cannot satisfy RevitMCP's v1 human-approval invariant.
+
+`requestState` is not authority either. The MRTR specification requires servers to treat `requestState` as attacker-controlled input. If it influences authorization, resource access, or business logic, the server must protect its integrity and reject state that fails verification. If RevitMCP uses `requestState` later, that state must be integrity-protected and bound to the originating operation, the exact intent, and an expiry. That protection does not by itself prove that a person approved.
+
+Trust in an approval provider must be established independently of self-reported `clientInfo`, model or provider identity, arbitrary request fields, and the accepted response itself. The trusted provider must produce or attest approval for this exact immutable intent. If RevitMCP cannot establish that provider trust, apply fails closed.
+
+Human approval must be informed by the authoritative RevitMCP-generated preview/diff for the same `intent_ref` and fingerprint. A model-generated prose summary may accompany that preview. It is not the authoritative approval content. The approval attestation must be bound to that exact intent and fingerprint. The precise UI and schema remain later capability and provider work. The architecture only requires that approval be informed by, and bound to, the exact server-generated preview.
+
 Core write semantics stay independent of any one MCP client. An external orchestrator may coordinate approval later, as ADR-0007 allows, and still must not own the Revit transaction or Revit capability semantics. RevitMCP must remain usable for its read tools without an orchestrator.
 
-If a compatible trusted approval mechanism is unavailable, write execution fails closed. No provider means no apply.
+If a compatible trusted approval mechanism is unavailable, or provider trust cannot be established, write execution fails closed. No trusted provider means no apply.
 
 ### 11. MRTR is evidence, not implementation authorization
 
-MCP `2026-07-28` MRTR is relevant architecture evidence, not an implementation authorization. The current `ModelContextProtocol` `2.2.0` package and any protocol migration must be evaluated separately before implementation. This ADR does not upgrade the package and does not implement MRTR.
+MCP `2026-07-28` MRTR is relevant architecture evidence, not an implementation authorization and not an approval authority. The current `ModelContextProtocol` `2.2.0` package and any protocol migration must be evaluated separately before implementation. This ADR does not upgrade the package and does not implement MRTR. Decision 10 still applies after any future migration: an `inputResponses` acceptance is client input, and apply still fails closed unless independent provider trust and an intent-bound human approval both exist.
 
 ### 12. Apply revalidates immediately before mutation
 
@@ -340,7 +362,11 @@ ADR-0008 preserves ADR-0001 through ADR-0007, including:
 - CAP-0005: `revit_get_parameter_values`
 - MCP specification `2026-07-28`: https://modelcontextprotocol.io/specification/2026-07-28
 - MCP `2026-07-28` release, including MRTR / `input_required`: https://blog.modelcontextprotocol.io/posts/2026-07-28/
-- MCP tools, including untrusted tool annotations: https://modelcontextprotocol.io/specification/2026-07-28/server/tools
+- MCP tools. The protocol does not mandate a UI interaction model. Human-in-the-loop confirmation is SHOULD guidance. Tool annotations are untrusted unless they come from trusted servers: https://modelcontextprotocol.io/specification/2026-07-28/server/tools
+- MCP `2026-07-28` Multi Round-Trip Requests. `inputResponses` are client-supplied results, including `action=accept`. `requestState` is attacker-controlled input and requires integrity protection when it influences authorization or business logic: https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/mrtr
+- Official MCP C# SDK MRTR guidance. Registered handlers can satisfy `input_required` and the client retries automatically, including `requestState`-only results: https://csharp.sdk.modelcontextprotocol.io/v2/concepts/mrtr/mrtr.html
+- MCP C# SDK 2.0 announcement. The high-level client resolves MRTR automatically from registered handlers: https://devblogs.microsoft.com/dotnet/announcing-v20-of-the-official-mcp-csharp-sdk/
+- Autodesk Revit 2026 `IsValidObject` remarks. A managed wrapper is no longer valid when the corresponding native object is destroyed or its creation is undone: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/d1cfc136-56e5-614b-8d23-6b5ef2c7c874.htm
 - Autodesk Revit 2026 `Transaction.Commit`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/32714010-7138-f64f-8fde-a310354448e3.htm
 - Autodesk Revit 2026 `Transaction.Commit(FailureHandlingOptions)`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/9e9983d1-bd0d-b476-2dc4-021c56eb2bd7.htm
 - Autodesk Revit 2026 `Document.IsModifiable`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/af884262-3ba2-b0a0-d7ef-f0a49c1bf1bc.htm
