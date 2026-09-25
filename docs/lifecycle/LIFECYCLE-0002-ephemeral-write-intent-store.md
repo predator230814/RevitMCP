@@ -34,7 +34,9 @@ Stored data is immutable RevitMCP-owned state only:
 
 No live Autodesk Revit API wrapper may be retained. No `Document`, `Element`, `Parameter`, `Connector`, or other native-wrapper lifetime may become intent state. Preview may touch those objects only inside the EXEC-0001 call that builds the snapshot. The snapshot copied into the store must already be free of them.
 
-Numeric `ElementId`, raw parameter ids, raw internal-unit doubles, paths, and usernames are not stored.
+Do not store a separate numeric `ElementId`, `Parameter.Id`, or raw-id field. Do not store raw internal-unit doubles, paths, or usernames.
+
+The current local-parameter identity may already embed a numeric Revit id inside `ClassifiedParameterIdentity.StableKey`. `RevitParameterIdentity.ResolveLocalKey` uses a `ParameterElement.UniqueId` when one exists, and otherwise a `local:` prefix plus `definition.Id.Value` or `parameter.Id.Value`. Copy that existing `StableKey` verbatim as an opaque internal document-lifetime token. The canonical fingerprint treats it as that exact string. Do not parse, reinterpret, or promote it to the MCP or public contract. This specification does not redesign CAP-0004 parameter identity.
 
 ## `intent_ref`
 
@@ -114,9 +116,9 @@ The parameter identity is a copy of the classified binding the Addin already use
 - identity kind `built_in`, `shared`, or `local`;
 - optional parameter type id;
 - optional shared GUID string;
-- stable key.
+- `StableKey`, copied verbatim from the existing classified identity.
 
-Those fields are strings and a fixed source token. They are not a `Parameter`. A `type` source is rejected at creation because CAP-0007 does not store type-parameter updates.
+Those fields are strings and a fixed source token. They are not a `Parameter`. `StableKey` stays an opaque internal token, including when the current local fallback was derived from a numeric Revit id. A `type` source is rejected at creation because CAP-0007 does not store type-parameter updates.
 
 `request_position` is the 1-based request index from CAP-0007. It is internal metadata. It is not an MCP result field.
 
@@ -211,16 +213,16 @@ Preserve CAP-0007 and EXEC-0001.
 
 Reuse the existing two-phase `DocumentClosing` / `DocumentClosed` correlation. `DocumentClosing` `DocumentId` is only a temporary event-pair key. It is not a RevitMCP `document_id`, and cleanup must not treat it as document identity.
 
-On `DocumentClosed` with success only:
+On successful `DocumentClosed` only:
 
-1. resolve the current ADR-0006 `document_id` for that still-known document;
-2. forget every intent for that `document_id`;
-3. forget the document's parameter-ref map;
-4. forget the document identity.
+1. call `OpenDocumentIdentityService.TryGet(document, out documentId)`, or the equivalent non-creating lookup;
+2. do not call `GetId` or `GetOrAssign` during close cleanup;
+3. if no mapping exists, skip intent forget;
+4. if a mapping exists, capture that existing `document_id` before forgetting the identity mapping, then forget intents for that id;
+5. forget the document's parameter-ref map;
+6. forget the document identity last.
 
 Cancelled and failed closes leave the pending correlation without calling forget. Intents, parameter refs, and `document_id` for that still-open document stay.
-
-If the document never received a `document_id`, skip intent forget. There is nothing to remove.
 
 Shutdown clears intent state before process-owned bridge and dispatcher resources are fully released. Entering LIFECYCLE-0001 stopping closes the store and removes every entry. A later `TryCreate` in that process fails and stores nothing, including a preview that was already running. Restart does not reload the cleared entries.
 
@@ -259,7 +261,7 @@ A future implementation must cover these cases without launching Revit:
 9. Purging an expired intent frees a capacity slot.
 10. 64 live intents are accepted and the 65th returns `INTENT_CAPACITY_REACHED` without storing it.
 11. A live unexpired intent is never removed to admit another intent.
-12. Successful close forgets only that document's intents.
+12. Successful close uses a non-creating `TryGet`, captures that `document_id` before forget, and forgets only that document's intents. It does not call `GetId` or `GetOrAssign`. A document with no existing mapping skips intent forget.
 13. Cancelled and failed close preserve that document's intents.
 14. Shutdown clear removes every intent, and a later create does not restore them.
 15. No operation lists, searches by prefix, or returns recent intents.
