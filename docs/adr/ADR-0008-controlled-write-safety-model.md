@@ -1,6 +1,6 @@
 # ADR-0008: Controlled write safety model
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-24
 
 ## Context
