@@ -7,3 +7,7 @@ These specifications refine accepted ADRs and execution/bridge contracts. They d
 Accepted specifications:
 
 - `LIFECYCLE-0001-revit-addin-bootstrap-and-shutdown.md` — minimal Revit add-in bootstrap, readiness publication, startup failure, and shutdown ordering.
+
+Proposed specifications:
+
+- `LIFECYCLE-0002-ephemeral-write-intent-store.md` — Addin-owned ephemeral store for a CAP-0007 preview intent. Not implemented. No Revit model mutation.
