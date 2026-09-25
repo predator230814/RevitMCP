@@ -1,6 +1,6 @@
 # RevitMCP Current State
 
-_Last updated: 2026-09-24_
+_Last updated: 2026-09-25_
 
 ## Phase
 
@@ -17,6 +17,8 @@ revit_get_mep_topology
 
 Live compatibility validation of this merged six-tool stack at SHA `5740f0ef9c73e40b471a1047231623b47a88edde` is **PASS** on Revit 2025 (`25.4.30.30`), Revit 2027 (`27.0.10.13`), concurrent multi-instance routing, and a CAP-0001 family document. No production code changed for that validation.
 
+The read-only six-tool baseline and that compatibility evidence remain complete. ADR-0008, the controlled-write safety model, is **Accepted**. No write capability exists yet. CAP-0007 is not accepted. No production write implementation is authorized. `tools/list` remains exactly the six tools above.
+
 ## What exists
 
 - GitHub repository initialized.
@@ -31,6 +33,7 @@ Live compatibility validation of this merged six-tool stack at SHA `5740f0ef9c73
 - ADR-0005 makes bounded, filtered, deterministic agent context and token efficiency a first-class capability-design requirement.
 - ADR-0006 accepts an opaque process-scoped `document_id` for each open-document lifetime and opaque cross-call `element_ref` values based initially on Revit `Element.UniqueId`; `document_id` may be generated from a GUID internally but remains an opaque string contractually.
 - The post-SERVER-0004 architecture checkpoint is complete. ADR-0007 is accepted: RevitMCP remains a specialized Revit capability service; Autodesk cloud capability is logically separated from the Revit-local MCP boundary; APS/ACC/Forma service topology is deferred; orchestration is external and optional.
+- ADR-0008 is **Accepted**. It records the v1 controlled-write safety model. No write capability exists yet. CAP-0007 is not accepted. No production write implementation is authorized.
 - CAP-0005 accepts `revit_get_parameter_values` as a read-only capability: explicit `element_ref + parameter_ref` typed reads. Contracts, Addin, typed Bridge RPC, and SERVER-0005 stdio MCP exposure are implemented. Typed Bridge live validation for CAP-0005 / BRIDGE-0006 on Revit 2026.5 is **PASS**. Official MCP-client-to-Revit live validation for SERVER-0005 is **PASS**.
 - The ADR-0004 solution/project skeleton is committed: `RevitMCP.sln`, `global.json`, centralized build/package props, `src/RevitMCP.Contracts`, `src/RevitMCP.Bridge`, `src/RevitMCP.Server`, one multi-version `src/RevitMCP.Addin` project, and test projects for Contracts, Bridge, Server, and Addin.
 - Revit 2025, 2026, and 2027 are built from the same add-in project using an explicit `RevitVersion` build property; the initial target matrix is `net8.0-windows` for Revit 2025/2026 and `net10.0-windows` for Revit 2027.
@@ -767,7 +770,7 @@ A command-line open of a copied Metric Column `.rft` exited before a family docu
 
 ## What does not exist yet
 
-- no write capability or write authorization;
+- no write capability and no production write implementation; ADR-0008 is **Accepted** as the safety model only, and CAP-0007 is not accepted;
 - no APS/ACC/Forma MCP, orchestrator, or dynamic tool-list exposure;
 - no full/all-parameter element dump or whole-document parameter catalog;
 - local parameter identity remains document-scoped; built-in/shared canonical identity and opaque `parameter_ref` now exist for later read/write chaining;
@@ -782,8 +785,8 @@ A command-line open of a copied Metric Column `.rft` exited before a family docu
 
 ## Current priorities
 
-1. Official MCP live validation of SERVER-0006 / `revit_get_mep_topology` on Revit 2026.5 is **PASS**. `tools/list` exposes exactly six tools.
-2. Live Revit 2025, live Revit 2027, multi-instance routing, and CAP-0001 family-document validation are **PASS** at SHA `5740f0ef9c73e40b471a1047231623b47a88edde`.
+1. The read-only six-tool baseline and its live compatibility validation are complete. `tools/list` remains exactly six tools.
+2. ADR-0008 is **Accepted**. It does not authorize write production code, CAP-0007, MRTR implementation, or an MCP SDK upgrade.
 3. Do not begin writes, APS, orchestrator, WebMCP, MCP Apps, UI, or dynamic tool scoping.
 
 ## Known constraints
@@ -825,4 +828,4 @@ A command-line open of a copied Metric Column `.rft` exited before a family docu
 
 ## Next task
 
-Live compatibility validation of the merged six-tool stack is **PASS** at SHA `5740f0ef9c73e40b471a1047231623b47a88edde` on Revit 2025 (`25.4.30.30`), Revit 2027 (`27.0.10.13`), concurrent multi-instance routing, and a CAP-0001 family document. SERVER-0006 official MCP live validation on Revit 2026.5 remains **PASS**. Do not begin writes, APS, orchestrator, WebMCP, MCP Apps, UI, or dynamic tool scoping.
+The read-only baseline and live compatibility validation remain complete. `tools/list` remains exactly six tools. ADR-0008, the controlled-write safety model, is **Accepted**. No write capability exists yet. CAP-0007 is not accepted. ADR-0008 does not authorize write production code, MRTR implementation, or an MCP SDK upgrade. Do not begin writes, APS, orchestrator, WebMCP, MCP Apps, UI, or dynamic tool scoping.
