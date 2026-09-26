@@ -94,6 +94,7 @@ internal sealed class IntentEntry
     public IntentEntry(
         string intentRef,
         string intentFingerprint,
+        int fingerprintSchemaVersion,
         DateTimeOffset createdAt,
         DateTimeOffset expiresAt,
         string instanceId,
@@ -102,6 +103,7 @@ internal sealed class IntentEntry
     {
         IntentRef = intentRef;
         IntentFingerprint = intentFingerprint;
+        FingerprintSchemaVersion = fingerprintSchemaVersion;
         CreatedAt = createdAt;
         ExpiresAt = expiresAt;
         InstanceId = instanceId;
@@ -112,6 +114,8 @@ internal sealed class IntentEntry
     public string IntentRef { get; }
 
     public string IntentFingerprint { get; }
+
+    public int FingerprintSchemaVersion { get; }
 
     public DateTimeOffset CreatedAt { get; }
 

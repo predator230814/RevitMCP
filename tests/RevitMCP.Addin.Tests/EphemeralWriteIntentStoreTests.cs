@@ -112,6 +112,123 @@ public sealed class EphemeralWriteIntentStoreTests
 
         Assert.Equal(positiveBytes, negativeBytes);
         Assert.Equal(positiveFingerprint, negativeFingerprint);
+
+        var store = Store(new Queue<byte[]>(new[] { Bytes(8) }));
+        var created = store.TryCreate(Draft(
+            proposed: new IntentTypedValue.QuantityValue(-0.0, "autodesk.unit.unit:meters-1.0.0"),
+            measurable: true));
+        Assert.Equal(IntentStoreCreateStatus.Created, created.Status);
+        Assert.True(store.TryGet(created.IntentRef!, out var stored));
+        var quantity = Assert.IsType<IntentTypedValue.QuantityValue>(stored!.Items[0].Proposed);
+        Assert.Equal(BitConverter.DoubleToInt64Bits(-0.0), BitConverter.DoubleToInt64Bits(quantity.Value));
+        Assert.NotEqual(0L, BitConverter.DoubleToInt64Bits(quantity.Value));
+    }
+
+    [Fact]
+    public void Retrieved_entry_records_fingerprint_schema_version_one()
+    {
+        var store = Store(new Queue<byte[]>(new[] { Bytes(1) }));
+        var created = store.TryCreate(Draft());
+
+        Assert.True(store.TryGet(created.IntentRef!, out var stored));
+        Assert.Equal(1, stored!.FingerprintSchemaVersion);
+    }
+
+    [Fact]
+    public void Absent_and_present_empty_optional_strings_differ()
+    {
+        var absent = Draft();
+        var presentEmpty = Draft();
+        presentEmpty.Items![0].SharedGuid = string.Empty;
+
+        Assert.True(IntentCanonicalEncoder.TryEncode(
+            absent,
+            out _,
+            out _,
+            out _,
+            out var absentBytes,
+            out var absentFingerprint));
+        Assert.True(IntentCanonicalEncoder.TryEncode(
+            presentEmpty,
+            out _,
+            out _,
+            out _,
+            out var presentBytes,
+            out var presentFingerprint));
+
+        Assert.NotEqual(absentBytes, presentBytes);
+        Assert.NotEqual(absentFingerprint, presentFingerprint);
+    }
+
+    [Fact]
+    public void Schema_v1_golden_canonical_vector()
+    {
+        const string expectedCanonical =
+            "00000001" +
+            "0000000169" +
+            "0000000164" +
+            "00000001" +
+            "00000001" +
+            "0000000165" +
+            "0000000170" +
+            "00000008696e7374616e6365" +
+            "000000056c6f63616c" +
+            "00" +
+            "0100000000" +
+            "000000016b" +
+            "000000026f6b" +
+            "000000016e" +
+            "00" +
+            "00000000" +
+            "00" +
+            "000000016d" +
+            "01" +
+            "0000000473706563" +
+            "00" +
+            "00" +
+            "01000000026162";
+        const string expectedFingerprint = "fc3a6571543de582f0ca77364b3ed958049a85a49880da332bacd3934d06ee32";
+
+        var draft = new IntentDraft
+        {
+            InstanceId = "i",
+            DocumentId = "d",
+            Items = new List<IntentItemDraft>
+            {
+                new()
+                {
+                    RequestPosition = 1,
+                    ElementRef = "e",
+                    ParameterRef = "p",
+                    Source = "instance",
+                    IdentityKind = DescribeParameterIdentityKind.Local,
+                    ParameterTypeId = null,
+                    SharedGuid = string.Empty,
+                    StableKey = "k",
+                    Status = "ok",
+                    ElementName = "n",
+                    ElementNameTruncated = false,
+                    CategoryName = string.Empty,
+                    CategoryNameTruncated = false,
+                    ParameterName = "m",
+                    ParameterNameTruncated = true,
+                    DataTypeKind = DescribeParameterDataTypeKind.Spec,
+                    ForgeTypeId = null,
+                    BeforeHasValue = false,
+                    Proposed = new IntentTypedValue.StringValue("ab")
+                }
+            }
+        };
+
+        Assert.True(IntentCanonicalEncoder.TryEncode(
+            draft,
+            out _,
+            out _,
+            out _,
+            out var canonical,
+            out var fingerprint));
+        Assert.Equal(expectedCanonical, IntentCanonicalEncoder.ToLowerHex(canonical));
+        Assert.Equal(expectedFingerprint, fingerprint);
     }
 
     [Fact]

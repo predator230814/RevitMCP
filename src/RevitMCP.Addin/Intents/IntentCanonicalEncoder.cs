@@ -71,15 +71,12 @@ internal static class IntentCanonicalEncoder
             || draft.ParameterRef is null
             || draft.Source != "instance"
             || !TryIdentityKind(draft.IdentityKind, out _)
-            || !IsOpaqueOptional(draft.ParameterTypeId)
-            || !IsOpaqueOptional(draft.SharedGuid)
             || draft.StableKey is null
             || draft.Status != "ok"
             || draft.ElementName is null
             || draft.CategoryName is null
             || draft.ParameterName is null
             || !TryDataTypeKind(draft.DataTypeKind, out _)
-            || !IsOpaqueOptional(draft.ForgeTypeId)
             || !TryCopyValue(draft.BeforeHasValue, draft.BeforeValue, out var before)
             || draft.Proposed is null
             || !TryCopyRequiredValue(draft.Proposed, out var proposed))
@@ -171,7 +168,7 @@ internal static class IntentCanonicalEncoder
                 return true;
             case IntentTypedValue.QuantityValue quantity
                 when double.IsFinite(quantity.Value) && !string.IsNullOrEmpty(quantity.UnitTypeId):
-                copied = new IntentTypedValue.QuantityValue(CanonicalZero(quantity.Value), quantity.UnitTypeId);
+                copied = new IntentTypedValue.QuantityValue(quantity.Value, quantity.UnitTypeId);
                 return true;
             default:
                 copied = null!;
@@ -204,11 +201,6 @@ internal static class IntentCanonicalEncoder
     private static double CanonicalZero(double value)
     {
         return value == 0.0 ? 0.0 : value;
-    }
-
-    private static bool IsOpaqueOptional(string? value)
-    {
-        return value is null || value.Length > 0;
     }
 
     private static bool TryIdentityKind(DescribeParameterIdentityKind kind, out string token)

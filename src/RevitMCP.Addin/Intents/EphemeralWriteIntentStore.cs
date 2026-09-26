@@ -70,6 +70,7 @@ internal sealed class EphemeralWriteIntentStore
             var stored = new StoredIntent(
                 intentRef,
                 fingerprint,
+                IntentCanonicalEncoder.SchemaVersion,
                 createdAt,
                 expiresAt,
                 _clock.GetTimestamp(),
@@ -219,6 +220,7 @@ internal sealed class EphemeralWriteIntentStore
         public StoredIntent(
             string intentRef,
             string fingerprint,
+            int fingerprintSchemaVersion,
             DateTimeOffset createdAt,
             DateTimeOffset expiresAt,
             long monotonicOrigin,
@@ -228,6 +230,7 @@ internal sealed class EphemeralWriteIntentStore
         {
             IntentRef = intentRef;
             Fingerprint = fingerprint;
+            FingerprintSchemaVersion = fingerprintSchemaVersion;
             CreatedAt = createdAt;
             ExpiresAt = expiresAt;
             MonotonicOrigin = monotonicOrigin;
@@ -239,6 +242,8 @@ internal sealed class EphemeralWriteIntentStore
         public string IntentRef { get; }
 
         public string Fingerprint { get; }
+
+        public int FingerprintSchemaVersion { get; }
 
         public DateTimeOffset CreatedAt { get; }
 
@@ -257,6 +262,7 @@ internal sealed class EphemeralWriteIntentStore
             return new IntentEntry(
                 IntentRef,
                 Fingerprint,
+                FingerprintSchemaVersion,
                 CreatedAt,
                 ExpiresAt,
                 InstanceId,
