@@ -3,6 +3,7 @@ using Autodesk.Revit.UI.Events;
 using RevitMCP.Addin.Capabilities;
 using RevitMCP.Addin.Execution;
 using RevitMCP.Addin.Identity;
+using RevitMCP.Addin.Intents;
 using RevitMCP.Bridge;
 
 namespace RevitMCP.Addin.Lifecycle;
@@ -59,37 +60,133 @@ internal sealed class RevitIdlingSubscription : IBootstrapSubscription
 internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
 {
     private readonly RevitExecutionDispatcher _dispatcher;
+    private readonly Action _stopExecution;
+    private readonly Action _disposeExecution;
+    private readonly EphemeralWriteIntentStore _intentStore;
     private readonly OpenDocumentIdentityService _identity;
     private readonly OpenDocumentParameterIdentityService _parameterRefs;
-    private readonly IDisposable? _closeCleanup;
+    private IDisposable? _closeCleanup;
+    private int _disposed;
 
     public RevitExecutionDispatcherLifetime(
         RevitExecutionDispatcher dispatcher,
         IDocumentCloseEventSource? closeEvents = null)
+        : this(dispatcher, new EphemeralWriteIntentStore(), closeEvents)
     {
-        ArgumentNullException.ThrowIfNull(dispatcher);
-        _dispatcher = dispatcher;
-        _identity = new OpenDocumentIdentityService();
-        _parameterRefs = new OpenDocumentParameterIdentityService();
+    }
+
+    internal RevitExecutionDispatcherLifetime(
+        RevitExecutionDispatcher dispatcher,
+        EphemeralWriteIntentStore intentStore,
+        IDocumentCloseEventSource? closeEvents = null)
+        : this(intentStore, BindExecution(dispatcher))
+    {
         if (closeEvents is not null)
         {
             _closeCleanup = closeEvents.Subscribe(new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(ForgetDocument));
         }
     }
 
-    private bool ForgetDocument(Autodesk.Revit.DB.Document document)
+    private RevitExecutionDispatcherLifetime(
+        EphemeralWriteIntentStore intentStore,
+        (Action Stop, Action Dispose, RevitExecutionDispatcher Dispatcher) execution)
+        : this(intentStore, execution.Stop, execution.Dispose, execution.Dispatcher)
     {
-        var forgottenId = _identity.Forget(document);
-        var forgottenRefs = _parameterRefs.Forget(document);
-        return forgottenId || forgottenRefs;
     }
 
-    public void Stop() => _dispatcher.Stop();
+    private static (Action Stop, Action Dispose, RevitExecutionDispatcher Dispatcher) BindExecution(RevitExecutionDispatcher dispatcher)
+    {
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        return (dispatcher.Stop, dispatcher.Dispose, dispatcher);
+    }
+
+    internal RevitExecutionDispatcherLifetime(
+        EphemeralWriteIntentStore intentStore,
+        Action stopExecution,
+        Action disposeExecution,
+        IDisposable? closeCleanup = null)
+    {
+        ArgumentNullException.ThrowIfNull(intentStore);
+        ArgumentNullException.ThrowIfNull(stopExecution);
+        ArgumentNullException.ThrowIfNull(disposeExecution);
+        _dispatcher = null!;
+        _stopExecution = stopExecution;
+        _disposeExecution = disposeExecution;
+        _intentStore = intentStore;
+        _closeCleanup = closeCleanup;
+        _identity = null!;
+        _parameterRefs = null!;
+    }
+
+    private RevitExecutionDispatcherLifetime(
+        EphemeralWriteIntentStore intentStore,
+        Action stopExecution,
+        Action disposeExecution,
+        RevitExecutionDispatcher dispatcher,
+        IDisposable? closeCleanup = null)
+    {
+        ArgumentNullException.ThrowIfNull(intentStore);
+        ArgumentNullException.ThrowIfNull(stopExecution);
+        ArgumentNullException.ThrowIfNull(disposeExecution);
+        _dispatcher = dispatcher;
+        _stopExecution = stopExecution;
+        _disposeExecution = disposeExecution;
+        _intentStore = intentStore;
+        _closeCleanup = closeCleanup;
+        _identity = new OpenDocumentIdentityService();
+        _parameterRefs = new OpenDocumentParameterIdentityService();
+    }
+
+    private bool ForgetDocument(Autodesk.Revit.DB.Document document)
+    {
+        var hasExistingDocumentId = _identity.TryGet(document, out var documentId);
+        return ApplySuccessfulDocumentClose(
+            hasExistingDocumentId,
+            documentId,
+            _intentStore,
+            () => _parameterRefs.Forget(document),
+            () => _identity.Forget(document));
+    }
+
+    internal static bool ApplySuccessfulDocumentClose(
+        bool hasExistingDocumentId,
+        string? documentId,
+        EphemeralWriteIntentStore intentStore,
+        Func<bool> forgetParameterRefs,
+        Func<bool> forgetDocumentIdentity)
+    {
+        ArgumentNullException.ThrowIfNull(intentStore);
+        ArgumentNullException.ThrowIfNull(forgetParameterRefs);
+        ArgumentNullException.ThrowIfNull(forgetDocumentIdentity);
+
+        var forgottenIntent = false;
+        if (hasExistingDocumentId)
+        {
+            ArgumentNullException.ThrowIfNull(documentId);
+            forgottenIntent = intentStore.ForgetDocument(documentId) > 0;
+        }
+
+        var forgottenRefs = forgetParameterRefs();
+        var forgottenIdentity = forgetDocumentIdentity();
+        return forgottenIntent || forgottenRefs || forgottenIdentity;
+    }
+
+    public void Stop()
+    {
+        _intentStore.Clear();
+        _stopExecution();
+    }
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
+        Stop();
         _closeCleanup?.Dispose();
-        _dispatcher.Dispose();
+        _disposeExecution();
     }
 
     public IRevitCapabilityService CreateCapability(BridgeInstanceMetadata metadata)
