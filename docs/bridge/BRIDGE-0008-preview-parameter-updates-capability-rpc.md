@@ -23,7 +23,7 @@ PreviewParameterUpdatesResult
 
 This specification preserves the explicit typed RPC approach established by BRIDGE-0002 through BRIDGE-0007. It does not implement Contracts, Bridge code, Addin code, tests, Server registration, or MCP schemas. It does not introduce a generic capability registry, command envelope, reflection-driven dispatch, or dynamic tool dictionary. It does not place the MCP SDK below `RevitMCP.Server`.
 
-Current runtime protocol remains v7. Current code still treats protocol v8 as unsupported. This document does not change that.
+Typed local Bridge protocol v8 is implemented. `revit.preview_parameter_updates` is reachable through the local typed Bridge on protocol `{8}` only. Server/MCP preview remains absent. `tools/list` remains exactly six. Unknown v9 is unsupported. This document's protocol matrix is unchanged.
 
 ## Related accepted decisions
 
@@ -123,7 +123,7 @@ Lower prefixes remain unchanged:
 
 Any incomplete composition falls back to the highest complete accepted prefix. The presence of a preview service without the complete inherited v7 surface must not advertise v8.
 
-This specification does not claim that protocol v8 is implemented.
+Typed local Bridge protocol v8 is implemented. Server/MCP preview remains absent. The advertisement rules below remain the accepted contract.
 
 ## Explicit capability-version rule
 
@@ -332,7 +332,7 @@ preview without the complete inherited v7 surface                               
 
 Any incomplete or non-prefix combination falls back to the highest actually guaranteed accepted prefix.
 
-Registration metadata must publish v8 only after all v8-required services are functional and the listener is ready, consistent with ADR-0003 and LIFECYCLE-0001. Until that implementation exists, registration continues to describe the current v7 host.
+Registration metadata must publish v8 only after all v8-required services are functional and the listener is ready, consistent with ADR-0003 and LIFECYCLE-0001. A production Addin that composes the complete prefix, including preview, advertises v8. A complete v7 host without preview continues to advertise `[7, 6, 5, 4, 3, 2, 1]`.
 
 ## Host gating
 
@@ -481,21 +481,14 @@ It must not reference:
 
 ## Handshake advertisement
 
-Current implemented runtime remains protocol v7:
-
-```text
-SupportedVersions = [7, 6, 5, 4, 3, 2, 1]
-CurrentVersion = 7
-```
-
-Unknown v8 is still unsupported by current code.
-
-After a future BRIDGE-0008 implementation, a full CAP-0001..CAP-0007 host advertises:
+Implemented runtime for a full CAP-0001..CAP-0007 host:
 
 ```text
 SupportedVersions = [8, 7, 6, 5, 4, 3, 2, 1]
 CurrentVersion = 8
 ```
+
+A complete v7 host without the preview service advertises `[7, 6, 5, 4, 3, 2, 1]` and must not advertise v8. Unknown v9 is unsupported. Server/MCP preview remains absent. `tools/list` remains exactly six.
 
 Handshake itself remains cached metadata only. It must not inspect the Revit model, invoke EXEC-0001, or create an intent.
 

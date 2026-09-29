@@ -7,7 +7,7 @@ namespace RevitMCP.Server.Tests;
 public sealed class GetMepTopologyRoutingTests
 {
     [Fact]
-    public void Get_mep_topology_eligibility_is_protocol_v7_only()
+    public void Get_mep_topology_eligibility_is_protocol_v7_and_v8()
     {
         Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v1", "pipe-v1", protocolVersion: 1)));
         Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v2", "pipe-v2", protocolVersion: 2)));
@@ -16,7 +16,8 @@ public sealed class GetMepTopologyRoutingTests
         Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v5", "pipe-v5", protocolVersion: 5)));
         Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v6", "pipe-v6", protocolVersion: 6)));
         Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
-        Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
     }
 
     [Fact]
@@ -39,12 +40,20 @@ public sealed class GetMepTopologyRoutingTests
         Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(v6));
 
         var v8 = TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8);
-        Assert.False(InstanceTargetResolver.IsGetContextEligible(v8));
-        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(v8));
-        Assert.False(InstanceTargetResolver.IsGetElementsEligible(v8));
-        Assert.False(InstanceTargetResolver.IsDescribeParametersEligible(v8));
-        Assert.False(InstanceTargetResolver.IsGetParameterValuesEligible(v8));
-        Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(v8));
+        Assert.True(InstanceTargetResolver.IsGetContextEligible(v8));
+        Assert.True(InstanceTargetResolver.IsQueryElementsEligible(v8));
+        Assert.True(InstanceTargetResolver.IsGetElementsEligible(v8));
+        Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(v8));
+        Assert.True(InstanceTargetResolver.IsGetParameterValuesEligible(v8));
+        Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(v8));
+
+        var v9 = TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9);
+        Assert.False(InstanceTargetResolver.IsGetContextEligible(v9));
+        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(v9));
+        Assert.False(InstanceTargetResolver.IsGetElementsEligible(v9));
+        Assert.False(InstanceTargetResolver.IsDescribeParametersEligible(v9));
+        Assert.False(InstanceTargetResolver.IsGetParameterValuesEligible(v9));
+        Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(v9));
     }
 
     [Fact]
@@ -142,12 +151,12 @@ public sealed class GetMepTopologyRoutingTests
     }
 
     [Fact]
-    public async Task Explicit_v8_id_returns_unavailable()
+    public async Task Explicit_v9_id_returns_unavailable()
     {
         var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8));
+        discovery.Instances.Add(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9));
         var factory = UnusedFactory();
-        var outcome = await CreateService(discovery, factory).ExecuteAsync("v8", TestSupport.CreateGetMepTopologyRequest(), CancellationToken.None);
+        var outcome = await CreateService(discovery, factory).ExecuteAsync("v9", TestSupport.CreateGetMepTopologyRequest(), CancellationToken.None);
 
         Assert.Equal(McpToolErrorCodes.InstanceUnavailable, outcome.ErrorCode);
         Assert.Empty(factory.RequestedPipes);

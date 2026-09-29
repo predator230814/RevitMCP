@@ -92,6 +92,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("getmep.create");
         return new RecordingGetMepTopologyService();
     }
+
+    public IRevitPreviewParameterUpdatesService? CreatePreviewParameterUpdates(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("preview.create");
+        return new RecordingPreviewParameterUpdatesService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -145,6 +152,18 @@ internal sealed class RecordingGetParameterValuesService : IRevitGetParameterVal
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording get-parameter-values does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingPreviewParameterUpdatesService : IRevitPreviewParameterUpdatesService
+{
+    public Task<PreviewParameterUpdatesResult> PreviewParameterUpdatesAsync(
+        PreviewParameterUpdatesRequest request,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording preview does not execute Revit work.");
     }
 }
 
@@ -255,6 +274,8 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitGetMepTopologyService? LastGetMepTopology { get; private set; }
 
+    public IRevitPreviewParameterUpdatesService? LastPreviewParameterUpdates { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
@@ -263,6 +284,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitDescribeParametersService? describeParameters,
         IRevitGetParameterValuesService? getParameterValues,
         IRevitGetMepTopologyService? getMepTopology,
+        IRevitPreviewParameterUpdatesService? previewParameterUpdates,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -272,6 +294,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         LastDescribeParameters = describeParameters;
         LastGetParameterValues = getParameterValues;
         LastGetMepTopology = getMepTopology;
+        LastPreviewParameterUpdates = previewParameterUpdates;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

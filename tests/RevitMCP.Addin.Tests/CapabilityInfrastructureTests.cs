@@ -50,14 +50,16 @@ public sealed class CapabilityInfrastructureTests
         Assert.Contains("new RevitDescribeParametersService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetParameterValuesService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetMepTopologyService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
-        Assert.Contains("StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, cancellationToken)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitPreviewParameterUpdatesService(_dispatcher, metadata, _identity, _parameterRefs, _intentStore)", adapters, StringComparison.Ordinal);
+        Assert.Contains("StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, cancellationToken)", adapters, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateCapability(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateQuery(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateGetElements(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateDescribeParameters(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateGetParameterValues(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateGetMepTopology(metadata)", coordinator, StringComparison.Ordinal);
-        Assert.Contains("_bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, startup.Token)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("dispatcher.CreatePreviewParameterUpdates(metadata)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("_bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, startup.Token)", coordinator, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextRequest", adapters, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextResult", adapters, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextRequest", coordinator, StringComparison.Ordinal);
@@ -86,7 +88,8 @@ public sealed class CapabilityInfrastructureTests
         Assert.Null(bridges.LastGetElements);
         Assert.Null(bridges.LastDescribeParameters);
         Assert.Null(bridges.LastGetParameterValues);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "bridge.start", "registration.publish" }, events);
+        Assert.Null(bridges.LastPreviewParameterUpdates);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "bridge.start", "registration.publish" }, events);
     }
 
     private static string FindRepoRoot()
@@ -174,6 +177,13 @@ internal sealed class NullCapabilityDispatcher : ILifecycleDispatcher
     {
         _ = metadata;
         _events.Add("getmep.create");
+        return null;
+    }
+
+    public IRevitPreviewParameterUpdatesService? CreatePreviewParameterUpdates(BridgeInstanceMetadata metadata)
+    {
+        _ = metadata;
+        _events.Add("preview.create");
         return null;
     }
 }

@@ -16,7 +16,8 @@ public sealed class GetParameterValuesRoutingTests
         Assert.False(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v5", "pipe-v5", protocolVersion: 5)));
         Assert.True(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v6", "pipe-v6", protocolVersion: 6)));
         Assert.True(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
-        Assert.False(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.True(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.False(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
     }
 
     [Fact]
@@ -27,13 +28,17 @@ public sealed class GetParameterValuesRoutingTests
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v6", "pipe-v6", protocolVersion: 6)));
         Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v6", "pipe-v6", protocolVersion: 6)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
-        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
-        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
-        Assert.False(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.False(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
         Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
-        Assert.False(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
+        Assert.False(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
     }
 
     [Fact]
@@ -131,12 +136,12 @@ public sealed class GetParameterValuesRoutingTests
     }
 
     [Fact]
-    public async Task Explicit_v8_id_returns_unavailable()
+    public async Task Explicit_v9_id_returns_unavailable()
     {
         var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8));
+        discovery.Instances.Add(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9));
         var factory = UnusedFactory();
-        var outcome = await CreateService(discovery, factory).ExecuteAsync("v8", TestSupport.CreateGetParameterValuesRequest(), CancellationToken.None);
+        var outcome = await CreateService(discovery, factory).ExecuteAsync("v9", TestSupport.CreateGetParameterValuesRequest(), CancellationToken.None);
 
         Assert.Equal(McpToolErrorCodes.InstanceUnavailable, outcome.ErrorCode);
         Assert.Empty(factory.RequestedPipes);
