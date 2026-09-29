@@ -1,6 +1,6 @@
 # BRIDGE-0008: `revit.preview_parameter_updates` capability RPC
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-09-28
 - Introduced bridge protocol version: 8
 
@@ -501,7 +501,7 @@ Handshake itself remains cached metadata only. It must not inspect the Revit mod
 
 ## Acceptance criteria
 
-BRIDGE-0008 is acceptable as a Proposed specification when:
+BRIDGE-0008 is acceptable as a specification when:
 
 1. Protocol 8 adds exactly `revit.preview_parameter_updates` and preserves the v7 guarantees.
 2. Explicit capability sets include v8 for inherited capabilities.
