@@ -1,0 +1,15 @@
+using System.Text.Json.Serialization;
+
+namespace RevitMCP.Contracts;
+
+public sealed class PreviewParameterUpdate
+{
+    [JsonPropertyName("element_ref")]
+    public required string ElementRef { get; init; }
+
+    [JsonPropertyName("parameter_ref")]
+    public required string ParameterRef { get; init; }
+
+    [JsonPropertyName("value")]
+    public required PreviewParameterValue Value { get; init; }
+}

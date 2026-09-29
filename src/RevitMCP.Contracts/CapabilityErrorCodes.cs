@@ -21,4 +21,12 @@ public static class CapabilityErrorCodes
     public const string InvalidParameterRead = "INVALID_PARAMETER_READ";
 
     public const string InvalidMepTopology = "INVALID_MEP_TOPOLOGY";
+
+    public const string UnsupportedDocumentKind = "UNSUPPORTED_DOCUMENT_KIND";
+
+    public const string DocumentNotWritable = "DOCUMENT_NOT_WRITABLE";
+
+    public const string InvalidParameterUpdatePreview = "INVALID_PARAMETER_UPDATE_PREVIEW";
+
+    public const string IntentCapacityReached = "INTENT_CAPACITY_REACHED";
 }
