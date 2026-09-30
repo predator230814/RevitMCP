@@ -26,4 +26,9 @@ public interface IRevitBridgeClient : IAsyncDisposable
         GetMepTopologyRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken);
+
+    Task<PreviewParameterUpdatesResult> PreviewParameterUpdatesAsync(
+        PreviewParameterUpdatesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
 }

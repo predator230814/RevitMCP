@@ -37,7 +37,7 @@ public sealed class GetMepTopologyBridgeTests
             getParameterValues: null,
             getMepTopology: new FakeGetMepTopologyService());
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, full.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.GetMepTopologyVersions, full.SupportedProtocolVersions);
         Assert.Equal(7, full.SupportedProtocolVersions.Max());
         Assert.Equal(BridgeProtocol.GetParameterValuesVersions, valuesOnly.SupportedProtocolVersions);
         Assert.Equal(BridgeProtocol.HandshakeOnlyVersions, topologyOnly.SupportedProtocolVersions);
@@ -96,7 +96,7 @@ public sealed class GetMepTopologyBridgeTests
     }
 
     [Fact]
-    public async Task Unknown_v8_cannot_negotiate_and_does_not_invoke_topology()
+    public async Task Client_offering_only_v8_cannot_negotiate_with_a_v7_host()
     {
         if (!OperatingSystem.IsWindows())
         {

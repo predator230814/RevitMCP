@@ -116,20 +116,21 @@ public sealed class GetElementsBridgeTests
     }
 
     [Fact]
-    public void Unknown_v8_does_not_allow_any_current_capability()
+    public void Unknown_v9_does_not_allow_any_current_capability()
     {
-        Assert.True(BridgeProtocol.SupportsGetContext(7));
-        Assert.True(BridgeProtocol.SupportsQueryElements(7));
-        Assert.True(BridgeProtocol.SupportsGetElements(7));
-        Assert.True(BridgeProtocol.SupportsDescribeParameters(7));
-        Assert.True(BridgeProtocol.SupportsGetParameterValues(7));
-        Assert.True(BridgeProtocol.SupportsGetMepTopology(7));
-        Assert.False(BridgeProtocol.SupportsGetContext(8));
-        Assert.False(BridgeProtocol.SupportsQueryElements(8));
-        Assert.False(BridgeProtocol.SupportsGetElements(8));
-        Assert.False(BridgeProtocol.SupportsDescribeParameters(8));
-        Assert.False(BridgeProtocol.SupportsGetParameterValues(8));
-        Assert.False(BridgeProtocol.SupportsGetMepTopology(8));
+        Assert.True(BridgeProtocol.SupportsGetContext(8));
+        Assert.True(BridgeProtocol.SupportsQueryElements(8));
+        Assert.True(BridgeProtocol.SupportsGetElements(8));
+        Assert.True(BridgeProtocol.SupportsDescribeParameters(8));
+        Assert.True(BridgeProtocol.SupportsGetParameterValues(8));
+        Assert.True(BridgeProtocol.SupportsGetMepTopology(8));
+        Assert.False(BridgeProtocol.SupportsGetContext(9));
+        Assert.False(BridgeProtocol.SupportsQueryElements(9));
+        Assert.False(BridgeProtocol.SupportsGetElements(9));
+        Assert.False(BridgeProtocol.SupportsDescribeParameters(9));
+        Assert.False(BridgeProtocol.SupportsGetParameterValues(9));
+        Assert.False(BridgeProtocol.SupportsGetMepTopology(9));
+        Assert.False(BridgeProtocol.SupportsPreviewParameterUpdates(9));
     }
 
     [Fact]

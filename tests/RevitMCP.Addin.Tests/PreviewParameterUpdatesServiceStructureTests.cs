@@ -60,7 +60,7 @@ public sealed class PreviewParameterUpdatesServiceStructureTests
     }
 
     [Fact]
-    public void Lifetime_factory_passes_the_owned_intent_store_and_bridge_stays_unwired()
+    public void Lifetime_factory_passes_the_owned_intent_store_and_coordinator_composes_preview()
     {
         var adapters = File.ReadAllText(Source("src", "RevitMCP.Addin", "Lifecycle", "RevitLifecycleAdapters.cs"));
         var coordinator = File.ReadAllText(Source("src", "RevitMCP.Addin", "Lifecycle", "AddinLifecycleCoordinator.cs"));
@@ -72,10 +72,10 @@ public sealed class PreviewParameterUpdatesServiceStructureTests
             StringComparison.Ordinal);
         Assert.Equal(1, Count(adapters, "new EphemeralWriteIntentStore()"));
         Assert.Equal(1, Count(adapters, "new OpenDocumentIdentityService()"));
-        Assert.DoesNotContain("CreatePreviewParameterUpdates", coordinator, StringComparison.Ordinal);
-        Assert.Contains("public const int CurrentVersion = GetMepTopologyVersion", protocol, StringComparison.Ordinal);
-        Assert.Contains("GetMepTopologyVersion = 7", protocol, StringComparison.Ordinal);
-        Assert.DoesNotContain("preview_parameter", protocol, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("dispatcher.CreatePreviewParameterUpdates(metadata)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("public const int CurrentVersion = PreviewParameterUpdatesVersion", protocol, StringComparison.Ordinal);
+        Assert.Contains("PreviewParameterUpdatesVersion = 8", protocol, StringComparison.Ordinal);
+        Assert.Contains("SupportsPreviewParameterUpdates", protocol, StringComparison.Ordinal);
     }
 
     private static string Source(params string[] parts)

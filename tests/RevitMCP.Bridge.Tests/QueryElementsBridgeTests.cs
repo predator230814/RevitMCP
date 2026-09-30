@@ -98,12 +98,12 @@ public sealed class QueryElementsBridgeTests
     }
 
     [Fact]
-    public void Unknown_v8_does_not_allow_get_context_or_query()
+    public void Unknown_v9_does_not_allow_get_context_or_query()
     {
-        Assert.True(BridgeProtocol.SupportsGetContext(7));
-        Assert.True(BridgeProtocol.SupportsQueryElements(7));
-        Assert.False(BridgeProtocol.SupportsGetContext(8));
-        Assert.False(BridgeProtocol.SupportsQueryElements(8));
+        Assert.True(BridgeProtocol.SupportsGetContext(8));
+        Assert.True(BridgeProtocol.SupportsQueryElements(8));
+        Assert.False(BridgeProtocol.SupportsGetContext(9));
+        Assert.False(BridgeProtocol.SupportsQueryElements(9));
     }
 
     [Fact]

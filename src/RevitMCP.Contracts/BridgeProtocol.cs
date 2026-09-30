@@ -16,7 +16,9 @@ public static class BridgeProtocol
 
     public const int GetMepTopologyVersion = 7;
 
-    public const int CurrentVersion = GetMepTopologyVersion;
+    public const int PreviewParameterUpdatesVersion = 8;
+
+    public const int CurrentVersion = PreviewParameterUpdatesVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -41,8 +43,20 @@ public static class BridgeProtocol
             HandshakeVersion
         ];
 
+    public static IReadOnlyList<int> GetMepTopologyVersions { get; } =
+        [
+            GetMepTopologyVersion,
+            GetParameterValuesVersion,
+            DescribeParametersVersion,
+            GetElementsVersion,
+            QueryElementsVersion,
+            GetContextVersion,
+            HandshakeVersion
+        ];
+
     public static IReadOnlyList<int> SupportedVersions { get; } =
         [
+            PreviewParameterUpdatesVersion,
             GetMepTopologyVersion,
             GetParameterValuesVersion,
             DescribeParametersVersion,
@@ -58,27 +72,36 @@ public static class BridgeProtocol
             or GetElementsVersion
             or DescribeParametersVersion
             or GetParameterValuesVersion
-            or GetMepTopologyVersion;
+            or GetMepTopologyVersion
+            or PreviewParameterUpdatesVersion;
 
     public static bool SupportsQueryElements(int version) =>
         version is QueryElementsVersion
             or GetElementsVersion
             or DescribeParametersVersion
             or GetParameterValuesVersion
-            or GetMepTopologyVersion;
+            or GetMepTopologyVersion
+            or PreviewParameterUpdatesVersion;
 
     public static bool SupportsGetElements(int version) =>
         version is GetElementsVersion
             or DescribeParametersVersion
             or GetParameterValuesVersion
-            or GetMepTopologyVersion;
+            or GetMepTopologyVersion
+            or PreviewParameterUpdatesVersion;
 
     public static bool SupportsDescribeParameters(int version) =>
-        version is DescribeParametersVersion or GetParameterValuesVersion or GetMepTopologyVersion;
+        version is DescribeParametersVersion
+            or GetParameterValuesVersion
+            or GetMepTopologyVersion
+            or PreviewParameterUpdatesVersion;
 
     public static bool SupportsGetParameterValues(int version) =>
-        version is GetParameterValuesVersion or GetMepTopologyVersion;
+        version is GetParameterValuesVersion or GetMepTopologyVersion or PreviewParameterUpdatesVersion;
 
     public static bool SupportsGetMepTopology(int version) =>
-        version is GetMepTopologyVersion;
+        version is GetMepTopologyVersion or PreviewParameterUpdatesVersion;
+
+    public static bool SupportsPreviewParameterUpdates(int version) =>
+        version is PreviewParameterUpdatesVersion;
 }

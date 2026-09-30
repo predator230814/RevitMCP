@@ -9,7 +9,7 @@ using RevitMCP.Contracts;
 
 namespace RevitMCP.Addin.Capabilities;
 
-internal sealed class RevitPreviewParameterUpdatesService
+internal sealed class RevitPreviewParameterUpdatesService : IRevitPreviewParameterUpdatesService
 {
     private readonly RevitExecutionDispatcher _dispatcher;
     private readonly BridgeInstanceMetadata _metadata;

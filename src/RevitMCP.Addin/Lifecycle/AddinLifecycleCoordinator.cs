@@ -112,8 +112,11 @@ internal sealed class AddinLifecycleCoordinator
             var getMepTopology = dispatcher.CreateGetMepTopology(metadata);
             EnsureNotStopping();
 
+            var previewParameterUpdates = dispatcher.CreatePreviewParameterUpdates(metadata);
+            EnsureNotStopping();
+
             using var startup = new CancellationTokenSource(_startupTimeout);
-            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, startup.Token);
+            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, startup.Token);
 
             lock (_gate)
             {

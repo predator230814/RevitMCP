@@ -23,7 +23,7 @@ PreviewParameterUpdatesResult
 
 This specification preserves the explicit typed RPC approach established by BRIDGE-0002 through BRIDGE-0007. It does not implement Contracts, Bridge code, Addin code, tests, Server registration, or MCP schemas. It does not introduce a generic capability registry, command envelope, reflection-driven dispatch, or dynamic tool dictionary. It does not place the MCP SDK below `RevitMCP.Server`.
 
-Current runtime protocol remains v7. Current code still treats protocol v8 as unsupported. This document does not change that.
+Typed local Bridge protocol v8 is implemented. `revit.preview_parameter_updates` is reachable through the local typed Bridge on protocol `{8}` only. Server/MCP preview remains absent. `tools/list` remains exactly six. Unknown v9 is unsupported. This document's protocol matrix is unchanged.
 
 ## Related accepted decisions
 
@@ -98,7 +98,7 @@ protocol 8
   revit.preview_parameter_updates
 ```
 
-A complete future v8 host advertises:
+A complete v8 host advertises:
 
 ```text
 [8, 7, 6, 5, 4, 3, 2, 1]
@@ -123,13 +123,13 @@ Lower prefixes remain unchanged:
 
 Any incomplete composition falls back to the highest complete accepted prefix. The presence of a preview service without the complete inherited v7 surface must not advertise v8.
 
-This specification does not claim that protocol v8 is implemented.
+Typed local Bridge protocol v8 is implemented. Server/MCP preview remains absent. The advertisement rules below remain the accepted contract.
 
 ## Explicit capability-version rule
 
 Protocol integers are not an automatic numeric compatibility ladder.
 
-Accepted support sets after a future BRIDGE-0008 implementation:
+Accepted support sets:
 
 ```text
 revit.get_context                  {2,3,4,5,6,7,8}
@@ -170,7 +170,7 @@ PreviewParameterUpdatesRequest
 PreviewParameterUpdatesResult
 ```
 
-Those types do not exist in the current repository. This specification names them; it does not add them.
+Those types exist in `RevitMCP.Contracts`. This specification names them; it does not redefine them.
 
 ## Transport-neutral request
 
@@ -246,7 +246,7 @@ The Bridge must not:
 
 CAP-0007 owns the business contract: document gates, parameter resolution, write eligibility, item evaluation order, before-state, no-change, and intent creation.
 
-The future Addin service owns Revit execution. It uses the single LIFECYCLE-0002 store already owned by `RevitExecutionDispatcherLifetime`. This Bridge specification does not redefine store ownership, capacity, fingerprint schema, document-close cleanup, or shutdown cleanup.
+The Addin service owns Revit execution. It uses the single LIFECYCLE-0002 store already owned by `RevitExecutionDispatcherLifetime`. This Bridge specification does not redefine store ownership, capacity, fingerprint schema, document-close cleanup, or shutdown cleanup.
 
 ADR-0006 remains authoritative for `document_id` and `element_ref`. ADR-0008 remains authoritative for later approval and apply behavior.
 
@@ -254,7 +254,7 @@ ADR-0006 remains authoritative for `document_id` and `element_ref`. ADR-0008 rem
 
 Explicit typed service composition remains the rule.
 
-Introduce a future Bridge service interface conceptually:
+The Bridge service interface is:
 
 ```text
 IRevitPreviewParameterUpdatesService
@@ -265,7 +265,7 @@ IRevitPreviewParameterUpdatesService
 
 The host remains explicitly composed.
 
-Conceptual v8 host:
+v8 host:
 
 ```text
 NamedPipeBridgeHost
@@ -332,7 +332,7 @@ preview without the complete inherited v7 surface                               
 
 Any incomplete or non-prefix combination falls back to the highest actually guaranteed accepted prefix.
 
-Registration metadata must publish v8 only after all v8-required services are functional and the listener is ready, consistent with ADR-0003 and LIFECYCLE-0001. Until that implementation exists, registration continues to describe the current v7 host.
+Registration metadata must publish v8 only after all v8-required services are functional and the listener is ready, consistent with ADR-0003 and LIFECYCLE-0001. A production Addin that composes the complete prefix, including preview, advertises v8. A complete v7 host without preview continues to advertise `[7, 6, 5, 4, 3, 2, 1]`.
 
 ## Host gating
 
@@ -371,7 +371,7 @@ Unknown v9 rejects every capability, including the inherited methods.
 
 ## Typed client
 
-Future `IRevitBridgeClient` method:
+`IRevitBridgeClient` method:
 
 ```text
 Task<PreviewParameterUpdatesResult> PreviewParameterUpdatesAsync(
@@ -434,7 +434,7 @@ Server routing errors, including `NO_REVIT_INSTANCE`, `INSTANCE_REQUIRED`, `INST
 
 ## Execution boundary
 
-Intended future path:
+Implemented local Bridge path:
 
 ```text
 NamedPipeBridgeClient
@@ -465,7 +465,7 @@ ADR-0008 remains authoritative for later approval and apply behavior. A later ap
 
 ## Contract dependency boundaries
 
-`RevitMCP.Contracts` may later contain only transport-neutral CAP-0007 request, result, item, and value types.
+`RevitMCP.Contracts` contains only transport-neutral CAP-0007 request, result, item, and value types for this RPC.
 
 It must not reference:
 
@@ -481,21 +481,14 @@ It must not reference:
 
 ## Handshake advertisement
 
-Current implemented runtime remains protocol v7:
-
-```text
-SupportedVersions = [7, 6, 5, 4, 3, 2, 1]
-CurrentVersion = 7
-```
-
-Unknown v8 is still unsupported by current code.
-
-After a future BRIDGE-0008 implementation, a full CAP-0001..CAP-0007 host advertises:
+Implemented runtime for a full CAP-0001..CAP-0007 host:
 
 ```text
 SupportedVersions = [8, 7, 6, 5, 4, 3, 2, 1]
 CurrentVersion = 8
 ```
+
+A complete v7 host without the preview service advertises `[7, 6, 5, 4, 3, 2, 1]` and must not advertise v8. Unknown v9 is unsupported. Server/MCP preview remains absent. `tools/list` remains exactly six.
 
 Handshake itself remains cached metadata only. It must not inspect the Revit model, invoke EXEC-0001, or create an intent.
 
