@@ -1,6 +1,7 @@
 # CAP-0007: `revit_preview_parameter_updates`
 
 - Status: Accepted
+- Amended: 2026-09-30 — parameter write-eligibility rule after Revit 2026.5 live validation
 - Operation class: Preview
 - Date: 2026-09-25
 
@@ -218,7 +219,7 @@ A `parameter_ref` remains:
 
 CAP-0007 re-resolves the exact parameter occurrence on the requested element. It does not trust aggregated CAP-0004 discovery as writeability evidence.
 
-`read_only_on_count` is informational aggregation over the elements CAP-0004 happened to inspect. `read_only_on_count == 0` is never sufficient authorization or writeability evidence. CAP-0004 says this explicitly. CAP-0007 checks the actual occurrence's `Parameter.IsReadOnly` and `Parameter.UserModifiable`.
+`read_only_on_count` is informational aggregation over the elements CAP-0004 happened to inspect. `read_only_on_count == 0` is never sufficient authorization or writeability evidence. CAP-0004 says this explicitly. CAP-0007 re-resolves the actual occurrence and evaluates `Parameter.IsReadOnly`, `Parameter.IsShared`, and, for shared parameters, `Parameter.UserModifiable` on that occurrence.
 
 Resolution re-finds the current visible parameter on the instance surface using the accepted CAP-0004 identity semantics:
 
@@ -249,14 +250,37 @@ An item can be `ok` only when, at preview execution time, all of the following a
 - the binding source is `instance`;
 - the actual parameter occurrence exists on that instance's visible instance parameters (`Element.GetOrderedParameters()`);
 - `Parameter.IsReadOnly == false`;
-- `Parameter.UserModifiable == true`;
+- the occurrence is not a shared parameter with `Parameter.UserModifiable == false`;
 - the proposed kind matches the supported source, storage, spec, and value rules in this specification;
 - the exact before-state can be represented without truncation;
 - the proposed value is not equal to that before-state under the comparison below.
 
-`Parameter.UserModifiable` means the interactive user can modify the value. Autodesk's related `ExternalDefinition.UserModifiable` remarks say an API application may still be able to modify some parameters the UI grays out. CAP-0007 v1 does not use that API loophole. `UserModifiable == false` is `parameter_not_writable`.
+The write-eligibility gate is exactly:
 
-Eligibility is not approval and not a promise that a later apply will commit. ADR-0008 requires apply to revalidate immediately before mutation.
+```text
+Parameter.IsReadOnly == false
+AND NOT (
+  Parameter.IsShared == true
+  AND Parameter.UserModifiable == false
+)
+```
+
+In words:
+
+- `Parameter.IsReadOnly == true` -> `parameter_not_writable`;
+- shared parameter and `UserModifiable == false` -> `parameter_not_writable`;
+- non-shared parameter and `UserModifiable == false` -> do not reject on `UserModifiable`; continue the remaining CAP-0007 eligibility checks;
+- shared parameter, `UserModifiable == true`, and not read-only -> continue the remaining eligibility checks.
+
+`Parameter.UserModifiable` means the interactive user can modify the value. It is not a general API-writeability flag. `Parameter.IsReadOnly` remains the fundamental API writeability gate. Autodesk's `Parameter.Set` remarks fail a set when the parameter is read-only.
+
+Autodesk's `Parameter.UserModifiable` and `ExternalDefinition.UserModifiable` remarks say a shared parameter can have `UserModifiable == false` while an API application may still modify it. CAP-0007 v1 does not use that shared-parameter API loophole. A shared parameter explicitly marked non-user-modifiable stays `parameter_not_writable`.
+
+### Amendment rationale
+
+Live Revit 2026.5 validation on build `26.5.0.55` found ordinary non-shared and built-in instance parameters with `IsReadOnly=false` and `UserModifiable=false`. The original rule required `IsReadOnly == false` and `UserModifiable == true` for every parameter, so it rejected every tested otherwise-valid preview candidate. No `Parameter.Set` was attempted. The live session did not prove that a later set would succeed.
+
+Eligibility is not approval and not a guarantee that a later apply will commit. A future apply must revalidate this amended write-eligibility rule on the re-resolved occurrence immediately before mutation.
 
 ## Item evaluation order
 
@@ -277,7 +301,8 @@ binding source is type
 re-find the visible instance parameter by CAP-0004 identity
     not present → parameter_not_present
 
-IsReadOnly == true or UserModifiable == false
+IsReadOnly == true
+    or (IsShared == true and UserModifiable == false)
     → parameter_not_writable
 
 proposed kind does not match the supported storage/spec rules
@@ -381,7 +406,7 @@ Meaning:
 - `parameter_ref_not_found`: the opaque parameter ref is not known for this active document lifetime;
 - `parameter_not_present`: the ref is valid and instance-scoped, but that definition is not present on the element's visible instance parameters;
 - `unsupported_parameter_source`: the ref resolved with source `type`;
-- `parameter_not_writable`: the occurrence exists, and `IsReadOnly` is true or `UserModifiable` is false;
+- `parameter_not_writable`: the occurrence exists, and `IsReadOnly` is true, or the occurrence is shared and `UserModifiable` is false;
 - `value_type_mismatch`: the occurrence exists, but the proposed kind is not supported for that storage and spec, including Yes/No and other non-`SpecTypeId.Int.Integer` integer specs, non-Double or non-measurable quantity targets, and ElementId/reference storage;
 - `invalid_unit`: the proposed quantity's `unit_type_id` is non-empty but fails `UnitUtils.IsUnit` or is not valid for the parameter spec;
 - `unsupported_value`: the occurrence and proposed kind match, but the exact before-state or converted value cannot be represented under this contract;
@@ -459,7 +484,7 @@ The stored intent contains only:
 
 Request order is semantic. The stored intent preserves the exact order of the requested updates. A later apply, which this specification does not define, must consume that ordered batch. Applying A then B is not treated as equivalent to B then A. A future accepted specification may prove order-independence; until then, order stays part of the intent.
 
-It does not retain live Revit API wrapper objects (`Element`, `Parameter`, `Connector`, or similar). The approval-preview payload is an immutable RevitMCP-owned snapshot of strings and typed values. Preview may use live Revit objects only while executing inside a valid EXEC-0001 context. A later apply must re-resolve current Revit objects in a fresh EXEC-0001 context and compare the re-resolved human-facing fields with the stored approval-preview payload. A mismatch, including a renamed element, category, or parameter, requires a new preview and a new approval. Apply must not silently use an element whose human-facing identity no longer matches the approved preview.
+It does not retain live Revit API wrapper objects (`Element`, `Parameter`, `Connector`, or similar). The approval-preview payload is an immutable RevitMCP-owned snapshot of strings and typed values. Preview may use live Revit objects only while executing inside a valid EXEC-0001 context. A later apply must re-resolve current Revit objects in a fresh EXEC-0001 context and compare the re-resolved human-facing fields with the stored approval-preview payload. A mismatch, including a renamed element, category, or parameter, requires a new preview and a new approval. Apply must not silently use an element whose human-facing identity no longer matches the approved preview. Immediately before mutation, apply must also revalidate the amended write-eligibility rule on the re-resolved occurrence: `IsReadOnly == false`, and not (`IsShared == true` and `UserModifiable == false`).
 
 `intent_ref` is opaque and high-entropy. Clients cannot enumerate intents.
 
@@ -709,9 +734,9 @@ The official MCP tool is specified here. Do not register it in this specificatio
 
 ## Compatibility
 
-RevitMCP continues to target Revit 2025, 2026, and 2027 from one shared Addin project. The APIs named here (`StorageType`, `HasValue`, `IsReadOnly`, `UserModifiable`, `GetDataType`, `SpecTypeId.Int.Integer`, `UnitUtils`, `Document.IsFamilyDocument`, `Document.IsReadOnly`, and `GetOrderedParameters`) belong to that supported matrix.
+RevitMCP continues to target Revit 2025, 2026, and 2027 from one shared Addin project. The APIs named here (`StorageType`, `HasValue`, `IsReadOnly`, `IsShared`, `UserModifiable`, `GetDataType`, `SpecTypeId.Int.Integer`, `UnitUtils`, `Document.IsFamilyDocument`, `Document.IsReadOnly`, and `GetOrderedParameters`) belong to that supported matrix.
 
-This specification does not claim live validation on any Revit version.
+Live Revit 2026.5 validation on build `26.5.0.55` exercised the protocol v8 preview path and is the reason for the 2026-09-30 eligibility amendment. That session did not call `Parameter.Set` and did not produce an `ok` preview item under the original rule. The amended rule is specified here and is not claimed as implemented behavior.
 
 Do not treat compile-time availability as live proof.
 
@@ -744,7 +769,7 @@ CAP-0007 is acceptable as a capability contract when:
 12. Integer eligibility requires `StorageType.Integer` and `GetDataType()` exactly `SpecTypeId.Int.Integer`.
 13. Quantity eligibility requires Double storage, a measurable spec, and a supplied unit that passes `IsUnit` and `IsValidUnit`.
 14. Quantity preview uses typed unit conversion, never localized `SetValueString`.
-15. Write eligibility re-resolves the occurrence and requires `IsReadOnly == false` and `UserModifiable == true`.
+15. Write eligibility re-resolves the occurrence and requires `Parameter.IsReadOnly == false`, and `parameter_not_writable` when `Parameter.IsShared == true` and `Parameter.UserModifiable == false`. A non-shared parameter with `UserModifiable == false` is not rejected on `UserModifiable`.
 16. CAP-0004 `read_only_on_count` is not writeability evidence.
 17. A valued string longer than 512 characters is `unsupported_value`, not a truncated before-state.
 18. Quantity `before` is expressed in the proposed `unit_type_id`.
@@ -783,7 +808,7 @@ CAP-0007 is acceptable as a capability contract when:
 - save and synchronize;
 - caller-extendable TTL;
 - an MCP SDK upgrade;
-- live Revit validation.
+- live validation of an `ok` preview under the amended write-eligibility rule.
 
 ## Sequencing
 
@@ -812,7 +837,7 @@ Do not register the MCP tool until a later accepted Server specification says to
 - EXEC-0001: serialized Revit execution dispatcher
 - Autodesk Revit API `Document` class, including `IsReadOnly` and `IsModifiable`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/db03274b-a107-aa32-9034-f3e0df4bb1ec.htm
 - Autodesk Revit API `Document.IsModifiable`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/af884262-3ba2-b0a0-d7ef-f0a49c1bf1bc.htm
-- Autodesk Revit API `Parameter` class, including `IsReadOnly` and `UserModifiable`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/333ff41b-e6a7-d959-60bf-c3bfae495581.htm
+- Autodesk Revit API `Parameter` class, including `IsReadOnly`, `IsShared`, `UserModifiable`, and `Set`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/333ff41b-e6a7-d959-60bf-c3bfae495581.htm
 - Autodesk Revit API `ExternalDefinition.UserModifiable`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/4568f90c-7d4b-c9f2-da59-1540ca14a22f.htm
 - Autodesk Revit API `Definition.GetDataType()`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/1c008d27-9e61-362c-308c-8b718ee0f8df.htm
 - Autodesk Revit API `FormatOptions.SetUnitTypeId`, which requires `UnitUtils.IsUnit`: https://help.autodesk.com/cloudhelp/2026/ENU/Revit-API-MainReference/files/html/756cf4e7-b124-2703-3335-35f376f2c676.htm
