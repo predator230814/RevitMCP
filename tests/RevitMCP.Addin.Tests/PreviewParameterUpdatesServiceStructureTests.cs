@@ -38,7 +38,15 @@ public sealed class PreviewParameterUpdatesServiceStructureTests
         Assert.Contains("element.GetOrderedParameters()", source, StringComparison.Ordinal);
         Assert.Contains("RevitParameterIdentity.Classify(parameter, document)", source, StringComparison.Ordinal);
         Assert.Contains("integerSpec.Equals(SpecTypeId.Int.Integer)", source, StringComparison.Ordinal);
-        Assert.Contains("match.IsReadOnly || !match.UserModifiable", source, StringComparison.Ordinal);
+        var eligibility = source.IndexOf(
+            "PreviewParameterWriteEligibility.IsWritable(match.IsReadOnly, match.IsShared, match.UserModifiable)",
+            StringComparison.Ordinal);
+        var valueTypeMismatch = source.IndexOf("PreviewParameterUpdateStatus.ValueTypeMismatch", StringComparison.Ordinal);
+        Assert.True(eligibility >= 0 && eligibility < valueTypeMismatch);
+        Assert.Contains("match.IsReadOnly", source, StringComparison.Ordinal);
+        Assert.Contains("match.IsShared", source, StringComparison.Ordinal);
+        Assert.Contains("match.UserModifiable", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("match.IsReadOnly || !match.UserModifiable", source, StringComparison.Ordinal);
         Assert.Contains("document.IsFamilyDocument", source, StringComparison.Ordinal);
         Assert.Contains("document.IsReadOnly", source, StringComparison.Ordinal);
         Assert.Contains("UnitUtils.ConvertFromInternalUnits(parameter.AsDouble(), unit)", source, StringComparison.Ordinal);

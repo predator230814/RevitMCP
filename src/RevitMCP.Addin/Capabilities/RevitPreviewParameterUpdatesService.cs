@@ -155,7 +155,7 @@ internal sealed class RevitPreviewParameterUpdatesService : IRevitPreviewParamet
             return Failure(update, PreviewParameterUpdateStatus.ParameterNotPresent);
         }
 
-        if (match.IsReadOnly || !match.UserModifiable)
+        if (!PreviewParameterWriteEligibility.IsWritable(match.IsReadOnly, match.IsShared, match.UserModifiable))
         {
             return Failure(update, PreviewParameterUpdateStatus.ParameterNotWritable);
         }
