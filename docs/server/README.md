@@ -10,9 +10,6 @@ Accepted specifications:
 - [SERVER-0004](SERVER-0004-stdio-describe-parameters-tool.md) — CAP-0004 `revit_describe_parameters`, bridge protocol-v5 capability gating, closed identity/data-type output variants, and preservation of CAP-0001/CAP-0002/CAP-0003 on explicitly compatible v5 bridges. Implemented. Official MCP-client-to-Revit-2026.5 live validation is **PASS**.
 - [SERVER-0005](SERVER-0005-stdio-get-parameter-values-tool.md) — CAP-0005 `revit_get_parameter_values`, bridge protocol-v6 capability gating, closed typed-value output variants, and preservation of CAP-0001..CAP-0004 on explicitly compatible v6 bridges. Implemented and merged. Official MCP-client-to-Revit-2026.5 live validation is **PASS**.
 - [SERVER-0006](SERVER-0006-stdio-get-mep-topology-tool.md) — CAP-0006 `revit_get_mep_topology`, bridge protocol-v7 capability gating, closed deterministic physical graph output, and preservation of CAP-0001..CAP-0005 on explicitly compatible v7 bridges. Implemented. Current MCP tools are exactly 6. Official MCP-client-to-Revit-2026.5 live validation is **PASS**.
-
-Proposed specifications:
-
-- [SERVER-0007](SERVER-0007-stdio-preview-parameter-updates-tool.md) — CAP-0007 `revit_preview_parameter_updates` through the existing stdio Server, bridge protocol `{8}` only, and preservation of the current six tools. Not implemented. `tools/list` remains exactly 6.
+- [SERVER-0007](SERVER-0007-stdio-preview-parameter-updates-tool.md) — **Accepted**. CAP-0007 `revit_preview_parameter_updates` through the existing stdio Server, bridge protocol `{8}` only, and preservation of the current six tools. Not implemented. `tools/list` remains exactly 6.
 
 Server specifications refine accepted ADRs and capability contracts. They must not introduce Autodesk Revit API dependencies into the Server or silently change lower-layer Bridge/Addin contracts.

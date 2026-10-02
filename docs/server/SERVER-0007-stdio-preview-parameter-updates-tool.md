@@ -1,7 +1,8 @@
 # SERVER-0007: stdio `revit_preview_parameter_updates` tool
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-01
+- Accepted: 2026-10-01 — strict-validation implementation contract
 
 ## Purpose
 
@@ -289,12 +290,17 @@ MCP-boundary rejection does not replace CAP-0007. A quantity that is syntactical
 
 ## MCP-boundary validation
 
-Use the existing:
+The public MCP input schema stays the exact closed `oneOf` value union defined above.
 
-```text
-StrictInputMcpServerTool
-ClosedSchemaArgumentValidator
-```
+The current `ClosedSchemaArgumentValidator.MatchesValue` enforces `type`, `enum`, `const`, and string, number, array, and object constraints. It does not interpret `oneOf`. A `value` schema written as `oneOf` is therefore not descended into by that validator alone. SERVER-0007 must not claim that the existing validator rejects a too-long string or an empty `unit_type_id` by itself.
+
+Future implementation uses three existing or local pieces. Do not add a general `oneOf` engine to `ClosedSchemaArgumentValidator` in SERVER-0007 unless a later implementation proves that necessary and that tradeoff is discussed first.
+
+- Keep `StrictInputMcpServerTool` and `ClosedSchemaArgumentValidator` for the constraints they already enforce, including closed objects, required fields, array bounds, and aliases that fail those checks.
+- Rely on the existing strict serializer and binder. `McpJson.Options` disallows unmapped members. `StrictInputMcpServerTool` maps `JsonException` to `INVALID_REQUEST`. That path covers a malformed polymorphic shape, an unknown `kind`, and extra properties on the bound value.
+- Add a small CAP-0007-specific guard in `PreviewParameterUpdatesMcpTools`, before `_application.ExecuteAsync`. The guard therefore runs before discovery and Bridge. It enforces at least string length `<= 512`, a non-empty `unit_type_id`, and duplicate `(element_ref, parameter_ref)` pairs. It returns `INVALID_REQUEST`.
+
+An Int32 overflow or a fractional integer may be rejected by binding. The behavioral contract is still `INVALID_REQUEST` before discovery.
 
 Valid MCP input maps exactly to CAP-0007 Contracts.
 
@@ -712,7 +718,9 @@ ServerTimeouts
 
 Register exactly one new MCP tool through an explicit `ServerHost` extension, analogous to `.WithGetMepTopologyTool()`.
 
-Do not use assembly scanning. Do not change global `McpCallResultFactory` behavior. No generic tool or capability framework.
+Do not use assembly scanning. Do not change global `McpCallResultFactory` behavior. No generic tool or capability framework. Do not extend `ClosedSchemaArgumentValidator` with a general `oneOf` engine in this work.
+
+`PreviewParameterUpdatesMcpTools` owns the small pre-application guard described under MCP-boundary validation. That guard is not a second validation framework.
 
 ## Automated implementation acceptance criteria
 
@@ -723,9 +731,9 @@ Later implementation tests must cover at least:
 3. a closed input schema;
 4. `updates` bounded to 1..20;
 5. all three value variants;
-6. semantic duplicate-pair rejection, including the same pair with different proposed values;
+6. semantic duplicate-pair rejection, including the same pair with different proposed values, performed by the CAP-0007 guard before `ExecuteAsync`;
 7. aliases and extra properties rejected;
-8. malformed input performs no discovery or Bridge work;
+8. malformed input performs no discovery or Bridge work, including a string longer than 512 characters, an empty `unit_type_id`, an unknown value kind, an extra value property, and a duplicate semantic pair;
 9. optional `instance_id` routing semantics, including that empty or whitespace present ids do not auto-select;
 10. the `ready=false` output shape, with intent metadata absent;
 11. the `ready=true` output shape, with intent metadata required and every item `ok`;
@@ -833,7 +841,7 @@ SERVER-0007 is accepted as a specification when:
 2. The tool name, title, description, and all four annotations match accepted CAP-0007 metadata, including the explanation that `readOnlyHint=false` is ephemeral intent state and not a Revit model write.
 3. MCP input is a closed JSON Schema 2020-12 object with required `document_id` and `updates`, optional `instance_id` as `string | null`, and `additionalProperties = false`.
 4. `updates` is 1..20 closed items. Semantic uniqueness is the raw `(element_ref, parameter_ref)` pair. `uniqueItems=true` alone is not the uniqueness rule. The same pair with different proposed values is `INVALID_REQUEST` before discovery or Bridge.
-5. The proposed value union is exactly string, integer, and quantity, with the bounds in this specification. There is no null, clear, or unset variant and no `element_reference`.
+5. The proposed value union is exactly string, integer, and quantity, with the bounds in this specification. There is no null, clear, or unset variant and no `element_reference`. The public schema stays a closed `oneOf`. Enforcement is split: the current validator and strict binder cover what they already enforce, and a small `PreviewParameterUpdatesMcpTools` guard, before `ExecuteAsync`, covers string length, non-empty `unit_type_id`, and duplicate pairs. SERVER-0007 does not add a general `oneOf` engine.
 6. Empty or whitespace `document_id` and refs stay opaque and are not schema-rejected. Missing or null required fields are `INVALID_REQUEST`.
 7. Accepted MCP input maps to `PreviewParameterUpdatesRequest` in original order, without `instance_id`, timeout, or approval fields.
 8. Output is a closed `PreviewParameterUpdatesResult` with distinct `ready=false` and `ready=true` families. Intent metadata is required only when `ready=true`. Failure items are exactly three fields. `ok` and `no_change` items carry the CAP-0007 display and value shape. `data_type` is the existing CAP-0004 schema.
