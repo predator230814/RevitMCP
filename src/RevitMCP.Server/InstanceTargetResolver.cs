@@ -39,6 +39,11 @@ internal static class InstanceTargetResolver
         return Resolve(discovered, instanceId, IsGetMepTopologyEligible);
     }
 
+    public static TargetResolution ResolveForPreviewParameterUpdates(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        return Resolve(discovered, instanceId, IsPreviewParameterUpdatesEligible);
+    }
+
     public static bool IsGetContextEligible(DiscoveredInstance instance)
     {
         return IsEligible(instance, BridgeProtocol.SupportsGetContext);
@@ -67,6 +72,11 @@ internal static class InstanceTargetResolver
     public static bool IsGetMepTopologyEligible(DiscoveredInstance instance)
     {
         return IsEligible(instance, BridgeProtocol.SupportsGetMepTopology);
+    }
+
+    public static bool IsPreviewParameterUpdatesEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsPreviewParameterUpdates);
     }
 
     private static bool IsEligible(DiscoveredInstance instance, Func<int, bool> supportsCapability)
