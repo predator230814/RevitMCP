@@ -28,7 +28,7 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(6, tools.Count);
+        Assert.Equal(7, tools.Count);
         Assert.Equal(
             new[]
             {
@@ -37,6 +37,7 @@ public sealed class StdioServerProcessTests
                 GetElementsToolMetadata.Name,
                 GetMepTopologyToolMetadata.Name,
                 GetParameterValuesToolMetadata.Name,
+                PreviewParameterUpdatesToolMetadata.Name,
                 QueryElementsToolMetadata.Name
             },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
@@ -48,6 +49,7 @@ public sealed class StdioServerProcessTests
                 "revit_get_elements",
                 "revit_get_mep_topology",
                 "revit_get_parameter_values",
+                "revit_preview_parameter_updates",
                 "revit_query_elements"
             },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
@@ -55,6 +57,7 @@ public sealed class StdioServerProcessTests
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.get_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.query_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.describe_", StringComparison.Ordinal));
+        Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.preview_", StringComparison.Ordinal));
 
         var getContext = Assert.Single(tools, tool => tool.Name == GetContextToolMetadata.Name);
         Assert.Equal(GetContextToolMetadata.Title, getContext.Title);
@@ -90,6 +93,14 @@ public sealed class StdioServerProcessTests
         Assert.Equal(GetMepTopologyToolMetadata.Description, getMepTopology.Description);
         Assert.True(getMepTopology.ProtocolTool.Annotations?.ReadOnlyHint);
         Assert.False(getMepTopology.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var preview = Assert.Single(tools, tool => tool.Name == PreviewParameterUpdatesToolMetadata.Name);
+        Assert.Equal(PreviewParameterUpdatesToolMetadata.Title, preview.Title);
+        Assert.Equal(PreviewParameterUpdatesToolMetadata.Description, preview.Description);
+        Assert.False(preview.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(preview.ProtocolTool.Annotations?.DestructiveHint);
+        Assert.False(preview.ProtocolTool.Annotations?.IdempotentHint);
+        Assert.False(preview.ProtocolTool.Annotations?.OpenWorldHint);
 
         var rejected = await client.CallToolAsync(
             GetElementsToolMetadata.Name,
@@ -191,6 +202,32 @@ public sealed class StdioServerProcessTests
         Assert.Contains(McpToolErrorCodes.InvalidRequest, topologyText, StringComparison.Ordinal);
         Assert.DoesNotContain("NO_REVIT_INSTANCE", topologyText, StringComparison.Ordinal);
         Assert.DoesNotContain("INVALID_MEP_TOPOLOGY", topologyText, StringComparison.Ordinal);
+
+        var malformedPreview = await client.CallToolAsync(
+            PreviewParameterUpdatesToolMetadata.Name,
+            new Dictionary<string, object?>
+            {
+                ["document_id"] = "doc-1",
+                ["updates"] = new object[]
+                {
+                    new Dictionary<string, object?>
+                    {
+                        ["element_ref"] = "ref-1",
+                        ["parameter_ref"] = "pref-1",
+                        ["value"] = new Dictionary<string, object?>
+                        {
+                            ["kind"] = "string",
+                            ["value"] = new string('a', 513)
+                        }
+                    }
+                }
+            });
+        Assert.True(malformedPreview.IsError);
+        var previewText = Assert.IsType<TextContentBlock>(Assert.Single(malformedPreview.Content)).Text;
+        Assert.Contains(McpToolErrorCodes.InvalidRequest, previewText, StringComparison.Ordinal);
+        Assert.DoesNotContain("NO_REVIT_INSTANCE", previewText, StringComparison.Ordinal);
+        Assert.DoesNotContain("INVALID_PARAMETER_UPDATE_PREVIEW", previewText, StringComparison.Ordinal);
+        Assert.DoesNotContain("revit.preview_parameter_updates", previewText, StringComparison.Ordinal);
     }
 
     private static (string FileName, IList<string> Arguments)? ResolveServerCommand()

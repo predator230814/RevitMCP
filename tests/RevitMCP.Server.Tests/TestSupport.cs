@@ -417,6 +417,95 @@ internal static class TestSupport
         };
     }
 
+    public static PreviewParameterUpdatesRequest CreatePreviewParameterUpdatesRequest(
+        string documentId = "doc-1",
+        IReadOnlyList<PreviewParameterUpdate>? updates = null)
+    {
+        return new PreviewParameterUpdatesRequest
+        {
+            DocumentId = documentId,
+            Updates = updates ??
+            [
+                new PreviewParameterUpdate
+                {
+                    ElementRef = "ref-1",
+                    ParameterRef = "pref-1",
+                    Value = new PreviewParameterStringValue { Value = "proposed" }
+                }
+            ]
+        };
+    }
+
+    public static PreviewParameterUpdateItem CreatePreviewFailureItem(
+        string elementRef,
+        string parameterRef,
+        PreviewParameterUpdateStatus status)
+    {
+        return new PreviewParameterUpdateItem
+        {
+            ElementRef = elementRef,
+            ParameterRef = parameterRef,
+            Status = status
+        };
+    }
+
+    public static PreviewParameterUpdateItem CreatePreviewEligibleItem(
+        string elementRef,
+        string parameterRef,
+        PreviewParameterUpdateStatus status,
+        PreviewParameterValue proposed,
+        bool hasValue = false,
+        PreviewParameterValue? before = null,
+        DescribeParameterDataType? dataType = null)
+    {
+        return new PreviewParameterUpdateItem
+        {
+            ElementRef = elementRef,
+            ParameterRef = parameterRef,
+            Status = status,
+            ElementName = "Element",
+            ElementNameTruncated = false,
+            CategoryName = "Category",
+            CategoryNameTruncated = false,
+            ParameterName = "Parameter",
+            ParameterNameTruncated = false,
+            DataType = dataType ?? new DescribeParameterDataType
+            {
+                Kind = DescribeParameterDataTypeKind.Unknown
+            },
+            Before = new PreviewParameterBefore
+            {
+                HasValue = hasValue,
+                Value = before
+            },
+            Proposed = proposed
+        };
+    }
+
+    public static PreviewParameterUpdatesResult CreatePreviewParameterUpdatesResult(
+        string instanceId,
+        string documentId,
+        bool ready,
+        IReadOnlyList<PreviewParameterUpdateItem> items,
+        string? intentRef = null,
+        string? intentFingerprint = null,
+        DateTimeOffset? expiresAt = null)
+    {
+        return new PreviewParameterUpdatesResult
+        {
+            Context = new DescribeParametersContext
+            {
+                InstanceId = instanceId,
+                DocumentId = documentId
+            },
+            Ready = ready,
+            Items = items,
+            IntentRef = intentRef,
+            IntentFingerprint = intentFingerprint,
+            ExpiresAt = expiresAt
+        };
+    }
+
     public static void AssertOptionalNullableInstanceId(JsonElement property)
     {
         Assert.Equal(
@@ -630,15 +719,25 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
             : GetMepTopology(request, timeout, cancellationToken);
     }
 
+    public int PreviewParameterUpdatesCalls { get; private set; }
+
+    public PreviewParameterUpdatesRequest? LastPreviewParameterUpdatesRequest { get; private set; }
+
+    public TimeSpan? LastPreviewParameterUpdatesTimeout { get; private set; }
+
+    public Func<PreviewParameterUpdatesRequest, TimeSpan, CancellationToken, Task<PreviewParameterUpdatesResult>>? PreviewParameterUpdates { get; set; }
+
     public Task<PreviewParameterUpdatesResult> PreviewParameterUpdatesAsync(
         PreviewParameterUpdatesRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        _ = request;
-        _ = timeout;
-        _ = cancellationToken;
-        throw new NotSupportedException("This recording client does not implement revit.preview_parameter_updates.");
+        PreviewParameterUpdatesCalls++;
+        LastPreviewParameterUpdatesRequest = request;
+        LastPreviewParameterUpdatesTimeout = timeout;
+        return PreviewParameterUpdates is null
+            ? throw new NotSupportedException("This recording client does not implement revit.preview_parameter_updates.")
+            : PreviewParameterUpdates(request, timeout, cancellationToken);
     }
 
     public ValueTask DisposeAsync()
