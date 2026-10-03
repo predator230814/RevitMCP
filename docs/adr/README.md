@@ -12,9 +12,6 @@ Accepted ADRs:
 - [ADR-0006](ADR-0006-document-and-element-reference-identity.md) — document and element reference identity
 - [ADR-0007](ADR-0007-federated-mcp-boundaries-and-orchestration.md) — federated MCP boundaries and optional orchestration
 - [ADR-0008](ADR-0008-controlled-write-safety-model.md) — controlled write safety model
-
-Proposed ADRs:
-
 - [ADR-0009](ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) — agent and human interaction, and the trusted approval boundary
 
 ## When to create an ADR
