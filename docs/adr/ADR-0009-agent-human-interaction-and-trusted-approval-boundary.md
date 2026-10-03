@@ -1,6 +1,6 @@
 # ADR-0009: Agent and human interaction and trusted approval boundary
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-02
 
 ## Context
@@ -102,7 +102,7 @@ Rejected. Temporary hide/isolate is not accepted as transient in this ADR.
 
 ## Decision
 
-ADR-0009 does not supersede ADR-0001 through ADR-0008. Those decisions remain in force. This ADR is proposed only. It authorizes no production change.
+ADR-0009 does not supersede ADR-0001 through ADR-0008. Those decisions remain in force. Acceptance authorizes no production change.
 
 ### 1. One Revit-local capability and execution core
 
@@ -267,11 +267,10 @@ No capability is reclassified by this ADR. No tool is added or removed.
 - Future capabilities need both an audience decision and an effect decision.
 - Transient interaction is not available as a classification for temporary hide/isolate until a later, evidence-based decision.
 - Writes still cannot ship until a trusted approval provider exists.
-- This proposed ADR does not select the product UI, the first approval provider, or an orchestration technology.
+- This ADR does not select the product UI, the first approval provider, or an orchestration technology.
 
 ## Explicitly not decided
 
-- whether ADR-0009 is accepted;
 - which future tools are `model`, `app`, or `model+app`;
 - whether temporary hide/isolate is transient after Revit API validation;
 - the MCP App host, manifest, or UI;
