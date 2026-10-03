@@ -50,6 +50,12 @@ Target conceptual layers:
 - Multi-service workflow orchestration, if introduced, is external and optional. Ordinary MCP clients must be able to use RevitMCP without an orchestrator.
 - The agent-facing tool surface for a workflow should remain small and coherent as the capability catalogue grows. The scoping mechanism is deferred; a hard tool-count limit is not an invariant.
 
+## Proposed checkpoint
+
+[ADR-0009](adr/ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) is **Proposed**. It is the current architecture checkpoint. It separates model-facing MCP capabilities, human-facing MCP App interactions, persistent Revit writes, the trusted approval-provider boundary, and optional external orchestration.
+
+It does not change ADR-0007 or ADR-0008. Persistent writes remain on the ADR-0008 path. An MCP App is not a second Revit MCP service and is not a trusted approval provider. Current stdio operation remains valid. ADR-0009 does not authorize MCP Apps, app-only tools, CAP-0008, apply, Streamable HTTP, approval-provider code, or any production write.
+
 ## Decisions intentionally not made yet
 
 The following remain open architectural questions and must not be treated as settled:
@@ -61,7 +67,8 @@ The following remain open architectural questions and must not be treated as set
 - extent and form of WebMCP integration;
 - Autodesk-cloud MCP service topology (one coherent service vs several specialized services);
 - multi-service orchestration implementation technology, if introduced;
-- future tool-surface scoping mechanism.
+- future tool-surface scoping mechanism;
+- acceptance of proposed ADR-0009. Whether temporary hide/isolate is transient is not part of that acceptance; ADR-0009 defers that classification until the concrete Revit API behavior is validated.
 
 These remaining decisions should be made through research, discussion, and ADRs. Do not treat them as implementation work authorized by this document.
 

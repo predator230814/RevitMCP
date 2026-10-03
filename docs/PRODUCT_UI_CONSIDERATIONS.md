@@ -4,6 +4,8 @@
 
 Open product question. No UI architecture has been selected.
 
+[ADR-0009](adr/ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) is **Proposed**. It separates model-facing capabilities, human-facing MCP App interaction, and the trusted approval-provider boundary. It does not select this product UI. An MCP App may later present an approval screen, but that screen is not automatically a trusted approval provider. Persistent writes remain governed by ADR-0008. The questions below stay open.
+
 ## Why this matters
 
 RevitMCP should not assume that every user has access to a dedicated MCP-capable desktop client such as ChatGPT Desktop, Claude Desktop, Cursor, or similar developer-oriented tooling.
