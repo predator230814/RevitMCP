@@ -55,6 +55,33 @@ public class SpikeMessageParserTests
         Assert.Equal("malformed", result.Rejection);
     }
 
+    [Theory]
+    [InlineData("https://revitmcp-spike.local/")]
+    [InlineData("https://revitmcp-spike.local/index.html")]
+    [InlineData("https://REVITMCP-SPIKE.LOCAL/index.html?ready=1")]
+    [InlineData("https://revitmcp-spike.local:443/index.html")]
+    public void Local_virtual_origin_is_accepted(string uri)
+    {
+        Assert.True(SpikeOrigin.IsLocal(uri));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("about:blank")]
+    [InlineData("http://revitmcp-spike.local/")]
+    [InlineData("https://revitmcp-spike.local.evil.com/")]
+    [InlineData("https://evil.com/")]
+    [InlineData("https://evil.com@revitmcp-spike.local/")]
+    [InlineData("https://revitmcp-spike.local:444/")]
+    [InlineData("https://revitmcp-spike.local.evil.com")]
+    [InlineData("file:///C:/ui/index.html")]
+    public void Other_origins_are_rejected(string? uri)
+    {
+        Assert.False(SpikeOrigin.IsLocal(uri));
+    }
+
     [Fact]
     public void Host_messages_are_not_accepted_as_ui_commands()
     {

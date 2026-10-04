@@ -87,7 +87,14 @@ internal sealed class SpikePaneHost : UserControl
                 return;
             }
 
-            var uiFolder = Path.Combine(AppContext.BaseDirectory, "ui");
+            var assemblyDirectory = Path.GetDirectoryName(typeof(SpikePaneHost).Assembly.Location);
+            if (string.IsNullOrEmpty(assemblyDirectory))
+            {
+                ShowFailure("Local UI assets were not found next to the spike assembly.");
+                return;
+            }
+
+            var uiFolder = Path.Combine(assemblyDirectory, "ui");
             if (!File.Exists(Path.Combine(uiFolder, "index.html")))
             {
                 ShowFailure("Local UI assets were not found next to the spike assembly.");
@@ -138,7 +145,7 @@ internal sealed class SpikePaneHost : UserControl
             return;
         }
 
-        if (!args.IsSuccess || !IsAllowedLocalUri(_core.Source))
+        if (!args.IsSuccess || !SpikeOrigin.IsLocal(_core.Source))
         {
             ShowFailure("Local content navigation failed. The spike did not leave the expected origin.");
             return;
@@ -157,6 +164,12 @@ internal sealed class SpikePaneHost : UserControl
 
         try
         {
+            if (!SpikeOrigin.IsLocal(args.Source))
+            {
+                _lastUiToHost = "rejected:origin";
+                return;
+            }
+
             var result = SpikeMessageParser.Parse(args.WebMessageAsJson);
             if (!result.Accepted)
             {
@@ -245,17 +258,7 @@ internal sealed class SpikePaneHost : UserControl
             return true;
         }
 
-        return IsAllowedLocalUri(uri);
-    }
-
-    private static bool IsAllowedLocalUri(string? uri)
-    {
-        if (string.IsNullOrEmpty(uri))
-        {
-            return false;
-        }
-
-        return uri.StartsWith(SpikeContent.LocalOrigin, StringComparison.OrdinalIgnoreCase);
+        return SpikeOrigin.IsLocal(uri);
     }
 
     private void ShowFailure(string message)

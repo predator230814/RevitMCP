@@ -10,6 +10,37 @@ public static class SpikeContent
     public const string LocalOrigin = "https://revitmcp-spike.local/";
 }
 
+/// <summary>
+/// Compares a WebView2 URI to the spike's local virtual origin by scheme, host, and port.
+/// </summary>
+public static class SpikeOrigin
+{
+    public static bool IsLocal(string? uri)
+    {
+        if (string.IsNullOrWhiteSpace(uri) || !Uri.TryCreate(uri, UriKind.Absolute, out var parsed))
+        {
+            return false;
+        }
+
+        if (!string.Equals(parsed.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrEmpty(parsed.UserInfo))
+        {
+            return false;
+        }
+
+        if (!string.Equals(parsed.IdnHost, SpikeContent.LocalHostName, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return parsed.IsDefaultPort;
+    }
+}
+
 public static class SpikeJson
 {
     public static readonly JsonSerializerOptions Options = new()
