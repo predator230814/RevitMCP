@@ -1,0 +1,20 @@
+<Project>
+  <!--
+    Nearest Directory.Build.props wins. Import the repository file so this spike
+    keeps the same language, warning, and Nice3point version policy.
+  -->
+  <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', '$(MSBuildThisFileDirectory)../'))" />
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'RevitMCP.WebView2Spike' AND ('$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027')">
+    <BaseOutputPath>bin\$(RevitVersion)\</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj\$(RevitVersion)\</BaseIntermediateOutputPath>
+    <MSBuildProjectExtensionsPath>$(MSBuildProjectDirectory)\obj\$(RevitVersion)\</MSBuildProjectExtensionsPath>
+    <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'RevitMCP.WebView2Spike'">
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2025'">$(Nice3pointRevitApi2025)</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2026'">$(Nice3pointRevitApi2026)</RevitApiPackageVersion>
+    <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2027'">$(Nice3pointRevitApi2027)</RevitApiPackageVersion>
+  </PropertyGroup>
+</Project>

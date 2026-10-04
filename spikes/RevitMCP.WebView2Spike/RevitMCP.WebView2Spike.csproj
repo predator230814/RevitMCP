@@ -1,0 +1,83 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <RootNamespace>RevitMCP.WebView2Spike</RootNamespace>
+    <AssemblyName>RevitMCP.WebView2Spike</AssemblyName>
+    <Description>Isolated Revit DockablePane and WebView2 feasibility spike. Not part of the RevitMCP capability core.</Description>
+    <UseWPF>true</UseWPF>
+    <PlatformTarget>x64</PlatformTarget>
+    <TargetFramework Condition="'$(RevitVersion)' == '2025'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' == '2026'">net8.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(RevitVersion)' == '2027'">net10.0-windows</TargetFramework>
+    <TargetFramework Condition="'$(TargetFramework)' == ''">net8.0-windows</TargetFramework>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitVersion)' == '2025'">
+    <DefineConstants>$(DefineConstants);REVIT2025</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(RevitVersion)' == '2026'">
+    <DefineConstants>$(DefineConstants);REVIT2026</DefineConstants>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(RevitVersion)' == '2027'">
+    <DefineConstants>$(DefineConstants);REVIT2027</DefineConstants>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" VersionOverride="$(RevitApiPackageVersion)">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI" VersionOverride="$(RevitApiPackageVersion)">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.Web.WebView2" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="ui\**\*" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <Target Name="ValidateRevitVersion" BeforeTargets="PrepareForBuild">
+    <Error
+      Text="RevitMCP.WebView2Spike requires an explicit RevitVersion MSBuild property. Supported values: 2025, 2026, 2027."
+      Condition="'$(RevitVersion)' == ''" />
+    <Error
+      Text="Unsupported RevitVersion '$(RevitVersion)'. The spike supports 2025, 2026, and 2027."
+      Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' != '2025' AND '$(RevitVersion)' != '2026' AND '$(RevitVersion)' != '2027'" />
+  </Target>
+
+  <Target Name="RemoveRevitApiFromCopyLocal" AfterTargets="ResolveAssemblyReferences">
+    <ItemGroup>
+      <ReferenceCopyLocalPaths Remove="@(ReferenceCopyLocalPaths)" Condition="'%(Filename)' == 'RevitAPI' OR '%(Filename)' == 'RevitAPIUI'" />
+      <RuntimeCopyLocalItems Remove="@(RuntimeCopyLocalItems)" Condition="'%(Filename)' == 'RevitAPI' OR '%(Filename)' == 'RevitAPIUI'" />
+    </ItemGroup>
+  </Target>
+
+  <Target Name="AssertSpikePayload" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
+    <Error
+      Text="RevitAPI.dll must not be copied into the spike output."
+      Condition="Exists('$(OutputPath)RevitAPI.dll')" />
+    <Error
+      Text="RevitAPIUI.dll must not be copied into the spike output."
+      Condition="Exists('$(OutputPath)RevitAPIUI.dll')" />
+    <Error
+      Text="Microsoft.Web.WebView2.Core.dll is missing from $(OutputPath)."
+      Condition="!Exists('$(OutputPath)Microsoft.Web.WebView2.Core.dll')" />
+    <Error
+      Text="Microsoft.Web.WebView2.Wpf.dll is missing from $(OutputPath)."
+      Condition="!Exists('$(OutputPath)Microsoft.Web.WebView2.Wpf.dll')" />
+    <Error
+      Text="WebView2Loader.dll is missing from $(OutputPath). The spike needs the managed package's native loader."
+      Condition="!Exists('$(OutputPath)WebView2Loader.dll') AND !Exists('$(OutputPath)runtimes\win-x64\native\WebView2Loader.dll')" />
+    <Error
+      Text="Local UI assets are missing from $(OutputPath)ui."
+      Condition="!Exists('$(OutputPath)ui\index.html') OR !Exists('$(OutputPath)ui\app.js') OR !Exists('$(OutputPath)ui\app.css')" />
+  </Target>
+</Project>
