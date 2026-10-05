@@ -127,7 +127,13 @@ Conceptual `BeginReview(intent_ref)`:
 - a different intent currently has the active pending session: `busy`;
 - otherwise: `started`, and the provider creates one new active review session.
 
-Do not define public MCP error codes for these outcomes.
+A new review starts only when the current active Revit document resolves to the same existing RevitMCP `document_id` bound to the intent. The lookup is non-creating. The provider does not mint a `document_id` in order to start a review.
+
+If another document is active, or no active document can be resolved, the review does not start and the outcome is `unavailable`. The provider does not activate or switch to another Revit document.
+
+`already_active` is not a new start. It brings forward the pending session that was already bound to that document.
+
+Do not define a public MCP error code for these outcomes.
 
 ## 8. Approval session binding
 
@@ -195,6 +201,17 @@ Do not define the exact Revit event that observes the active-document change.
 ## 12. Terminal decisions
 
 The first valid terminal human decision wins.
+
+`ApproveCurrent` and `RejectCurrent` revalidate before recording that decision:
+
+- the session correlation is still current;
+- the exact intent is still live in `EphemeralWriteIntentStore`;
+- the stored fingerprint, `instance_id`, and `document_id` still match that intent;
+- the current active document still matches the intent document, using a non-creating identity lookup.
+
+If the intent has expired or disappeared, the active document has changed, or the document has been successfully closed before the click is processed, record no decision. End the session as non-actionable. Fail closed. The conceptual result is `unavailable`, or `invalid_session` when the correlation itself is no longer current.
+
+Do not define the exact Revit event or implementation API that observes the active document.
 
 `approved` cannot later become `rejected`. `rejected` cannot later become `approved`.
 
@@ -370,7 +387,7 @@ Stop()
   -> cleared
 ```
 
-`ApproveCurrent` and `RejectCurrent` record a decision only for the current session correlation, and only as an explicit human action under section 9. `invalid_session` covers a missing, stale, or superseded correlation. `unavailable` covers a stopped provider or an intent the store no longer returns as live.
+`ApproveCurrent` and `RejectCurrent` record a decision only for the current session correlation, only as an explicit human action under section 9, and only after the revalidation in section 12. `invalid_session` covers a missing, stale, or superseded correlation. `unavailable` covers a stopped provider, an intent the store no longer returns as live, or an active document that no longer matches the intent.
 
 `DismissCurrent` records no decision.
 
@@ -408,6 +425,11 @@ A future implementation must cover these cases without launching Revit:
 26. No operation lists or searches approvals or intents.
 27. Decision state does not duplicate the full BIM preview payload.
 28. Provider state retains no Revit API wrappers.
+29. `BeginReview` while a different document is active does not start.
+30. `BeginReview` with no resolvable active document does not start.
+31. An intent that expires after `BeginReview` and before Approve or Reject receives no terminal decision.
+32. A delayed Approve or Reject after an active-document change records no decision.
+33. A delayed Approve or Reject after successful document-close invalidation records no decision.
 
 ## Explicitly excluded
 
