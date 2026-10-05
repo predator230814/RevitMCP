@@ -141,6 +141,13 @@ These are not approval authorities:
 
 This preserves ADR-0008. If that in-process provider is unavailable, apply fails closed.
 
+In-process ownership is a trust decision. It is not isolation from other code already loaded into Revit. The v1 threat scope is:
+
+- v1 protects the write decision against untrusted MCP, model, client, Server, MCP App, orchestrator, and request inputs;
+- the trusted computing base includes the Revit process, the RevitMCP.Addin binaries, and the bundled local approval UI assets used by the provider;
+- v1 does not claim protection against a compromised Revit process, malicious or injected in-process code, tampered RevitMCP binaries or UI assets, or a compromised OS or user session;
+- stronger isolation against those threats is future external-provider and platform-security work.
+
 ### 2. Intent state remains immutable
 
 LIFECYCLE-0002 semantics stay unchanged.
@@ -247,6 +254,8 @@ native provider
 ```
 
 The WebView2 message itself is not an authority-bearing token. A future bounded message concept such as `approveCurrent` or `rejectCurrent` names the decision for the current session. The page does not send an arbitrary `intent_ref`, fingerprint, or write instruction that the provider treats as authority.
+
+The bundled local approval UI is part of the trusted local interaction path. It must emit Approve or Reject only from an explicit user action for the currently rendered native-bound approval session. Page-load or automatic approval, model-triggered approval, and a generic programmatic approval command are forbidden. Content security policy, origin checks, and session validation constrain the channel. They do not by themselves prove a physical human gesture. The native .NET provider remains the authority.
 
 This ADR does not define a final JSON schema.
 
@@ -359,7 +368,7 @@ ADR-0010 does not authorize:
 
 ### Positive
 
-- v1 has the strongest available trust boundary: the decision is made in the Revit process that owns the intent.
+- v1 has a strong and simple trust boundary against untrusted MCP-side inputs: the approval decision is owned by the Revit-local Addin boundary that owns the intent.
 - The client and the model cannot self-approve.
 - Immutable intents remain unchanged.
 - A local approval UI can still be a modern DockablePane surface.
@@ -374,6 +383,7 @@ ADR-0010 does not authorize:
 - The approval provider needs lifecycle state separate from `EphemeralWriteIntentStore`.
 - An external enterprise provider requires a later trust and attestation design.
 - WebView2 compatibility remains a Revit-version integration concern for any future presentation implementation.
+- v1 does not claim protection against a compromised Revit process, injected in-process code, tampered binaries or UI assets, or a compromised OS or user session. Stronger isolation is later external-provider and platform-security work.
 
 ## Explicitly not decided
 
