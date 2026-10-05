@@ -1,6 +1,6 @@
 # LIFECYCLE-0003: Revit-local trusted approval provider lifecycle
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-05
 
 ## Purpose
