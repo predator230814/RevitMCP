@@ -118,6 +118,41 @@ public sealed class RevitLocalApprovalProviderStateMachineTests
     }
 
     [Fact]
+    public void Same_document_observation_ends_the_session_when_the_intent_expires()
+    {
+        var harness = Harness();
+        var started = harness.Provider.BeginReview(harness.IntentRef, "doc-a");
+        harness.Clock.Advance(TimeSpan.FromMinutes(10));
+
+        Assert.Equal(ApprovalObservation.Ended, harness.Provider.ObserveActiveDocument("doc-a"));
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, harness.Provider.ApproveCurrent(started.SessionRef, "doc-a").Status);
+        Assert.Equal(ApprovalConsumeStatus.NotApproved, harness.Provider.TryConsumeApproved(harness.IntentRef).Status);
+    }
+
+    [Fact]
+    public void Same_document_observation_ends_the_session_when_the_intent_is_rebound()
+    {
+        var clock = new ManualTimeProvider();
+        var draws = new Queue<byte[]>(new[] { Bytes(1), Bytes(1) });
+        var store = new EphemeralWriteIntentStore(clock, draws.Dequeue);
+        var sessions = new Queue<string>(new[] { "session-1", "session-2" });
+        var provider = new RevitLocalApprovalProviderStateMachine(store, clock, sessions.Dequeue);
+        var first = store.TryCreate(Draft());
+        var started = provider.BeginReview(first.IntentRef, "doc-a");
+        store.ForgetDocument("doc-a");
+        var reused = store.TryCreate(Draft(elementName: "Wall 2"));
+
+        Assert.Equal(first.IntentRef, reused.IntentRef);
+        Assert.NotEqual(first.IntentFingerprint, reused.IntentFingerprint);
+        Assert.Equal(ApprovalObservation.Ended, provider.ObserveActiveDocument("doc-a"));
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, provider.ApproveCurrent(started.SessionRef, "doc-a").Status);
+        Assert.Equal(ApprovalConsumeStatus.NotApproved, provider.TryConsumeApproved(reused.IntentRef).Status);
+        var restarted = provider.BeginReview(reused.IntentRef, "doc-a");
+        Assert.Equal(ApprovalReviewStatus.Started, restarted.Status);
+        Assert.NotEqual(started.SessionRef, restarted.SessionRef);
+    }
+
+    [Fact]
     public void Null_active_document_observation_ends_the_pending_session_without_a_decision()
     {
         var harness = Harness();
@@ -257,6 +292,26 @@ public sealed class RevitLocalApprovalProviderStateMachineTests
         Assert.Equal(ApprovalCommandStatus.InvalidSession, harness.Provider.ApproveCurrent(started.SessionRef, "doc-a").Status);
         Assert.Equal(restarted.SessionRef, harness.Provider.BeginReview(harness.IntentRef, "doc-a").SessionRef);
         Assert.Equal(ApprovalConsumeStatus.NotApproved, harness.Provider.TryConsumeApproved(harness.IntentRef).Status);
+    }
+
+    [Fact]
+    public void Repeated_session_candidate_does_not_reuse_a_previous_session_ref()
+    {
+        var clock = new ManualTimeProvider();
+        var draws = new Queue<byte[]>(new[] { Bytes(1), Bytes(2) });
+        var store = new EphemeralWriteIntentStore(clock, draws.Dequeue);
+        var provider = new RevitLocalApprovalProviderStateMachine(store, clock, () => "session-a");
+        var created = store.TryCreate(Draft());
+        var started = provider.BeginReview(created.IntentRef, "doc-a");
+        Assert.Equal(ApprovalDismissStatus.Dismissed, provider.DismissCurrent(started.SessionRef).Status);
+
+        var restarted = provider.BeginReview(created.IntentRef, "doc-a");
+
+        Assert.Equal(ApprovalReviewStatus.Started, restarted.Status);
+        Assert.NotEqual(started.SessionRef, restarted.SessionRef);
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, provider.ApproveCurrent(started.SessionRef, "doc-a").Status);
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, provider.RejectCurrent(started.SessionRef, "doc-a").Status);
+        Assert.Equal(ApprovalCommandStatus.Recorded, provider.ApproveCurrent(restarted.SessionRef, "doc-a").Status);
     }
 
     [Fact]
