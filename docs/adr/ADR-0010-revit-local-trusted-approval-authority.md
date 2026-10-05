@@ -1,6 +1,6 @@
 # ADR-0010: Revit-local trusted approval authority and provider contract
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-05
 
 ## Context
@@ -122,7 +122,7 @@ Rejected as an approval authority.
 
 ## Decision
 
-ADR-0010 does not supersede ADR-0001 through ADR-0009. Those decisions remain in force. This record is Proposed. Nothing in it is accepted implementation authority.
+ADR-0010 does not supersede ADR-0001 through ADR-0009. Those decisions remain in force. Acceptance authorizes no production change.
 
 ### 1. v1 approval authority is Revit-local and in-process
 

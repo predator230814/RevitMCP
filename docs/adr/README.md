@@ -13,9 +13,6 @@ Accepted ADRs:
 - [ADR-0007](ADR-0007-federated-mcp-boundaries-and-orchestration.md) — federated MCP boundaries and optional orchestration
 - [ADR-0008](ADR-0008-controlled-write-safety-model.md) — controlled write safety model
 - [ADR-0009](ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) — agent and human interaction, and the trusted approval boundary
-
-Proposed ADRs:
-
 - [ADR-0010](ADR-0010-revit-local-trusted-approval-authority.md) — Revit-local trusted approval authority and provider contract
 
 ## When to create an ADR
