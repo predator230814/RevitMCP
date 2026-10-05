@@ -2,9 +2,11 @@
 
 ## Status
 
-Open product question. No UI architecture has been selected.
+The preferred v1 approval presentation direction is accepted. A production UI implementation does not exist. Broader product UI and chat questions remain open.
 
-[ADR-0009](adr/ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) is **Accepted**. It separates model-facing capabilities, human-facing MCP App interaction, and the trusted approval-provider boundary. It does not select this product UI. An MCP App may later present an approval screen, but that screen is not automatically a trusted approval provider. Persistent writes remain governed by ADR-0008. The questions below stay open.
+[ADR-0009](adr/ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) is **Accepted**. It separates model-facing capabilities, human-facing MCP App interaction, and the trusted approval-provider boundary. It does not select the broader product UI. An MCP App may later present an approval screen, but that screen is not automatically a trusted approval provider. Persistent writes remain governed by ADR-0008.
+
+[ADR-0010](adr/ADR-0010-revit-local-trusted-approval-authority.md) is **Accepted**. The preferred v1 approval presentation direction is `DockablePane -> WPF -> bundled local WebView2`. Native `RevitMCP.Addin` remains the trusted approval authority. WebView2 remains presentation and input, not authority. A production UI implementation does not exist. The broader questions below stay open.
 
 ## Why this matters
 

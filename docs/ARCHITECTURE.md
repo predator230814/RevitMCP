@@ -56,6 +56,12 @@ Target conceptual layers:
 
 It does not change ADR-0007 or ADR-0008. Persistent writes remain on the ADR-0008 path. An MCP App is not a second Revit MCP service and is not a trusted approval provider. Current stdio operation remains valid. Acceptance does not authorize MCP Apps, app-only tools, CAP-0008, apply, Streamable HTTP, approval-provider code, MRTR or an SDK upgrade, orchestration implementation, temporary hide/isolate classification, or any production write.
 
+## Accepted v1 approval authority
+
+[ADR-0010](adr/ADR-0010-revit-local-trusted-approval-authority.md) is **Accepted**. The v1 trusted approval authority is Revit-local and in-process inside `RevitMCP.Addin`. `DockablePane -> WPF -> local WebView2` is the accepted preferred v1 approval presentation direction, based on the merged feasibility spike. That presentation is not the approval authority. Production WebView2 UI code does not exist.
+
+Acceptance does not authorize approval-provider production code, production WebView2 UI, CAP-0008, apply, Bridge v9, a Server write tool, MRTR, an SDK upgrade, or any production write.
+
 ## Decisions intentionally not made yet
 
 The following remain open architectural questions and must not be treated as settled:
