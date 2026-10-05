@@ -9,7 +9,7 @@ Revit DockablePane
 -> local HTML/CSS/JavaScript
 ```
 
-This is not the production RevitMCP add-in, not an MCP tool, and not an accepted UI architecture. ADR-0009 does not accept WebView2. Live Revit validation and Tech Lead review are still required before any product decision.
+This is not the production RevitMCP add-in, not an MCP tool, and not an accepted UI architecture. ADR-0009 does not accept WebView2. The live checks below prove feasibility only.
 
 The spike does not create a Revit transaction, call `Parameter.Set`, save, or sync. JavaScript can send only a whitelisted `ping` message. Unknown messages are rejected. The page is local and cannot navigate away from `https://revitmcp-spike.local/`.
 
@@ -59,11 +59,37 @@ Show and hide the pane from Add-Ins > External Tools:
 
 If the Evergreen WebView2 Runtime is missing, the pane shows that failure and Revit keeps running.
 
+## Live validation
+
+Feasibility only, recorded at `88b588afc42d5ea6e587bebd32ec2c76ed176fe2`. This does not accept WebView2 as production UI architecture.
+
+- Revit 2025.5 `25.5.0.57`: **PASS**
+  - managed WebView2 `1.0.2045.28` from Autodesk Revit 2025
+  - Evergreen runtime `154.0.4258.53`
+  - local content rendered
+  - hostReady PASS
+  - ping/pong PASS
+  - hide/show PASS
+  - clean shutdown/relaunch PASS
+- Revit 2026.5 `26.5.0.55`: **PASS**
+  - managed WebView2 `1.0.2478.35` from Autodesk Revit 2026
+  - local content and messaging PASS
+  - lifecycle PASS
+- Revit 2027: **PASS**
+  - managed WebView2 `1.0.2478.35` from Autodesk Revit 2027
+  - local content and messaging PASS
+  - lifecycle PASS
+
+Spike evidence:
+
+- Revit owns the managed WebView2 assemblies in-process.
+- The spike must compile against a compatible host-managed SDK version.
+- WebView2 creation is lazy.
+- The Evergreen browser runtime remains separate.
+
 ## Manual validation
 
-Do not mark a year PASS until these are observed in that Revit process. Current status: **PENDING** for Revit 2025, Revit 2026.5, and Revit 2027.
-
-Use a disposable project only.
+The matrix above is the recorded result. The checklist below is the manual procedure. Use a disposable project only.
 
 1. Revit starts with the spike loaded.
 2. Dockable pane registration succeeds. A failed registration leaves the show command reporting that the pane is not registered.
