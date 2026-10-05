@@ -7,6 +7,7 @@
 
   <ItemGroup>
     <Compile Include="..\RevitMCP.WebView2Spike\Messaging\SpikeMessages.cs" Link="SpikeMessages.cs" />
+    <Compile Include="..\RevitMCP.WebView2Spike\SpikeWebViewLifecycle.cs" Link="SpikeWebViewLifecycle.cs" />
   </ItemGroup>
 
   <ItemGroup>

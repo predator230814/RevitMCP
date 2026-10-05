@@ -11,7 +11,7 @@ namespace RevitMCP.WebView2Spike;
 
 internal sealed class SpikePaneHost : UserControl
 {
-    private readonly WebView2 _webView = new();
+    private readonly Grid _root = new();
     private readonly TextBlock _status = new()
     {
         TextWrapping = TextWrapping.Wrap,
@@ -21,6 +21,7 @@ internal sealed class SpikePaneHost : UserControl
 
     private readonly string _revitVersionNumber;
     private readonly string _revitBuild;
+    private WebView2? _webView;
     private CoreWebView2? _core;
     private int _initializeOnce;
     private int _disposed;
@@ -31,12 +32,15 @@ internal sealed class SpikePaneHost : UserControl
     {
         _revitVersionNumber = revitVersionNumber;
         _revitBuild = revitBuild;
-        Content = new Grid
-        {
-            Children = { _webView, _status },
-        };
-        _status.Text = "Starting the local WebView2 spike. Revit startup is not waiting on this.";
+        _root.Children.Add(_status);
+        Content = _root;
+        _status.Text = "WebView2 is not created until this pane is shown.";
         Loaded += OnLoaded;
+    }
+
+    public void BeginAfterShow()
+    {
+        TryCreateWebView();
     }
 
     public void DisposeHost()
@@ -48,20 +52,37 @@ internal sealed class SpikePaneHost : UserControl
 
         Loaded -= OnLoaded;
         DetachCore();
-        _webView.Dispose();
+        _webView?.Dispose();
+        _webView = null;
     }
 
     private void OnLoaded(object sender, RoutedEventArgs args)
     {
+        TryCreateWebView();
+    }
+
+    private void TryCreateWebView()
+    {
+        if (!SpikeWebViewLifecycle.ShouldCreate(
+                SpikePaneLifetime.ShowRequested,
+                IsLoaded,
+                alreadyCreated: _webView is not null || Volatile.Read(ref _initializeOnce) != 0))
+        {
+            return;
+        }
+
         if (Interlocked.Exchange(ref _initializeOnce, 1) != 0)
         {
             return;
         }
 
-        _ = InitializeAsync();
+        var webView = new WebView2();
+        _webView = webView;
+        _root.Children.Insert(0, webView);
+        _ = InitializeAsync(webView);
     }
 
-    private async Task InitializeAsync()
+    private async Task InitializeAsync(WebView2 webView)
     {
         try
         {
@@ -109,13 +130,13 @@ internal sealed class SpikePaneHost : UserControl
             Directory.CreateDirectory(userDataFolder);
 
             var environment = await CoreWebView2Environment.CreateAsync(browserExecutableFolder: null, userDataFolder: userDataFolder);
-            await _webView.EnsureCoreWebView2Async(environment);
-            if (Volatile.Read(ref _disposed) != 0 || _webView.CoreWebView2 is null)
+            await webView.EnsureCoreWebView2Async(environment);
+            if (Volatile.Read(ref _disposed) != 0 || webView.CoreWebView2 is null)
             {
                 return;
             }
 
-            _core = _webView.CoreWebView2;
+            _core = webView.CoreWebView2;
             _core.Settings.AreHostObjectsAllowed = false;
             _core.Settings.IsWebMessageEnabled = true;
             _core.Settings.AreDefaultScriptDialogsEnabled = false;
@@ -263,7 +284,11 @@ internal sealed class SpikePaneHost : UserControl
 
     private void ShowFailure(string message)
     {
-        _webView.Visibility = Visibility.Collapsed;
+        if (_webView is not null)
+        {
+            _webView.Visibility = Visibility.Collapsed;
+        }
+
         _status.Visibility = Visibility.Visible;
         _status.Text = message;
     }

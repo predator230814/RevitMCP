@@ -30,7 +30,15 @@ internal static class SpikePaneLifetime
 {
     private static SpikePaneHost? _host;
 
+    private static int _showRequested;
+
+    public static bool ShowRequested => Volatile.Read(ref _showRequested) != 0;
+
+    public static void RequestShow() => Volatile.Write(ref _showRequested, 1);
+
     public static void Attach(SpikePaneHost host) => _host = host;
+
+    public static void BeginAfterShow() => _host?.BeginAfterShow();
 
     public static void DisposeHost()
     {

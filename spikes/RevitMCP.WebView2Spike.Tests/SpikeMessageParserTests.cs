@@ -1,7 +1,26 @@
+using RevitMCP.WebView2Spike;
 using RevitMCP.WebView2Spike.Messaging;
 using Xunit;
 
 namespace RevitMCP.WebView2Spike.Tests;
+
+public class SpikeWebViewLifecycleTests
+{
+    [Fact]
+    public void WebView_is_not_created_before_show_or_load()
+    {
+        Assert.False(SpikeWebViewLifecycle.ShouldCreate(showRequested: false, paneLoaded: true, alreadyCreated: false));
+        Assert.False(SpikeWebViewLifecycle.ShouldCreate(showRequested: true, paneLoaded: false, alreadyCreated: false));
+        Assert.False(SpikeWebViewLifecycle.ShouldCreate(showRequested: false, paneLoaded: false, alreadyCreated: false));
+    }
+
+    [Fact]
+    public void WebView_is_created_once_after_show_and_load()
+    {
+        Assert.True(SpikeWebViewLifecycle.ShouldCreate(showRequested: true, paneLoaded: true, alreadyCreated: false));
+        Assert.False(SpikeWebViewLifecycle.ShouldCreate(showRequested: true, paneLoaded: true, alreadyCreated: true));
+    }
+}
 
 public class SpikeMessageParserTests
 {

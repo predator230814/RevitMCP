@@ -31,7 +31,9 @@ internal static class SpikePaneCommands
             var pane = application.GetDockablePane(new DockablePaneId(SpikeIds.PaneGuid));
             if (visible)
             {
+                SpikePaneLifetime.RequestShow();
                 pane.Show();
+                SpikePaneLifetime.BeginAfterShow();
             }
             else if (pane.IsShown())
             {
