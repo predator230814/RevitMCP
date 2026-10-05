@@ -7,4 +7,8 @@ These specifications refine accepted ADRs and execution/bridge contracts. They d
 Accepted specifications:
 
 - `LIFECYCLE-0001-revit-addin-bootstrap-and-shutdown.md` — minimal Revit add-in bootstrap, readiness publication, startup failure, and shutdown ordering.
-- `LIFECYCLE-0002-ephemeral-write-intent-store.md` — Addin-owned ephemeral store for a CAP-0007 preview intent. Accepted. The in-process store, successful document-close cleanup, and shutdown cleanup are implemented. CAP-0007 is not implemented. No Revit model mutation.
+- `LIFECYCLE-0002-ephemeral-write-intent-store.md` — Addin-owned ephemeral store for a CAP-0007 preview intent. Accepted. The in-process store, successful document-close cleanup, and shutdown cleanup are implemented. CAP-0007 is implemented end-to-end through SERVER-0007 and Bridge protocol v8, and that path is live-validated. No Revit model mutation.
+
+Proposed specifications:
+
+- `LIFECYCLE-0003-revit-local-approval-provider-lifecycle.md` — Revit-local trusted approval provider lifecycle. Proposed. It does not authorize provider implementation, production UI, CAP-0008, or a Revit write.
