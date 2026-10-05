@@ -76,7 +76,17 @@ internal sealed class SpikePaneHost : UserControl
             return;
         }
 
-        var webView = new WebView2();
+        WebView2 webView;
+        try
+        {
+            webView = new WebView2();
+        }
+        catch (Exception)
+        {
+            ReleaseFailedWebView("WebView2 could not be created in the spike pane.");
+            throw;
+        }
+
         _webView = webView;
         _root.Children.Insert(0, webView);
         _ = InitializeAsync(webView);
@@ -98,27 +108,27 @@ internal sealed class SpikePaneHost : UserControl
             }
             catch (WebView2RuntimeNotFoundException)
             {
-                ShowFailure("The Evergreen WebView2 Runtime is not installed. This spike does not download or install it.");
+                ReleaseFailedWebView("The Evergreen WebView2 Runtime is not installed. This spike does not download or install it.");
                 return;
             }
 
             if (string.IsNullOrWhiteSpace(runtimeVersion))
             {
-                ShowFailure("The Evergreen WebView2 Runtime reported an empty version. This spike does not download or install it.");
+                ReleaseFailedWebView("The Evergreen WebView2 Runtime reported an empty version. This spike does not download or install it.");
                 return;
             }
 
             var assemblyDirectory = Path.GetDirectoryName(typeof(SpikePaneHost).Assembly.Location);
             if (string.IsNullOrEmpty(assemblyDirectory))
             {
-                ShowFailure("Local UI assets were not found next to the spike assembly.");
+                ReleaseFailedWebView("Local UI assets were not found next to the spike assembly.");
                 return;
             }
 
             var uiFolder = Path.Combine(assemblyDirectory, "ui");
             if (!File.Exists(Path.Combine(uiFolder, "index.html")))
             {
-                ShowFailure("Local UI assets were not found next to the spike assembly.");
+                ReleaseFailedWebView("Local UI assets were not found next to the spike assembly.");
                 return;
             }
 
@@ -131,8 +141,14 @@ internal sealed class SpikePaneHost : UserControl
 
             var environment = await CoreWebView2Environment.CreateAsync(browserExecutableFolder: null, userDataFolder: userDataFolder);
             await webView.EnsureCoreWebView2Async(environment);
-            if (Volatile.Read(ref _disposed) != 0 || webView.CoreWebView2 is null)
+            if (Volatile.Read(ref _disposed) != 0)
             {
+                return;
+            }
+
+            if (webView.CoreWebView2 is null)
+            {
+                ReleaseFailedWebView("WebView2 initialization failed. Show the pane again to retry.");
                 return;
             }
 
@@ -155,7 +171,7 @@ internal sealed class SpikePaneHost : UserControl
         }
         catch (Exception ex)
         {
-            ShowFailure("WebView2 initialization failed: " + ex.GetType().Name + ". Revit was not crashed and the model was not modified.");
+            ReleaseFailedWebView("WebView2 initialization failed: " + ex.GetType().Name + ". Show the pane again to retry.");
         }
     }
 
@@ -168,7 +184,7 @@ internal sealed class SpikePaneHost : UserControl
 
         if (!args.IsSuccess || !SpikeOrigin.IsLocal(_core.Source))
         {
-            ShowFailure("Local content navigation failed. The spike did not leave the expected origin.");
+            ReleaseFailedWebView("Local content navigation failed. Show the pane again to retry.");
             return;
         }
 
@@ -282,11 +298,19 @@ internal sealed class SpikePaneHost : UserControl
         return SpikeOrigin.IsLocal(uri);
     }
 
-    private void ShowFailure(string message)
+    private void ReleaseFailedWebView(string message)
     {
+        DetachCore();
         if (_webView is not null)
         {
-            _webView.Visibility = Visibility.Collapsed;
+            _root.Children.Remove(_webView);
+            _webView.Dispose();
+            _webView = null;
+        }
+
+        if (Volatile.Read(ref _disposed) == 0)
+        {
+            Interlocked.Exchange(ref _initializeOnce, 0);
         }
 
         _status.Visibility = Visibility.Visible;

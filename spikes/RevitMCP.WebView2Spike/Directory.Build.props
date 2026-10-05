@@ -16,5 +16,8 @@
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2025'">$(Nice3pointRevitApi2025)</RevitApiPackageVersion>
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2026'">$(Nice3pointRevitApi2026)</RevitApiPackageVersion>
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2027'">$(Nice3pointRevitApi2027)</RevitApiPackageVersion>
+    <WebView2PackageVersion Condition="'$(RevitVersion)' == '2025'">1.0.2045.28</WebView2PackageVersion>
+    <WebView2PackageVersion Condition="'$(RevitVersion)' == '2026'">1.0.2478.35</WebView2PackageVersion>
+    <WebView2PackageVersion Condition="'$(RevitVersion)' == '2027'">1.0.2478.35</WebView2PackageVersion>
   </PropertyGroup>
 </Project>

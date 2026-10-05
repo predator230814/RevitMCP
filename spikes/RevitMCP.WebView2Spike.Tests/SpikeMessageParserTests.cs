@@ -20,6 +20,50 @@ public class SpikeWebViewLifecycleTests
         Assert.True(SpikeWebViewLifecycle.ShouldCreate(showRequested: true, paneLoaded: true, alreadyCreated: false));
         Assert.False(SpikeWebViewLifecycle.ShouldCreate(showRequested: true, paneLoaded: true, alreadyCreated: true));
     }
+
+    [Fact]
+    public void Failed_attempt_can_be_retried_on_a_later_show()
+    {
+        Assert.False(SpikeWebViewLifecycle.ShouldCreate(showRequested: true, paneLoaded: true, alreadyCreated: true));
+        Assert.True(SpikeWebViewLifecycle.ShouldCreate(showRequested: true, paneLoaded: true, alreadyCreated: false));
+    }
+}
+
+public class SpikeWebViewPackageTests
+{
+    [Theory]
+    [InlineData("2025", "1.0.2045.28")]
+    [InlineData("2026", "1.0.2478.35")]
+    [InlineData("2027", "1.0.2478.35")]
+    public void Managed_sdk_matches_the_revit_year(string revitYear, string packageVersion)
+    {
+        Assert.Equal(packageVersion, SpikeWebViewPackages.ForRevitYear(revitYear));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("2024")]
+    [InlineData("2028")]
+    public void Unknown_revit_year_has_no_package(string? revitYear)
+    {
+        Assert.Null(SpikeWebViewPackages.ForRevitYear(revitYear));
+    }
+
+    [Fact]
+    public void Show_failures_are_distinct()
+    {
+        var registered = SpikeShowDiagnostics.Message(SpikeShowStep.NotRegistered);
+        var shown = SpikeShowDiagnostics.Message(SpikeShowStep.ShowFailed);
+        var created = SpikeShowDiagnostics.Message(SpikeShowStep.WebViewCreationFailed);
+
+        Assert.Equal("The RevitMCP UI spike pane is not registered.", registered);
+        Assert.Equal("The RevitMCP UI spike pane could not be shown.", shown);
+        Assert.Equal("WebView2 could not be created in the spike pane.", created);
+        Assert.NotEqual(registered, shown);
+        Assert.NotEqual(registered, created);
+        Assert.NotEqual(shown, created);
+    }
 }
 
 public class SpikeMessageParserTests

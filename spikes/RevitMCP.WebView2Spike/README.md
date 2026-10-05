@@ -15,7 +15,11 @@ The spike does not create a Revit transaction, call `Parameter.Set`, save, or sy
 
 ## Package
 
-`Microsoft.Web.WebView2` `1.0.4258.31` is the current stable Release SDK. The prerelease SDK was not used because it targets preview Edge channels and experimental APIs. This spike uses only stable WebView2 APIs and expects the Evergreen WebView2 Runtime to already be installed. It does not download that runtime.
+The managed SDK reference follows the WebView2 assemblies already loaded by that Revit year. The installed Evergreen browser runtime stays unchanged and is discovered at runtime. This spike does not download that runtime and does not add an assembly resolver.
+
+- Revit 2025: `Microsoft.Web.WebView2` `1.0.2045.28`
+- Revit 2026: `Microsoft.Web.WebView2` `1.0.2478.35`
+- Revit 2027: `Microsoft.Web.WebView2` `1.0.2478.35`
 
 Revit API packages follow the repository matrix:
 

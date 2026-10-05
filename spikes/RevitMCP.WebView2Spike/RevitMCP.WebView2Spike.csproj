@@ -37,7 +37,7 @@
       <ExcludeAssets>runtime</ExcludeAssets>
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.Web.WebView2" />
+    <PackageReference Include="Microsoft.Web.WebView2" VersionOverride="$(WebView2PackageVersion)" />
   </ItemGroup>
 
   <ItemGroup>
@@ -51,6 +51,9 @@
     <Error
       Text="Unsupported RevitVersion '$(RevitVersion)'. The spike supports 2025, 2026, and 2027."
       Condition="'$(RevitVersion)' != '' AND '$(RevitVersion)' != '2025' AND '$(RevitVersion)' != '2026' AND '$(RevitVersion)' != '2027'" />
+    <Error
+      Text="WebView2PackageVersion is not set for RevitVersion '$(RevitVersion)'."
+      Condition="('$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027') AND '$(WebView2PackageVersion)' == ''" />
   </Target>
 
   <Target Name="RemoveRevitApiFromCopyLocal" AfterTargets="ResolveAssemblyReferences">
