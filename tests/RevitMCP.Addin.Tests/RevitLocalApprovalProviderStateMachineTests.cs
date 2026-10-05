@@ -62,7 +62,7 @@ public sealed class RevitLocalApprovalProviderStateMachineTests
         var review = harness.Provider.BeginReview(harness.IntentRef, "doc-a");
 
         Assert.Equal(ApprovalReviewStatus.Started, review.Status);
-        Assert.Equal("session-1", review.SessionRef);
+        Assert.False(string.IsNullOrWhiteSpace(review.SessionRef));
     }
 
     [Fact]
@@ -208,7 +208,7 @@ public sealed class RevitLocalApprovalProviderStateMachineTests
         Assert.Equal(ApprovalConsumeStatus.NotApproved, provider.TryConsumeApproved(reused.IntentRef).Status);
         var restarted = provider.BeginReview(reused.IntentRef, "doc-a");
         Assert.Equal(ApprovalReviewStatus.Started, restarted.Status);
-        Assert.Equal("session-2", restarted.SessionRef);
+        Assert.NotEqual(started.SessionRef, restarted.SessionRef);
     }
 
     [Fact]
@@ -302,16 +302,23 @@ public sealed class RevitLocalApprovalProviderStateMachineTests
         var store = new EphemeralWriteIntentStore(clock, draws.Dequeue);
         var provider = new RevitLocalApprovalProviderStateMachine(store, clock, () => "session-a");
         var created = store.TryCreate(Draft());
-        var started = provider.BeginReview(created.IntentRef, "doc-a");
-        Assert.Equal(ApprovalDismissStatus.Dismissed, provider.DismissCurrent(started.SessionRef).Status);
+        var first = provider.BeginReview(created.IntentRef, "doc-a");
+        Assert.Equal(ApprovalDismissStatus.Dismissed, provider.DismissCurrent(first.SessionRef).Status);
+        var second = provider.BeginReview(created.IntentRef, "doc-a");
+        Assert.Equal(ApprovalDismissStatus.Dismissed, provider.DismissCurrent(second.SessionRef).Status);
+        var third = provider.BeginReview(created.IntentRef, "doc-a");
 
-        var restarted = provider.BeginReview(created.IntentRef, "doc-a");
-
-        Assert.Equal(ApprovalReviewStatus.Started, restarted.Status);
-        Assert.NotEqual(started.SessionRef, restarted.SessionRef);
-        Assert.Equal(ApprovalCommandStatus.InvalidSession, provider.ApproveCurrent(started.SessionRef, "doc-a").Status);
-        Assert.Equal(ApprovalCommandStatus.InvalidSession, provider.RejectCurrent(started.SessionRef, "doc-a").Status);
-        Assert.Equal(ApprovalCommandStatus.Recorded, provider.ApproveCurrent(restarted.SessionRef, "doc-a").Status);
+        Assert.Equal(ApprovalReviewStatus.Started, first.Status);
+        Assert.Equal(ApprovalReviewStatus.Started, second.Status);
+        Assert.Equal(ApprovalReviewStatus.Started, third.Status);
+        Assert.NotEqual(first.SessionRef, second.SessionRef);
+        Assert.NotEqual(second.SessionRef, third.SessionRef);
+        Assert.NotEqual(first.SessionRef, third.SessionRef);
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, provider.ApproveCurrent(first.SessionRef, "doc-a").Status);
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, provider.RejectCurrent(first.SessionRef, "doc-a").Status);
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, provider.ApproveCurrent(second.SessionRef, "doc-a").Status);
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, provider.RejectCurrent(second.SessionRef, "doc-a").Status);
+        Assert.Equal(ApprovalCommandStatus.Recorded, provider.ApproveCurrent(third.SessionRef, "doc-a").Status);
     }
 
     [Fact]

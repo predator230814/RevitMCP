@@ -68,9 +68,8 @@ internal sealed class RevitLocalApprovalProviderStateMachine
     private readonly Func<string> _sessionRefFactory;
     private readonly string _providerMethod;
     private readonly Dictionary<string, TerminalDecision> _decisions = new(StringComparer.Ordinal);
-    private readonly HashSet<string> _issuedSessionRefs = new(StringComparer.Ordinal);
     private ActiveSession? _session;
-    private int _sessionDisambiguator;
+    private int _sessionSequence;
     private bool _stopped;
 
     public RevitLocalApprovalProviderStateMachine(
@@ -387,24 +386,13 @@ internal sealed class RevitLocalApprovalProviderStateMachine
             return false;
         }
 
-        if (string.IsNullOrWhiteSpace(created))
+        if (string.IsNullOrWhiteSpace(created) || _sessionSequence == int.MaxValue)
         {
             return false;
         }
 
-        var candidate = created;
-        while (!_issuedSessionRefs.Add(candidate))
-        {
-            if (_sessionDisambiguator == int.MaxValue)
-            {
-                return false;
-            }
-
-            _sessionDisambiguator++;
-            candidate = string.Concat(created, "~", _sessionDisambiguator.ToString(System.Globalization.CultureInfo.InvariantCulture));
-        }
-
-        sessionRef = candidate;
+        _sessionSequence++;
+        sessionRef = string.Concat(created, "~", _sessionSequence.ToString(System.Globalization.CultureInfo.InvariantCulture));
         return true;
     }
 
