@@ -56,6 +56,12 @@ Target conceptual layers:
 
 It does not change ADR-0007 or ADR-0008. Persistent writes remain on the ADR-0008 path. An MCP App is not a second Revit MCP service and is not a trusted approval provider. Current stdio operation remains valid. Acceptance does not authorize MCP Apps, app-only tools, CAP-0008, apply, Streamable HTTP, approval-provider code, MRTR or an SDK upgrade, orchestration implementation, temporary hide/isolate classification, or any production write.
 
+## Proposed v1 approval authority
+
+[ADR-0010](adr/ADR-0010-revit-local-trusted-approval-authority.md) is **Proposed**. It selects a Revit-local, in-process trusted approval authority inside `RevitMCP.Addin` for v1, keeps the ephemeral intent store immutable, and records `DockablePane -> WPF -> local WebView2` as the preferred v1 presentation direction. The merged WebView2 spike is feasibility evidence only.
+
+ADR-0010 is not accepted. It does not authorize approval-provider code, production WebView2 UI, CAP-0008, apply, MRTR, an SDK upgrade, or any production write.
+
 ## Decisions intentionally not made yet
 
 The following remain open architectural questions and must not be treated as settled:
@@ -69,6 +75,7 @@ The following remain open architectural questions and must not be treated as set
 - multi-service orchestration implementation technology, if introduced;
 - future tool-surface scoping mechanism;
 - whether temporary hide/isolate is a transient interaction. ADR-0009 defers that classification until the concrete Revit API behavior is validated. Acceptance of ADR-0009 does not decide it.
+- which trusted approval provider ships, and which Revit approval presentation ships. ADR-0010 proposes the v1 answers and remains Proposed.
 
 These remaining decisions should be made through research, discussion, and ADRs. Do not treat them as implementation work authorized by this document.
 

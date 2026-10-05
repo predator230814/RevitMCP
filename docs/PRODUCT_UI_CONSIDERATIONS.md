@@ -2,9 +2,11 @@
 
 ## Status
 
-Open product question. No UI architecture has been selected.
+Open product question. No production UI architecture has been accepted.
 
-[ADR-0009](adr/ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) is **Accepted**. It separates model-facing capabilities, human-facing MCP App interaction, and the trusted approval-provider boundary. It does not select this product UI. An MCP App may later present an approval screen, but that screen is not automatically a trusted approval provider. Persistent writes remain governed by ADR-0008. The questions below stay open.
+[ADR-0009](adr/ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) is **Accepted**. It separates model-facing capabilities, human-facing MCP App interaction, and the trusted approval-provider boundary. It does not select this product UI. An MCP App may later present an approval screen, but that screen is not automatically a trusted approval provider. Persistent writes remain governed by ADR-0008.
+
+[ADR-0010](adr/ADR-0010-revit-local-trusted-approval-authority.md) is **Proposed**. It records `DockablePane -> WPF -> local WebView2` as the preferred v1 Revit approval presentation direction. The merged WebView2 spike is feasibility evidence only. Neither the spike nor this proposal accepts WebView2 as production UI. The native Addin remains the proposed approval authority. The questions below stay open.
 
 ## Why this matters
 

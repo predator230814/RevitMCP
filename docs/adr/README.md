@@ -14,6 +14,10 @@ Accepted ADRs:
 - [ADR-0008](ADR-0008-controlled-write-safety-model.md) — controlled write safety model
 - [ADR-0009](ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) — agent and human interaction, and the trusted approval boundary
 
+Proposed ADRs:
+
+- [ADR-0010](ADR-0010-revit-local-trusted-approval-authority.md) — Revit-local trusted approval authority and provider contract
+
 ## When to create an ADR
 
 Create an ADR when a decision materially affects architecture, interoperability, security, deployment, protocol behavior, Revit integration, or long-term maintainability.
