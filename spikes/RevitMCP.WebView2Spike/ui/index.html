@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'none'; connect-src 'none'; frame-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <title>RevitMCP UI Spike</title>
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <main>
+    <p class="eyebrow">Experimental spike</p>
+    <h1>RevitMCP UI Spike</h1>
+    <p class="note">Local WebView2 page. It cannot modify the Revit model.</p>
+    <dl>
+      <div><dt>Revit</dt><dd id="revit">waiting</dd></div>
+      <div><dt>Runtime</dt><dd id="dotnet">waiting</dd></div>
+      <div><dt>WebView2 SDK</dt><dd id="sdk">waiting</dd></div>
+      <div><dt>WebView2 runtime</dt><dd id="browser">waiting</dd></div>
+      <div><dt>Origin</dt><dd id="origin">waiting</dd></div>
+      <div><dt>CoreWebView2</dt><dd id="initialized">waiting</dd></div>
+    </dl>
+    <section>
+      <h2>Messages</h2>
+      <p>Host to UI <strong id="host-to-ui">waiting</strong></p>
+      <p>UI to Host <strong id="ui-to-host">waiting</strong></p>
+      <button id="ping" type="button">Send ping</button>
+      <p id="detail"></p>
+    </section>
+    <section>
+      <h2>Loaded WebView2 assemblies</h2>
+      <ul id="assemblies"></ul>
+    </section>
+  </main>
+  <script src="app.js"></script>
+</body>
+</html>

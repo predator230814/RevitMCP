@@ -6,6 +6,7 @@
   <ItemGroup>
     <PackageVersion Include="Microsoft.Extensions.Hosting" Version="10.0.10" />
     <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="18.9.0" />
+    <PackageVersion Include="Microsoft.Web.WebView2" Version="1.0.4258.31" />
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
     <PackageVersion Include="Nice3point.Revit.Api.RevitAPI" Version="$(Nice3pointRevitApi2026)" />
     <PackageVersion Include="Nice3point.Revit.Api.RevitAPIUI" Version="$(Nice3pointRevitApi2026)" />
