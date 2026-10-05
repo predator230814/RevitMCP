@@ -66,7 +66,7 @@ Disadvantages:
 - headless or unattended apply stays impossible in v1;
 - the provider needs its own lifecycle beside the immutable intent store.
 
-Proposed direction for v1.
+Selected for v1.
 
 ### Option B: Separate local companion-process approval provider
 
