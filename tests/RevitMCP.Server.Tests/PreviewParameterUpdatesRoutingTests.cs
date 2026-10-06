@@ -17,7 +17,8 @@ public sealed class PreviewParameterUpdatesRoutingTests
         Assert.False(InstanceTargetResolver.IsPreviewParameterUpdatesEligible(TestSupport.Ready("v6", "pipe-v6", protocolVersion: 6)));
         Assert.False(InstanceTargetResolver.IsPreviewParameterUpdatesEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
         Assert.True(InstanceTargetResolver.IsPreviewParameterUpdatesEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
-        Assert.False(InstanceTargetResolver.IsPreviewParameterUpdatesEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
+        Assert.True(InstanceTargetResolver.IsPreviewParameterUpdatesEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
+        Assert.False(InstanceTargetResolver.IsPreviewParameterUpdatesEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
     }
 
     [Fact]
@@ -87,7 +88,7 @@ public sealed class PreviewParameterUpdatesRoutingTests
 
     [Theory]
     [InlineData("v7", 7)]
-    [InlineData("v9", 9)]
+    [InlineData("v10", 10)]
     public async Task Explicit_ineligible_id_returns_unavailable(string instanceId, int protocolVersion)
     {
         var discovery = new FakeDiscovery();

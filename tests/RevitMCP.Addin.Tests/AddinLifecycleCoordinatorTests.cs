@@ -39,7 +39,7 @@ public sealed class AddinLifecycleCoordinatorTests
 
         Assert.Equal(AddinLifecycleState.Ready, coordinator.State);
         Assert.Equal(1, dispatchers.CreateCount);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "bridge.start", "registration.publish" }, events);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "bridge.start", "registration.publish" }, events);
     }
 
     [Fact]
@@ -61,8 +61,9 @@ public sealed class AddinLifecycleCoordinatorTests
         Assert.Equal("getparametervalues.create", events[5]);
         Assert.Equal("getmep.create", events[6]);
         Assert.Equal("preview.create", events[7]);
-        Assert.Equal("bridge.start", events[8]);
-        Assert.Equal("registration.publish", events[9]);
+        Assert.Equal("review.create", events[8]);
+        Assert.Equal("bridge.start", events[9]);
+        Assert.Equal("registration.publish", events[10]);
         Assert.True(bridges.Published);
         Assert.True(bridges.LastBridge?.HasRegistration);
         Assert.NotNull(bridges.LastCapability);
@@ -72,6 +73,7 @@ public sealed class AddinLifecycleCoordinatorTests
         Assert.NotNull(bridges.LastGetParameterValues);
         Assert.NotNull(bridges.LastGetMepTopology);
         Assert.NotNull(bridges.LastPreviewParameterUpdates);
+        Assert.NotNull(bridges.LastRequestParameterUpdateReview);
         Assert.NotNull(coordinator.Metadata);
         Assert.Equal(coordinator.InstanceId, coordinator.Metadata!.InstanceId);
         Assert.Equal("2026", coordinator.Metadata.RevitVersion);
@@ -149,6 +151,7 @@ public sealed class AddinLifecycleCoordinatorTests
                 "getparametervalues.create",
                 "getmep.create",
                 "preview.create",
+                "review.create",
                 "bridge.start",
                 "registration.publish",
                 "dispatcher.stop",

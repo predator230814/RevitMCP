@@ -47,7 +47,8 @@ internal static class TestSupport
             AddinVersion = registration.AddinVersion,
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
-                BridgeProtocol.PreviewParameterUpdatesVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.RequestParameterUpdateReviewVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.PreviewParameterUpdatesVersion => BridgeProtocol.PreviewParameterUpdatesVersions,
                 BridgeProtocol.GetMepTopologyVersion => BridgeProtocol.GetMepTopologyVersions,
                 BridgeProtocol.GetParameterValuesVersion => BridgeProtocol.GetParameterValuesVersions,
                 BridgeProtocol.DescribeParametersVersion => BridgeProtocol.DescribeParametersVersions,
@@ -738,6 +739,27 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return PreviewParameterUpdates is null
             ? throw new NotSupportedException("This recording client does not implement revit.preview_parameter_updates.")
             : PreviewParameterUpdates(request, timeout, cancellationToken);
+    }
+
+    public int RequestParameterUpdateReviewCalls { get; private set; }
+
+    public RequestParameterUpdateReviewRequest? LastRequestParameterUpdateReviewRequest { get; private set; }
+
+    public TimeSpan? LastRequestParameterUpdateReviewTimeout { get; private set; }
+
+    public Func<RequestParameterUpdateReviewRequest, TimeSpan, CancellationToken, Task<RequestParameterUpdateReviewResult>>? RequestParameterUpdateReview { get; set; }
+
+    public Task<RequestParameterUpdateReviewResult> RequestParameterUpdateReviewAsync(
+        RequestParameterUpdateReviewRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        RequestParameterUpdateReviewCalls++;
+        LastRequestParameterUpdateReviewRequest = request;
+        LastRequestParameterUpdateReviewTimeout = timeout;
+        return RequestParameterUpdateReview is null
+            ? throw new NotSupportedException("This recording client does not implement revit.request_parameter_update_review.")
+            : RequestParameterUpdateReview(request, timeout, cancellationToken);
     }
 
     public ValueTask DisposeAsync()

@@ -29,4 +29,6 @@ public static class CapabilityErrorCodes
     public const string InvalidParameterUpdatePreview = "INVALID_PARAMETER_UPDATE_PREVIEW";
 
     public const string IntentCapacityReached = "INTENT_CAPACITY_REACHED";
+
+    public const string InvalidApprovalReviewRequest = "INVALID_APPROVAL_REVIEW_REQUEST";
 }

@@ -28,7 +28,7 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(7, tools.Count);
+        Assert.Equal(8, tools.Count);
         Assert.Equal(
             new[]
             {
@@ -38,7 +38,8 @@ public sealed class StdioServerProcessTests
                 GetMepTopologyToolMetadata.Name,
                 GetParameterValuesToolMetadata.Name,
                 PreviewParameterUpdatesToolMetadata.Name,
-                QueryElementsToolMetadata.Name
+                QueryElementsToolMetadata.Name,
+                RequestParameterUpdateReviewToolMetadata.Name
             },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
         Assert.Equal(
@@ -50,7 +51,8 @@ public sealed class StdioServerProcessTests
                 "revit_get_mep_topology",
                 "revit_get_parameter_values",
                 "revit_preview_parameter_updates",
-                "revit_query_elements"
+                "revit_query_elements",
+                "revit_request_parameter_update_review"
             },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("handshake", StringComparison.OrdinalIgnoreCase));
@@ -58,6 +60,7 @@ public sealed class StdioServerProcessTests
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.query_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.describe_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.preview_", StringComparison.Ordinal));
+        Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.request_", StringComparison.Ordinal));
 
         var getContext = Assert.Single(tools, tool => tool.Name == GetContextToolMetadata.Name);
         Assert.Equal(GetContextToolMetadata.Title, getContext.Title);
@@ -101,6 +104,14 @@ public sealed class StdioServerProcessTests
         Assert.False(preview.ProtocolTool.Annotations?.DestructiveHint);
         Assert.False(preview.ProtocolTool.Annotations?.IdempotentHint);
         Assert.False(preview.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var review = Assert.Single(tools, tool => tool.Name == RequestParameterUpdateReviewToolMetadata.Name);
+        Assert.Equal(RequestParameterUpdateReviewToolMetadata.Title, review.Title);
+        Assert.Equal(RequestParameterUpdateReviewToolMetadata.Description, review.Description);
+        Assert.False(review.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(review.ProtocolTool.Annotations?.DestructiveHint);
+        Assert.False(review.ProtocolTool.Annotations?.IdempotentHint);
+        Assert.False(review.ProtocolTool.Annotations?.OpenWorldHint);
 
         var rejected = await client.CallToolAsync(
             GetElementsToolMetadata.Name,
@@ -228,6 +239,19 @@ public sealed class StdioServerProcessTests
         Assert.DoesNotContain("NO_REVIT_INSTANCE", previewText, StringComparison.Ordinal);
         Assert.DoesNotContain("INVALID_PARAMETER_UPDATE_PREVIEW", previewText, StringComparison.Ordinal);
         Assert.DoesNotContain("revit.preview_parameter_updates", previewText, StringComparison.Ordinal);
+
+        var malformedReview = await client.CallToolAsync(
+            RequestParameterUpdateReviewToolMetadata.Name,
+            new Dictionary<string, object?>
+            {
+                ["instance_id"] = "only",
+                ["intent_ref"] = "intent-ref",
+                ["confirm"] = true
+            });
+        Assert.True(malformedReview.IsError);
+        var reviewText = Assert.IsType<TextContentBlock>(Assert.Single(malformedReview.Content)).Text;
+        Assert.Contains(McpToolErrorCodes.InvalidRequest, reviewText, StringComparison.Ordinal);
+        Assert.DoesNotContain("revit.request_parameter_update_review", reviewText, StringComparison.Ordinal);
     }
 
     private static (string FileName, IList<string> Arguments)? ResolveServerCommand()

@@ -116,7 +116,7 @@ public sealed class GetElementsBridgeTests
     }
 
     [Fact]
-    public void Unknown_v9_does_not_allow_any_current_capability()
+    public void Unknown_v10_does_not_allow_any_current_capability()
     {
         Assert.True(BridgeProtocol.SupportsGetContext(8));
         Assert.True(BridgeProtocol.SupportsQueryElements(8));
@@ -124,13 +124,21 @@ public sealed class GetElementsBridgeTests
         Assert.True(BridgeProtocol.SupportsDescribeParameters(8));
         Assert.True(BridgeProtocol.SupportsGetParameterValues(8));
         Assert.True(BridgeProtocol.SupportsGetMepTopology(8));
-        Assert.False(BridgeProtocol.SupportsGetContext(9));
-        Assert.False(BridgeProtocol.SupportsQueryElements(9));
-        Assert.False(BridgeProtocol.SupportsGetElements(9));
-        Assert.False(BridgeProtocol.SupportsDescribeParameters(9));
-        Assert.False(BridgeProtocol.SupportsGetParameterValues(9));
-        Assert.False(BridgeProtocol.SupportsGetMepTopology(9));
-        Assert.False(BridgeProtocol.SupportsPreviewParameterUpdates(9));
+        Assert.True(BridgeProtocol.SupportsGetContext(9));
+        Assert.True(BridgeProtocol.SupportsQueryElements(9));
+        Assert.True(BridgeProtocol.SupportsGetElements(9));
+        Assert.True(BridgeProtocol.SupportsDescribeParameters(9));
+        Assert.True(BridgeProtocol.SupportsGetParameterValues(9));
+        Assert.True(BridgeProtocol.SupportsGetMepTopology(9));
+        Assert.True(BridgeProtocol.SupportsPreviewParameterUpdates(9));
+        Assert.False(BridgeProtocol.SupportsGetContext(10));
+        Assert.False(BridgeProtocol.SupportsQueryElements(10));
+        Assert.False(BridgeProtocol.SupportsGetElements(10));
+        Assert.False(BridgeProtocol.SupportsDescribeParameters(10));
+        Assert.False(BridgeProtocol.SupportsGetParameterValues(10));
+        Assert.False(BridgeProtocol.SupportsGetMepTopology(10));
+        Assert.False(BridgeProtocol.SupportsPreviewParameterUpdates(10));
+        Assert.False(BridgeProtocol.SupportsRequestParameterUpdateReview(10));
     }
 
     [Fact]

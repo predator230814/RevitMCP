@@ -99,6 +99,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("preview.create");
         return new RecordingPreviewParameterUpdatesService();
     }
+
+    public IRevitRequestParameterUpdateReviewService? CreateRequestParameterUpdateReview(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("review.create");
+        return new RecordingRequestParameterUpdateReviewService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -164,6 +171,18 @@ internal sealed class RecordingPreviewParameterUpdatesService : IRevitPreviewPar
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording preview does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingRequestParameterUpdateReviewService : IRevitRequestParameterUpdateReviewService
+{
+    public Task<RequestParameterUpdateReviewResult> RequestParameterUpdateReviewAsync(
+        RequestParameterUpdateReviewRequest request,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording request-review does not execute Revit work.");
     }
 }
 
@@ -276,6 +295,8 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitPreviewParameterUpdatesService? LastPreviewParameterUpdates { get; private set; }
 
+    public IRevitRequestParameterUpdateReviewService? LastRequestParameterUpdateReview { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
@@ -285,6 +306,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitGetParameterValuesService? getParameterValues,
         IRevitGetMepTopologyService? getMepTopology,
         IRevitPreviewParameterUpdatesService? previewParameterUpdates,
+        IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -295,6 +317,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         LastGetParameterValues = getParameterValues;
         LastGetMepTopology = getMepTopology;
         LastPreviewParameterUpdates = previewParameterUpdates;
+        LastRequestParameterUpdateReview = requestParameterUpdateReview;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

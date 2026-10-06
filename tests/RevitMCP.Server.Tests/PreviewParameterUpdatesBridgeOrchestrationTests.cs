@@ -16,7 +16,7 @@ public sealed class PreviewParameterUpdatesBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 9, 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -62,8 +62,8 @@ public sealed class PreviewParameterUpdatesBridgeOrchestrationTests
 
     [Theory]
     [InlineData(7)]
-    [InlineData(9)]
-    public async Task Selected_non_v8_does_not_invoke_preview(int selectedVersion)
+    [InlineData(10)]
+    public async Task Selected_unsupported_protocol_does_not_invoke_preview(int selectedVersion)
     {
         var discovery = new FakeDiscovery();
         discovery.Instances.Add(TestSupport.Ready("id-v8", "pipe-v8", protocolVersion: 8));
@@ -73,7 +73,7 @@ public sealed class PreviewParameterUpdatesBridgeOrchestrationTests
             return Task.FromResult(new RecordingBridgeClient
             {
                 Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: selectedVersion)),
-                PreviewParameterUpdates = (_, _, _) => throw new InvalidOperationException("Preview must not run for a non-v8 selection.")
+                PreviewParameterUpdates = (_, _, _) => throw new InvalidOperationException("Preview must not run for an unsupported protocol selection.")
             });
         });
 
