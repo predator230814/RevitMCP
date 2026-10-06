@@ -104,10 +104,12 @@ public sealed class IntentStoreLifecycleTests
         var other = store.TryCreate(Draft("doc-b"));
         var steps = new List<string>();
 
+        var provider = new RevitMCP.Addin.Approval.RevitLocalApprovalProviderStateMachine(store);
         var forgotten = RevitExecutionDispatcherLifetime.ApplySuccessfulDocumentClose(
             hasExistingDocumentId: true,
             documentId: "doc-a",
-            store,
+            provider.ForgetDocument,
+            store.ForgetDocument,
             () =>
             {
                 steps.Add(store.TryGet(matching.IntentRef!, out _) ? "parameter-refs-while-live" : "parameter-refs");
@@ -133,10 +135,20 @@ public sealed class IntentStoreLifecycleTests
         var created = store.TryCreate(Draft("doc-a"));
         var steps = new List<string>();
 
+        var provider = new RevitMCP.Addin.Approval.RevitLocalApprovalProviderStateMachine(store);
         var forgotten = RevitExecutionDispatcherLifetime.ApplySuccessfulDocumentClose(
             hasExistingDocumentId: false,
             documentId: null,
-            store,
+            documentId =>
+            {
+                steps.Add("provider");
+                return provider.ForgetDocument(documentId);
+            },
+            documentId =>
+            {
+                steps.Add("intent");
+                return store.ForgetDocument(documentId);
+            },
             () =>
             {
                 steps.Add("parameter-refs");
@@ -160,10 +172,12 @@ public sealed class IntentStoreLifecycleTests
         var created = store.TryCreate(Draft("doc-a"));
         var cleanup = new DocumentCloseIdentityCleanup<object>(_ =>
         {
+            var provider = new RevitMCP.Addin.Approval.RevitLocalApprovalProviderStateMachine(store);
             return RevitExecutionDispatcherLifetime.ApplySuccessfulDocumentClose(
                 true,
                 "doc-a",
-                store,
+                provider.ForgetDocument,
+                store.ForgetDocument,
                 () => false,
                 () => false);
         });
@@ -192,7 +206,7 @@ public sealed class IntentStoreLifecycleTests
         var coordinator = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "RevitMCP.Addin", "Lifecycle", "AddinLifecycleCoordinator.cs"));
 
         Assert.Equal(1, CountOccurrences(adapters, "new EphemeralWriteIntentStore()"));
-        Assert.Contains("new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents)", adapters, StringComparison.Ordinal);
         Assert.Contains("new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(ForgetDocument)", adapters, StringComparison.Ordinal);
 
         var forget = Slice(adapters, "private bool ForgetDocument(", "internal static bool ApplySuccessfulDocumentClose");
@@ -204,11 +218,15 @@ public sealed class IntentStoreLifecycleTests
         Assert.DoesNotContain("GetOrAssign(", forget, StringComparison.Ordinal);
 
         var apply = Slice(adapters, "internal static bool ApplySuccessfulDocumentClose", "public void Stop()");
-        var intentForget = apply.IndexOf("intentStore.ForgetDocument(documentId)", StringComparison.Ordinal);
+        var providerForget = apply.IndexOf("forgetProvider(documentId)", StringComparison.Ordinal);
+        var intentForget = apply.IndexOf("forgetIntent(documentId)", StringComparison.Ordinal);
         var parameterCallback = apply.IndexOf("forgetParameterRefs()", StringComparison.Ordinal);
         var identityCallback = apply.IndexOf("forgetDocumentIdentity()", StringComparison.Ordinal);
         Assert.Contains("if (hasExistingDocumentId)", apply, StringComparison.Ordinal);
-        Assert.True(intentForget >= 0 && intentForget < parameterCallback && parameterCallback < identityCallback);
+        Assert.True(providerForget >= 0 && providerForget < intentForget && intentForget < parameterCallback && parameterCallback < identityCallback);
+        var providerBinding = forget.IndexOf("_approval.ForgetDocument", StringComparison.Ordinal);
+        var intentBinding = forget.IndexOf("_intentStore.ForgetDocument", StringComparison.Ordinal);
+        Assert.True(providerBinding >= 0 && providerBinding < intentBinding);
 
         var production = Slice(adapters, "internal RevitExecutionDispatcherLifetime(", "internal RevitExecutionDispatcherLifetime(");
         Assert.Contains("BindExecution(dispatcher)", production, StringComparison.Ordinal);
@@ -218,7 +236,11 @@ public sealed class IntentStoreLifecycleTests
         Assert.True(stopBinding >= 0 && stopBinding < disposeBinding);
 
         var stop = Slice(adapters, "public void Stop()", "public void Dispose()");
-        Assert.True(stop.IndexOf("_intentStore.Clear()", StringComparison.Ordinal) < stop.IndexOf("_stopExecution()", StringComparison.Ordinal));
+        var providerStop = stop.IndexOf("_approval.Stop()", StringComparison.Ordinal);
+        var detach = stop.IndexOf("DetachActiveDocumentObservation()", StringComparison.Ordinal);
+        var clear = stop.IndexOf("_intentStore.Clear()", StringComparison.Ordinal);
+        var executionStop = stop.IndexOf("_stopExecution()", StringComparison.Ordinal);
+        Assert.True(providerStop >= 0 && providerStop < detach && detach < clear && clear < executionStop);
 
         var dispose = Slice(adapters, "public void Dispose()", "public IRevitCapabilityService");
         var stopCall = dispose.IndexOf("Stop();", StringComparison.Ordinal);
