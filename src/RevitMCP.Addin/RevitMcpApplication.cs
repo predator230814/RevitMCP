@@ -53,6 +53,14 @@ public sealed class RevitMcpApplication : IExternalApplication
             {
                 _productionDispatchers.CloseEvents =
                     new RevitDocumentCloseEventSource(application.ControlledApplication);
+                try
+                {
+                    _productionDispatchers.ActiveDocumentEvents = new RevitActiveDocumentEventSource(application);
+                }
+                catch (Exception)
+                {
+                    _productionDispatchers.ActiveDocumentEvents = new DisabledActiveDocumentEventSource();
+                }
             }
 
             BeginStartup(new RevitIdlingScheduler(application));

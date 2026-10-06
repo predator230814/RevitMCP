@@ -1,5 +1,6 @@
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
+using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Capabilities;
 using RevitMCP.Addin.Execution;
 using RevitMCP.Addin.Identity;
@@ -63,28 +64,36 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private readonly Action _stopExecution;
     private readonly Action _disposeExecution;
     private readonly EphemeralWriteIntentStore _intentStore;
+    private readonly RevitLocalApprovalProviderStateMachine _approval;
     private readonly OpenDocumentIdentityService _identity;
     private readonly OpenDocumentParameterIdentityService _parameterRefs;
     private IDisposable? _closeCleanup;
+    private IDisposable? _activeDocumentObservation;
     private int _disposed;
+
+    internal RevitLocalApprovalProviderStateMachine ApprovalProvider => _approval;
 
     public RevitExecutionDispatcherLifetime(
         RevitExecutionDispatcher dispatcher,
-        IDocumentCloseEventSource? closeEvents = null)
-        : this(dispatcher, new EphemeralWriteIntentStore(), closeEvents)
+        IDocumentCloseEventSource? closeEvents = null,
+        IActiveDocumentEventSource? activeDocumentEvents = null)
+        : this(dispatcher, new EphemeralWriteIntentStore(), closeEvents, activeDocumentEvents)
     {
     }
 
     internal RevitExecutionDispatcherLifetime(
         RevitExecutionDispatcher dispatcher,
         EphemeralWriteIntentStore intentStore,
-        IDocumentCloseEventSource? closeEvents = null)
+        IDocumentCloseEventSource? closeEvents = null,
+        IActiveDocumentEventSource? activeDocumentEvents = null)
         : this(intentStore, BindExecution(dispatcher))
     {
         if (closeEvents is not null)
         {
             _closeCleanup = closeEvents.Subscribe(new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(ForgetDocument));
         }
+
+        TrySubscribeActiveDocument(activeDocumentEvents);
     }
 
     private RevitExecutionDispatcherLifetime(
@@ -104,7 +113,8 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         EphemeralWriteIntentStore intentStore,
         Action stopExecution,
         Action disposeExecution,
-        IDisposable? closeCleanup = null)
+        IDisposable? closeCleanup = null,
+        IActiveDocumentEventSource? activeDocumentEvents = null)
     {
         ArgumentNullException.ThrowIfNull(intentStore);
         ArgumentNullException.ThrowIfNull(stopExecution);
@@ -113,9 +123,11 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         _stopExecution = stopExecution;
         _disposeExecution = disposeExecution;
         _intentStore = intentStore;
+        _approval = new RevitLocalApprovalProviderStateMachine(intentStore);
         _closeCleanup = closeCleanup;
         _identity = null!;
         _parameterRefs = null!;
+        TrySubscribeActiveDocument(activeDocumentEvents);
     }
 
     private RevitExecutionDispatcherLifetime(
@@ -132,6 +144,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         _stopExecution = stopExecution;
         _disposeExecution = disposeExecution;
         _intentStore = intentStore;
+        _approval = new RevitLocalApprovalProviderStateMachine(intentStore);
         _closeCleanup = closeCleanup;
         _identity = new OpenDocumentIdentityService();
         _parameterRefs = new OpenDocumentParameterIdentityService();
@@ -143,7 +156,8 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         return ApplySuccessfulDocumentClose(
             hasExistingDocumentId,
             documentId,
-            _intentStore,
+            _approval.ForgetDocument,
+            _intentStore.ForgetDocument,
             () => _parameterRefs.Forget(document),
             () => _identity.Forget(document));
     }
@@ -151,30 +165,76 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     internal static bool ApplySuccessfulDocumentClose(
         bool hasExistingDocumentId,
         string? documentId,
-        EphemeralWriteIntentStore intentStore,
+        Func<string, int> forgetProvider,
+        Func<string, int> forgetIntent,
         Func<bool> forgetParameterRefs,
         Func<bool> forgetDocumentIdentity)
     {
-        ArgumentNullException.ThrowIfNull(intentStore);
+        ArgumentNullException.ThrowIfNull(forgetProvider);
+        ArgumentNullException.ThrowIfNull(forgetIntent);
         ArgumentNullException.ThrowIfNull(forgetParameterRefs);
         ArgumentNullException.ThrowIfNull(forgetDocumentIdentity);
 
-        var forgottenIntent = false;
+        var forgotten = false;
         if (hasExistingDocumentId)
         {
             ArgumentNullException.ThrowIfNull(documentId);
-            forgottenIntent = intentStore.ForgetDocument(documentId) > 0;
+            forgotten = forgetProvider(documentId) > 0;
+            forgotten = forgetIntent(documentId) > 0 || forgotten;
         }
 
         var forgottenRefs = forgetParameterRefs();
         var forgottenIdentity = forgetDocumentIdentity();
-        return forgottenIntent || forgottenRefs || forgottenIdentity;
+        return forgotten || forgottenRefs || forgottenIdentity;
+    }
+
+    internal void ObserveMappedActiveDocument(bool hasExistingDocumentId, string? documentId)
+    {
+        _approval.ObserveActiveDocument(hasExistingDocumentId ? documentId : null);
     }
 
     public void Stop()
     {
-        _intentStore.Clear();
-        _stopExecution();
+        _approval.Stop();
+        try
+        {
+            DetachActiveDocumentObservation();
+        }
+        finally
+        {
+            _intentStore.Clear();
+            _stopExecution();
+        }
+    }
+
+    private void TrySubscribeActiveDocument(IActiveDocumentEventSource? activeDocumentEvents)
+    {
+        if (activeDocumentEvents is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _activeDocumentObservation = activeDocumentEvents.Subscribe(OnActiveDocumentChanged, _identity);
+        }
+        catch (Exception)
+        {
+            _activeDocumentObservation = null;
+            _approval.Stop();
+        }
+    }
+
+    private void OnActiveDocumentChanged(bool hasExistingDocumentId, string? documentId)
+    {
+        ObserveMappedActiveDocument(hasExistingDocumentId, documentId);
+    }
+
+    private void DetachActiveDocumentObservation()
+    {
+        var observation = _activeDocumentObservation;
+        _activeDocumentObservation = null;
+        observation?.Dispose();
     }
 
     public void Dispose()
@@ -236,8 +296,10 @@ internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFact
 {
     public IDocumentCloseEventSource? CloseEvents { get; set; }
 
+    public IActiveDocumentEventSource? ActiveDocumentEvents { get; set; }
+
     public ILifecycleDispatcher Create() =>
-        new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents);
+        new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents);
 }
 
 internal sealed class NamedPipeLifecycleBridge : ILifecycleBridge
