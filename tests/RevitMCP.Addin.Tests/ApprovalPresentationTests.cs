@@ -187,6 +187,8 @@ public sealed class ApprovalPresentationTests
     [InlineData("{\"type\":\"approveCurrent\",\"sessionRef\":\"session~1\",\"confirm\":true}")]
     [InlineData("{\"type\":\"approveCurrent\",\"sessionRef\":\"session~1\",\"intentRef\":\"intent\"}")]
     [InlineData("{\"type\":\"approveCurrent\",\"sessionRef\":\"session~1\",\"documentId\":\"doc-a\"}")]
+    [InlineData("{\"type\":\"approveCurrent\",\"sessionRef\":\"session~1\",\"createdAt\":\"2026-09-25T12:00:00Z\"}")]
+    [InlineData("{\"type\":\"approveCurrent\",\"sessionRef\":\"session~1\",\"expiresAt\":\"2026-09-25T12:10:00Z\"}")]
     public void Extra_members_are_rejected(string json)
     {
         var parsed = ApprovalMessageParser.Parse(json);
@@ -235,6 +237,10 @@ public sealed class ApprovalPresentationTests
         Assert.Contains("\"kind\":\"string\"", json, StringComparison.Ordinal);
         Assert.Contains("\"value\":\"proposed\"", json, StringComparison.Ordinal);
         Assert.Contains("\"type\":\"renderReview\"", json, StringComparison.Ordinal);
+        Assert.Contains("\"createdAt\":", json, StringComparison.Ordinal);
+        Assert.Contains("\"expiresAt\":", json, StringComparison.Ordinal);
+        Assert.Contains(review.RenderModel.CreatedAt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), json, StringComparison.Ordinal);
+        Assert.Contains(review.RenderModel.ExpiresAt.ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture), json, StringComparison.Ordinal);
     }
 
     [Theory]
@@ -344,6 +350,7 @@ public sealed class ApprovalPresentationTests
         Assert.Null(harness.Ui.Current);
         Assert.Equal(ApprovalCommandStatus.InvalidSession, harness.Controller.ApproveCurrent(started.SessionRef, "doc-a").Status);
         Assert.Equal(ApprovalConsumeStatus.NotApproved, harness.Provider.TryConsumeApproved(harness.IntentRef).Status);
+        harness.Ui.RegisterSurface(new RecordingSurface());
         var retry = await harness.Adapter.PresentReviewAsync(harness.IntentRef, CancellationToken.None);
         Assert.Equal(ApprovalReviewStatus.Started, retry.Status);
         Assert.NotEqual(started.SessionRef, retry.SessionRef);
@@ -444,6 +451,14 @@ public sealed class ApprovalPresentationTests
         Assert.DoesNotContain("sessionStorage", script, StringComparison.Ordinal);
         Assert.DoesNotContain("fetch(", script, StringComparison.Ordinal);
         Assert.DoesNotContain("XMLHttpRequest", script, StringComparison.Ordinal);
+        Assert.Contains("id=\"created-at\"", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"expires-at\"", html, StringComparison.Ordinal);
+        Assert.Contains("message.createdAt", script, StringComparison.Ordinal);
+        Assert.Contains("message.expiresAt", script, StringComparison.Ordinal);
+        Assert.Contains("clearMetadata()", script, StringComparison.Ordinal);
+        Assert.Contains("postMessage({ type: type, sessionRef: sessionRef })", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Date.now", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("new Date", script, StringComparison.Ordinal);
         Assert.Contains("ui\\index.html", project, StringComparison.Ordinal);
         Assert.Contains("WebView2Loader.dll", project, StringComparison.Ordinal);
         Assert.Contains("Microsoft.Web.WebView2.Core.dll", project, StringComparison.Ordinal);
@@ -475,6 +490,7 @@ public sealed class ApprovalPresentationTests
         var gate = new ScriptedGate();
         var adapter = new RevitLocalApprovalPresentationAdapter(controller, ui, gate);
         ui.Attach(adapter, controller);
+        ui.RegisterSurface(new RecordingSurface());
         var created = store.TryCreate(Draft());
         Assert.Equal(IntentStoreCreateStatus.Created, created.Status);
         return new HarnessState(store, provider, controller, ui, adapter, gate, created.IntentRef!);
@@ -571,11 +587,43 @@ public sealed class ApprovalPresentationTests
         throw new InvalidOperationException("Repository root was not found.");
     }
 
+    [Fact]
+    public async Task Show_that_invalidates_initialization_fails_closed_without_a_decision()
+    {
+        var harness = Harness();
+        harness.Gate.DuringShow = harness.Ui.NotifyInitializationFailed;
+
+        var presented = await harness.Adapter.PresentReviewAsync(harness.IntentRef, CancellationToken.None);
+
+        Assert.Equal(ApprovalReviewStatus.Unavailable, presented.Status);
+        Assert.Null(harness.Ui.Current);
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, harness.Controller.ApproveCurrent("session~1", "doc-a").Status);
+        Assert.Equal(ApprovalCommandStatus.InvalidSession, harness.Controller.RejectCurrent("session~1", "doc-a").Status);
+        Assert.Equal(ApprovalConsumeStatus.NotApproved, harness.Provider.TryConsumeApproved(harness.IntentRef).Status);
+    }
+
+    private sealed class RecordingSurface : IApprovalPaneSurface
+    {
+        public void BeginAfterShow()
+        {
+        }
+
+        public void Post(string json)
+        {
+        }
+
+        public void DisposeSurface()
+        {
+        }
+    }
+
     private sealed class ScriptedGate : IApprovalRevitGate
     {
         public string? DocumentId { get; set; } = "doc-a";
 
         public bool ShowSucceeds { get; set; } = true;
+
+        public Action? DuringShow { get; set; }
 
         public int PresentEntries { get; private set; }
 
@@ -586,7 +634,11 @@ public sealed class ApprovalPresentationTests
             Func<string?, Func<bool>, ApprovalPresentationResult> present)
         {
             PresentEntries++;
-            return Task.FromResult(present(DocumentId, () => ShowSucceeds));
+            return Task.FromResult(present(DocumentId, () =>
+            {
+                DuringShow?.Invoke();
+                return ShowSucceeds;
+            }));
         }
 
         public Task<ApprovalUiDispatchResult> DispatchAsync(

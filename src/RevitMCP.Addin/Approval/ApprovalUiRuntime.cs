@@ -125,15 +125,27 @@ internal sealed class ApprovalUiRuntime
             shown = false;
         }
 
-        if (!shown || _stopped)
+        if (!shown || !IsCurrentPresentation(model))
         {
-            _current = null;
-            _showRequested = false;
+            if (_current is null || string.Equals(_current.SessionRef, model.SessionRef, StringComparison.Ordinal))
+            {
+                _current = null;
+                _showRequested = false;
+            }
+
             return false;
         }
 
         _surface?.Post(ApprovalReviewJson.SerializeRender(model));
         return true;
+    }
+
+    private bool IsCurrentPresentation(ApprovalReviewRenderModel model)
+    {
+        return !_stopped
+            && _surface is not null
+            && _current is not null
+            && string.Equals(_current.SessionRef, model.SessionRef, StringComparison.Ordinal);
     }
 
     public void ClearReview()

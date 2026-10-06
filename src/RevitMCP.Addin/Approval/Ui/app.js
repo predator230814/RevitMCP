@@ -1,5 +1,8 @@
 (function () {
   var idle = document.getElementById("idle");
+  var metadata = document.getElementById("review-metadata");
+  var createdAt = document.getElementById("created-at");
+  var expiresAt = document.getElementById("expires-at");
   var items = document.getElementById("items");
   var approve = document.getElementById("approve");
   var reject = document.getElementById("reject");
@@ -35,10 +38,17 @@
     return String(value.value);
   }
 
+  function clearMetadata() {
+    createdAt.textContent = "";
+    expiresAt.textContent = "";
+    metadata.hidden = true;
+  }
+
   function clearReview() {
     sessionRef = "";
     pending = false;
     items.textContent = "";
+    clearMetadata();
     idle.hidden = false;
     setEnabled(false);
   }
@@ -47,6 +57,9 @@
     sessionRef = typeof message.sessionRef === "string" ? message.sessionRef : "";
     pending = false;
     items.textContent = "";
+    createdAt.textContent = "Created " + String(message.createdAt);
+    expiresAt.textContent = "Expires " + String(message.expiresAt);
+    metadata.hidden = false;
     idle.hidden = true;
     var list = message.items || [];
     for (var index = 0; index < list.length; index++) {

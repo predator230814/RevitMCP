@@ -18,7 +18,8 @@ h1 {
   font-weight: 600;
 }
 
-#idle {
+#idle,
+#review-metadata {
   margin: 0 0 16px;
 }
 
