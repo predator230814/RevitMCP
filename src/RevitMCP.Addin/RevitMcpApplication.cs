@@ -1,4 +1,5 @@
 using Autodesk.Revit.UI;
+using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Identity;
 using RevitMCP.Addin.Lifecycle;
 
@@ -7,11 +8,16 @@ namespace RevitMCP.Addin;
 public sealed class RevitMcpApplication : IExternalApplication
 {
     private readonly RevitExecutionDispatcherFactory? _productionDispatchers;
+    private readonly ApprovalUiRuntime? _approvalUi;
     private readonly AddinLifecycleCoordinator _lifecycle;
 
     public RevitMcpApplication()
     {
-        _productionDispatchers = new RevitExecutionDispatcherFactory();
+        _approvalUi = new ApprovalUiRuntime();
+        _productionDispatchers = new RevitExecutionDispatcherFactory
+        {
+            ApprovalUi = _approvalUi,
+        };
         _lifecycle = new AddinLifecycleCoordinator(
             _productionDispatchers,
             new NamedPipeLifecycleBridgeFactory(),
@@ -61,6 +67,21 @@ public sealed class RevitMcpApplication : IExternalApplication
                 {
                     _productionDispatchers.ActiveDocumentEvents = new DisabledActiveDocumentEventSource();
                 }
+
+                if (_approvalUi is not null)
+                {
+                    try
+                    {
+                        application.RegisterDockablePane(
+                            new DockablePaneId(ApprovalPaneIds.PaneId),
+                            ApprovalPaneIds.Title,
+                            new ApprovalPaneProvider(_approvalUi));
+                    }
+                    catch (Exception)
+                    {
+                        _approvalUi.MarkUnavailable();
+                    }
+                }
             }
 
             BeginStartup(new RevitIdlingScheduler(application));
@@ -75,7 +96,15 @@ public sealed class RevitMcpApplication : IExternalApplication
 
     public Result OnShutdown(UIControlledApplication application)
     {
-        _lifecycle.Shutdown();
+        try
+        {
+            _lifecycle.Shutdown();
+        }
+        finally
+        {
+            _approvalUi?.Shutdown();
+        }
+
         return Result.Succeeded;
     }
 

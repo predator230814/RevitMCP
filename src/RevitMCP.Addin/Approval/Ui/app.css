@@ -1,0 +1,54 @@
+:root {
+  color: #1c1c1c;
+  background: #f4f1ea;
+  font-family: "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+}
+
+main {
+  padding: 20px;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+#idle {
+  margin: 0 0 16px;
+}
+
+article {
+  margin: 0 0 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #d7d1c7;
+}
+
+h2 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+p {
+  margin: 0 0 6px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+button {
+  font: inherit;
+  padding: 8px 14px;
+}
+
+button:disabled {
+  opacity: 0.55;
+}

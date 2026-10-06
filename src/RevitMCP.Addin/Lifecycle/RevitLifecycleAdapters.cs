@@ -70,6 +70,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private readonly OpenDocumentParameterIdentityService _parameterRefs;
     private IDisposable? _closeCleanup;
     private IDisposable? _activeDocumentObservation;
+    private ApprovalUiRuntime? _approvalUi;
     private int _disposed;
 
     internal RevitLocalApprovalProviderStateMachine ApprovalProvider => _approval;
@@ -207,9 +208,24 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         }
         finally
         {
+            _approvalUi?.Detach();
             _intentStore.Clear();
             _stopExecution();
         }
+    }
+
+    internal void AttachApprovalUi(ApprovalUiRuntime approvalUi)
+    {
+        ArgumentNullException.ThrowIfNull(approvalUi);
+        if (_approvalUi is not null)
+        {
+            return;
+        }
+
+        _approvalUi = approvalUi;
+        var gate = new RevitLocalApprovalPresentationGate(_dispatcher, _identity, approvalUi);
+        var adapter = new RevitLocalApprovalPresentationAdapter(_interaction, approvalUi, gate);
+        approvalUi.Attach(adapter, _interaction);
     }
 
     private void TrySubscribeActiveDocument(IActiveDocumentEventSource? activeDocumentEvents)
@@ -303,8 +319,18 @@ internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFact
 
     public IActiveDocumentEventSource? ActiveDocumentEvents { get; set; }
 
-    public ILifecycleDispatcher Create() =>
-        new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents);
+    public ApprovalUiRuntime? ApprovalUi { get; set; }
+
+    public ILifecycleDispatcher Create()
+    {
+        var lifetime = new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents);
+        if (ApprovalUi is not null)
+        {
+            lifetime.AttachApprovalUi(ApprovalUi);
+        }
+
+        return lifetime;
+    }
 }
 
 internal sealed class NamedPipeLifecycleBridge : ILifecycleBridge
