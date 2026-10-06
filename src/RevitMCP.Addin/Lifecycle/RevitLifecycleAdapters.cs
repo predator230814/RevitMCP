@@ -65,6 +65,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private readonly Action _disposeExecution;
     private readonly EphemeralWriteIntentStore _intentStore;
     private readonly RevitLocalApprovalProviderStateMachine _approval;
+    private readonly RevitLocalApprovalInteractionController _interaction;
     private readonly OpenDocumentIdentityService _identity;
     private readonly OpenDocumentParameterIdentityService _parameterRefs;
     private IDisposable? _closeCleanup;
@@ -72,6 +73,8 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private int _disposed;
 
     internal RevitLocalApprovalProviderStateMachine ApprovalProvider => _approval;
+
+    internal RevitLocalApprovalInteractionController ApprovalInteraction => _interaction;
 
     public RevitExecutionDispatcherLifetime(
         RevitExecutionDispatcher dispatcher,
@@ -124,6 +127,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         _disposeExecution = disposeExecution;
         _intentStore = intentStore;
         _approval = new RevitLocalApprovalProviderStateMachine(intentStore);
+        _interaction = new RevitLocalApprovalInteractionController(intentStore, _approval);
         _closeCleanup = closeCleanup;
         _identity = null!;
         _parameterRefs = null!;
@@ -145,6 +149,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         _disposeExecution = disposeExecution;
         _intentStore = intentStore;
         _approval = new RevitLocalApprovalProviderStateMachine(intentStore);
+        _interaction = new RevitLocalApprovalInteractionController(intentStore, _approval);
         _closeCleanup = closeCleanup;
         _identity = new OpenDocumentIdentityService();
         _parameterRefs = new OpenDocumentParameterIdentityService();
