@@ -1,15 +1,16 @@
 # LIFECYCLE-0004: Controlled apply-attempt lifecycle
 
 - Status: Proposed
+- Amended: 2026-10-07 — conform to Accepted ADR-0011
 - Date: 2026-10-07
 
 ## Purpose
 
-Define the Addin-owned apply-attempt store required by proposed CAP-0008 and by ADR-0008's rule that an intent may cause at most one mutation attempt.
+Define the Addin-owned apply-attempt store required by Proposed CAP-0008, Accepted ADR-0011, and ADR-0008's rule that an intent may cause at most one mutation attempt.
 
 The store remembers the outcome of a controlled apply so a retry, including a retry after the caller timed out, returns that outcome and does not open a second Revit transaction.
 
-This specification is Proposed. It does not implement the store. It does not authorize a Revit model write, a Bridge or Server specification, or production apply code.
+This specification is Proposed. It is amended to the Accepted ADR-0011 write-audit contract. It does not implement the store or the audit writer. It does not authorize a Revit model write, a Bridge or Server specification, or production apply code.
 
 ## Relationship
 
@@ -61,7 +62,9 @@ Do not store:
 - approval decisions or `session_ref`;
 - before or proposed values;
 - raw Revit ids or internal-unit doubles;
-- live Revit API wrappers (`Document`, `Element`, `Parameter`, `Transaction`, `Connector`, or similar).
+- live Revit API wrappers (`Document`, `Element`, `Parameter`, `Transaction`, `Connector`, or similar);
+- audit JSON, `audit_stream_ref`, or an audit event payload;
+- raw or unmapped provider strings.
 
 No Revit wrapper may be retained between calls. Mutation uses wrappers only inside the EXEC-0001 execution that performs that attempt.
 
@@ -128,34 +131,55 @@ Lookup and claim are exact ordinal matches on the full `intent_ref`. There is no
    A losing caller observes in_progress.
    This record is not yet irrevocable.
 
-7. Only the owner of that record may call TryConsumeApproved(intent_ref).
+7. The owner runs ADR-0011 audit preflight before TryConsumeApproved.
+   If preflight fails, the owner releases that pre-mutation record,
+   consumes nothing, and returns unavailable.
+
+8. Only the owner of that record may call TryConsumeApproved(intent_ref),
+   and only after preflight succeeds.
    The two stores are not one atomic transaction.
    If TryConsumeApproved returns not_approved, the owner removes that
    pre-mutation record, creates no terminal outcome, and returns
    approval_required.
    approval_required does not reveal why consumption failed.
 
-8. Once TryConsumeApproved succeeds, the same record becomes irrevocable.
+9. Once TryConsumeApproved succeeds, the same record becomes irrevocable.
    It may only progress to a terminal outcome:
-   stale, transaction_failed, committed_unverified, indeterminate, or applied.
+   stale, transaction_failed, committed_unverified, indeterminate,
+   applied, or audit_failed.
    No normal code path may release it.
 
-9. Revalidate exactly as CAP-0008 requires.
-   Failure stores stale and starts no transaction.
+10. If mandatory audit metadata cannot be represented, or the durable
+    apply_started barrier fails, Complete(intent_ref, audit_failed) first.
+    Start no transaction.
+    Any apply_completed line is best-effort only and must not rewrite
+    that terminal outcome.
 
-10. Start one CAP-0008 transaction.
-    A known non-committed outcome stores transaction_failed.
-    An uncertain outcome, including Pending, stores indeterminate.
+11. Revalidate exactly as CAP-0008 requires.
+    Failure completes terminal stale and starts no transaction.
+    apply_started has already been durably written.
 
-11. After finalized Committed, verify as CAP-0008 requires.
-    Success stores applied.
-    HasValue == false or any other verification failure stores
+12. Start one CAP-0008 transaction.
+    A known non-committed outcome completes transaction_failed.
+    Unresolved Pending completes indeterminate and performs no
+    completion-audit write while Pending remains unresolved.
+    Any other uncertain outcome completes indeterminate.
+
+13. After finalized Committed, verify as CAP-0008 requires.
+    Success completes applied.
+    HasValue == false or any other verification failure completes
     committed_unverified.
 
-12. Store the terminal outcome before returning it.
+14. Store the immutable terminal outcome before any apply_completed
+    audit work that ADR-0011 permits.
+    A completion-audit failure does not remove or rewrite that
+    terminal state.
+    Then return the stored outcome.
 ```
 
-An irrevocable record must not return to pre-mutation, and it must not be deleted to allow a second owner while the document remains open. Releasing a record is allowed only for the owner, and only when `TryConsumeApproved` returned `not_approved`. The other removals are terminal expiry, successful document close, and process shutdown.
+Steps 11 through 13 run only when step 10 did not complete `audit_failed`. Each `Complete` call is the terminal store. `apply_completed` runs after that store, and only when ADR-0011 permits it. `stale` still attempts `apply_completed`. Unresolved `Pending` does not.
+
+An irrevocable record must not return to pre-mutation, and it must not be deleted to allow a second owner while the document remains open. Releasing a record is allowed only for the owner, and only before approval consumption: preflight failure, or `TryConsumeApproved` returned `not_approved`. The other removals are terminal expiry, successful document close, and process shutdown. After approval consumption, caller cancellation cannot release the record or authorize another attempt.
 
 ## Concurrency
 
@@ -173,7 +197,7 @@ Invariants:
 
 Do not introduce distributed locking. One in-process mutual exclusion for the apply-attempt store is enough. Do not describe that lock plus the approval-provider lock as a single atomic commit.
 
-Do not hold the store lock while executing arbitrary Revit API work. The exclusive record exists before `TryConsumeApproved`. The terminal outcome is recorded after Revit work finishes.
+Do not hold the store lock while executing arbitrary Revit API work or while the audit writer flushes. The exclusive record exists before audit preflight and before `TryConsumeApproved`. The terminal outcome is recorded before `apply_completed` audit work. A completion-audit failure cannot reopen or release the attempt.
 
 ## Timeout and cancellation
 
@@ -181,10 +205,10 @@ Preserve EXEC-0001.
 
 - Before an exclusive record exists, cancellation consumes nothing.
 - While the record is still pre-mutation, cancellation releases it, does not call `TryConsumeApproved`, and stores no terminal outcome.
-- After `TryConsumeApproved` succeeds, the record is irrevocable. A caller timeout does not release it.
-- Once the queued apply execution has begun, do not abort the Revit thread and do not cancel the Revit transaction from the timed-out caller.
+- After `TryConsumeApproved` succeeds, the record is irrevocable. Caller cancellation or timeout cannot release it and cannot authorize another attempt.
+- Once the queued apply execution has begun, including audit-barrier, revalidation, or Revit work, do not abort the Revit thread and do not cancel the Revit transaction from the timed-out caller.
 - That execution finishes the CAP-0008 outcome and stores it, even if the caller has already stopped waiting.
-- A later apply returns `in_progress` until the terminal outcome is stored. It then returns that outcome when the binding matches, and it does not mutate again.
+- If the caller stops waiting while that work continues, a later apply returns `in_progress` until the terminal outcome is stored. It then returns that exact outcome when the binding matches, and it does not mutate again.
 - A timeout response is not proof that no exclusive record exists.
 
 ## Document close and shutdown
@@ -201,7 +225,7 @@ Shutdown clears the store before process-owned bridge and dispatcher resources a
 
 Do not add listing, search, prefix lookup, recent-attempts, or an audit export on this store.
 
-Audit remains a separate design. This store is not the audit sink.
+The audit writer remains the separate ADR-0011 component. This store is not the audit sink. It owns retry and double-mutation protection, plus the binding and state metadata in this specification.
 
 The only lookup is the exact `intent_ref` used by the apply flow above.
 
@@ -237,11 +261,11 @@ Clear()
 
 `TryLookup` returns a stored terminal outcome when the source intent is absent, and when a live intent has the same fingerprint, instance, and document binding. `binding_mismatch` means a live intent has the same `intent_ref` and a different binding: the caller returns `unavailable`, does not read out the old outcome, and does not mutate. `absent` covers no stored attempt. It does not reveal whether an unknown ref expired.
 
-`ReleasePreMutation` succeeds only for the owner, and only before `TryConsumeApproved` has succeeded. `rejected` means the record is already irrevocable or terminal. No normal path may release it then.
+`ReleasePreMutation` succeeds only for the owner, and only before `TryConsumeApproved` has succeeded. Preflight failure is one such release. `rejected` means the record is already irrevocable or terminal, including terminal `audit_failed`. No normal path may release it then.
 
 `MarkIrrevocable` is the owner's record after `TryConsumeApproved` succeeds. It does not itself call the approval provider.
 
-`Complete` accepts only the five terminal CAP-0008 statuses `applied`, `stale`, `transaction_failed`, `committed_unverified`, and `indeterminate`. It does not accept `approval_required`, `unavailable`, or `in_progress`.
+`Complete` accepts only the six terminal CAP-0008 statuses `applied`, `stale`, `transaction_failed`, `committed_unverified`, `indeterminate`, and `audit_failed`. It does not accept `approval_required`, `unavailable`, or `in_progress`. Those three remain non-terminal public outcomes.
 
 ## Pure tests
 
@@ -250,7 +274,7 @@ A future implementation must cover these cases without launching Revit:
 1. A second caller for one `intent_ref` does not create a second record and observes `in_progress` until a terminal outcome exists.
 2. `not_approved` releases only the pre-mutation record, leaves no terminal outcome, and returns `approval_required`.
 3. After `TryConsumeApproved` succeeds, `ReleasePreMutation` is rejected and the record accepts only a terminal completion.
-4. Stored `stale`, `transaction_failed`, `committed_unverified`, `indeterminate`, and `applied` are returned on retry without a new owner when the binding matches or the source intent is absent.
+4. Stored `stale`, `transaction_failed`, `committed_unverified`, `indeterminate`, `applied`, and `audit_failed` are returned on retry without a new owner when the binding matches or the source intent is absent.
 5. A live intent with the same `intent_ref` and a different fingerprint, instance, or document binding does not return the old terminal outcome and does not start a mutation.
 6. A terminal outcome is valid before 30 monotonic minutes and absent at 30 monotonic minutes.
 7. Moving the UTC clock does not extend that monotonic expiry.
@@ -262,6 +286,11 @@ A future implementation must cover these cases without launching Revit:
 13. Stored records keep fingerprint, instance, and document binding internally, and contain no BIM values, session refs, raw ids, or Revit wrappers. MCP output does not include those internal fields.
 14. Concurrent establishes never leave more than 128 live attempts, and concurrent callers for one ref allow at most one owner.
 15. Only the owner calls `TryConsumeApproved`. A non-owner does not.
+16. Audit preflight failure releases the pre-mutation record, consumes nothing, and leaves no terminal outcome.
+17. `Complete` accepts `audit_failed`. A retry returns that terminal outcome and does not create a new owner.
+18. `ReleasePreMutation` is rejected after approval consumption, including when the next completion is `audit_failed`.
+19. The terminal outcome is stored before a simulated `apply_completed` failure. That failure cannot reopen or release the attempt.
+20. Unresolved `Pending` completes `indeterminate` with no completion-audit write, and that terminal record prevents a second owner.
 
 ## Explicitly excluded
 
@@ -272,7 +301,7 @@ A future implementation must cover these cases without launching Revit:
 - Server or MCP registration;
 - `Parameter.Set`;
 - `Transaction`, `SubTransaction`, and `TransactionGroup`;
-- an audit sink, retention policy, or log package;
+- a production audit-writer implementation; ADR-0011 owns that design, and this store does not keep audit payloads;
 - save, sync, and worksharing checkout;
 - MRTR, MCP Apps, and external approval providers;
 - cross-process persistence.
@@ -281,6 +310,7 @@ A future implementation must cover these cases without launching Revit:
 
 - ADR-0008: controlled write safety model
 - ADR-0010: Revit-local trusted approval authority and provider contract
+- ADR-0011: v1 controlled-write audit (Accepted)
 - CAP-0007: `revit_preview_parameter_updates`
 - CAP-0008: `revit_apply_parameter_updates`
 - LIFECYCLE-0002: ephemeral write-intent store

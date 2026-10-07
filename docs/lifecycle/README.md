@@ -12,4 +12,4 @@ Accepted specifications:
 
 Proposed specifications:
 
-- `LIFECYCLE-0004-controlled-apply-attempt-lifecycle.md` — Addin-owned apply-attempt store for a future CAP-0008 apply. Proposed on 2026-10-07. It does not modify the intent store or approval decisions. Proposal does not authorize a Revit write.
+- `LIFECYCLE-0004-controlled-apply-attempt-lifecycle.md` — Addin-owned apply-attempt store for a future CAP-0008 apply. Proposed on 2026-10-07 and amended the same day to conform to Accepted ADR-0011. It remains Proposed. It does not modify the intent store or approval decisions, and it does not authorize an implementation or a Revit write.

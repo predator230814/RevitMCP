@@ -895,8 +895,10 @@ A command-line open of a copied Metric Column `.rft` exited before a family docu
 
 ## Next task
 
-PR #67 is merged. Main contains Bridge v9 request-review. Official MCP-client to stdio Server to Bridge v9 to Revit 2026.5 live validation of request-review is **PASS**. The trusted approval UI before/proposed replay is **PASS**.
+PR #67 is merged. Main contains Bridge v9 request-review. Official MCP-client to stdio Server to Bridge v9 to Revit 2026.5 live validation of request-review is **PASS**. The trusted approval UI before/proposed replay is **PASS**. `tools/list` remains exactly 8 tools.
 
-PR #68 is merged. CAP-0008 and LIFECYCLE-0004 exist as **Proposed** specifications. Neither is accepted or implemented. No production Revit model write exists. No `Transaction` or `Parameter.Set` implementation is authorized.
+PR #68 is merged. PR #69 is merged. ADR-0011 is **Accepted**. Dave, Product Owner, accepted it on 2026-10-07. Acceptance does not authorize production audit code, production apply code, a Revit `Transaction`, `Parameter.Set`, Bridge protocol v10, or a Server/MCP apply tool. Bridge v10 does not exist. No production audit implementation exists. No production Revit model write exists.
 
-ADR-0011, the v1 controlled-write audit, is **Proposed**. It is the current architecture checkpoint. Acceptance of that audit design is still required before CAP-0008 and LIFECYCLE-0004 can be amended and considered for Product Owner acceptance. Production apply implementation remains unauthorized.
+CAP-0008 and LIFECYCLE-0004 remain **Proposed**. This checkpoint amends both to the Accepted ADR-0011 write-audit contract, including the public status `audit_failed`. Neither specification is accepted or implemented.
+
+After Tech Lead review of this amendment, the next decision is Product Owner acceptance of the amended CAP-0008 and LIFECYCLE-0004. Production apply implementation planning may begin only after both are Accepted.

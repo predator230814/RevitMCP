@@ -13,7 +13,7 @@ Capability specifications define behavior before implementation. They are not Ar
 - `CAP-0005-revit-get-parameter-values.md` — bounded typed reads of explicit `element_ref + parameter_ref` pairs. Implemented. Official MCP-client-to-Revit-2026.5 live validation is **PASS**.
 - `CAP-0006-revit-get-mep-topology.md` — bounded physical MEP element-to-element topology from known seeds. Implemented through Contracts/Addin/typed Bridge and the MCP tool `revit_get_mep_topology`. Typed Bridge live validation on Revit 2026.5 is **PASS**. Official MCP live validation is **PASS**.
 - `CAP-0007-revit-preview-parameter-updates.md` — **Accepted**. Contracts implemented. Addin preview implemented. Typed local Bridge protocol v8 implemented. Server/MCP tool `revit_preview_parameter_updates` is implemented. Official MCP-client to stdio Server to Bridge v8 to Revit 2026.5 validation is **PASS**. The 2026-09-30 write-eligibility amendment is implemented in the Addin. Typed Bridge live replay on Revit 2026.5 at SHA `47465bdcd2ac569307648e9a37ba7053ac8fd56a` is **PASS** for A/B/C/E. Case D was not run because the selected candidate was a string. No apply capability.
-- `CAP-0008-revit-apply-parameter-updates.md` — **Proposed**. Controlled apply of one previewed instance-parameter intent. Not accepted and not implemented. No Bridge protocol v10, Server tool, or production Revit write. Acceptance is blocked until the v1 write-audit design is accepted.
+- `CAP-0008-revit-apply-parameter-updates.md` — **Proposed**. Amended on 2026-10-07 to conform to Accepted ADR-0011. `audit_failed` is part of that Proposed contract. Not accepted and not implemented. No Bridge protocol v10, Server tool, production audit writer, or production Revit write.
 
 ## Required sections
 
