@@ -895,6 +895,8 @@ A command-line open of a copied Metric Column `.rft` exited before a family docu
 
 ## Next task
 
-PR #67 is merged. Main contains Bridge v9 request-review. `tools/list` exposes exactly 8 tools, including `revit_request_parameter_update_review`. Official MCP-client to stdio Server to Bridge v9 to Revit 2026.5 live validation of request-review is **PASS**. The trusted approval UI before/proposed replay is **PASS**. Request-review is not approval and does not consume an approval.
+PR #67 is merged. Main contains Bridge v9 request-review. Official MCP-client to stdio Server to Bridge v9 to Revit 2026.5 live validation of request-review is **PASS**. The trusted approval UI before/proposed replay is **PASS**.
 
-CAP-0008, `revit_apply_parameter_updates`, and LIFECYCLE-0004, the controlled apply-attempt lifecycle, are **Proposed** in PR #68. Neither is accepted or implemented. No production Revit model write exists. After those Proposed documents merge, the next architecture checkpoint is the v1 write-audit design. After that audit design is accepted, CAP-0008 and LIFECYCLE-0004 may be considered for Product Owner acceptance, and only then for production implementation.
+PR #68 is merged. CAP-0008 and LIFECYCLE-0004 exist as **Proposed** specifications. Neither is accepted or implemented. No production Revit model write exists. No `Transaction` or `Parameter.Set` implementation is authorized.
+
+ADR-0011, the v1 controlled-write audit, is **Proposed**. It is the current architecture checkpoint. Acceptance of that audit design is still required before CAP-0008 and LIFECYCLE-0004 can be amended and considered for Product Owner acceptance. Production apply implementation remains unauthorized.
