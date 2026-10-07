@@ -5,6 +5,13 @@ internal static class ApprovalContent
     public const string LocalHostName = "revitmcp-approval.local";
 
     public const string LocalOrigin = "https://revitmcp-approval.local/";
+
+    /// <summary>
+    /// Production UI bundle revision. Bump it whenever index.html, app.js, or app.css changes.
+    /// </summary>
+    public const string AssetRevision = "2026-10-07.1";
+
+    public static string IndexUri => LocalOrigin + "index.html?rev=" + AssetRevision;
 }
 
 /// <summary>

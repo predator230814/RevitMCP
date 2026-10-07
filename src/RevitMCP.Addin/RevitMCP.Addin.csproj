@@ -66,9 +66,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="Approval\Ui\index.html" Link="ui\index.html" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Approval\Ui\app.js" Link="ui\app.js" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="Approval\Ui\app.css" Link="ui\app.css" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Approval\Ui\index.html" Link="ui\index.html" CopyToOutputDirectory="Always" />
+    <Content Include="Approval\Ui\app.js" Link="ui\app.js" CopyToOutputDirectory="Always" />
+    <Content Include="Approval\Ui\app.css" Link="ui\app.css" CopyToOutputDirectory="Always" />
   </ItemGroup>
 
   <ItemGroup>
@@ -103,6 +103,16 @@
     <Error
       Text="RevitAPIUI.dll must not be copied into RevitMCP.Addin output. The Nice3point packages are compile-time references only."
       Condition="Exists('$(OutputPath)RevitAPIUI.dll')" />
+  </Target>
+
+  <!--
+    CopyToOutputDirectory=Always is not sufficient: the SDK copy skips unchanged
+    files. These three trusted assets must be rewritten on every Addin build.
+  -->
+  <Target Name="RefreshApprovalUiAssets" BeforeTargets="AssertAddinRuntimePayload" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
+    <Copy SourceFiles="Approval\Ui\index.html" DestinationFiles="$(OutputPath)ui\index.html" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="Approval\Ui\app.js" DestinationFiles="$(OutputPath)ui\app.js" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="Approval\Ui\app.css" DestinationFiles="$(OutputPath)ui\app.css" SkipUnchangedFiles="false" />
   </Target>
 
   <Target Name="AssertAddinRuntimePayload" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
