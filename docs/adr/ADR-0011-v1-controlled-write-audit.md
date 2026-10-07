@@ -1,15 +1,16 @@
 # ADR-0011: v1 controlled-write audit
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-07
+- Product Owner acceptance: Dave, 2026-10-07
 
 ## Context
 
 ADR-0008 requires an audit of controlled write attempts. It requires enough metadata to correlate the intent and fingerprint, Revit context, approval method, transaction outcome, verification outcome, and timestamps. It does not require raw before or after parameter values. It leaves the audit sink undecided.
 
-CAP-0008 and LIFECYCLE-0004 are Proposed. Both say CAP-0008 cannot be accepted for production implementation until the v1 write-audit design is accepted. Neither chooses storage, retention, or failure behavior.
+CAP-0008 and LIFECYCLE-0004 were Proposed without a chosen audit sink. Both required this design before CAP-0008 could be accepted for production implementation.
 
-This ADR chooses that v1 design. It is Proposed. It does not amend CAP-0008 or LIFECYCLE-0004. It does not authorize production apply code, a Revit `Transaction`, `Parameter.Set`, Bridge protocol v10, or a Server/MCP apply tool.
+This ADR chooses that v1 design. Dave, Product Owner, accepted it on 2026-10-07. Dave also accepted CAP-0008 and LIFECYCLE-0004 on 2026-10-07. Those acceptances do not mean a production audit writer, production apply code, a Revit `Transaction`, `Parameter.Set`, Bridge protocol v10, or a Server/MCP apply tool exists.
 
 The design stays vendor-neutral, local and offline capable, independent of any MCP client, model, or provider, bounded, and fail-closed before mutation when the mandatory write-ahead record cannot be made durable. Audit cost is per approved batch. Raw BIM values stay out of the normal record. A later central or enterprise sink must be able to replace the storage without changing CAP-0008 apply semantics.
 
@@ -48,7 +49,7 @@ Useful later as an optional integration. It is not a mandatory v1 dependency. A 
 
 ## Decision
 
-ADR-0011 does not supersede ADR-0001 through ADR-0010. Those decisions remain in force. This proposal authorizes no production change.
+ADR-0011 does not supersede ADR-0001 through ADR-0010. Those decisions remain in force. Acceptance authorizes no production implementation.
 
 ### 1. Ownership
 
@@ -173,7 +174,7 @@ audit_failed
 = no raw or unmapped provider string is written
 ```
 
-This ADR does not make that amendment. Pre-consumption audit and preflight failures stay outside `audit_failed`. The later amendment maps those to the existing `unavailable` status, and approval stays unconsumed.
+Pre-consumption audit and preflight failures stay outside `audit_failed`. Accepted CAP-0008 maps those to the existing `unavailable` status, and approval stays unconsumed.
 
 #### Terminal outcome order
 
@@ -459,13 +460,12 @@ Do not couple core apply semantics to OpenAI, Anthropic, Autodesk cloud, Azure, 
 
 ### 15. This ADR does not authorize implementation
 
-This proposal does not authorize:
+Acceptance does not authorize:
 
 - production audit code;
 - production apply code;
 - `Parameter.Set`;
 - a Revit `Transaction`, `SubTransaction`, or `TransactionGroup`;
-- an amendment of CAP-0008 or LIFECYCLE-0004 in the same change;
 - Bridge protocol v10;
 - a Server or MCP apply tool;
 - a package for JSON, hashing, or logging;
@@ -485,7 +485,7 @@ This proposal does not authorize:
 
 ### Costs / limitations
 
-- `audit_failed` is not yet a CAP-0008 status. Production apply still cannot be accepted until that amendment exists.
+- `audit_failed` is part of Accepted CAP-0008. The production apply and audit writer are not implemented yet.
 - A crash after `apply_started` and before `apply_completed` leaves an incomplete trail. v1 does not reconstruct the missing line.
 - Unresolved `Pending` may leave the same unmatched `apply_started` line. That gap is valid evidence of an unresolved attempt.
 - A best-effort `apply_completed` for `audit_failed` may be absent. The stored terminal outcome still stands.
@@ -495,13 +495,9 @@ This proposal does not authorize:
 
 ## Follow-up
 
-If this ADR is Accepted, the next docs checkpoint is an amendment of CAP-0008 and LIFECYCLE-0004 to the accepted audit contract. That amendment includes the terminal public status `audit_failed`, the preflight mapping to `unavailable`, and the rule that the apply-attempt terminal state is stored before completion-audit durability. `audit_failed` is the only new public status that amendment adds.
+Dave, Product Owner, accepted this ADR, CAP-0008, and LIFECYCLE-0004 on 2026-10-07. The accepted capability contract includes the terminal public status `audit_failed`, the preflight mapping to `unavailable`, and the rule that the apply-attempt terminal state is stored before completion-audit durability. `audit_failed` is the only new public status that contract adds.
 
-Production apply implementation may begin only after all three of the following are Accepted:
-
-1. ADR-0011;
-2. the amended CAP-0008;
-3. the amended LIFECYCLE-0004.
+The next checkpoint is implementation planning and decomposition, in small reviewable steps. Acceptance does not authorize a large autonomous implementation, and it does not mean the implementation exists.
 
 Bridge protocol v10 and the Server/MCP apply tool remain a later specification and implementation step.
 
@@ -519,9 +515,9 @@ Bridge protocol v10 and the Server/MCP apply tool remain a later specification a
 
 - ADR-0008: controlled write safety model, including decision 18
 - ADR-0010: Revit-local trusted approval authority and the v1 trust boundary
-- CAP-0008: `revit_apply_parameter_updates` (Proposed; unchanged by this ADR)
+- CAP-0008: `revit_apply_parameter_updates` (Accepted on 2026-10-07; not implemented)
 - LIFECYCLE-0003: Revit-local trusted approval provider lifecycle
-- LIFECYCLE-0004: controlled apply-attempt lifecycle (Proposed; unchanged by this ADR)
+- LIFECYCLE-0004: controlled apply-attempt lifecycle (Accepted on 2026-10-07; not implemented)
 - OWASP Logging Cheat Sheet: application logging, event attributes, sensitive-data exclusion, and log protection. <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html>
 - Microsoft .NET: `Environment.SpecialFolder.LocalApplicationData`. <https://learn.microsoft.com/dotnet/api/system.environment.specialfolder>
 - Microsoft .NET: `FileStream.Flush(bool)` with `flushToDisk: true`. <https://learn.microsoft.com/dotnet/api/system.io.filestream.flush>
