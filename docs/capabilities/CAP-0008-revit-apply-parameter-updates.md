@@ -97,6 +97,7 @@ status
 applied
 approval_required
 unavailable
+in_progress
 stale
 transaction_failed
 committed_unverified
@@ -126,21 +127,34 @@ This is the only success status.
 
 No consumable trusted local approval exists for the live intent.
 
-This status does not reveal whether the person rejected, dismissed, never reviewed, or whether a previous approval was already consumed. It starts no apply attempt and consumes nothing.
+This status does not reveal whether the person rejected, dismissed, or never reviewed. The pre-mutation apply record is released. No terminal outcome is created, and approval is not consumed.
 
 ### `unavailable`
 
-The exact intent cannot currently be applied, and no apply attempt has begun.
+The exact intent cannot currently be applied, and no apply attempt owns it.
 
-This covers unknown, expired, forgotten, or wrong-current-document intent state, and the equivalent bounded states in LIFECYCLE-0004, including attempt-capacity exhaustion and a single attempt that is already in progress with no stored terminal outcome yet.
+This covers:
+
+- unknown, expired, or forgotten intent;
+- wrong active document;
+- attempt-capacity exhaustion;
+- equivalent bounded states in LIFECYCLE-0004 where no attempt owns the intent.
+
+A live intent with the same `intent_ref` but a different fingerprint, instance, or document binding than a stored attempt is also `unavailable`. Do not return the old terminal outcome. Do not start a mutation.
 
 `unavailable` does not reveal which of those occurred. It does not consume approval and does not create a terminal attempt.
 
+### `in_progress`
+
+An exclusive apply record for this exact intent already exists, and no terminal outcome is available yet.
+
+This call starts no second transaction. It does not reveal whether the human approved, rejected, dismissed, or never reviewed. It does not replace or release the existing record.
+
 ### `stale`
 
-An approved attempt was claimed, then failed exact stale-state revalidation.
+An irrevocable attempt failed exact stale-state revalidation.
 
-No Revit transaction was started. The outcome is terminal for that intent. A later apply of the same `intent_ref` returns this stored outcome and must not mutate.
+No Revit transaction was started. The outcome is terminal for that intent. A later apply with the same binding returns this stored outcome and must not mutate.
 
 A current value that already equals the proposed value, because something else changed the model, is `stale`. It is not `applied`.
 
@@ -261,13 +275,15 @@ Check `TransactionStatus` explicitly.
 
 After finalized `Committed` only, re-resolve and re-read every target in a fresh resolution. Do not trust the pre-commit wrappers.
 
-String: `Parameter.AsString()` is an ordinal exact match of the proposed string.
+For every supported proposed value, verification first requires `Parameter.HasValue == true`. A parameter that has no value never verifies as `applied`. CAP-0008 does not support clear or unset.
 
-Integer: `Parameter.AsInteger()` is an exact match of the proposed Int32.
+Then:
 
-Quantity: `Parameter.AsDouble()` exactly equals the internal double passed to `Set` during this same execution. No tolerance. Do not publish that double.
+- string: `Parameter.AsString()` is an ordinal exact match of the proposed string;
+- integer: `Parameter.AsInteger()` exactly equals the proposed Int32;
+- quantity: `Parameter.AsDouble()` exactly equals the internal double passed to `Set` during this same execution. No tolerance. Do not publish that double.
 
-Any verification exception or mismatch stores `committed_unverified`. The model may have changed. Do not roll back a transaction Revit has already committed. Do not retry the mutation.
+Any verification exception, `HasValue == false`, or mismatch stores `committed_unverified`. The model may have changed. Do not roll back a transaction Revit has already committed. Do not retry the mutation.
 
 Only a completed verification of every target stores `applied`.
 
@@ -277,7 +293,11 @@ LIFECYCLE-0004 owns the apply-attempt store. This capability does not add apply 
 
 An intent causes at most one mutation attempt capable of committing.
 
-A retry returns the stored terminal outcome when one exists, including after the source intent TTL has elapsed, and does not open a transaction.
+LIFECYCLE-0004 establishes one exclusive apply record before `TryConsumeApproved`. The approval store and the apply-attempt store are not one atomic transaction. Only the owner of that record may consume. If consumption returns not approved, that pre-mutation record is released and the result is `approval_required`. After consumption succeeds, the record is irrevocable and can end only as a terminal outcome.
+
+A retry returns the stored terminal outcome when one exists and the binding still matches, including after the source intent TTL has elapsed, and does not open a transaction. A second call that finds the exclusive record before a terminal outcome returns `in_progress`.
+
+If a live intent has the same `intent_ref` and a different fingerprint, instance, or document binding, the result is `unavailable`. Do not return the old terminal outcome and do not start a mutation.
 
 A timeout or cancellation after the queued apply execution has begun does not abort the Revit thread. That execution finishes its controlled outcome and stores it. The caller may already have stopped waiting.
 
@@ -315,17 +335,19 @@ A future implementation, after this specification is Accepted and after the v1 w
 
 1. MCP input is only exact `instance_id` and `intent_ref`, and another Revit instance is never selected.
 2. The Addin request is only `intent_ref`.
-3. The public result object contains only `status` and one of the seven values.
-4. No consumable approval returns `approval_required` and leaves the approval unconsumed.
-5. Unknown, expired, forgotten, or wrong-document intent state before a claim returns `unavailable`.
-6. A claimed attempt that fails CAP-0007 revalidation returns `stale`, starts no transaction, and stays terminal.
-7. A current value that equals the proposal without equaling the stored before-state returns `stale`, not `applied`.
-8. One transaction named `RevitMCP Apply Parameter Updates` commits the whole batch or none of it, with one Undo item only on success.
-9. Any warning or error during that transaction rolls back.
-10. `RolledBack` is `transaction_failed`. `Pending` and any uncertain commit outcome are `indeterminate`. Neither status retries the mutation.
-11. Finalized `Committed` plus exact verification is `applied`. A verification mismatch is `committed_unverified`.
-12. A second apply returns the stored terminal outcome and does not call `Parameter.Set` again.
-13. The result exposes no approval decision, `session_ref`, fingerprint, raw values, or raw Revit ids.
+3. The public result object contains only `status` and one of the eight values.
+4. No consumable approval releases the pre-mutation record, returns `approval_required`, consumes nothing, and stores no terminal outcome.
+5. Unknown, expired, forgotten, or wrong-document intent state, and capacity exhaustion, return `unavailable` when no attempt owns the intent.
+6. A second call that finds an exclusive record and no terminal outcome returns `in_progress`, starts no transaction, and does not reveal the approval decision.
+7. A live intent whose fingerprint, instance, or document binding differs from the stored attempt returns `unavailable`, does not return the old terminal outcome, and does not mutate.
+8. An irrevocable attempt that fails CAP-0007 revalidation returns `stale`, starts no transaction, and stays terminal.
+9. A current value that equals the proposal without equaling the stored before-state returns `stale`, not `applied`.
+10. One transaction named `RevitMCP Apply Parameter Updates` commits the whole batch or none of it, with one Undo item only on success.
+11. Any warning or error during that transaction rolls back.
+12. `RolledBack` is `transaction_failed`. `Pending` and any uncertain commit outcome are `indeterminate`. Neither status retries the mutation.
+13. Finalized `Committed` verifies `HasValue == true` and then the exact proposed string, Int32, or internal double. Success is `applied`. `HasValue == false` or any mismatch is `committed_unverified`.
+14. A second apply returns the stored terminal outcome when the binding matches and does not call `Parameter.Set` again.
+15. The result exposes no approval decision, `session_ref`, fingerprint, raw values, or raw Revit ids.
 
 ## Explicitly deferred
 
