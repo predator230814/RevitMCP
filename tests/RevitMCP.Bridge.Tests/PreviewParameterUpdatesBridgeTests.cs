@@ -43,9 +43,10 @@ public sealed class PreviewParameterUpdatesBridgeTests
             getMepTopology: null,
             previewParameterUpdates: new FakePreviewParameterUpdatesService());
 
-        Assert.Equal(8, BridgeProtocol.CurrentVersion);
-        Assert.Equal(BridgeProtocol.SupportedVersions, full.SupportedProtocolVersions);
+        Assert.Equal(9, BridgeProtocol.CurrentVersion);
+        Assert.Equal(BridgeProtocol.PreviewParameterUpdatesVersions, full.SupportedProtocolVersions);
         Assert.Equal(new[] { 8, 7, 6, 5, 4, 3, 2, 1 }, full.SupportedProtocolVersions);
+        Assert.DoesNotContain(9, full.SupportedProtocolVersions);
         Assert.Equal(BridgeProtocol.GetMepTopologyVersions, v7.SupportedProtocolVersions);
         Assert.Equal(new[] { 7, 6, 5, 4, 3, 2, 1 }, v7.SupportedProtocolVersions);
         Assert.DoesNotContain(8, v7.SupportedProtocolVersions);
@@ -55,29 +56,32 @@ public sealed class PreviewParameterUpdatesBridgeTests
     }
 
     [Fact]
-    public void Capability_support_sets_include_v8_and_reject_v9()
+    public void Capability_support_sets_include_v9_and_reject_v10()
     {
-        Assert.Equal(8, BridgeProtocol.CurrentVersion);
-        Assert.True(BridgeProtocol.SupportsGetContext(8));
-        Assert.True(BridgeProtocol.SupportsQueryElements(8));
-        Assert.True(BridgeProtocol.SupportsGetElements(8));
-        Assert.True(BridgeProtocol.SupportsDescribeParameters(8));
-        Assert.True(BridgeProtocol.SupportsGetParameterValues(8));
-        Assert.True(BridgeProtocol.SupportsGetMepTopology(8));
+        Assert.Equal(9, BridgeProtocol.CurrentVersion);
+        Assert.True(BridgeProtocol.SupportsGetContext(9));
+        Assert.True(BridgeProtocol.SupportsQueryElements(9));
+        Assert.True(BridgeProtocol.SupportsGetElements(9));
+        Assert.True(BridgeProtocol.SupportsDescribeParameters(9));
+        Assert.True(BridgeProtocol.SupportsGetParameterValues(9));
+        Assert.True(BridgeProtocol.SupportsGetMepTopology(9));
+        Assert.True(BridgeProtocol.SupportsPreviewParameterUpdates(9));
         Assert.True(BridgeProtocol.SupportsPreviewParameterUpdates(8));
+        Assert.False(BridgeProtocol.SupportsRequestParameterUpdateReview(8));
 
-        foreach (var version in new[] { 1, 2, 3, 4, 5, 6, 7, 9 })
+        foreach (var version in new[] { 1, 2, 3, 4, 5, 6, 7, 10 })
         {
             Assert.False(BridgeProtocol.SupportsPreviewParameterUpdates(version));
         }
 
-        Assert.False(BridgeProtocol.SupportsGetContext(9));
-        Assert.False(BridgeProtocol.SupportsQueryElements(9));
-        Assert.False(BridgeProtocol.SupportsGetElements(9));
-        Assert.False(BridgeProtocol.SupportsDescribeParameters(9));
-        Assert.False(BridgeProtocol.SupportsGetParameterValues(9));
-        Assert.False(BridgeProtocol.SupportsGetMepTopology(9));
-        Assert.False(BridgeProtocol.SupportsPreviewParameterUpdates(9));
+        Assert.False(BridgeProtocol.SupportsGetContext(10));
+        Assert.False(BridgeProtocol.SupportsQueryElements(10));
+        Assert.False(BridgeProtocol.SupportsGetElements(10));
+        Assert.False(BridgeProtocol.SupportsDescribeParameters(10));
+        Assert.False(BridgeProtocol.SupportsGetParameterValues(10));
+        Assert.False(BridgeProtocol.SupportsGetMepTopology(10));
+        Assert.False(BridgeProtocol.SupportsPreviewParameterUpdates(10));
+        Assert.False(BridgeProtocol.SupportsRequestParameterUpdateReview(10));
     }
 
     [Fact]
@@ -333,11 +337,11 @@ public sealed class PreviewParameterUpdatesBridgeTests
     }
 
     [Fact]
-    public async Task Adapter_rejects_unknown_v9_and_a_missing_preview_service()
+    public async Task Adapter_rejects_unknown_v10_and_a_missing_preview_service()
     {
         var preview = new FakePreviewParameterUpdatesService();
-        var unknown = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(9), capability: null, previewParameterUpdates: preview);
-        await unknown.HandshakeAsync(CreateHandshakeRequest("any", [9]), CancellationToken.None);
+        var unknown = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(10), capability: null, previewParameterUpdates: preview);
+        await unknown.HandshakeAsync(CreateHandshakeRequest("any", [10]), CancellationToken.None);
         var future = await Assert.ThrowsAsync<LocalRpcException>(() =>
             unknown.PreviewParameterUpdatesAsync(
                 FakePreviewParameterUpdatesService.CreateRequest(),

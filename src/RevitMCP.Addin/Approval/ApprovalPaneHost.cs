@@ -18,6 +18,7 @@ internal sealed class ApprovalPaneHost : UserControl, IApprovalPaneSurface
         Text = "No approval request is currently active.",
     };
 
+    private readonly ApprovalWebViewUserData _userData = new();
     private WebView2? _webView;
     private CoreWebView2? _core;
     private int _initializeOnce;
@@ -157,11 +158,7 @@ internal sealed class ApprovalPaneHost : UserControl, IApprovalPaneSurface
                 return;
             }
 
-            var userDataFolder = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "RevitMCP",
-                "ApprovalUi",
-                Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            var userDataFolder = _userData.FolderPath;
             Directory.CreateDirectory(userDataFolder);
 
             var environment = await CoreWebView2Environment.CreateAsync(browserExecutableFolder: null, userDataFolder: userDataFolder);
@@ -191,7 +188,7 @@ internal sealed class ApprovalPaneHost : UserControl, IApprovalPaneSurface
                 uiFolder,
                 CoreWebView2HostResourceAccessKind.DenyCors);
             _core.NavigationCompleted += OnNavigationCompleted;
-            _core.Navigate(ApprovalContent.LocalOrigin + "index.html");
+            _core.Navigate(ApprovalContent.IndexUri);
         }
         catch (Exception)
         {
@@ -301,4 +298,18 @@ internal sealed class ApprovalPaneHost : UserControl, IApprovalPaneSurface
         _core.NavigationCompleted -= OnNavigationCompleted;
         _core = null;
     }
+}
+
+/// <summary>
+/// One opaque WebView user-data folder for this host. The token stays inside the Addin.
+/// </summary>
+internal sealed class ApprovalWebViewUserData
+{
+    private readonly string _token = Guid.NewGuid().ToString("N");
+
+    internal string FolderPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+        "RevitMCP",
+        "ApprovalUi",
+        Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture) + "-" + _token);
 }

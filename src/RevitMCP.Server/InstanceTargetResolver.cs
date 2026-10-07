@@ -79,6 +79,26 @@ internal static class InstanceTargetResolver
         return IsEligible(instance, BridgeProtocol.SupportsPreviewParameterUpdates);
     }
 
+    public static TargetResolution ResolveForRequestParameterUpdateReview(
+        IReadOnlyList<DiscoveredInstance> discovered,
+        string? instanceId)
+    {
+        ArgumentNullException.ThrowIfNull(discovered);
+        if (instanceId is null)
+        {
+            return TargetResolution.Failure(
+                McpToolErrorCodes.InstanceNotFound,
+                ToolErrorMessages.InstanceNotFound);
+        }
+
+        return ResolveExplicit(discovered, instanceId, IsRequestParameterUpdateReviewEligible);
+    }
+
+    public static bool IsRequestParameterUpdateReviewEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsRequestParameterUpdateReview);
+    }
+
     private static bool IsEligible(DiscoveredInstance instance, Func<int, bool> supportsCapability)
     {
         return instance.State == DiscoveryState.Ready

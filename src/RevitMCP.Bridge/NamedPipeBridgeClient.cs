@@ -248,6 +248,29 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             .ConfigureAwait(false);
     }
 
+    public async Task<RequestParameterUpdateReviewResult> RequestParameterUpdateReviewAsync(
+        RequestParameterUpdateReviewRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        RequestParameterUpdateReviewRequests.Validate(request);
+        return await InvokeCapabilityAsync<RequestParameterUpdateReviewResult>(
+                "revit.request_parameter_update_review",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureRequestParameterUpdateReviewAllowed,
+                "The Revit parameter update review request timed out.",
+                "The Revit parameter update review request could not be executed.")
+            .ConfigureAwait(false);
+    }
+
     public async ValueTask DisposeAsync()
     {
         _rpc.Dispose();
@@ -389,6 +412,17 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             throw new BridgeException(
                 BridgeErrorCodes.ProtocolIncompatible,
                 "revit.preview_parameter_updates requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsureRequestParameterUpdateReviewAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsRequestParameterUpdateReview(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.request_parameter_update_review requires a negotiated bridge protocol version that explicitly supports it.");
         }
     }
 

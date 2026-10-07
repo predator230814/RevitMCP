@@ -16,6 +16,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
     private readonly IRevitGetParameterValuesService? _getParameterValues;
     private readonly IRevitGetMepTopologyService? _getMepTopology;
     private readonly IRevitPreviewParameterUpdatesService? _previewParameterUpdates;
+    private readonly IRevitRequestParameterUpdateReviewService? _requestParameterUpdateReview;
     private readonly TaskCompletionSource _listenerReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Task _acceptLoop;
     private IRegistrationLease? _lease;
@@ -30,7 +31,8 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitDescribeParametersService? describeParameters,
         IRevitGetParameterValuesService? getParameterValues,
         IRevitGetMepTopologyService? getMepTopology,
-        IRevitPreviewParameterUpdatesService? previewParameterUpdates)
+        IRevitPreviewParameterUpdatesService? previewParameterUpdates,
+        IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview)
     {
         Metadata = metadata;
         PipeName = pipeName;
@@ -42,6 +44,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         _getParameterValues = getParameterValues;
         _getMepTopology = getMepTopology;
         _previewParameterUpdates = previewParameterUpdates;
+        _requestParameterUpdateReview = requestParameterUpdateReview;
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_lifetime.Token));
     }
 
@@ -125,7 +128,22 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitGetMepTopologyService? getMepTopology,
         CancellationToken cancellationToken)
     {
-        return StartAsync(metadata, store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates: null, cancellationToken);
+        return StartAsync(metadata, store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates: null, requestParameterUpdateReview: null, cancellationToken);
+    }
+
+    public static Task<NamedPipeBridgeHost> StartAsync(
+        BridgeInstanceMetadata metadata,
+        IRegistrationStore store,
+        IRevitCapabilityService? capability,
+        IRevitQueryElementsService? query,
+        IRevitGetElementsService? getElements,
+        IRevitDescribeParametersService? describeParameters,
+        IRevitGetParameterValuesService? getParameterValues,
+        IRevitGetMepTopologyService? getMepTopology,
+        IRevitPreviewParameterUpdatesService? previewParameterUpdates,
+        CancellationToken cancellationToken)
+    {
+        return StartAsync(metadata, store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview: null, cancellationToken);
     }
 
     public static async Task<NamedPipeBridgeHost> StartAsync(
@@ -138,14 +156,15 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitGetParameterValuesService? getParameterValues,
         IRevitGetMepTopologyService? getMepTopology,
         IRevitPreviewParameterUpdatesService? previewParameterUpdates,
+        IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview,
         CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(metadata);
         ArgumentNullException.ThrowIfNull(store);
 
-        var advertised = WithAdvertisedProtocol(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates);
+        var advertised = WithAdvertisedProtocol(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview);
         var pipeName = BridgePipeNames.Create(advertised.WindowsSessionId, advertised.InstanceId);
-        var host = new NamedPipeBridgeHost(advertised, pipeName, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates);
+        var host = new NamedPipeBridgeHost(advertised, pipeName, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview);
         try
         {
             await host._listenerReady.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -242,7 +261,8 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitDescribeParametersService? describeParameters = null,
         IRevitGetParameterValuesService? getParameterValues = null,
         IRevitGetMepTopologyService? getMepTopology = null,
-        IRevitPreviewParameterUpdatesService? previewParameterUpdates = null)
+        IRevitPreviewParameterUpdatesService? previewParameterUpdates = null,
+        IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview = null)
     {
         IReadOnlyList<int> versions;
         if (capability is not null
@@ -251,9 +271,20 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
             && describeParameters is not null
             && getParameterValues is not null
             && getMepTopology is not null
-            && previewParameterUpdates is not null)
+            && previewParameterUpdates is not null
+            && requestParameterUpdateReview is not null)
         {
             versions = BridgeProtocol.SupportedVersions;
+        }
+        else if (capability is not null
+            && query is not null
+            && getElements is not null
+            && describeParameters is not null
+            && getParameterValues is not null
+            && getMepTopology is not null
+            && previewParameterUpdates is not null)
+        {
+            versions = BridgeProtocol.PreviewParameterUpdatesVersions;
         }
         else if (capability is not null
             && query is not null
@@ -344,7 +375,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         JsonRpc? rpc = null;
         try
         {
-            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcBridgeAdapter(_handshake, _capability, _query, _getElements, _describeParameters, _getParameterValues, _getMepTopology, _previewParameterUpdates));
+            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcBridgeAdapter(_handshake, _capability, _query, _getElements, _describeParameters, _getParameterValues, _getMepTopology, _previewParameterUpdates, _requestParameterUpdateReview));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             await rpc.Completion.WaitAsync(linked.Token).ConfigureAwait(false);
         }

@@ -149,12 +149,12 @@ public sealed class BridgeEndpointGatingTests
     {
         var capability = new FakeCapabilityService();
         var query = new FakeQueryElementsService();
-        var adapter = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(9), capability, query);
+        var adapter = new StreamJsonRpcBridgeAdapter(new SelectedVersionHandshake(10), capability, query);
         await adapter.HandshakeAsync(
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [9],
+                SupportedProtocolVersions = [10],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);
@@ -228,11 +228,11 @@ public sealed class BridgeEndpointGatingTests
     }
 
     [Fact]
-    public async Task Unknown_selected_v9_does_not_invoke_get_elements()
+    public async Task Unknown_selected_v10_does_not_invoke_get_elements()
     {
         var getElements = new FakeGetElementsService();
         var adapter = new StreamJsonRpcBridgeAdapter(
-            new SelectedVersionHandshake(9),
+            new SelectedVersionHandshake(10),
             new FakeCapabilityService(),
             new FakeQueryElementsService(),
             getElements);
@@ -240,7 +240,7 @@ public sealed class BridgeEndpointGatingTests
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [9],
+                SupportedProtocolVersions = [10],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);
@@ -427,11 +427,11 @@ public sealed class BridgeEndpointGatingTests
     }
 
     [Fact]
-    public async Task Unknown_selected_v9_does_not_invoke_describe_parameters()
+    public async Task Unknown_selected_v10_does_not_invoke_describe_parameters()
     {
         var describe = new FakeDescribeParametersService();
         var adapter = new StreamJsonRpcBridgeAdapter(
-            new SelectedVersionHandshake(9),
+            new SelectedVersionHandshake(10),
             new FakeCapabilityService(),
             new FakeQueryElementsService(),
             new FakeGetElementsService(),
@@ -440,7 +440,7 @@ public sealed class BridgeEndpointGatingTests
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [9],
+                SupportedProtocolVersions = [10],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);
@@ -579,11 +579,11 @@ public sealed class BridgeEndpointGatingTests
     }
 
     [Fact]
-    public async Task Unknown_selected_v9_does_not_invoke_get_parameter_values()
+    public async Task Unknown_selected_v10_does_not_invoke_get_parameter_values()
     {
         var values = new FakeGetParameterValuesService();
         var adapter = new StreamJsonRpcBridgeAdapter(
-            new SelectedVersionHandshake(9),
+            new SelectedVersionHandshake(10),
             new FakeCapabilityService(),
             new FakeQueryElementsService(),
             new FakeGetElementsService(),
@@ -593,7 +593,7 @@ public sealed class BridgeEndpointGatingTests
             new BridgeHandshakeRequest
             {
                 ExpectedInstanceId = "any",
-                SupportedProtocolVersions = [9],
+                SupportedProtocolVersions = [10],
                 ClientName = "RevitMCP.Tests"
             },
             CancellationToken.None);

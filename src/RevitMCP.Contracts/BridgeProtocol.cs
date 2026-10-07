@@ -18,7 +18,9 @@ public static class BridgeProtocol
 
     public const int PreviewParameterUpdatesVersion = 8;
 
-    public const int CurrentVersion = PreviewParameterUpdatesVersion;
+    public const int RequestParameterUpdateReviewVersion = 9;
+
+    public const int CurrentVersion = RequestParameterUpdateReviewVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -54,8 +56,21 @@ public static class BridgeProtocol
             HandshakeVersion
         ];
 
+    public static IReadOnlyList<int> PreviewParameterUpdatesVersions { get; } =
+        [
+            PreviewParameterUpdatesVersion,
+            GetMepTopologyVersion,
+            GetParameterValuesVersion,
+            DescribeParametersVersion,
+            GetElementsVersion,
+            QueryElementsVersion,
+            GetContextVersion,
+            HandshakeVersion
+        ];
+
     public static IReadOnlyList<int> SupportedVersions { get; } =
         [
+            RequestParameterUpdateReviewVersion,
             PreviewParameterUpdatesVersion,
             GetMepTopologyVersion,
             GetParameterValuesVersion,
@@ -73,7 +88,8 @@ public static class BridgeProtocol
             or DescribeParametersVersion
             or GetParameterValuesVersion
             or GetMepTopologyVersion
-            or PreviewParameterUpdatesVersion;
+            or PreviewParameterUpdatesVersion
+            or RequestParameterUpdateReviewVersion;
 
     public static bool SupportsQueryElements(int version) =>
         version is QueryElementsVersion
@@ -81,27 +97,38 @@ public static class BridgeProtocol
             or DescribeParametersVersion
             or GetParameterValuesVersion
             or GetMepTopologyVersion
-            or PreviewParameterUpdatesVersion;
+            or PreviewParameterUpdatesVersion
+            or RequestParameterUpdateReviewVersion;
 
     public static bool SupportsGetElements(int version) =>
         version is GetElementsVersion
             or DescribeParametersVersion
             or GetParameterValuesVersion
             or GetMepTopologyVersion
-            or PreviewParameterUpdatesVersion;
+            or PreviewParameterUpdatesVersion
+            or RequestParameterUpdateReviewVersion;
 
     public static bool SupportsDescribeParameters(int version) =>
         version is DescribeParametersVersion
             or GetParameterValuesVersion
             or GetMepTopologyVersion
-            or PreviewParameterUpdatesVersion;
+            or PreviewParameterUpdatesVersion
+            or RequestParameterUpdateReviewVersion;
 
     public static bool SupportsGetParameterValues(int version) =>
-        version is GetParameterValuesVersion or GetMepTopologyVersion or PreviewParameterUpdatesVersion;
+        version is GetParameterValuesVersion
+            or GetMepTopologyVersion
+            or PreviewParameterUpdatesVersion
+            or RequestParameterUpdateReviewVersion;
 
     public static bool SupportsGetMepTopology(int version) =>
-        version is GetMepTopologyVersion or PreviewParameterUpdatesVersion;
+        version is GetMepTopologyVersion
+            or PreviewParameterUpdatesVersion
+            or RequestParameterUpdateReviewVersion;
 
     public static bool SupportsPreviewParameterUpdates(int version) =>
-        version is PreviewParameterUpdatesVersion;
+        version is PreviewParameterUpdatesVersion or RequestParameterUpdateReviewVersion;
+
+    public static bool SupportsRequestParameterUpdateReview(int version) =>
+        version is RequestParameterUpdateReviewVersion;
 }

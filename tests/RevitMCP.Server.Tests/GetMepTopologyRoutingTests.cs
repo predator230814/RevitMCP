@@ -17,7 +17,8 @@ public sealed class GetMepTopologyRoutingTests
         Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v6", "pipe-v6", protocolVersion: 6)));
         Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
         Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
-        Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
+        Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
+        Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
     }
 
     [Fact]
@@ -47,7 +48,7 @@ public sealed class GetMepTopologyRoutingTests
         Assert.True(InstanceTargetResolver.IsGetParameterValuesEligible(v8));
         Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(v8));
 
-        var v9 = TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9);
+        var v9 = TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10);
         Assert.False(InstanceTargetResolver.IsGetContextEligible(v9));
         Assert.False(InstanceTargetResolver.IsQueryElementsEligible(v9));
         Assert.False(InstanceTargetResolver.IsGetElementsEligible(v9));
@@ -151,12 +152,12 @@ public sealed class GetMepTopologyRoutingTests
     }
 
     [Fact]
-    public async Task Explicit_v9_id_returns_unavailable()
+    public async Task Explicit_v10_id_returns_unavailable()
     {
         var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9));
+        discovery.Instances.Add(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10));
         var factory = UnusedFactory();
-        var outcome = await CreateService(discovery, factory).ExecuteAsync("v9", TestSupport.CreateGetMepTopologyRequest(), CancellationToken.None);
+        var outcome = await CreateService(discovery, factory).ExecuteAsync("v10", TestSupport.CreateGetMepTopologyRequest(), CancellationToken.None);
 
         Assert.Equal(McpToolErrorCodes.InstanceUnavailable, outcome.ErrorCode);
         Assert.Empty(factory.RequestedPipes);

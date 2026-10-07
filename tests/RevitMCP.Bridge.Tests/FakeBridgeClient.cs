@@ -73,6 +73,17 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         throw new NotSupportedException("This fake client does not implement revit.preview_parameter_updates.");
     }
 
+    public Task<RequestParameterUpdateReviewResult> RequestParameterUpdateReviewAsync(
+        RequestParameterUpdateReviewRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.request_parameter_update_review.");
+    }
+
     public Task<GetMepTopologyResult> GetMepTopologyAsync(
         GetMepTopologyRequest request,
         TimeSpan timeout,
