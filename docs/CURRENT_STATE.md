@@ -1,6 +1,6 @@
 # RevitMCP Current State
 
-_Last updated: 2026-10-06_
+_Last updated: 2026-10-07_
 
 ## Phase
 
@@ -895,6 +895,6 @@ A command-line open of a copied Metric Column `.rft` exited before a family docu
 
 ## Next task
 
-PR #66 is merged. The production DockablePane, WPF, and bundled local WebView2 approval presentation exists and passed the Revit 2026.5 startup smoke. Bridge v9 adds the bounded request-review capability. `tools/list` exposes exactly 8 tools, including `revit_request_parameter_update_review`. That tool requires the exact `instance_id` and `intent_ref` returned by `revit_preview_parameter_updates`. It asks that Revit process to present the existing immutable intent to the local user. It is not approval. It returns before the human decision, exposes no MCP-facing `session_ref`, and does not consume approval. CAP-0008 still does not exist. No Revit model write exists.
+PR #67 is merged. Main contains Bridge v9 request-review. `tools/list` exposes exactly 8 tools, including `revit_request_parameter_update_review`. Official MCP-client to stdio Server to Bridge v9 to Revit 2026.5 live validation of request-review is **PASS**. The trusted approval UI before/proposed replay is **PASS**. Request-review is not approval and does not consume an approval.
 
-The next checkpoint after live validation of request-review is CAP-0008 controlled apply design, contract, and implementation under ADR-0008. Live MCP-client to stdio Server to Bridge v9 to Revit 2026.5 validation of request-review is still pending. Do not treat this implementation as that live gate. CAP-0008 still does not exist. No production Revit write exists.
+CAP-0008, `revit_apply_parameter_updates`, is **Proposed**. LIFECYCLE-0004, the controlled apply-attempt lifecycle, is **Proposed**. Neither is accepted or implemented. CAP-0008 still has no production behavior. No production Revit model write exists. The next checkpoint is that Proposed specification and apply-attempt lifecycle. CAP-0008 cannot move from Proposed to Accepted for production implementation until the v1 write-audit design is accepted.
