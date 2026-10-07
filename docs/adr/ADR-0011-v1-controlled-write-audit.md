@@ -19,7 +19,7 @@ The design stays vendor-neutral, local and offline capable, independent of any M
 2. An audit failure after the Revit model outcome is already known must not falsify or replace that known model outcome.
 3. Audit must not become a network or cloud availability dependency for v1.
 4. Audit overhead is per approved batch, not per parameter.
-5. No audit I/O occurs while the Revit `Transaction` is active.
+5. No audit I/O occurs while the Revit `Transaction` is active, including while `Commit` has returned `Pending` and failure processing is not finalized.
 6. Raw BIM values, prompts, document paths, user identity, and model prose are not required for normal audit correlation.
 7. Multiple Revit processes must not contend for one audit file.
 8. The v1 audit is an operational durable trail. It is not a claim of cryptographic non-repudiation against a compromised OS, user account, or Revit process.
@@ -94,7 +94,25 @@ write-YYYYMMDD-<audit_stream_ref>.jsonl
 
 A process may rotate to a new stream when the UTC date changes. It then stops appending to the previous file. Other RevitMCP processes never append to the same stream file. No cross-process writer lock is required.
 
-An implementation may keep its stream open for the process lifetime and allow read sharing. Another process still must not write to it.
+An implementation may keep its stream open for the process lifetime. The open stream may allow read sharing. It does not allow delete sharing. Another process still must not write to it.
+
+Housekeeping in another Revit process must not delete a stream that its owner currently has open. If a delete fails because the file is in use, the file stays. That result means the stream is retained. It is not a reason to force-delete the file.
+
+#### Process-local writer boundary
+
+One process-local synchronization boundary covers, as one critical section:
+
+- sequence allocation;
+- the stream-rotation decision;
+- JSON serialization;
+- the append;
+- `Flush(flushToDisk: true)`.
+
+That boundary keeps sequence numbers unique inside the stream, keeps each JSON line intact, and keeps rotation from racing an append in the same process.
+
+The same lock is not held during stale revalidation, during the Revit `Transaction`, during `Parameter.Set`, or during post-commit verification.
+
+Each Revit process writes only its own stream file. v1 adds no cross-process audit-write lock.
 
 ### 3. Two batch events
 
@@ -124,8 +142,10 @@ If `apply_started` cannot be durably persisted:
 - no Revit `Transaction` starts;
 - no `Parameter.Set` occurs;
 - the already-consumed approval cannot be reused;
-- the apply attempt becomes terminal;
+- store the future terminal outcome `audit_failed` in the LIFECYCLE-0004 apply-attempt store first;
 - the audit sink enters the degraded state defined below.
+
+Any `apply_completed` line for `audit_failed` is best-effort only. It may be absent, because the audit sink just failed. Absence of that completion line does not undo the stored `audit_failed` terminal outcome and does not authorize another mutation.
 
 That terminal outcome is not in the current CAP-0008 status list. A later amendment of CAP-0008 and LIFECYCLE-0004 must add:
 
@@ -141,22 +161,57 @@ audit_failed
 = no Revit mutation began
 = terminal
 = that intent never starts another mutation
+= the apply-attempt terminal state is stored before any best-effort completion line
 ```
 
 This ADR does not make that amendment.
 
+#### Terminal outcome order
+
+For every known terminal apply outcome, use this order:
+
+1. Determine the model or apply outcome.
+2. Store the immutable LIFECYCLE-0004 terminal outcome first.
+3. Then attempt and flush `apply_completed`, except where this ADR says that completion write does not run.
+4. Then return the CAP-0008 result.
+
+Completion-audit durability does not precede the apply-attempt terminal state. The stored terminal outcome is what a retry reads.
+
+If `apply_completed` persistence fails after that terminal outcome is stored:
+
+- the already-stored terminal outcome remains authoritative;
+- a retry returns that terminal outcome;
+- no mutation is retried;
+- the audit sink becomes degraded.
+
 #### `apply_completed`
 
-After the CAP-0008 terminal model outcome is known, append one `apply_completed` line and force it durable. The known outcomes are:
+After the LIFECYCLE-0004 terminal outcome is stored, append one `apply_completed` line and force it durable for a finalized outcome:
 
 - `stale`;
 - `transaction_failed`;
 - `committed_unverified`;
-- `indeterminate`;
-- `applied`;
-- a future audit-related terminal outcome, including `audit_failed`, when a later accepted amendment defines it.
+- `indeterminate`, when the transaction is not left in unresolved `Pending` failure processing;
+- `applied`.
+
+A future `audit_failed` completion, once that status exists, is best-effort only. It is not a second durability barrier.
 
 No completion write occurs inside an active Revit `Transaction`.
+
+#### `Pending`
+
+Autodesk documents `TransactionStatus.Pending` as failure processing that is not yet finalized. If `Commit` returns `Pending`:
+
+- store the LIFECYCLE-0004 terminal outcome `indeterminate` first;
+- do not mutate again;
+- do not perform completion-audit I/O while Revit remains in unresolved `Pending` failure processing;
+- the durable `apply_started` line may remain without a matching `apply_completed` line;
+- that incomplete trail is valid evidence of an unresolved attempt;
+- v1 does not add a synchronous recovery mechanism or a user-dialog flow for this case.
+
+A later design may add a safe completion hook. Until that exists, v1 does not emit `apply_completed` with `transaction_status = pending`.
+
+Finalized `Committed`, `RolledBack`, and stale paths still attempt `apply_completed` after the terminal state is stored.
 
 ### 4. Preflight before approval consumption
 
@@ -164,7 +219,10 @@ Before `TryConsumeApproved`:
 
 - verify or open the current audit stream;
 - run bounded capacity and retention housekeeping when required;
-- ensure the sink is writable enough to attempt the mandatory event.
+- measure audit-directory usage after that housekeeping;
+- require local headroom for one maximum `apply_started` line plus one maximum `apply_completed` line;
+- ensure the sink is writable enough to attempt the mandatory event;
+- reject `revit_version`, `revit_build`, or `addin_version` values that do not fit the bounds in decision 7. Do not truncate them.
 
 If preflight fails:
 
@@ -176,13 +234,15 @@ The later CAP-0008 amendment maps that preflight failure to the existing `unavai
 
 ### 5. Completion-audit failure
 
-If the model outcome is already known and `apply_completed` cannot be persisted, do not replace or falsify that known model result.
+If the model outcome is already known, the LIFECYCLE-0004 terminal outcome is already stored, and `apply_completed` cannot be persisted, do not replace or falsify that known model result.
 
 - transaction committed and verification passed remains `applied`;
 - a known rollback remains `transaction_failed`;
 - a committed verification mismatch remains `committed_unverified`;
-- a known `Pending` or otherwise uncertain result remains `indeterminate`;
+- an uncertain finalized result remains `indeterminate`;
 - stale revalidation remains `stale`.
+
+The unresolved `Pending` path does not attempt this completion write. Its stored outcome remains `indeterminate`, and its `apply_started` line may stay unmatched.
 
 The LIFECYCLE-0004 terminal outcome stays authoritative for CAP-0008 retry. A missing completion line does not become a reason to mutate again.
 
@@ -195,10 +255,11 @@ After an already-committed Revit transaction, an audit storage failure cannot ho
 Audit cost is at batch level:
 
 - at most one durable `apply_started` append before mutation;
-- at most one durable `apply_completed` append after the terminal outcome;
+- at most one durable `apply_completed` append after the terminal outcome is stored, and only for a finalized outcome;
+- zero completion-audit writes when `Commit` returns unresolved `Pending`;
 - zero audit writes per parameter;
 - zero network round trips;
-- zero audit work while the Revit `Transaction` is active.
+- zero audit work while the Revit `Transaction` is active, and zero completion-audit work while `Pending` failure processing is unresolved.
 
 The controlled parameter batch still uses one stale-revalidation phase, one Revit `Transaction`, one Undo item on successful commit, and one post-commit verification phase. Do not introduce one transaction or one flush per parameter.
 
@@ -206,34 +267,36 @@ The writer may reuse one open stream for the process lifetime so each event does
 
 ### 7. Closed event schema
 
-Each line is one closed object. No additional properties.
+Each line is one closed object. No additional properties. Every string is bounded so the maximum line size in decision 10 is enforceable. A value that does not fit its bound is not truncated and is not written.
 
 Common fields:
 
 ```text
 schema_version                         // integer 1
 event_type                             // apply_started | apply_completed
-event_at_utc                           // ISO-8601 with a Z offset
-audit_stream_ref                       // this process stream's opaque ref
-sequence                               // monotonic integer within the stream, starting at 1
-attempt_ref                            // internal high-entropy correlation value
-intent_ref_hash                        // SHA-256, domain-separated, lowercase hex
-intent_fingerprint                     // existing LIFECYCLE-0002 fingerprint
-intent_fingerprint_schema_version      // integer, currently 1
-instance_id_hash                       // SHA-256, domain-separated, lowercase hex
-document_id_hash                       // SHA-256, domain-separated, lowercase hex
-revit_version
-revit_build
-addin_version
-item_count                             // integer count of items in the batch
+event_at_utc                           // UTC, exactly yyyy-MM-ddTHH:mm:ss.fffffffZ
+audit_stream_ref                       // exactly 64 lowercase hex characters
+sequence                               // monotonic integer within the stream, starting at 1, at most 10 decimal digits
+attempt_ref                            // exactly 64 lowercase hex characters
+intent_ref_hash                        // SHA-256, domain-separated, exactly 64 lowercase hex characters
+intent_fingerprint                     // LIFECYCLE-0002 SHA-256, exactly 64 lowercase hex characters
+intent_fingerprint_schema_version      // integer, currently 1, at most 10 decimal digits
+instance_id_hash                       // SHA-256, domain-separated, exactly 64 lowercase hex characters
+document_id_hash                       // SHA-256, domain-separated, exactly 64 lowercase hex characters
+revit_version                          // 1..32 UTF-8 bytes, no surrounding whitespace added
+revit_build                            // 1..64 UTF-8 bytes, no surrounding whitespace added
+addin_version                          // 1..32 UTF-8 bytes, no surrounding whitespace added
+item_count                             // integer 1..20
 ```
+
+`audit_stream_ref` and `attempt_ref` are 32 random bytes, encoded as 64 lowercase hexadecimal characters. They are minted inside the Addin.
 
 `apply_started` also includes:
 
 ```text
-approval_method                        // revit_local
-approval_decided_at_utc
-approval_effective_expiry_utc
+approval_method                        // revit_local_in_process
+approval_decided_at_utc                // same fixed UTC timestamp form as event_at_utc
+approval_effective_expiry_utc          // same fixed UTC timestamp form as event_at_utc
 ```
 
 `apply_completed` also includes:
@@ -248,7 +311,7 @@ Closed values:
 
 ```text
 approval_method
-  revit_local
+  revit_local_in_process
 
 apply_status
   stale
@@ -262,7 +325,7 @@ transaction_status
   none
   committed
   rolled_back
-  pending
+  pending          // reserved; v1 does not emit this while Pending is unresolved
   unknown
 
 verification_status
@@ -273,7 +336,30 @@ verification_status
 
 `attempt_ref` is minted by the Addin for correlation inside the audit trail. It is not an authorization token and it is never MCP output.
 
-`sequence` increases by one for each line in that stream. A rotated stream starts its own sequence.
+#### Approval method
+
+The audit enum is closed. v1 does not copy `ApprovalSnapshot.ProviderMethod` into the file, and it does not normalize an arbitrary provider string into a nearby name.
+
+The mapping is read from the snapshot returned by a successful `TryConsumeApproved`, before `apply_started` and before any `Transaction`. The only accepted mapping is exact ordinal equality:
+
+```text
+ApprovalSnapshot.ProviderMethod == "revit-local-in-process"
+-> approval_method = revit_local_in_process
+```
+
+`revit-local-in-process` is the production `ApprovalSnapshot.ProviderMethod` default. Any other provider method is unmapped.
+
+An unmapped method fails closed before production apply:
+
+- no Revit `Transaction` starts;
+- no `Parameter.Set` occurs;
+- no `apply_started` line is written, because the closed enum has no value for that method and the raw provider string stays out of the audit file;
+- the already-consumed approval cannot be reused;
+- the apply-attempt store records a terminal no-mutation outcome before the CAP result is returned.
+
+This ADR does not add that public status. The later CAP-0008 and LIFECYCLE-0004 amendment must name it. The status means approval was consumed, no mutation began, the outcome is terminal, and that intent never starts another mutation.
+
+`sequence` increases by one for each line in that stream. A rotated stream starts its own sequence. If the next sequence would need more than 10 decimal digits, the writer does not emit the line.
 
 Do not include arbitrary exception text, failure-message text, or stack traces.
 
@@ -318,15 +404,21 @@ The v1 write audit never persists:
 
 Failure handling is represented only by the bounded status fields above. Do not log `FailureDefinition` message text. Do not add per-parameter counts in v1.
 
-### 10. Retention and capacity
+### 10. Retention and admission
 
-v1 retention is 30 days maximum. The hard total size of the audit directory is 64 MiB.
+v1 retention is 30 days maximum.
 
-The caller cannot configure either limit through MCP.
+64 MiB (67,108,864 bytes) is the v1 audit-directory admission threshold. It is not an absolute global directory ceiling. Independent process-owned files have no cross-process capacity reservation, so v1 cannot guarantee that concurrent Revit processes stay at or under 64 MiB. v1 does not add a cross-process audit-write lock to create that guarantee. A future ADR would have to add cross-process capacity reservation before 64 MiB could be treated as an absolute cap.
 
-During bounded housekeeping, stream files whose UTC date is older than 30 days may be deleted. Do not delete the active stream. Do not delete an unexpired stream merely to admit a new write.
+The caller cannot configure retention or the admission threshold through MCP.
 
-If the hard capacity is still exceeded after expired files are deleted, audit preflight fails. A new apply returns the future mapping `unavailable`. Approval stays unconsumed.
+Each serialized audit event has a hard maximum UTF-8 size of 8 KiB (8,192 bytes), including the trailing newline. The field bounds in decision 7 make that maximum enforceable. A line that would exceed 8,192 bytes is not appended.
+
+Before `TryConsumeApproved`, preflight requires local headroom for one maximum `apply_started` event plus one maximum `apply_completed` event: 16,384 bytes. Headroom is measured from the sum of file lengths in the v1 audit directory after expired-file housekeeping. If that sum plus 16,384 bytes exceeds 67,108,864 bytes, preflight fails. The later CAP-0008 mapping is `unavailable`. Approval stays unconsumed.
+
+Concurrent Revit processes can still both pass that check and then write. The directory can overshoot 64 MiB by a small amount. The next preflight then fails closed.
+
+During bounded housekeeping, stream files whose UTC date is older than 30 days may be deleted. Do not delete the active stream. Do not delete a stream that its owner currently has open. A delete that fails because the file is in use leaves the file in place. Do not delete an unexpired stream merely to admit a new write.
 
 This prefers keeping recent write evidence over discarding it to make room.
 
@@ -388,18 +480,21 @@ This proposal does not authorize:
 - Local use does not depend on a network or a telemetry vendor.
 - The record can correlate a batch without storing BIM values or raw opaque refs.
 - Each Revit process owns its file, so writers do not share one append stream.
+- The apply-attempt terminal outcome is stored before the completion-audit write, so a later flush failure cannot rewrite the known result.
 
 ### Costs / limitations
 
-- `audit_failed` is not yet a CAP-0008 status. Production apply still cannot be accepted until that amendment exists.
+- `audit_failed` is not yet a CAP-0008 status. An unmapped provider method also needs a public no-mutation terminal status in that same later amendment. Production apply still cannot be accepted until that amendment exists.
 - A crash after `apply_started` and before `apply_completed` leaves an incomplete trail. v1 does not reconstruct the missing line.
-- A full unexpired directory blocks new applies instead of deleting recent evidence.
+- Unresolved `Pending` may leave the same unmatched `apply_started` line. That gap is valid evidence of an unresolved attempt.
+- A best-effort `apply_completed` for `audit_failed` may be missing because the sink just failed. The stored terminal outcome still stands.
+- Concurrent processes can overshoot the 64 MiB admission threshold by a small amount. The next preflight fails closed. Recent unexpired evidence is kept.
 - The local file is not tamper-proof.
 - `Flush(flushToDisk: true)` does not promise survival of every physical-device failure.
 
 ## Follow-up
 
-If this ADR is Accepted, the next docs checkpoint is an amendment of CAP-0008 and LIFECYCLE-0004 to the accepted audit contract, including the terminal public status `audit_failed` and the preflight mapping to `unavailable`.
+If this ADR is Accepted, the next docs checkpoint is an amendment of CAP-0008 and LIFECYCLE-0004 to the accepted audit contract. That amendment includes the terminal public status `audit_failed`, the preflight mapping to `unavailable`, the rule that the apply-attempt terminal state is stored before completion-audit durability, and a public no-mutation terminal status for an unmapped provider method.
 
 Production apply implementation may begin only after all three of the following are Accepted:
 
@@ -412,8 +507,10 @@ Bridge protocol v10 and the Server/MCP apply tool remain a later specification a
 ## Explicitly not decided
 
 - the enterprise sink, export format, and administrator retention controls;
+- cross-process capacity reservation that would make 64 MiB an absolute directory ceiling;
 - cryptographic attestation or tamper-evident storage;
 - reconstruction of a missing `apply_completed` line after a crash;
+- a safe completion hook for unresolved `TransactionStatus.Pending`;
 - Bridge v10 and the MCP apply schema;
 - production code.
 
