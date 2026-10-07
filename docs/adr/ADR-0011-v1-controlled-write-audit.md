@@ -137,15 +137,21 @@ It is written before stale revalidation is allowed to open a Revit `Transaction`
 
 Append one `apply_started` line and force it durable before mutation is permitted. The implementation direction is `FileStream.Flush(flushToDisk: true)`, or the equivalent strongest BCL disk-flush primitive on the supported target framework. This does not defeat physical-device failure or a compromised OS.
 
-If `apply_started` cannot be durably persisted:
+If approval has been consumed and the attempt cannot satisfy the v1 audit contract before mutation, the future terminal outcome is `audit_failed`. That covers both of the following:
+
+1. The mandatory `apply_started` event cannot be durably persisted.
+2. Mandatory v1 audit metadata cannot be represented under the closed schema. This includes an unmapped `ApprovalSnapshot.ProviderMethod`.
+
+For both cases:
 
 - no Revit `Transaction` starts;
 - no `Parameter.Set` occurs;
-- the already-consumed approval cannot be reused;
-- store the future terminal outcome `audit_failed` in the LIFECYCLE-0004 apply-attempt store first;
-- the audit sink enters the degraded state defined below.
+- store `audit_failed` in the LIFECYCLE-0004 apply-attempt store first;
+- that intent never starts another mutation;
+- no raw or unmapped provider string is written;
+- any `apply_completed` record is best-effort only.
 
-Any `apply_completed` line for `audit_failed` is best-effort only. It may be absent, because the audit sink just failed. Absence of that completion line does not undo the stored `audit_failed` terminal outcome and does not authorize another mutation.
+A best-effort completion line may be absent. For case 1 it may be absent because the audit sink just failed, and the sink enters the degraded state defined below. For case 2, `apply_started` is not written, because the closed schema cannot represent the metadata. Absence of the completion line does not undo the stored `audit_failed` outcome.
 
 That terminal outcome is not in the current CAP-0008 status list. A later amendment of CAP-0008 and LIFECYCLE-0004 must add:
 
@@ -157,14 +163,17 @@ Meaning to adopt in that amendment:
 
 ```text
 audit_failed
-= approval was consumed and the mandatory durable write-ahead audit barrier failed
+= approval was consumed and the mandatory apply_started event could not be durably persisted
+  or mandatory v1 audit metadata could not be represented under the closed schema,
+  including an unmapped ApprovalSnapshot.ProviderMethod
 = no Revit mutation began
 = terminal
 = that intent never starts another mutation
 = the apply-attempt terminal state is stored before any best-effort completion line
+= no raw or unmapped provider string is written
 ```
 
-This ADR does not make that amendment.
+This ADR does not make that amendment. Pre-consumption audit and preflight failures stay outside `audit_failed`. The later amendment maps those to the existing `unavailable` status, and approval stays unconsumed.
 
 #### Terminal outcome order
 
@@ -230,7 +239,7 @@ If preflight fails:
 - do not consume approval;
 - start no transaction.
 
-The later CAP-0008 amendment maps that preflight failure to the existing `unavailable` status. Preflight is not proof that the later physical write cannot fail. A failure of the post-consumption write-ahead barrier is the `audit_failed` case, not `unavailable`.
+The later CAP-0008 amendment maps that preflight failure to the existing `unavailable` status. Approval stays unconsumed. Preflight is not proof that the later physical write cannot fail. After approval has been consumed, a failed `apply_started` barrier or unrepresentable closed-schema metadata is `audit_failed`, not `unavailable`.
 
 ### 5. Completion-audit failure
 
@@ -349,15 +358,7 @@ ApprovalSnapshot.ProviderMethod == "revit-local-in-process"
 
 `revit-local-in-process` is the production `ApprovalSnapshot.ProviderMethod` default. Any other provider method is unmapped.
 
-An unmapped method fails closed before production apply:
-
-- no Revit `Transaction` starts;
-- no `Parameter.Set` occurs;
-- no `apply_started` line is written, because the closed enum has no value for that method and the raw provider string stays out of the audit file;
-- the already-consumed approval cannot be reused;
-- the apply-attempt store records a terminal no-mutation outcome before the CAP result is returned.
-
-This ADR does not add that public status. The later CAP-0008 and LIFECYCLE-0004 amendment must name it. The status means approval was consumed, no mutation began, the outcome is terminal, and that intent never starts another mutation.
+An unmapped method uses the same future public status, `audit_failed`, defined in decision 3. No `apply_started` line is written, and the raw provider string stays out of the audit file.
 
 `sequence` increases by one for each line in that stream. A rotated stream starts its own sequence. If the next sequence would need more than 10 decimal digits, the writer does not emit the line.
 
@@ -484,17 +485,17 @@ This proposal does not authorize:
 
 ### Costs / limitations
 
-- `audit_failed` is not yet a CAP-0008 status. An unmapped provider method also needs a public no-mutation terminal status in that same later amendment. Production apply still cannot be accepted until that amendment exists.
+- `audit_failed` is not yet a CAP-0008 status. Production apply still cannot be accepted until that amendment exists.
 - A crash after `apply_started` and before `apply_completed` leaves an incomplete trail. v1 does not reconstruct the missing line.
 - Unresolved `Pending` may leave the same unmatched `apply_started` line. That gap is valid evidence of an unresolved attempt.
-- A best-effort `apply_completed` for `audit_failed` may be missing because the sink just failed. The stored terminal outcome still stands.
+- A best-effort `apply_completed` for `audit_failed` may be absent. The stored terminal outcome still stands.
 - Concurrent processes can overshoot the 64 MiB admission threshold by a small amount. The next preflight fails closed. Recent unexpired evidence is kept.
 - The local file is not tamper-proof.
 - `Flush(flushToDisk: true)` does not promise survival of every physical-device failure.
 
 ## Follow-up
 
-If this ADR is Accepted, the next docs checkpoint is an amendment of CAP-0008 and LIFECYCLE-0004 to the accepted audit contract. That amendment includes the terminal public status `audit_failed`, the preflight mapping to `unavailable`, the rule that the apply-attempt terminal state is stored before completion-audit durability, and a public no-mutation terminal status for an unmapped provider method.
+If this ADR is Accepted, the next docs checkpoint is an amendment of CAP-0008 and LIFECYCLE-0004 to the accepted audit contract. That amendment includes the terminal public status `audit_failed`, the preflight mapping to `unavailable`, and the rule that the apply-attempt terminal state is stored before completion-audit durability. `audit_failed` is the only new public status that amendment adds.
 
 Production apply implementation may begin only after all three of the following are Accepted:
 
