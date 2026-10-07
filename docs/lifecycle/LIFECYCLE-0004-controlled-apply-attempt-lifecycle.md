@@ -1,16 +1,17 @@
 # LIFECYCLE-0004: Controlled apply-attempt lifecycle
 
-- Status: Proposed
+- Status: Accepted
 - Amended: 2026-10-07 — conform to Accepted ADR-0011
 - Date: 2026-10-07
+- Product Owner acceptance: Dave, 2026-10-07
 
 ## Purpose
 
-Define the Addin-owned apply-attempt store required by Proposed CAP-0008, Accepted ADR-0011, and ADR-0008's rule that an intent may cause at most one mutation attempt.
+Define the Addin-owned apply-attempt store required by Accepted CAP-0008, Accepted ADR-0011, and ADR-0008's rule that an intent may cause at most one mutation attempt.
 
 The store remembers the outcome of a controlled apply so a retry, including a retry after the caller timed out, returns that outcome and does not open a second Revit transaction.
 
-This specification is Proposed. It is amended to the Accepted ADR-0011 write-audit contract. It does not implement the store or the audit writer. It does not authorize a Revit model write, a Bridge or Server specification, or production apply code.
+This specification is Accepted. Dave, Product Owner, accepted it on 2026-10-07. It conforms to the Accepted ADR-0011 write-audit contract. Acceptance does not mean the store or the audit writer is implemented. It does not claim a Revit model write, a Bridge or Server specification, or production apply code.
 
 ## Relationship
 

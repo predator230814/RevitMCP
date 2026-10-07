@@ -1,13 +1,14 @@
 # CAP-0008: `revit_apply_parameter_updates`
 
-- Status: Proposed
+- Status: Accepted
 - Amended: 2026-10-07 — conform to Accepted ADR-0011
 - Operation class: Write
 - Date: 2026-10-07
+- Product Owner acceptance: Dave, 2026-10-07
 
 ## Purpose
 
-`revit_apply_parameter_updates` is the proposed apply half of the ADR-0008 write workflow:
+`revit_apply_parameter_updates` is the apply half of the ADR-0008 write workflow:
 
 ```text
 preview
@@ -21,9 +22,9 @@ preview
 
 It asks one exact Revit process to apply one existing CAP-0007 immutable intent, and only after that process's trusted local approval provider has an unconsumed approval for that intent.
 
-This specification is Proposed. It is amended to the Accepted ADR-0011 write-audit contract. It authorizes no production code, no audit-writer implementation, no Bridge method, no Server tool, and no Revit model write.
+This specification is Accepted. Dave, Product Owner, accepted it on 2026-10-07. It conforms to the Accepted ADR-0011 write-audit contract. Acceptance does not mean an implementation exists. No production code, audit writer, Bridge method, Server tool, or Revit model write exists under this acceptance.
 
-Apply is not preview and not request-review. Preview creates the intent. Request-review presents it. Apply is the only proposed path that may mutate parameter values.
+Apply is not preview and not request-review. Preview creates the intent. Request-review presents it. Apply is the only path in this workflow that may mutate parameter values.
 
 ## MCP tool
 
@@ -406,7 +407,7 @@ If `apply_completed` fails:
 
 `audit_failed` stores its terminal outcome first. Its `apply_completed` line is best-effort only. Unresolved `Pending` stores `indeterminate` and performs no completion-audit I/O while failure processing remains unresolved.
 
-This specification remains Proposed. Acceptance of ADR-0011 does not accept CAP-0008 and does not authorize production apply.
+This specification is Accepted. Acceptance records the contract. It does not mean a production apply or audit writer exists.
 
 ## What this capability does not do
 
@@ -430,7 +431,7 @@ This specification remains Proposed. Acceptance of ADR-0011 does not accept CAP-
 
 ## Acceptance criteria
 
-A future implementation, after this amended specification is Accepted, must show:
+A future implementation of this Accepted specification must show:
 
 1. MCP input is only exact `instance_id` and `intent_ref`, and another Revit instance is never selected.
 2. The Addin request is only `intent_ref`.

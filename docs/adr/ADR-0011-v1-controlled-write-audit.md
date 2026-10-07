@@ -10,7 +10,7 @@ ADR-0008 requires an audit of controlled write attempts. It requires enough meta
 
 CAP-0008 and LIFECYCLE-0004 were Proposed without a chosen audit sink. Both required this design before CAP-0008 could be accepted for production implementation.
 
-This ADR chooses that v1 design. Dave, Product Owner, accepted it on 2026-10-07. Acceptance does not authorize production audit code, production apply code, a Revit `Transaction`, `Parameter.Set`, Bridge protocol v10, or a Server/MCP apply tool. CAP-0008 and LIFECYCLE-0004 remain Proposed until their conforming amendments are Accepted.
+This ADR chooses that v1 design. Dave, Product Owner, accepted it on 2026-10-07. Dave also accepted CAP-0008 and LIFECYCLE-0004 on 2026-10-07. Those acceptances do not mean a production audit writer, production apply code, a Revit `Transaction`, `Parameter.Set`, Bridge protocol v10, or a Server/MCP apply tool exists.
 
 The design stays vendor-neutral, local and offline capable, independent of any MCP client, model, or provider, bounded, and fail-closed before mutation when the mandatory write-ahead record cannot be made durable. Audit cost is per approved batch. Raw BIM values stay out of the normal record. A later central or enterprise sink must be able to replace the storage without changing CAP-0008 apply semantics.
 
@@ -174,7 +174,7 @@ audit_failed
 = no raw or unmapped provider string is written
 ```
 
-Pre-consumption audit and preflight failures stay outside `audit_failed`. The CAP-0008 amendment maps those to the existing `unavailable` status, and approval stays unconsumed. That amendment stays Proposed until CAP-0008 is Accepted.
+Pre-consumption audit and preflight failures stay outside `audit_failed`. Accepted CAP-0008 maps those to the existing `unavailable` status, and approval stays unconsumed.
 
 #### Terminal outcome order
 
@@ -485,7 +485,7 @@ Acceptance does not authorize:
 
 ### Costs / limitations
 
-- `audit_failed` belongs in the Proposed CAP-0008 amendment. Production apply cannot begin until that amended CAP-0008 and LIFECYCLE-0004 are Accepted.
+- `audit_failed` is part of Accepted CAP-0008. The production apply and audit writer are not implemented yet.
 - A crash after `apply_started` and before `apply_completed` leaves an incomplete trail. v1 does not reconstruct the missing line.
 - Unresolved `Pending` may leave the same unmatched `apply_started` line. That gap is valid evidence of an unresolved attempt.
 - A best-effort `apply_completed` for `audit_failed` may be absent. The stored terminal outcome still stands.
@@ -495,13 +495,9 @@ Acceptance does not authorize:
 
 ## Follow-up
 
-Dave, Product Owner, accepted this ADR on 2026-10-07. The next docs checkpoint is the Proposed amendment of CAP-0008 and LIFECYCLE-0004 to this contract. That amendment includes the terminal public status `audit_failed`, the preflight mapping to `unavailable`, and the rule that the apply-attempt terminal state is stored before completion-audit durability. `audit_failed` is the only new public status that amendment adds. Those two specifications stay Proposed until they are Accepted.
+Dave, Product Owner, accepted this ADR, CAP-0008, and LIFECYCLE-0004 on 2026-10-07. The accepted capability contract includes the terminal public status `audit_failed`, the preflight mapping to `unavailable`, and the rule that the apply-attempt terminal state is stored before completion-audit durability. `audit_failed` is the only new public status that contract adds.
 
-Production apply implementation may begin only after all three of the following are Accepted:
-
-1. ADR-0011;
-2. the amended CAP-0008;
-3. the amended LIFECYCLE-0004.
+The next checkpoint is implementation planning and decomposition, in small reviewable steps. Acceptance does not authorize a large autonomous implementation, and it does not mean the implementation exists.
 
 Bridge protocol v10 and the Server/MCP apply tool remain a later specification and implementation step.
 
@@ -519,9 +515,9 @@ Bridge protocol v10 and the Server/MCP apply tool remain a later specification a
 
 - ADR-0008: controlled write safety model, including decision 18
 - ADR-0010: Revit-local trusted approval authority and the v1 trust boundary
-- CAP-0008: `revit_apply_parameter_updates` (Proposed until its conforming amendment is Accepted)
+- CAP-0008: `revit_apply_parameter_updates` (Accepted on 2026-10-07; not implemented)
 - LIFECYCLE-0003: Revit-local trusted approval provider lifecycle
-- LIFECYCLE-0004: controlled apply-attempt lifecycle (Proposed until its conforming amendment is Accepted)
+- LIFECYCLE-0004: controlled apply-attempt lifecycle (Accepted on 2026-10-07; not implemented)
 - OWASP Logging Cheat Sheet: application logging, event attributes, sensitive-data exclusion, and log protection. <https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html>
 - Microsoft .NET: `Environment.SpecialFolder.LocalApplicationData`. <https://learn.microsoft.com/dotnet/api/system.environment.specialfolder>
 - Microsoft .NET: `FileStream.Flush(bool)` with `flushToDisk: true`. <https://learn.microsoft.com/dotnet/api/system.io.filestream.flush>
