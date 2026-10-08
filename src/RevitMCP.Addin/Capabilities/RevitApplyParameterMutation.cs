@@ -75,10 +75,6 @@ internal static class RevitApplyParameterMutation
         try
         {
             transaction = new Transaction(prepared.Document, TransactionName);
-            var options = transaction.GetFailureHandlingOptions();
-            options.SetFailuresPreprocessor(new ApplyRollbackFailuresPreprocessor());
-            options.SetClearAfterRollback(true);
-            transaction.SetFailureHandlingOptions(options);
 
             TransactionStatus started;
             try
@@ -87,12 +83,25 @@ internal static class RevitApplyParameterMutation
             }
             catch (Exception)
             {
-                return ReadUnresolved(transaction, knownNonCommitted: true);
+                return Publish(ref transaction, ApplyTransactionCheckpoint.Start, returned: null, prepared);
             }
 
             if (started != TransactionStatus.Started)
             {
-                return ReadUnresolved(transaction, knownNonCommitted: true);
+                return Publish(ref transaction, ApplyTransactionCheckpoint.Start, started, prepared);
+            }
+
+            try
+            {
+                // Start() resets failure handling. Install it only after Started, before any Set or rollback.
+                var options = transaction.GetFailureHandlingOptions();
+                options.SetFailuresPreprocessor(new ApplyRollbackFailuresPreprocessor());
+                options.SetClearAfterRollback(true);
+                transaction.SetFailureHandlingOptions(options);
+            }
+            catch (Exception)
+            {
+                return Rollback(ref transaction);
             }
 
             try
@@ -101,13 +110,13 @@ internal static class RevitApplyParameterMutation
                 {
                     if (!TrySet(prepared.Parameters[index], prepared.Items[index], prepared.InternalQuantities[index]))
                     {
-                        return Rollback(transaction);
+                        return Rollback(ref transaction);
                     }
                 }
             }
             catch (Exception)
             {
-                return Rollback(transaction);
+                return Rollback(ref transaction);
             }
 
             TransactionStatus committed;
@@ -117,77 +126,120 @@ internal static class RevitApplyParameterMutation
             }
             catch (Exception)
             {
-                return ReadUnresolved(transaction, knownNonCommitted: false);
+                return Publish(ref transaction, ApplyTransactionCheckpoint.Commit, returned: null, prepared);
             }
 
-            if (committed == TransactionStatus.Pending || IsPending(transaction))
-            {
-                transaction = null;
-                return new ApplyMutationResult(ApplyMutationKind.Pending, AuditTransactionStatus.Pending);
-            }
-
-            if (committed != TransactionStatus.Committed)
-            {
-                return committed == TransactionStatus.RolledBack
-                    ? new ApplyMutationResult(ApplyMutationKind.TransactionFailed, AuditTransactionStatus.RolledBack)
-                    : new ApplyMutationResult(ApplyMutationKind.Indeterminate, AuditTransactionStatus.Unknown);
-            }
-
-            return Verify(prepared)
-                ? new ApplyMutationResult(ApplyMutationKind.Applied, AuditTransactionStatus.Committed)
-                : new ApplyMutationResult(ApplyMutationKind.CommittedUnverified, AuditTransactionStatus.Committed);
+            return Publish(ref transaction, ApplyTransactionCheckpoint.Commit, committed, prepared);
         }
         finally
         {
-            if (transaction is not null && !IsPending(transaction))
-            {
-                transaction.Dispose();
-            }
+            SafeRelease(transaction);
         }
     }
 
-    private static ApplyMutationResult Rollback(Transaction transaction)
+    private static ApplyMutationResult Rollback(ref Transaction? transaction)
     {
+        TransactionStatus? returned = null;
         try
         {
-            var status = transaction.RollBack();
-            if (status == TransactionStatus.Pending || IsPending(transaction))
-            {
-                return new ApplyMutationResult(ApplyMutationKind.Pending, AuditTransactionStatus.Pending);
-            }
-
-            return status == TransactionStatus.RolledBack
-                ? new ApplyMutationResult(ApplyMutationKind.TransactionFailed, AuditTransactionStatus.RolledBack)
-                : new ApplyMutationResult(ApplyMutationKind.Indeterminate, AuditTransactionStatus.Unknown);
+            returned = transaction!.RollBack();
         }
         catch (Exception)
         {
-            return ReadUnresolved(transaction, knownNonCommitted: false);
+            returned = null;
         }
+
+        return Publish(ref transaction, ApplyTransactionCheckpoint.Rollback, returned, prepared: default);
     }
 
-    private static ApplyMutationResult ReadUnresolved(Transaction transaction, bool knownNonCommitted)
+    private static ApplyMutationResult Publish(
+        ref Transaction? transaction,
+        ApplyTransactionCheckpoint checkpoint,
+        TransactionStatus? returned,
+        PreparedBatch prepared)
+    {
+        var getStatus = ApplyObservedTransactionStatus.Unreadable;
+        if (transaction is not null && TryReadStatus(transaction, out var status))
+        {
+            getStatus = MapStatus(status);
+        }
+
+        var returnedStatus = returned is TransactionStatus returnedValue
+            ? MapStatus(returnedValue)
+            : (ApplyObservedTransactionStatus?)null;
+        var classification = ApplyTransactionStatusClassifier.Observe(
+            checkpoint,
+            getStatus,
+            returnedStatus);
+
+        if (classification.Result.Kind == ApplyMutationKind.Pending)
+        {
+            transaction = null;
+            return classification.Result;
+        }
+
+        if (!classification.RequiresVerification)
+        {
+            return classification.Result;
+        }
+
+        return Verify(prepared)
+            ? new ApplyMutationResult(ApplyMutationKind.Applied, AuditTransactionStatus.Committed)
+            : new ApplyMutationResult(ApplyMutationKind.CommittedUnverified, AuditTransactionStatus.Committed);
+    }
+
+    private static ApplyObservedTransactionStatus MapStatus(TransactionStatus status)
+    {
+        return status switch
+        {
+            TransactionStatus.Pending => ApplyObservedTransactionStatus.Pending,
+            TransactionStatus.RolledBack => ApplyObservedTransactionStatus.RolledBack,
+            TransactionStatus.Committed => ApplyObservedTransactionStatus.Committed,
+            _ => ApplyObservedTransactionStatus.Other
+        };
+    }
+
+    private static bool TryReadStatus(Transaction transaction, out TransactionStatus status)
     {
         try
         {
-            if (IsPending(transaction))
+            status = transaction.GetStatus();
+            return true;
+        }
+        catch (Exception)
+        {
+            status = default;
+            return false;
+        }
+    }
+
+    private static void SafeRelease(Transaction? transaction)
+    {
+        if (transaction is null)
+        {
+            return;
+        }
+
+        try
+        {
+            if (transaction.GetStatus() == TransactionStatus.Pending)
             {
-                return new ApplyMutationResult(ApplyMutationKind.Pending, AuditTransactionStatus.Pending);
+                return;
             }
         }
         catch (Exception)
         {
-            return new ApplyMutationResult(ApplyMutationKind.Indeterminate, AuditTransactionStatus.Unknown);
+            return;
         }
 
-        return knownNonCommitted
-            ? new ApplyMutationResult(ApplyMutationKind.TransactionFailed, AuditTransactionStatus.None)
-            : new ApplyMutationResult(ApplyMutationKind.Indeterminate, AuditTransactionStatus.Unknown);
-    }
-
-    private static bool IsPending(Transaction transaction)
-    {
-        return transaction.GetStatus() == TransactionStatus.Pending;
+        try
+        {
+            transaction.Dispose();
+        }
+        catch (Exception)
+        {
+            // Cleanup must not replace a result that was already classified.
+        }
     }
 
     private static bool Verify(PreparedBatch prepared)
