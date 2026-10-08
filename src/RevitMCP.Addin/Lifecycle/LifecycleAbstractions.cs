@@ -30,6 +30,8 @@ internal interface ILifecycleDispatcher : IDisposable
     IRevitPreviewParameterUpdatesService? CreatePreviewParameterUpdates(BridgeInstanceMetadata metadata);
 
     IRevitRequestParameterUpdateReviewService? CreateRequestParameterUpdateReview(BridgeInstanceMetadata metadata);
+
+    IRevitApplyParameterUpdatesService? CreateApplyParameterUpdates(BridgeInstanceMetadata metadata);
 }
 
 internal interface ILifecycleBridge : IAsyncDisposable
@@ -54,6 +56,7 @@ internal interface ILifecycleBridgeFactory
         IRevitGetMepTopologyService? getMepTopology,
         IRevitPreviewParameterUpdatesService? previewParameterUpdates,
         IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview,
+        IRevitApplyParameterUpdatesService? applyParameterUpdates,
         CancellationToken cancellationToken);
 }
 

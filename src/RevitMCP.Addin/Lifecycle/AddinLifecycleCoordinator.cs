@@ -118,8 +118,11 @@ internal sealed class AddinLifecycleCoordinator
             var requestParameterUpdateReview = dispatcher.CreateRequestParameterUpdateReview(metadata);
             EnsureNotStopping();
 
+            var applyParameterUpdates = dispatcher.CreateApplyParameterUpdates(metadata);
+            EnsureNotStopping();
+
             using var startup = new CancellationTokenSource(_startupTimeout);
-            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, startup.Token);
+            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, startup.Token);
 
             lock (_gate)
             {
