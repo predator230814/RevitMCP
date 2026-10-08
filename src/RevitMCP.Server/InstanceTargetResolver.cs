@@ -99,6 +99,26 @@ internal static class InstanceTargetResolver
         return IsEligible(instance, BridgeProtocol.SupportsRequestParameterUpdateReview);
     }
 
+    public static TargetResolution ResolveForApplyParameterUpdates(
+        IReadOnlyList<DiscoveredInstance> discovered,
+        string? instanceId)
+    {
+        ArgumentNullException.ThrowIfNull(discovered);
+        if (instanceId is null)
+        {
+            return TargetResolution.Failure(
+                McpToolErrorCodes.InstanceNotFound,
+                ToolErrorMessages.InstanceNotFound);
+        }
+
+        return ResolveExplicit(discovered, instanceId, IsApplyParameterUpdatesEligible);
+    }
+
+    public static bool IsApplyParameterUpdatesEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsApplyParameterUpdates);
+    }
+
     private static bool IsEligible(DiscoveredInstance instance, Func<int, bool> supportsCapability)
     {
         return instance.State == DiscoveryState.Ready

@@ -18,7 +18,7 @@ public sealed class QueryElementsRoutingTests
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
-        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
+        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 11)));
     }
 
     [Fact]
@@ -33,7 +33,7 @@ public sealed class QueryElementsRoutingTests
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
-        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
+        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 11)));
     }
 
     [Fact]

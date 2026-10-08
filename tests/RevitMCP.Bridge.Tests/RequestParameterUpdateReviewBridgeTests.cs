@@ -34,7 +34,7 @@ public sealed class RequestParameterUpdateReviewBridgeTests
             services.Topology,
             services.Preview);
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, v9.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.RequestParameterUpdateReviewVersions, v9.SupportedProtocolVersions);
         Assert.Equal(9, v9.SupportedProtocolVersions.Max());
         Assert.Equal(BridgeProtocol.PreviewParameterUpdatesVersions, v8.SupportedProtocolVersions);
         Assert.Equal(8, v8.SupportedProtocolVersions.Max());
@@ -101,8 +101,8 @@ public sealed class RequestParameterUpdateReviewBridgeTests
             missing.RequestParameterUpdateReviewAsync(ValidRequest(), CancellationToken.None));
         Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, ErrorCode(incompatible));
 
-        var unknown = CreateAdapter(review, selectedVersion: 10);
-        await unknown.HandshakeAsync(Handshake("any", [10]), CancellationToken.None);
+        var unknown = CreateAdapter(review, selectedVersion: 11);
+        await unknown.HandshakeAsync(Handshake("any", [11]), CancellationToken.None);
         var future = await Assert.ThrowsAsync<LocalRpcException>(() =>
             unknown.RequestParameterUpdateReviewAsync(ValidRequest(), CancellationToken.None));
         Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, ErrorCode(future));

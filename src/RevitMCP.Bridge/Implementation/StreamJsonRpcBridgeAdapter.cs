@@ -14,6 +14,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitGetMepTopologyService? _getMepTopology;
     private readonly IRevitPreviewParameterUpdatesService? _previewParameterUpdates;
     private readonly IRevitRequestParameterUpdateReviewService? _requestParameterUpdateReview;
+    private readonly IRevitApplyParameterUpdatesService? _applyParameterUpdates;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -25,7 +26,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitGetParameterValuesService? getParameterValues = null,
         IRevitGetMepTopologyService? getMepTopology = null,
         IRevitPreviewParameterUpdatesService? previewParameterUpdates = null,
-        IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview = null)
+        IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview = null,
+        IRevitApplyParameterUpdatesService? applyParameterUpdates = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -36,6 +38,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _getMepTopology = getMepTopology;
         _previewParameterUpdates = previewParameterUpdates;
         _requestParameterUpdateReview = requestParameterUpdateReview;
+        _applyParameterUpdates = applyParameterUpdates;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -335,6 +338,44 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit parameter update review request could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.apply_parameter_updates")]
+    public async Task<ApplyParameterUpdatesResult> ApplyParameterUpdatesAsync(
+        ApplyParameterUpdatesRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsApplyParameterUpdates,
+            "revit.apply_parameter_updates is not available on this connection.");
+        if (_applyParameterUpdates is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.apply_parameter_updates is not available on this endpoint."));
+        }
+
+        try
+        {
+            ApplyParameterUpdatesRequests.Validate(request);
+            return await _applyParameterUpdates.ApplyParameterUpdatesAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The Revit parameter update apply request could not be executed."));
         }
     }
 

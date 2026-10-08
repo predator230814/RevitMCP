@@ -20,7 +20,9 @@ public static class BridgeProtocol
 
     public const int RequestParameterUpdateReviewVersion = 9;
 
-    public const int CurrentVersion = RequestParameterUpdateReviewVersion;
+    public const int ApplyParameterUpdatesVersion = 10;
+
+    public const int CurrentVersion = ApplyParameterUpdatesVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -68,8 +70,22 @@ public static class BridgeProtocol
             HandshakeVersion
         ];
 
+    public static IReadOnlyList<int> RequestParameterUpdateReviewVersions { get; } =
+        [
+            RequestParameterUpdateReviewVersion,
+            PreviewParameterUpdatesVersion,
+            GetMepTopologyVersion,
+            GetParameterValuesVersion,
+            DescribeParametersVersion,
+            GetElementsVersion,
+            QueryElementsVersion,
+            GetContextVersion,
+            HandshakeVersion
+        ];
+
     public static IReadOnlyList<int> SupportedVersions { get; } =
         [
+            ApplyParameterUpdatesVersion,
             RequestParameterUpdateReviewVersion,
             PreviewParameterUpdatesVersion,
             GetMepTopologyVersion,
@@ -89,7 +105,8 @@ public static class BridgeProtocol
             or GetParameterValuesVersion
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
-            or RequestParameterUpdateReviewVersion;
+            or RequestParameterUpdateReviewVersion
+            or ApplyParameterUpdatesVersion;
 
     public static bool SupportsQueryElements(int version) =>
         version is QueryElementsVersion
@@ -98,7 +115,8 @@ public static class BridgeProtocol
             or GetParameterValuesVersion
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
-            or RequestParameterUpdateReviewVersion;
+            or RequestParameterUpdateReviewVersion
+            or ApplyParameterUpdatesVersion;
 
     public static bool SupportsGetElements(int version) =>
         version is GetElementsVersion
@@ -106,29 +124,38 @@ public static class BridgeProtocol
             or GetParameterValuesVersion
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
-            or RequestParameterUpdateReviewVersion;
+            or RequestParameterUpdateReviewVersion
+            or ApplyParameterUpdatesVersion;
 
     public static bool SupportsDescribeParameters(int version) =>
         version is DescribeParametersVersion
             or GetParameterValuesVersion
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
-            or RequestParameterUpdateReviewVersion;
+            or RequestParameterUpdateReviewVersion
+            or ApplyParameterUpdatesVersion;
 
     public static bool SupportsGetParameterValues(int version) =>
         version is GetParameterValuesVersion
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
-            or RequestParameterUpdateReviewVersion;
+            or RequestParameterUpdateReviewVersion
+            or ApplyParameterUpdatesVersion;
 
     public static bool SupportsGetMepTopology(int version) =>
         version is GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
-            or RequestParameterUpdateReviewVersion;
+            or RequestParameterUpdateReviewVersion
+            or ApplyParameterUpdatesVersion;
 
     public static bool SupportsPreviewParameterUpdates(int version) =>
-        version is PreviewParameterUpdatesVersion or RequestParameterUpdateReviewVersion;
+        version is PreviewParameterUpdatesVersion
+            or RequestParameterUpdateReviewVersion
+            or ApplyParameterUpdatesVersion;
 
     public static bool SupportsRequestParameterUpdateReview(int version) =>
-        version is RequestParameterUpdateReviewVersion;
+        version is RequestParameterUpdateReviewVersion or ApplyParameterUpdatesVersion;
+
+    public static bool SupportsApplyParameterUpdates(int version) =>
+        version is ApplyParameterUpdatesVersion;
 }
