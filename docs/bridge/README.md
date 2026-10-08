@@ -23,7 +23,7 @@ BRIDGE-0001-short-name.md
 - `BRIDGE-0007-get-mep-topology-capability-rpc.md` — CAP-0006 topology RPC (`revit.get_mep_topology`) on bridge protocol version 7; v7 explicitly preserves the v2..v6 capability guarantees. Implemented. Typed Bridge live validation on Revit 2026.5 is **PASS**. Protocol v8, v9, and v10 preserve that RPC.
 - `BRIDGE-0008-preview-parameter-updates-capability-rpc.md` — CAP-0007 preview RPC (`revit.preview_parameter_updates`) on bridge protocol version 8. Implemented. Preview support is `{8,9,10}`.
 - `BRIDGE-0009-request-parameter-update-review-capability-rpc.md` — implemented request-review RPC (`revit.request_parameter_update_review`) on protocol v9, preserved by v10. Support is `{9,10}`.
-- `BRIDGE-0010-apply-parameter-updates-capability-rpc.md` — CAP-0008 apply RPC (`revit.apply_parameter_updates`) on protocol v10. Implemented in the Draft PR. A full host advertises `[10,9,8,7,6,5,4,3,2,1]` only when apply is composed with the complete v9 prefix. Unknown v11 is unsupported. Live Revit write validation is pending.
+- `BRIDGE-0010-apply-parameter-updates-capability-rpc.md` — CAP-0008 apply RPC (`revit.apply_parameter_updates`) on protocol v10. Implemented. A full host advertises `[10,9,8,7,6,5,4,3,2,1]` only when apply is composed with the complete v9 prefix. Unknown v11 is unsupported. Official MCP live functional validation on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353` is **PASS**. Induced Revit failure-dialog behavior remains deferred validation debt.
 
 ## Principles
 

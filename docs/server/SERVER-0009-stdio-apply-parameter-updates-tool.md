@@ -1,6 +1,6 @@
 # SERVER-0009: stdio `revit_apply_parameter_updates`
 
-- Status: Implemented in the Draft PR. Live Revit write validation is pending. Do not merge until that gate passes.
+- Status: Implemented. Official MCP-client live functional validation on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353` is **PASS**. `tools/list` was exactly 9 and the selected protocol was 10. Induced Revit warning/error failure-dialog behavior was not executed and remains deferred validation debt.
 - Bridge protocol: `{10}` only
 
 ## Tool
@@ -57,4 +57,4 @@ openWorldHint: false
 
 These are MCP hints only. They are not authorization.
 
-After this implementation, `tools/list` is exactly 9 tools. Live validation of that count is still pending.
+After this implementation, `tools/list` is exactly 9 tools. That count was live-validated on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353`.

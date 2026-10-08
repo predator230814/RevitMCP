@@ -1,6 +1,6 @@
 # BRIDGE-0010: `revit.apply_parameter_updates` capability RPC
 
-- Status: Implemented in the Draft PR. Live Revit write validation is pending. Do not merge until that gate passes.
+- Status: Implemented. Official MCP-client live functional validation on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353` is **PASS**. `tools/list` was exactly 9 and the selected protocol was 10. Induced Revit warning/error failure-dialog behavior was not executed and remains deferred validation debt.
 - Introduced bridge protocol version: 10
 
 ## Purpose
