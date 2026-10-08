@@ -762,6 +762,27 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
             : RequestParameterUpdateReview(request, timeout, cancellationToken);
     }
 
+    public int ApplyParameterUpdatesCalls { get; private set; }
+
+    public ApplyParameterUpdatesRequest? LastApplyParameterUpdatesRequest { get; private set; }
+
+    public TimeSpan? LastApplyParameterUpdatesTimeout { get; private set; }
+
+    public Func<ApplyParameterUpdatesRequest, TimeSpan, CancellationToken, Task<ApplyParameterUpdatesResult>>? ApplyParameterUpdates { get; set; }
+
+    public Task<ApplyParameterUpdatesResult> ApplyParameterUpdatesAsync(
+        ApplyParameterUpdatesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ApplyParameterUpdatesCalls++;
+        LastApplyParameterUpdatesRequest = request;
+        LastApplyParameterUpdatesTimeout = timeout;
+        return ApplyParameterUpdates is null
+            ? throw new NotSupportedException("This recording client does not implement revit.apply_parameter_updates.")
+            : ApplyParameterUpdates(request, timeout, cancellationToken);
+    }
+
     public ValueTask DisposeAsync()
     {
         Disposed = true;

@@ -31,4 +31,6 @@ public static class CapabilityErrorCodes
     public const string IntentCapacityReached = "INTENT_CAPACITY_REACHED";
 
     public const string InvalidApprovalReviewRequest = "INVALID_APPROVAL_REVIEW_REQUEST";
+
+    public const string InvalidApplyRequest = "INVALID_APPLY_REQUEST";
 }

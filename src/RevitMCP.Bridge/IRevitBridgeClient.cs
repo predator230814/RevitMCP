@@ -36,4 +36,9 @@ public interface IRevitBridgeClient : IAsyncDisposable
         RequestParameterUpdateReviewRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken);
+
+    Task<ApplyParameterUpdatesResult> ApplyParameterUpdatesAsync(
+        ApplyParameterUpdatesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
 }

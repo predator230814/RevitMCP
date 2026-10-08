@@ -28,10 +28,11 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(8, tools.Count);
+        Assert.Equal(9, tools.Count);
         Assert.Equal(
             new[]
             {
+                ApplyParameterUpdatesToolMetadata.Name,
                 DescribeParametersToolMetadata.Name,
                 GetContextToolMetadata.Name,
                 GetElementsToolMetadata.Name,
@@ -45,6 +46,7 @@ public sealed class StdioServerProcessTests
         Assert.Equal(
             new[]
             {
+                "revit_apply_parameter_updates",
                 "revit_describe_parameters",
                 "revit_get_context",
                 "revit_get_elements",
@@ -61,6 +63,7 @@ public sealed class StdioServerProcessTests
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.describe_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.preview_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.request_", StringComparison.Ordinal));
+        Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.apply_", StringComparison.Ordinal));
 
         var getContext = Assert.Single(tools, tool => tool.Name == GetContextToolMetadata.Name);
         Assert.Equal(GetContextToolMetadata.Title, getContext.Title);
