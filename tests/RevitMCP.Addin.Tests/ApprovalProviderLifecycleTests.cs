@@ -48,6 +48,11 @@ public sealed class ApprovalProviderLifecycleTests
             },
             documentId =>
             {
+                steps.Add("apply-attempts");
+                return 0;
+            },
+            documentId =>
+            {
                 steps.Add("intent");
                 return store.ForgetDocument(documentId);
             },
@@ -64,7 +69,7 @@ public sealed class ApprovalProviderLifecycleTests
 
         Assert.True(forgotten);
         Assert.Equal(
-            new[] { "provider-before-intent", "session-cleared", "intent", "parameter-refs", "identity" },
+            new[] { "provider-before-intent", "session-cleared", "apply-attempts", "intent", "parameter-refs", "identity" },
             steps);
         Assert.Equal(ApprovalReviewStatus.Unavailable, provider.BeginReview(created.IntentRef, "doc-a").Status);
     }
@@ -85,6 +90,11 @@ public sealed class ApprovalProviderLifecycleTests
             {
                 steps.Add("provider");
                 return provider.ForgetDocument(documentId);
+            },
+            documentId =>
+            {
+                steps.Add("apply-attempts");
+                return 0;
             },
             documentId =>
             {
@@ -119,6 +129,7 @@ public sealed class ApprovalProviderLifecycleTests
                 true,
                 "doc-a",
                 provider.ForgetDocument,
+                _ => 0,
                 store.ForgetDocument,
                 () => false,
                 () => false));
