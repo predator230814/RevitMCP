@@ -197,6 +197,12 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
 
             try
             {
+                if (_degraded && _stream is not null && !RestoreDurableBoundary())
+                {
+                    _degraded = true;
+                    return new AuditPreflightResult(false);
+                }
+
                 HousekeepingCore();
                 var usage = DirectoryUsage();
                 if (usage < 0 || usage > _options.AdmissionBytes - _options.HeadroomBytes)
@@ -204,13 +210,7 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
                     return new AuditPreflightResult(false);
                 }
 
-                if (!EnsureStream())
-                {
-                    _degraded = true;
-                    return new AuditPreflightResult(false);
-                }
-
-                if (_degraded && !RestoreDurableBoundary())
+                if (!RotateIfNeeded())
                 {
                     _degraded = true;
                     return new AuditPreflightResult(false);

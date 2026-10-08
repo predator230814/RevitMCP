@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -201,12 +202,13 @@ public sealed class ControlledWriteAuditWriterTests
         Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyStarted(Started()));
         var active = OnlyFile(sandbox.Directory, skip: new[] { expired, retained });
 
-        sandbox.Clock.UtcNow = new DateTimeOffset(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
+        sandbox.Clock.UtcNow = new DateTimeOffset(2026, 10, 8, 0, 0, 0, TimeSpan.Zero);
         Assert.True(writer.Preflight(Common()).Succeeded);
 
         Assert.False(File.Exists(expired));
         Assert.True(File.Exists(retained));
         Assert.True(File.Exists(active));
+        Assert.True(File.Exists(StreamFile(sandbox.Directory, new DateOnly(2026, 10, 8), writer.AuditStreamRef)));
     }
 
     [Fact]
@@ -223,6 +225,73 @@ public sealed class ControlledWriteAuditWriterTests
 
         Assert.True(File.Exists(expired));
         held.Dispose();
+    }
+
+    [Fact]
+    public void Preflight_opens_the_current_utc_stream_before_append()
+    {
+        using var sandbox = new Sandbox();
+        sandbox.Clock.UtcNow = new DateTimeOffset(2026, 10, 7, 23, 0, 0, TimeSpan.Zero);
+        using var writer = sandbox.Open();
+        Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyStarted(Started()));
+        sandbox.Clock.UtcNow = new DateTimeOffset(2026, 10, 8, 0, 30, 0, TimeSpan.Zero);
+        var day2 = StreamFile(sandbox.Directory, new DateOnly(2026, 10, 8), writer.AuditStreamRef);
+        Assert.False(File.Exists(day2));
+
+        Assert.True(writer.Preflight(Common()).Succeeded);
+
+        Assert.True(File.Exists(day2));
+        Assert.Equal(0, new FileInfo(day2).Length);
+        Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyCompleted(Completed()));
+        writer.Stop();
+
+        var files = Directory.GetFiles(sandbox.Directory).Select(Path.GetFileName).OrderBy(name => name).ToArray();
+        Assert.Equal(new[] { "write-20261007-" + writer.AuditStreamRef + ".jsonl", "write-20261008-" + writer.AuditStreamRef + ".jsonl" }, files);
+        Assert.Equal(1, JsonDocument.Parse(File.ReadAllLines(Path.Combine(sandbox.Directory, files[0]!)).Single()).RootElement.GetProperty("sequence").GetInt32());
+        Assert.Equal(1, JsonDocument.Parse(File.ReadAllLines(day2).Single()).RootElement.GetProperty("sequence").GetInt32());
+    }
+
+    [Fact]
+    public void Current_stream_collision_fails_preflight_before_append()
+    {
+        using var sandbox = new Sandbox();
+        sandbox.Clock.UtcNow = new DateTimeOffset(2026, 10, 7, 23, 0, 0, TimeSpan.Zero);
+        using var writer = sandbox.Open();
+        Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyStarted(Started()));
+        sandbox.Clock.UtcNow = new DateTimeOffset(2026, 10, 8, 0, 30, 0, TimeSpan.Zero);
+        var day2 = StreamFile(sandbox.Directory, new DateOnly(2026, 10, 8), writer.AuditStreamRef);
+        File.WriteAllText(day2, "collision");
+
+        Assert.False(writer.Preflight(Common()).Succeeded);
+        Assert.Equal("collision", File.ReadAllText(day2));
+        Assert.True(writer.IsDegraded);
+        Assert.Equal(AuditAppendStatus.Failed, writer.TryAppendApplyStarted(Started('e')));
+    }
+
+    [Fact]
+    public void Degraded_recovery_restores_the_old_stream_before_rotating()
+    {
+        using var sandbox = new Sandbox();
+        sandbox.Clock.UtcNow = new DateTimeOffset(2026, 10, 7, 23, 0, 0, TimeSpan.Zero);
+        using var writer = sandbox.Open();
+        Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyStarted(Started()));
+        sandbox.Options.FailAfterWriteBytes = 6;
+        Assert.Equal(AuditAppendStatus.Failed, writer.TryAppendApplyCompleted(Completed()));
+        Assert.True(writer.IsDegraded);
+        sandbox.Options.FailAfterWriteBytes = null;
+        sandbox.Clock.UtcNow = new DateTimeOffset(2026, 10, 8, 0, 30, 0, TimeSpan.Zero);
+        var day1 = StreamFile(sandbox.Directory, new DateOnly(2026, 10, 7), writer.AuditStreamRef);
+        var day2 = StreamFile(sandbox.Directory, new DateOnly(2026, 10, 8), writer.AuditStreamRef);
+
+        Assert.True(writer.Preflight(Common()).Succeeded);
+
+        Assert.False(writer.IsDegraded);
+        var day1Line = File.ReadAllLines(day1).Single();
+        Assert.Equal(1, JsonDocument.Parse(day1Line).RootElement.GetProperty("sequence").GetInt32());
+        Assert.True(File.Exists(day2));
+        Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyStarted(Started('e')));
+        writer.Stop();
+        Assert.Equal(1, JsonDocument.Parse(File.ReadAllLines(day2).Single()).RootElement.GetProperty("sequence").GetInt32());
     }
 
     [Fact]
@@ -636,6 +705,11 @@ public sealed class ControlledWriteAuditWriterTests
     private static string Hash(string text)
     {
         return Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(text))).ToLowerInvariant();
+    }
+
+    private static string StreamFile(string directory, DateOnly date, string streamRef)
+    {
+        return Path.Combine(directory, string.Create(CultureInfo.InvariantCulture, $"write-{date:yyyyMMdd}-{streamRef}.jsonl"));
     }
 
     private static string Hex(char digit) => new(digit, 64);
