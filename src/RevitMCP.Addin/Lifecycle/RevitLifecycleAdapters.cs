@@ -1,6 +1,9 @@
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
+using System.IO;
+using RevitMCP.Addin.Apply;
 using RevitMCP.Addin.Approval;
+using RevitMCP.Addin.Audit;
 using RevitMCP.Addin.Capabilities;
 using RevitMCP.Addin.Execution;
 using RevitMCP.Addin.Identity;
@@ -64,6 +67,8 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private readonly Action _stopExecution;
     private readonly Action _disposeExecution;
     private readonly EphemeralWriteIntentStore _intentStore;
+    private readonly ControlledApplyAttemptStore _applyAttempts;
+    private readonly ControlledWriteAuditWriter _auditWriter;
     private readonly RevitLocalApprovalProviderStateMachine _approval;
     private readonly RevitLocalApprovalInteractionController _interaction;
     private readonly OpenDocumentIdentityService _identity;
@@ -74,6 +79,10 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private int _disposed;
 
     internal RevitLocalApprovalProviderStateMachine ApprovalProvider => _approval;
+
+    internal ControlledApplyAttemptStore ApplyAttempts => _applyAttempts;
+
+    internal ControlledWriteAuditWriter AuditWriter => _auditWriter;
 
     internal RevitLocalApprovalInteractionController ApprovalInteraction => _interaction;
 
@@ -118,7 +127,8 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         Action stopExecution,
         Action disposeExecution,
         IDisposable? closeCleanup = null,
-        IActiveDocumentEventSource? activeDocumentEvents = null)
+        IActiveDocumentEventSource? activeDocumentEvents = null,
+        AuditWriterOptions? auditOptions = null)
     {
         ArgumentNullException.ThrowIfNull(intentStore);
         ArgumentNullException.ThrowIfNull(stopExecution);
@@ -127,6 +137,12 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         _stopExecution = stopExecution;
         _disposeExecution = disposeExecution;
         _intentStore = intentStore;
+        _applyAttempts = new ControlledApplyAttemptStore();
+        _auditWriter = new ControlledWriteAuditWriter(options: auditOptions);
+        if (auditOptions is not null)
+        {
+            _auditWriter.TryHousekeepingAtProcessStart();
+        }
         _approval = new RevitLocalApprovalProviderStateMachine(intentStore);
         _interaction = new RevitLocalApprovalInteractionController(intentStore, _approval);
         _closeCleanup = closeCleanup;
@@ -149,6 +165,9 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         _stopExecution = stopExecution;
         _disposeExecution = disposeExecution;
         _intentStore = intentStore;
+        _applyAttempts = new ControlledApplyAttemptStore();
+        _auditWriter = new ControlledWriteAuditWriter();
+        _auditWriter.TryHousekeepingAtProcessStart();
         _approval = new RevitLocalApprovalProviderStateMachine(intentStore);
         _interaction = new RevitLocalApprovalInteractionController(intentStore, _approval);
         _closeCleanup = closeCleanup;
@@ -163,6 +182,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
             hasExistingDocumentId,
             documentId,
             _approval.ForgetDocument,
+            _applyAttempts.ForgetDocument,
             _intentStore.ForgetDocument,
             () => _parameterRefs.Forget(document),
             () => _identity.Forget(document));
@@ -172,11 +192,13 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         bool hasExistingDocumentId,
         string? documentId,
         Func<string, int> forgetProvider,
+        Func<string, int> forgetApplyAttempts,
         Func<string, int> forgetIntent,
         Func<bool> forgetParameterRefs,
         Func<bool> forgetDocumentIdentity)
     {
         ArgumentNullException.ThrowIfNull(forgetProvider);
+        ArgumentNullException.ThrowIfNull(forgetApplyAttempts);
         ArgumentNullException.ThrowIfNull(forgetIntent);
         ArgumentNullException.ThrowIfNull(forgetParameterRefs);
         ArgumentNullException.ThrowIfNull(forgetDocumentIdentity);
@@ -186,6 +208,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         {
             ArgumentNullException.ThrowIfNull(documentId);
             forgotten = forgetProvider(documentId) > 0;
+            forgotten = forgetApplyAttempts(documentId) > 0 || forgotten;
             forgotten = forgetIntent(documentId) > 0 || forgotten;
         }
 
@@ -209,6 +232,15 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         finally
         {
             _approvalUi?.Detach();
+            _applyAttempts.Clear();
+            try
+            {
+                _auditWriter.Stop();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+
             _intentStore.Clear();
             _stopExecution();
         }

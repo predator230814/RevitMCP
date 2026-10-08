@@ -899,6 +899,6 @@ PR #67 is merged. Main contains Bridge v9 request-review. Official MCP-client to
 
 PR #68 is merged. PR #69 is merged. ADR-0011, CAP-0008, and LIFECYCLE-0004 are **Accepted**. Dave, Product Owner, accepted them on 2026-10-07. CAP-0008 conforms to Accepted ADR-0011 and includes `audit_failed`.
 
-The production audit writer does not exist yet. The production CAP-0008 apply implementation does not exist yet. Bridge v10 does not exist. The Server/MCP apply tool does not exist. No production `Transaction` or `Parameter.Set` exists.
+The process-owned LIFECYCLE-0004 apply-attempt store infrastructure is implemented. The process-owned ADR-0011 v1 local audit-writer infrastructure is implemented. The production CAP-0008 apply implementation does not exist yet. Bridge remains v9. Bridge v10 does not exist. The Server/MCP apply tool does not exist. No production `Transaction` or `Parameter.Set` exists. `tools/list` remains exactly 8 tools.
 
-The next checkpoint is implementation planning and decomposition. Acceptance authorizes that planning. It does not authorize a large autonomous implementation. Implementation should proceed in small reviewable steps.
+The next checkpoint is CAP-0008 apply orchestration. This foundations step does not authorize that orchestration, a Revit transaction, or a public tool change.

@@ -109,6 +109,7 @@ public sealed class IntentStoreLifecycleTests
             hasExistingDocumentId: true,
             documentId: "doc-a",
             provider.ForgetDocument,
+            _ => 0,
             store.ForgetDocument,
             () =>
             {
@@ -146,6 +147,11 @@ public sealed class IntentStoreLifecycleTests
             },
             documentId =>
             {
+                steps.Add("apply-attempts");
+                return 0;
+            },
+            documentId =>
+            {
                 steps.Add("intent");
                 return store.ForgetDocument(documentId);
             },
@@ -177,6 +183,7 @@ public sealed class IntentStoreLifecycleTests
                 true,
                 "doc-a",
                 provider.ForgetDocument,
+                _ => 0,
                 store.ForgetDocument,
                 () => false,
                 () => false);
@@ -219,14 +226,16 @@ public sealed class IntentStoreLifecycleTests
 
         var apply = Slice(adapters, "internal static bool ApplySuccessfulDocumentClose", "public void Stop()");
         var providerForget = apply.IndexOf("forgetProvider(documentId)", StringComparison.Ordinal);
+        var applyForget = apply.IndexOf("forgetApplyAttempts(documentId)", StringComparison.Ordinal);
         var intentForget = apply.IndexOf("forgetIntent(documentId)", StringComparison.Ordinal);
         var parameterCallback = apply.IndexOf("forgetParameterRefs()", StringComparison.Ordinal);
         var identityCallback = apply.IndexOf("forgetDocumentIdentity()", StringComparison.Ordinal);
         Assert.Contains("if (hasExistingDocumentId)", apply, StringComparison.Ordinal);
-        Assert.True(providerForget >= 0 && providerForget < intentForget && intentForget < parameterCallback && parameterCallback < identityCallback);
+        Assert.True(providerForget >= 0 && providerForget < applyForget && applyForget < intentForget && intentForget < parameterCallback && parameterCallback < identityCallback);
         var providerBinding = forget.IndexOf("_approval.ForgetDocument", StringComparison.Ordinal);
+        var applyBinding = forget.IndexOf("_applyAttempts.ForgetDocument", StringComparison.Ordinal);
         var intentBinding = forget.IndexOf("_intentStore.ForgetDocument", StringComparison.Ordinal);
-        Assert.True(providerBinding >= 0 && providerBinding < intentBinding);
+        Assert.True(providerBinding >= 0 && providerBinding < applyBinding && applyBinding < intentBinding);
 
         var production = Slice(adapters, "internal RevitExecutionDispatcherLifetime(", "internal RevitExecutionDispatcherLifetime(");
         Assert.Contains("BindExecution(dispatcher)", production, StringComparison.Ordinal);
