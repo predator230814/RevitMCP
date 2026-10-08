@@ -158,11 +158,59 @@ public sealed class ApplyTransactionStatusClassifierTests
     }
 
     [Fact]
-    public void Pending_wins_over_another_readable_status()
+    public void Current_committed_wins_over_returned_pending()
     {
         var actual = ApplyTransactionStatusClassifier.Observe(
             ApplyTransactionCheckpoint.Commit,
             ApplyObservedTransactionStatus.Committed,
+            ApplyObservedTransactionStatus.Pending);
+        Assert.True(actual.RequiresVerification);
+        Assert.Equal(ApplyMutationKind.Applied, actual.Result.Kind);
+        Assert.Equal(AuditTransactionStatus.Committed, actual.Result.TransactionStatus);
+    }
+
+    [Fact]
+    public void Current_rolled_back_wins_over_returned_pending()
+    {
+        var actual = ApplyTransactionStatusClassifier.Observe(
+            ApplyTransactionCheckpoint.Commit,
+            ApplyObservedTransactionStatus.RolledBack,
+            ApplyObservedTransactionStatus.Pending);
+        AssertTerminal(actual, ApplyMutationKind.TransactionFailed, AuditTransactionStatus.RolledBack);
+    }
+
+    [Fact]
+    public void Current_pending_wins_over_returned_committed()
+    {
+        var committed = ApplyTransactionStatusClassifier.Observe(
+            ApplyTransactionCheckpoint.Commit,
+            ApplyObservedTransactionStatus.Pending,
+            ApplyObservedTransactionStatus.Committed);
+        AssertTerminal(committed, ApplyMutationKind.Pending, AuditTransactionStatus.Pending);
+
+        var rolledBack = ApplyTransactionStatusClassifier.Observe(
+            ApplyTransactionCheckpoint.Rollback,
+            ApplyObservedTransactionStatus.Pending,
+            ApplyObservedTransactionStatus.RolledBack);
+        AssertTerminal(rolledBack, ApplyMutationKind.Pending, AuditTransactionStatus.Pending);
+    }
+
+    [Fact]
+    public void Returned_pending_is_used_when_current_status_is_unreadable()
+    {
+        var actual = ApplyTransactionStatusClassifier.Observe(
+            ApplyTransactionCheckpoint.Commit,
+            ApplyObservedTransactionStatus.Unreadable,
+            ApplyObservedTransactionStatus.Pending);
+        AssertTerminal(actual, ApplyMutationKind.Pending, AuditTransactionStatus.Pending);
+    }
+
+    [Fact]
+    public void Returned_pending_stays_pending_when_current_status_is_not_final()
+    {
+        var actual = ApplyTransactionStatusClassifier.Observe(
+            ApplyTransactionCheckpoint.Commit,
+            ApplyObservedTransactionStatus.Other,
             ApplyObservedTransactionStatus.Pending);
         AssertTerminal(actual, ApplyMutationKind.Pending, AuditTransactionStatus.Pending);
     }

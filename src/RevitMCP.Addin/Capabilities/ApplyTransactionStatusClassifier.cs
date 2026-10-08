@@ -39,24 +39,28 @@ internal static class ApplyTransactionStatusClassifier
         ApplyObservedTransactionStatus getStatus,
         ApplyObservedTransactionStatus? returnedStatus)
     {
-        if (returnedStatus == ApplyObservedTransactionStatus.Pending
-            || getStatus == ApplyObservedTransactionStatus.Pending)
+        switch (getStatus)
         {
-            return Classify(checkpoint, ApplyObservedTransactionStatus.Pending);
-        }
+            case ApplyObservedTransactionStatus.Committed:
+            case ApplyObservedTransactionStatus.RolledBack:
+            case ApplyObservedTransactionStatus.Pending:
+                return Classify(checkpoint, getStatus);
+            case ApplyObservedTransactionStatus.Unreadable:
+                if (returnedStatus is ApplyObservedTransactionStatus returned
+                    && returned != ApplyObservedTransactionStatus.Unreadable)
+                {
+                    return Classify(checkpoint, returned);
+                }
 
-        if (getStatus != ApplyObservedTransactionStatus.Unreadable)
-        {
-            return Classify(checkpoint, getStatus);
-        }
+                return Classify(checkpoint, ApplyObservedTransactionStatus.Unreadable);
+            default:
+                if (returnedStatus == ApplyObservedTransactionStatus.Pending)
+                {
+                    return Classify(checkpoint, ApplyObservedTransactionStatus.Pending);
+                }
 
-        if (returnedStatus is ApplyObservedTransactionStatus returned
-            && returned != ApplyObservedTransactionStatus.Unreadable)
-        {
-            return Classify(checkpoint, returned);
+                return Classify(checkpoint, getStatus);
         }
-
-        return Classify(checkpoint, ApplyObservedTransactionStatus.Unreadable);
     }
 
     internal static ApplyTransactionClassification Classify(
