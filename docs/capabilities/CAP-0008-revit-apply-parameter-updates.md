@@ -22,7 +22,7 @@ preview
 
 It asks one exact Revit process to apply one existing CAP-0007 immutable intent, and only after that process's trusted local approval provider has an unconsumed approval for that intent.
 
-This specification is Accepted. Dave, Product Owner, accepted it on 2026-10-07. It conforms to the Accepted ADR-0011 write-audit contract. Acceptance does not mean an implementation exists. No production code, audit writer, Bridge method, Server tool, or Revit model write exists under this acceptance.
+This specification is Accepted. Dave, Product Owner, accepted it on 2026-10-07. It conforms to the Accepted ADR-0011 write-audit contract. Acceptance of this specification did not itself create the apply implementation. The ADR-0011 audit writer and the apply-attempt store exist. The CAP-0008 apply path in the Draft PR is not live-validated and must not merge until that gate passes.
 
 Apply is not preview and not request-review. Preview creates the intent. Request-review presents it. Apply is the only path in this workflow that may mutate parameter values.
 
