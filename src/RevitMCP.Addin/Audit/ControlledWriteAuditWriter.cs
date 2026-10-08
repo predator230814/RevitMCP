@@ -55,6 +55,33 @@ internal sealed class AuditWriterOptions
     public TimeSpan Retention { get; init; } = TimeSpan.FromDays(30);
 
     public bool FailFlush { get; set; }
+
+    public bool FailHousekeeping { get; set; }
+
+    public int? FailAfterWriteBytes { get; set; }
+}
+
+internal sealed class AuditCommonMetadata
+{
+    public required string AttemptRef { get; init; }
+
+    public required string IntentRef { get; init; }
+
+    public required string IntentFingerprint { get; init; }
+
+    public required int IntentFingerprintSchemaVersion { get; init; }
+
+    public required string InstanceId { get; init; }
+
+    public required string DocumentId { get; init; }
+
+    public required string RevitVersion { get; init; }
+
+    public required string RevitBuild { get; init; }
+
+    public required string AddinVersion { get; init; }
+
+    public required int ItemCount { get; init; }
 }
 
 internal sealed class AuditEventDraft
@@ -107,10 +134,13 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
     private FileStream? _stream;
     private DateOnly _streamDate;
     private string? _activePath;
-    private int _sequence;
+    private long _durableLength;
+    private int _durableSequence;
     private bool _degraded;
     private bool _stopped;
     private bool _disposed;
+
+    internal bool InjectStopIoFailure { get; set; }
 
     public ControlledWriteAuditWriter(TimeProvider? clock = null, AuditWriterOptions? options = null)
     {
@@ -150,8 +180,9 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
 
     public static string HashDocumentId(string raw) => Hash("revitmcp-audit-v1:document_id:", raw);
 
-    public AuditPreflightResult Preflight(string revitVersion, string revitBuild, string addinVersion)
+    public AuditPreflightResult Preflight(AuditCommonMetadata metadata)
     {
+        ArgumentNullException.ThrowIfNull(metadata);
         lock (_gate)
         {
             if (_stopped)
@@ -159,7 +190,7 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
                 return new AuditPreflightResult(false);
             }
 
-            if (!Fits(revitVersion, 1, 32) || !Fits(revitBuild, 1, 64) || !Fits(addinVersion, 1, 32))
+            if (!CanRepresent(metadata))
             {
                 return new AuditPreflightResult(false);
             }
@@ -179,8 +210,9 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
                     return new AuditPreflightResult(false);
                 }
 
-                if (_degraded && !FlushCurrent())
+                if (_degraded && !RestoreDurableBoundary())
                 {
+                    _degraded = true;
                     return new AuditPreflightResult(false);
                 }
 
@@ -191,6 +223,35 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
             {
                 _degraded = true;
                 return new AuditPreflightResult(false);
+            }
+        }
+    }
+
+    internal void TryHousekeepingAtProcessStart()
+    {
+        lock (_gate)
+        {
+            if (_stopped || _stream is not null)
+            {
+                return;
+            }
+
+            try
+            {
+                if (_options.FailHousekeeping)
+                {
+                    throw new UnauthorizedAccessException("injected");
+                }
+
+                if (!Directory.Exists(ResolveDirectory()))
+                {
+                    return;
+                }
+
+                HousekeepingCore();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException)
+            {
             }
         }
     }
@@ -235,14 +296,35 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
             _stopped = true;
             try
             {
-                FlushCurrent();
+                if (InjectStopIoFailure)
+                {
+                    throw new IOException("injected");
+                }
+
+                if (!RestoreDurableBoundary())
+                {
+                    _degraded = true;
+                }
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {
                 _degraded = true;
             }
 
-            _stream?.Dispose();
+            try
+            {
+                if (InjectStopIoFailure)
+                {
+                    throw new IOException("injected");
+                }
+
+                _stream?.Dispose();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                _degraded = true;
+            }
+
             _stream = null;
         }
     }
@@ -280,26 +362,28 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
                     return AuditAppendStatus.Failed;
                 }
 
-                if (_sequence == int.MaxValue)
+                if (_durableSequence == int.MaxValue)
                 {
                     return AuditAppendStatus.Rejected;
                 }
 
-                var next = _sequence + 1;
-
+                var next = _durableSequence + 1;
                 if (!TrySerialize(draft, started, next, out var line))
                 {
                     return AuditAppendStatus.Rejected;
                 }
 
-                _stream!.Write(line);
-                _sequence = next;
-                if (!FlushCurrent())
+                var boundary = _durableLength;
+                _stream!.Position = boundary;
+                WriteCandidate(line);
+                if (!ConfirmDurable())
                 {
                     _degraded = true;
                     return AuditAppendStatus.Failed;
                 }
 
+                _durableLength = boundary + line.Length;
+                _durableSequence = next;
                 return AuditAppendStatus.Durable;
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
@@ -312,16 +396,84 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
 
     private bool ValidateCommon(AuditEventDraft draft)
     {
-        return IsLowerHex(draft.AttemptRef, 64)
-            && IsLowerHex(draft.IntentFingerprint, 64)
-            && draft.IntentFingerprintSchemaVersion > 0
-            && draft.IntentRef is not null
-            && draft.InstanceId is not null
-            && draft.DocumentId is not null
-            && Fits(draft.RevitVersion, 1, 32)
-            && Fits(draft.RevitBuild, 1, 64)
-            && Fits(draft.AddinVersion, 1, 32)
-            && draft.ItemCount is >= 1 and <= 20;
+        return CanRepresent(
+            draft.AttemptRef,
+            draft.IntentRef,
+            draft.IntentFingerprint,
+            draft.IntentFingerprintSchemaVersion,
+            draft.InstanceId,
+            draft.DocumentId,
+            draft.RevitVersion,
+            draft.RevitBuild,
+            draft.AddinVersion,
+            draft.ItemCount);
+    }
+
+    private static bool CanRepresent(AuditCommonMetadata metadata)
+    {
+        return CanRepresent(
+            metadata.AttemptRef,
+            metadata.IntentRef,
+            metadata.IntentFingerprint,
+            metadata.IntentFingerprintSchemaVersion,
+            metadata.InstanceId,
+            metadata.DocumentId,
+            metadata.RevitVersion,
+            metadata.RevitBuild,
+            metadata.AddinVersion,
+            metadata.ItemCount);
+    }
+
+    private static bool CanRepresent(
+        string? attemptRef,
+        string? intentRef,
+        string? intentFingerprint,
+        int schemaVersion,
+        string? instanceId,
+        string? documentId,
+        string? revitVersion,
+        string? revitBuild,
+        string? addinVersion,
+        int itemCount)
+    {
+        return IsLowerHex(attemptRef, 64)
+            && IsLowerHex(intentFingerprint, 64)
+            && schemaVersion > 0
+            && !string.IsNullOrEmpty(intentRef)
+            && !string.IsNullOrEmpty(instanceId)
+            && !string.IsNullOrEmpty(documentId)
+            && Fits(revitVersion, 1, 32)
+            && Fits(revitBuild, 1, 64)
+            && Fits(addinVersion, 1, 32)
+            && itemCount is >= 1 and <= 20;
+    }
+
+    private void WriteCandidate(byte[] line)
+    {
+        if (_options.FailAfterWriteBytes is int partial)
+        {
+            var count = Math.Clamp(partial, 0, line.Length);
+            if (count > 0)
+            {
+                _stream!.Write(line, 0, count);
+            }
+
+            throw new IOException("injected write failure");
+        }
+
+        _stream!.Write(line);
+    }
+
+    private bool RestoreDurableBoundary()
+    {
+        if (_stream is null)
+        {
+            return true;
+        }
+
+        _stream.SetLength(_durableLength);
+        _stream.Position = _durableLength;
+        return ConfirmDurable();
     }
 
     private bool TrySerialize(AuditEventDraft draft, bool started, int sequence, out byte[] line)
@@ -392,7 +544,8 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
         _stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
         _streamDate = today;
         _activePath = path;
-        _sequence = 0;
+        _durableLength = 0;
+        _durableSequence = 0;
         return true;
     }
 
@@ -411,7 +564,7 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
         return EnsureStream();
     }
 
-    private bool FlushCurrent()
+    private bool ConfirmDurable()
     {
         if (_stream is null)
         {
@@ -420,6 +573,7 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
 
         if (_options.FailFlush)
         {
+            _stream.Flush(flushToDisk: false);
             return false;
         }
 

@@ -303,7 +303,19 @@ public sealed class ApplyAttemptStoreTests
             var store = new ControlledApplyAttemptStore();
             Assert.Equal(ApplyEstablishStatus.Owner, store.TryEstablishExclusive("intent-a", Binding(), out var owner));
 
-            var preflight = writer.Preflight("2026", "2026.5", "0.1");
+            var preflight = writer.Preflight(new AuditCommonMetadata
+            {
+                AttemptRef = Hex('c'),
+                IntentRef = "raw-intent-secret",
+                IntentFingerprint = Hex('d'),
+                IntentFingerprintSchemaVersion = 1,
+                InstanceId = "raw-instance-secret",
+                DocumentId = "raw-document-secret",
+                RevitVersion = "2026",
+                RevitBuild = "2026.5",
+                AddinVersion = "0.1.0",
+                ItemCount = 1
+            });
 
             Assert.False(preflight.Succeeded);
             Assert.Equal(ApplyReleaseStatus.Released, store.ReleasePreMutation(owner));
@@ -332,6 +344,21 @@ public sealed class ApplyAttemptStoreTests
 
             Assert.Equal(AuditAppendStatus.Failed, completed);
             Assert.True(writer.IsDegraded);
+            options.FailFlush = false;
+            Assert.True(writer.Preflight(new AuditCommonMetadata
+            {
+                AttemptRef = Hex('c'),
+                IntentRef = "raw-intent-secret",
+                IntentFingerprint = Hex('d'),
+                IntentFingerprintSchemaVersion = 1,
+                InstanceId = "raw-instance-secret",
+                DocumentId = "raw-document-secret",
+                RevitVersion = "2026",
+                RevitBuild = "2026.5",
+                AddinVersion = "0.1.0",
+                ItemCount = 1
+            }).Succeeded);
+            Assert.All(Directory.GetFiles(root), path => Assert.Equal(0, new FileInfo(path).Length));
             Assert.Equal(ApplyTerminalStatus.Applied, store.TryLookup("intent-a", null).Terminal);
             Assert.Equal(ApplyEstablishStatus.InProgress, store.TryEstablishExclusive("intent-a", Binding(), out var outsider));
             Assert.False(outsider.IsAssigned);

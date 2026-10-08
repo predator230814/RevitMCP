@@ -121,6 +121,9 @@ internal sealed class ControlledApplyAttemptStore
 
             if (TryGetLive(intentRef, out _))
             {
+                // Internal InProgress means a record is retained, including a terminal outcome.
+                // Future CAP orchestration must TryLookup after losing establish and replay that terminal.
+                // Do not surface this status as the public in_progress result.
                 return ApplyEstablishStatus.InProgress;
             }
 

@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using RevitMCP.Addin.Apply;
 using RevitMCP.Addin.Audit;
 using RevitMCP.Addin.Intents;
 using RevitMCP.Addin.Lifecycle;
@@ -179,10 +180,10 @@ public sealed class ControlledWriteAuditWriterTests
         sandbox.Options.HeadroomBytes = 16_384;
         File.WriteAllBytes(Path.Combine(sandbox.Directory, "notes.txt"), new byte[20_000 - 16_384]);
         using var writer = sandbox.Open();
-        Assert.True(writer.Preflight("2026", "2026.5", "0.1").Succeeded);
+        Assert.True(writer.Preflight(Common()).Succeeded);
 
         File.WriteAllBytes(Path.Combine(sandbox.Directory, "notes-2.txt"), new byte[] { 1 });
-        Assert.False(writer.Preflight("2026", "2026.5", "0.1").Succeeded);
+        Assert.False(writer.Preflight(Common()).Succeeded);
         Assert.True(File.Exists(Path.Combine(sandbox.Directory, "notes.txt")));
         Assert.True(File.Exists(Path.Combine(sandbox.Directory, "notes-2.txt")));
     }
@@ -201,7 +202,7 @@ public sealed class ControlledWriteAuditWriterTests
         var active = OnlyFile(sandbox.Directory, skip: new[] { expired, retained });
 
         sandbox.Clock.UtcNow = new DateTimeOffset(2026, 12, 31, 0, 0, 0, TimeSpan.Zero);
-        Assert.True(writer.Preflight("2026", "2026.5", "0.1").Succeeded);
+        Assert.True(writer.Preflight(Common()).Succeeded);
 
         Assert.False(File.Exists(expired));
         Assert.True(File.Exists(retained));
@@ -218,7 +219,7 @@ public sealed class ControlledWriteAuditWriterTests
         using var held = new FileStream(expired, FileMode.Open, FileAccess.Read, FileShare.None);
         using var writer = sandbox.Open();
 
-        Assert.True(writer.Preflight("2026", "2026.5", "0.1").Succeeded);
+        Assert.True(writer.Preflight(Common()).Succeeded);
 
         Assert.True(File.Exists(expired));
         held.Dispose();
@@ -263,19 +264,79 @@ public sealed class ControlledWriteAuditWriterTests
     }
 
     [Fact]
-    public void Flush_failure_degrades_the_writer_until_preflight_recovers()
+    public void Flush_failure_recovers_to_the_previous_durable_sequence()
+    {
+        using var sandbox = new Sandbox();
+        using var writer = sandbox.Open();
+        Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyStarted(Started()));
+        sandbox.Options.FailFlush = true;
+        Assert.Equal(AuditAppendStatus.Failed, writer.TryAppendApplyCompleted(Completed()));
+        Assert.True(writer.IsDegraded);
+        Assert.Equal(AuditAppendStatus.Failed, writer.TryAppendApplyStarted(Started('e')));
+
+        sandbox.Options.FailFlush = false;
+        Assert.True(writer.Preflight(Common()).Succeeded);
+        Assert.False(writer.IsDegraded);
+        Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyCompleted(Completed()));
+        writer.Stop();
+
+        var sequences = Sequences(sandbox.Directory);
+        Assert.Equal(new[] { 1, 2 }, sequences);
+        Assert.All(Lines(sandbox.Directory), line => JsonDocument.Parse(line));
+    }
+
+    [Fact]
+    public void First_event_failure_recovers_so_the_next_durable_sequence_is_one()
     {
         using var sandbox = new Sandbox();
         sandbox.Options.FailFlush = true;
         using var writer = sandbox.Open();
         Assert.Equal(AuditAppendStatus.Failed, writer.TryAppendApplyStarted(Started()));
         Assert.True(writer.IsDegraded);
-        Assert.Equal(AuditAppendStatus.Failed, writer.TryAppendApplyCompleted(Completed()));
 
         sandbox.Options.FailFlush = false;
-        Assert.True(writer.Preflight("2026", "2026.5", "0.1").Succeeded);
-        Assert.False(writer.IsDegraded);
+        Assert.True(writer.Preflight(Common()).Succeeded);
+        Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyStarted(Started()));
+        writer.Stop();
+
+        Assert.Equal(new[] { 1 }, Sequences(sandbox.Directory));
+        JsonDocument.Parse(Lines(sandbox.Directory).Single());
+    }
+
+    [Fact]
+    public void Partial_write_is_truncated_back_to_the_durable_boundary()
+    {
+        using var sandbox = new Sandbox();
+        using var writer = sandbox.Open();
+        Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyStarted(Started()));
+        sandbox.Options.FailAfterWriteBytes = 4;
+        Assert.Equal(AuditAppendStatus.Failed, writer.TryAppendApplyCompleted(Completed()));
+        Assert.True(writer.IsDegraded);
+
+        sandbox.Options.FailAfterWriteBytes = null;
+        Assert.True(writer.Preflight(Common()).Succeeded);
         Assert.Equal(AuditAppendStatus.Durable, writer.TryAppendApplyCompleted(Completed()));
+        writer.Stop();
+
+        Assert.Equal(new[] { 1, 2 }, Sequences(sandbox.Directory));
+        Assert.All(Lines(sandbox.Directory), line => JsonDocument.Parse(line));
+    }
+
+    [Fact]
+    public void Invalid_common_metadata_fails_preflight_without_a_line_or_degradation()
+    {
+        using var sandbox = new Sandbox();
+        using var writer = sandbox.Open();
+        Assert.False(writer.Preflight(Common(fingerprint: "not-a-fingerprint")).Succeeded);
+        Assert.False(writer.Preflight(Common(attempt: "ABCD")).Succeeded);
+        Assert.False(writer.Preflight(Common(itemCount: 0)).Succeeded);
+        Assert.False(writer.Preflight(Common(itemCount: 21)).Succeeded);
+        Assert.False(writer.Preflight(Common(intentRef: "")).Succeeded);
+        Assert.False(writer.IsDegraded);
+        Assert.True(writer.Preflight(Common()).Succeeded);
+        writer.Stop();
+
+        Assert.Empty(Lines(sandbox.Directory));
     }
 
     [Fact]
@@ -289,7 +350,7 @@ public sealed class ControlledWriteAuditWriterTests
         var uppercase = Started();
         uppercase = WithAttempt(uppercase, new string('A', 64));
         Assert.Equal(AuditAppendStatus.Rejected, writer.TryAppendApplyStarted(uppercase));
-        Assert.False(writer.Preflight(new string('v', 33), "2026.5", "0.1").Succeeded);
+        Assert.False(writer.Preflight(Common(revitVersion: new string('v', 33))).Succeeded);
         Assert.False(writer.IsDegraded);
         writer.Stop();
         Assert.Empty(Directory.GetFiles(sandbox.Directory));
@@ -302,7 +363,7 @@ public sealed class ControlledWriteAuditWriterTests
         var blocked = Path.Combine(sandbox.Directory, "blocked");
         File.WriteAllText(blocked, "x");
         using var writer = new ControlledWriteAuditWriter(options: new AuditWriterOptions { Directory = blocked });
-        var preflight = writer.Preflight("2026", "2026.5", "0.1");
+        var preflight = writer.Preflight(Common());
         Assert.False(preflight.Succeeded);
         Assert.True(writer.IsDegraded);
 
@@ -346,6 +407,77 @@ public sealed class ControlledWriteAuditWriterTests
     }
 
     [Fact]
+    public void Process_start_housekeeping_deletes_only_expired_streams_and_creates_none()
+    {
+        using var sandbox = new Sandbox();
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var expired = Path.Combine(sandbox.Directory, "write-" + today.AddDays(-31).ToString("yyyyMMdd") + "-" + Hex('a') + ".jsonl");
+        var retained = Path.Combine(sandbox.Directory, "write-" + today.AddDays(-2).ToString("yyyyMMdd") + "-" + Hex('b') + ".jsonl");
+        var locked = Path.Combine(sandbox.Directory, "write-" + today.AddDays(-40).ToString("yyyyMMdd") + "-" + Hex('c') + ".jsonl");
+        File.WriteAllText(expired, "{}\n");
+        File.WriteAllText(retained, "{}\n");
+        File.WriteAllText(locked, "{}\n");
+        using var held = new FileStream(locked, FileMode.Open, FileAccess.Read, FileShare.None);
+        var store = IntentStore();
+        var lifetime = new RevitExecutionDispatcherLifetime(
+            store,
+            () => { },
+            () => { },
+            auditOptions: sandbox.Options);
+
+        Assert.False(File.Exists(expired));
+        Assert.True(File.Exists(retained));
+        Assert.True(File.Exists(locked));
+        Assert.DoesNotContain(
+            Directory.GetFiles(sandbox.Directory),
+            path => Path.GetFileName(path).Contains(lifetime.AuditWriter.AuditStreamRef, StringComparison.Ordinal));
+        Assert.Equal(IntentStoreCreateStatus.Created, store.TryCreate(Intent("doc-a")).Status);
+        lifetime.Dispose();
+        held.Dispose();
+    }
+
+    [Fact]
+    public void Unavailable_audit_directory_does_not_break_lifetime_construction()
+    {
+        using var sandbox = new Sandbox();
+        var blocked = Path.Combine(sandbox.Directory, "blocked");
+        File.WriteAllText(blocked, "x");
+        var store = IntentStore();
+        var lifetime = new RevitExecutionDispatcherLifetime(
+            store,
+            () => { },
+            () => { },
+            auditOptions: new AuditWriterOptions { Directory = blocked, FailHousekeeping = true });
+
+        Assert.Equal(IntentStoreCreateStatus.Created, store.TryCreate(Intent("doc-a")).Status);
+        Assert.Empty(Directory.GetFiles(sandbox.Directory, "write-*.jsonl"));
+        lifetime.Dispose();
+    }
+
+    [Fact]
+    public void Audit_stop_failure_does_not_prevent_lifetime_cleanup()
+    {
+        var store = IntentStore();
+        var created = store.TryCreate(Intent("doc-a"));
+        var steps = new List<string>();
+        var lifetime = new RevitExecutionDispatcherLifetime(
+            store,
+            () => steps.Add(store.TryGet(created.IntentRef!, out _) ? "execution-while-live" : "execution-after-clear"),
+            () => { });
+        lifetime.AuditWriter.InjectStopIoFailure = true;
+        Assert.Equal(ApplyEstablishStatus.Owner, lifetime.ApplyAttempts.TryEstablishExclusive("intent-a", new ApplyBinding(Hex('a'), "instance-a", "doc-a"), out _));
+
+        lifetime.Stop();
+        lifetime.Dispose();
+
+        Assert.NotEmpty(steps);
+        Assert.All(steps, step => Assert.Equal("execution-after-clear", step));
+        Assert.Equal(IntentStoreCreateStatus.Rejected, store.TryCreate(Intent("doc-b")).Status);
+        Assert.Equal(ApplyLookupStatus.Absent, lifetime.ApplyAttempts.TryLookup("intent-a", null).Status);
+        Assert.True(lifetime.AuditWriter.IsDegraded);
+    }
+
+    [Fact]
     public void Stop_and_dispose_are_idempotent()
     {
         using var sandbox = new Sandbox();
@@ -370,6 +502,28 @@ public sealed class ControlledWriteAuditWriterTests
         Assert.Contains("Flush(flushToDisk: true)", source, StringComparison.Ordinal);
         Assert.Contains("FileShare.Read", source, StringComparison.Ordinal);
         Assert.Contains("FileMode.CreateNew", source, StringComparison.Ordinal);
+    }
+
+    private static AuditCommonMetadata Common(
+        string? attempt = null,
+        string? fingerprint = null,
+        int itemCount = 2,
+        string? revitVersion = null,
+        string? intentRef = null)
+    {
+        return new AuditCommonMetadata
+        {
+            AttemptRef = attempt ?? Hex('b'),
+            IntentRef = intentRef ?? "raw-intent-secret",
+            IntentFingerprint = fingerprint ?? Hex('c'),
+            IntentFingerprintSchemaVersion = 1,
+            InstanceId = "raw-instance-secret",
+            DocumentId = "raw-document-secret",
+            RevitVersion = revitVersion ?? "2026",
+            RevitBuild = "2026.5",
+            AddinVersion = "0.1.0",
+            ItemCount = itemCount
+        };
     }
 
     private static AuditEventDraft Started(char attempt = 'b')
@@ -486,6 +640,13 @@ public sealed class ControlledWriteAuditWriterTests
 
     private static string Hex(char digit) => new(digit, 64);
 
+    private static int[] Sequences(string directory)
+    {
+        return Lines(directory)
+            .Select(line => JsonDocument.Parse(line).RootElement.GetProperty("sequence").GetInt32())
+            .ToArray();
+    }
+
     private static List<string> Lines(string directory)
     {
         return Directory.GetFiles(directory)
@@ -498,6 +659,44 @@ public sealed class ControlledWriteAuditWriterTests
     private static string OnlyFile(string directory, string[]? skip = null)
     {
         return Directory.GetFiles(directory).Single(path => skip is null || !skip.Contains(path, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private static EphemeralWriteIntentStore IntentStore()
+    {
+        var draw = 0;
+        return new EphemeralWriteIntentStore(randomBytes: () =>
+        {
+            var bytes = new byte[32];
+            bytes[0] = (byte)++draw;
+            return bytes;
+        });
+    }
+
+    private static IntentDraft Intent(string documentId)
+    {
+        return new IntentDraft
+        {
+            InstanceId = "instance-a",
+            DocumentId = documentId,
+            Items = new List<IntentItemDraft>
+            {
+                new()
+                {
+                    RequestPosition = 1,
+                    ElementRef = "element-a",
+                    ParameterRef = "parameter-a",
+                    Source = "instance",
+                    IdentityKind = DescribeParameterIdentityKind.Local,
+                    StableKey = "local:42",
+                    Status = "ok",
+                    ElementName = "Wall 1",
+                    CategoryName = "Walls",
+                    ParameterName = "Comments",
+                    DataTypeKind = DescribeParameterDataTypeKind.Spec,
+                    Proposed = new IntentTypedValue.StringValue("proposed")
+                }
+            }
+        };
     }
 
     private static string RepoFile(string relative)

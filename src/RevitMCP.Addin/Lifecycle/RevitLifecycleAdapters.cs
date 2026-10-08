@@ -1,5 +1,6 @@
 using Autodesk.Revit.UI;
 using Autodesk.Revit.UI.Events;
+using System.IO;
 using RevitMCP.Addin.Apply;
 using RevitMCP.Addin.Approval;
 using RevitMCP.Addin.Audit;
@@ -126,7 +127,8 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         Action stopExecution,
         Action disposeExecution,
         IDisposable? closeCleanup = null,
-        IActiveDocumentEventSource? activeDocumentEvents = null)
+        IActiveDocumentEventSource? activeDocumentEvents = null,
+        AuditWriterOptions? auditOptions = null)
     {
         ArgumentNullException.ThrowIfNull(intentStore);
         ArgumentNullException.ThrowIfNull(stopExecution);
@@ -136,7 +138,11 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         _disposeExecution = disposeExecution;
         _intentStore = intentStore;
         _applyAttempts = new ControlledApplyAttemptStore();
-        _auditWriter = new ControlledWriteAuditWriter();
+        _auditWriter = new ControlledWriteAuditWriter(options: auditOptions);
+        if (auditOptions is not null)
+        {
+            _auditWriter.TryHousekeepingAtProcessStart();
+        }
         _approval = new RevitLocalApprovalProviderStateMachine(intentStore);
         _interaction = new RevitLocalApprovalInteractionController(intentStore, _approval);
         _closeCleanup = closeCleanup;
@@ -161,6 +167,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         _intentStore = intentStore;
         _applyAttempts = new ControlledApplyAttemptStore();
         _auditWriter = new ControlledWriteAuditWriter();
+        _auditWriter.TryHousekeepingAtProcessStart();
         _approval = new RevitLocalApprovalProviderStateMachine(intentStore);
         _interaction = new RevitLocalApprovalInteractionController(intentStore, _approval);
         _closeCleanup = closeCleanup;
@@ -226,7 +233,14 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         {
             _approvalUi?.Detach();
             _applyAttempts.Clear();
-            _auditWriter.Stop();
+            try
+            {
+                _auditWriter.Stop();
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+            }
+
             _intentStore.Clear();
             _stopExecution();
         }
