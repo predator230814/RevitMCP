@@ -9,7 +9,7 @@
 
 This specification is **Accepted**. Dave, Product Owner, accepted it on 2026-10-09.
 
-The capability, bridge protocol version 11, and the MCP tool `revit_get_warnings` are implemented. Live typed-Bridge validation and official MCP live validation have not been run. User-interface work remains outside this capability.
+The capability, bridge protocol version 11, and the MCP tool `revit_get_warnings` are implemented. Typed-Bridge and official MCP-client live validation on Revit 2026.5 build `26.5.0.55` at SHA `47b2784ae90b8ae08f3ffb64fc8345f779647184` is **PASS**. `tools/list` was exactly 10 and the selected Bridge protocol was 11. User-interface work remains outside this capability. Induced Revit failure-dialog behavior remains deferred validation debt.
 
 ## Purpose
 
@@ -545,7 +545,7 @@ The official MCP tool is specified here. Do not register it until a bridge contr
 
 RevitMCP continues to target Revit 2025, 2026, and 2027 from one shared Addin project. `Document.GetWarnings()` and `FailureMessage` belong to that supported matrix.
 
-This specification does not claim live validation on Revit 2025, 2026, or 2027.
+Live validation on Revit 2026.5 build `26.5.0.55` at SHA `47b2784ae90b8ae08f3ffb64fc8345f779647184` is **PASS**. Revit 2025 and Revit 2027 were not part of that session.
 
 Do not treat compile-time availability as live proof.
 
@@ -608,7 +608,7 @@ CAP-0009 accepted
 
 The bridge contract is [BRIDGE-0011](../bridge/BRIDGE-0011-get-warnings-capability-rpc.md). It assigns protocol version 11 and preserves current capabilities by explicit version sets. That version is not implemented by numeric `>=` behavior. This capability specification does not assign the version number.
 
-Contracts, Addin, Bridge, and the Server tool are implemented. The next checkpoint is live typed-Bridge validation, then official MCP live validation. Neither has been run.
+Contracts, Addin, Bridge, and the Server tool are implemented. Typed-Bridge live validation and official MCP live validation on Revit 2026.5 are **PASS** at SHA `47b2784ae90b8ae08f3ffb64fc8345f779647184`.
 
 ## References
 

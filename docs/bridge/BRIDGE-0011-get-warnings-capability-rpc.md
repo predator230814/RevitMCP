@@ -1,6 +1,6 @@
 # BRIDGE-0011: `revit.get_warnings` capability RPC
 
-- Status: Implemented. Live typed-Bridge validation and official MCP live validation have not been run.
+- Status: Implemented. Typed-Bridge and official MCP-client live validation on Revit 2026.5 build `26.5.0.55` at SHA `47b2784ae90b8ae08f3ffb64fc8345f779647184` is **PASS**. `tools/list` was exactly 10 and the selected protocol was 11. Induced Revit failure-dialog behavior was not executed and remains deferred validation debt.
 - Date: 2026-10-09
 - Introduced bridge protocol version: 11
 
@@ -8,7 +8,7 @@
 
 Define the local JSON-RPC Bridge operation that implements Accepted CAP-0009 `revit_get_warnings` and introduce bridge protocol version 11.
 
-This specification preserves the explicit typed RPC approach established by BRIDGE-0002 through BRIDGE-0010. The RPC, protocol sets, Contracts, Addin, Bridge, tests, and the Server tool are implemented. It does not introduce a generic capability registry, command envelope, or reflection-driven dispatch system. Live Revit validation is a later checkpoint.
+This specification preserves the explicit typed RPC approach established by BRIDGE-0002 through BRIDGE-0010. The RPC, protocol sets, Contracts, Addin, Bridge, tests, and the Server tool are implemented. It does not introduce a generic capability registry, command envelope, or reflection-driven dispatch system. Typed-Bridge and official MCP live validation on Revit 2026.5 are **PASS**.
 
 ## Related accepted decisions
 
@@ -352,7 +352,7 @@ It must not reference:
 
 `RevitMCP.Addin` owns `Document.GetWarnings()`, severity mapping, and element-ref resolution.
 
-`RevitMCP.Server` exposes `revit_get_warnings`. Live MCP validation has not been run.
+`RevitMCP.Server` exposes `revit_get_warnings`. Official MCP live validation on Revit 2026.5 is **PASS**.
 
 ## Handshake advertisement
 
@@ -382,12 +382,11 @@ BRIDGE-0011 is acceptable as a specification when:
 11. The Bridge does not reshape CAP-0009 results, including the optional `unmatched_element_refs` field.
 12. No generic registry, reflection dispatch, or Revit API leakage into Contracts/Bridge.
 13. Later automated tests cover advertisement, gating, inherited v11 eligibility, unknown v12 rejection, and capability-error survival. Addin coverage required by CAP-0009 stays in the Addin tests. Bridge tests do not redefine those rules.
-14. Typed-Bridge live validation remains required before official MCP live validation. It has not been run.
-15. Bridge, Addin, and Server code for this RPC are implemented. That implementation is not a live validation result.
+14. Typed-Bridge live validation and the later official MCP live validation on Revit 2026.5 are **PASS** at SHA `47b2784ae90b8ae08f3ffb64fc8345f779647184`.
+15. Bridge, Addin, and Server code for this RPC are implemented. The live result is recorded separately from the mere existence of that code.
 
 ## Explicitly deferred
 
-- live typed-Bridge validation and official MCP live validation;
 - warning resolution, deletion, or suppression;
 - transaction failure dialogs;
 - generic capability registry;
