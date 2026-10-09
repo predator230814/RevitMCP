@@ -1,12 +1,14 @@
 # RevitMCP Current State
 
-_Last updated: 2026-10-08_
+_Last updated: 2026-10-09_
 
 ## Validated head
 
 This record was written while PR #72 was still a draft. Merged history before that PR does not include the CAP-0008 slice. The validated SHA is `517bca8ddb8ecf3bab11cb14738ef8e0c9937353`.
 
 At that SHA, the CAP-0008 vertical slice, Bridge protocol v10, and `revit_apply_parameter_updates` are implemented. Official MCP-client live functional validation on Revit 2026.5 build `26.5.0.55` is **PASS**. Tech Lead review records that gate as **PASS**. `tools/list` was exactly 9 and the selected Bridge protocol was 10.
+
+A later gate is also **PASS**. CAP-0009 `revit_get_warnings` was live-validated on Revit 2026.5 build `26.5.0.55` at SHA `47b2784ae90b8ae08f3ffb64fc8345f779647184`. The selected Bridge protocol was 11. `tools/list` was exactly 10. The detail is recorded below under the 2026-10-09 live section.
 
 Observed on disposable Project Information Author:
 
@@ -130,7 +132,7 @@ CAP-0001 is implemented end-to-end for the accepted base contract. Active-projec
 - Addin `RevitGetContextService`, `RevitQueryElementsService`, `RevitGetElementsService`, `RevitDescribeParametersService`, and `RevitGetParameterValuesService` dispatch through the process-lifetime EXEC-0001 dispatcher. Query, get-elements, describe-parameters, and get-parameter-values share one `OpenDocumentIdentityService`. Describe-parameters and get-parameter-values share one document-lifetime `parameter_ref` map with reverse lookup; that map is forgotten on successful document close.
 - Lifecycle wiring: metadata -> dispatcher -> get-context + query + get-elements + describe-parameters + get-parameter-values + get-mep-topology + preview-parameter-updates + request-parameter-update-review + apply-parameter-updates + get-warnings services + document-close cleanup -> bridge start. The dispatcher lifetime owns one ephemeral write-intent store. The coordinator creates `RevitPreviewParameterUpdatesService` with that store and passes it to Bridge before start. Successful document close forgets that document's intents before parameter refs and document identity. Shutdown order remains dispatcher.Stop, which closes the intent store before stopping execution, then registration withdrawal/bridge, then cleanup unsubscribe / dispatcher dispose.
 - SERVER-0001: `RevitMCP.Server` is a real stdio MCP process using official `ModelContextProtocol` `2.2.0` only inside the Server boundary.
-- `tools/list` currently exposes exactly ten Revit tools: `revit_get_context`, `revit_query_elements`, `revit_get_elements`, `revit_describe_parameters`, `revit_get_parameter_values`, `revit_get_mep_topology`, `revit_get_warnings`, `revit_preview_parameter_updates`, `revit_request_parameter_update_review`, and `revit_apply_parameter_updates`. Live validation of `revit_get_warnings` has not been run. Historical official MCP-client to stdio Server to Bridge v8 to Revit 2026.5 validation of the preview tool is **PASS** at SHA `1ca66811734cec00401e627162a7b2e4d0a136b1`. Request-review live validation from PR #67 is **PASS**. CAP-0008 live functional validation on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353` is **PASS**. Induced Revit warning/error failure-dialog behavior remains deferred validation debt.
+- `tools/list` currently exposes exactly ten Revit tools: `revit_get_context`, `revit_query_elements`, `revit_get_elements`, `revit_describe_parameters`, `revit_get_parameter_values`, `revit_get_mep_topology`, `revit_get_warnings`, `revit_preview_parameter_updates`, `revit_request_parameter_update_review`, and `revit_apply_parameter_updates`. Official MCP live validation of `revit_get_warnings` on Revit 2026.5 build `26.5.0.55` at SHA `47b2784ae90b8ae08f3ffb64fc8345f779647184` is **PASS**. Historical official MCP-client to stdio Server to Bridge v8 to Revit 2026.5 validation of the preview tool is **PASS** at SHA `1ca66811734cec00401e627162a7b2e4d0a136b1`. Request-review live validation from PR #67 is **PASS**. CAP-0008 live functional validation on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353` is **PASS**. Induced Revit warning/error failure-dialog behavior remains deferred validation debt.
 - Fresh current-session discovery, deterministic 0/1/many routing, and a fresh typed bridge invocation (`handshake [11,10,9,8,7,6,5,4,3,2,1]`, require selected protocol explicitly in `{2,3,4,5,6,7,8,9,10,11}` for get-context, `{3,4,5,6,7,8,9,10,11}` for query, `{4,5,6,7,8,9,10,11}` for get-elements, `{5,6,7,8,9,10,11}` for describe-parameters, `{6,7,8,9,10,11}` for get-parameter-values, `{7,8,9,10,11}` for get-mep-topology, `{8,9,10,11}` for preview-parameter-updates, `{9,10,11}` for request-parameter-update-review, `{10,11}` for apply-parameter-updates, and `{11}` for get-warnings; unknown v12 is unsupported) on every MCP capability call. `instance_id` remains Server routing-only and does not enter transport-neutral capability requests. CAP-0005 exists through the stdio MCP code path; official MCP-client-to-Revit live validation is **PASS**. CAP-0006 is exposed as `revit_get_mep_topology`; official MCP-client-to-Revit live validation is **PASS**. CAP-0007 is exposed as `revit_preview_parameter_updates` on protocol `{8,9,10}`. Historical official MCP-client to stdio Server to Bridge v8 to Revit 2026.5 validation is **PASS** at SHA `1ca66811734cec00401e627162a7b2e4d0a136b1`.
 - Modern MCP success uses authoritative `structuredContent` with empty `content`. Errors use `isError: true` and one compact JSON text block without violating success `outputSchema`.
 
@@ -931,6 +933,21 @@ The process-owned LIFECYCLE-0004 apply-attempt store infrastructure is implement
 
 The remaining checkpoint is a later live exercise of induced Revit warning/error failure-dialog behavior, once a safe deterministic disposable scenario exists. That scenario was not run and is not passed.
 
-CAP-0009 `revit_get_warnings` is **Accepted** and implemented. Dave, Product Owner, accepted it on 2026-10-09. It is a bounded read of persistent failures posted on the active document. Contracts, Addin, Bridge protocol 11, and the stdio MCP tool are implemented. Live typed-Bridge validation and official MCP live validation have not been run. User-interface work is outside this capability. The induced failure-dialog exercise remains deferred validation debt.
+CAP-0009 `revit_get_warnings` is **Accepted** and implemented. Dave, Product Owner, accepted it on 2026-10-09. It is a bounded read of persistent failures posted on the active document. Contracts, Addin, Bridge protocol 11, and the stdio MCP tool are implemented. Typed-Bridge and official MCP live validation on Revit 2026.5 build `26.5.0.55` at SHA `47b2784ae90b8ae08f3ffb64fc8345f779647184` is **PASS**. User-interface work is outside this capability. The induced failure-dialog exercise remains deferred validation debt.
 
-BRIDGE-0011 is implemented. It names `revit.get_warnings` on bridge protocol version 11 and preserves protocol versions 1 through 10 by explicit sets. A full host advertises `[11,10,9,8,7,6,5,4,3,2,1]` only with the complete v10 prefix plus get-warnings. Unknown v12 is unsupported. Live validation has not been run.
+BRIDGE-0011 is implemented. It names `revit.get_warnings` on bridge protocol version 11 and preserves protocol versions 1 through 10 by explicit sets. A full host advertises `[11,10,9,8,7,6,5,4,3,2,1]` only with the complete v10 prefix plus get-warnings. Unknown v12 is unsupported. The same Revit 2026.5 session recorded that advertisement as selected protocol 11.
+
+### Live-tested CAP-0009 on Autodesk Revit 2026.5 (`26.5.0.55`)
+
+Date: 2026-10-09. Tested SHA `47b2784ae90b8ae08f3ffb64fc8345f779647184`, the merge of PR #75. Same Revit session for both documents. No production model. No `.rvt` committed. No save. `is_modified` stayed false before and after. The live harness remains untracked under `tools/`. Revit 2025 and Revit 2027 were not in this session. Description truncation, unresolved element ids, and an empty `failure_key` filter were not manufactured.
+
+Typed Bridge, real `NamedPipeBridgeClient`, handshake selected protocol 11 with supported versions `[11,10,9,8,7,6,5,4,3,2,1]`:
+
+- Autodesk sample **Snowdon Towers Sample Plumbing**: `matched_count` 7, counts `document_corruption=0`, `error=0`, `warning=7`, `other=0`, 3 definition rows. Truncation reason `elements` on 2 returned messages. An element filter kept 2 messages and reported `missing-ref` in `unmatched_element_refs`. `max_warnings=1` kept `matched_count` 7, returned 1 message, and reported truncation reason `warnings`. A wrong `document_id` returned `DOCUMENT_CONTEXT_CHANGED`.
+- New empty **Project1**, same session: `matched_count` 0, all four counts 0, `truncated` false. A wrong `document_id` returned `DOCUMENT_CONTEXT_CHANGED`.
+
+Official MCP client `ModelContextProtocol.Client.McpClient` 2.2.0 through stdio `RevitMCP.Server`:
+
+- `tools/list` was exactly 10 tools and included `revit_get_warnings`. No dotted Bridge RPC name was exposed.
+- **Project1**: `matched_count` 0, all four counts 0, `truncated` false, and `unmatched_element_refs` was absent. A wrong `document_id` returned `DOCUMENT_CONTEXT_CHANGED`.
+- **Snowdon Towers Sample Plumbing**: `matched_count` 7, the same four counts, truncation reason `elements`. The element filter kept 2 messages and reported `missing-ref`. `max_warnings=1` returned 1 message with truncation reason `warnings`. A wrong `document_id` returned `DOCUMENT_CONTEXT_CHANGED`.
