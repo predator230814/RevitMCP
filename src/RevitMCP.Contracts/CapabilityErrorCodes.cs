@@ -33,4 +33,6 @@ public static class CapabilityErrorCodes
     public const string InvalidApprovalReviewRequest = "INVALID_APPROVAL_REVIEW_REQUEST";
 
     public const string InvalidApplyRequest = "INVALID_APPLY_REQUEST";
+
+    public const string InvalidWarnings = "INVALID_WARNINGS";
 }

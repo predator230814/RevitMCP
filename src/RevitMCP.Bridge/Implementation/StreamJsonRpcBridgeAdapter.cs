@@ -15,6 +15,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitPreviewParameterUpdatesService? _previewParameterUpdates;
     private readonly IRevitRequestParameterUpdateReviewService? _requestParameterUpdateReview;
     private readonly IRevitApplyParameterUpdatesService? _applyParameterUpdates;
+    private readonly IRevitGetWarningsService? _getWarnings;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -27,7 +28,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitGetMepTopologyService? getMepTopology = null,
         IRevitPreviewParameterUpdatesService? previewParameterUpdates = null,
         IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview = null,
-        IRevitApplyParameterUpdatesService? applyParameterUpdates = null)
+        IRevitApplyParameterUpdatesService? applyParameterUpdates = null,
+        IRevitGetWarningsService? getWarnings = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -39,6 +41,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _previewParameterUpdates = previewParameterUpdates;
         _requestParameterUpdateReview = requestParameterUpdateReview;
         _applyParameterUpdates = applyParameterUpdates;
+        _getWarnings = getWarnings;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -376,6 +379,43 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit parameter update apply request could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.get_warnings")]
+    public async Task<GetWarningsResult> GetWarningsAsync(
+        GetWarningsRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsGetWarnings,
+            "revit.get_warnings is not available on this connection.");
+        if (_getWarnings is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.get_warnings is not available on this endpoint."));
+        }
+
+        try
+        {
+            return await _getWarnings.GetWarningsAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The Revit warnings request could not be executed."));
         }
     }
 

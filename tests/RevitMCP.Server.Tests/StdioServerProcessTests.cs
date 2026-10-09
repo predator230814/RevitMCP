@@ -28,7 +28,7 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(9, tools.Count);
+        Assert.Equal(10, tools.Count);
         Assert.Equal(
             new[]
             {
@@ -38,6 +38,7 @@ public sealed class StdioServerProcessTests
                 GetElementsToolMetadata.Name,
                 GetMepTopologyToolMetadata.Name,
                 GetParameterValuesToolMetadata.Name,
+                GetWarningsToolMetadata.Name,
                 PreviewParameterUpdatesToolMetadata.Name,
                 QueryElementsToolMetadata.Name,
                 RequestParameterUpdateReviewToolMetadata.Name
@@ -52,6 +53,7 @@ public sealed class StdioServerProcessTests
                 "revit_get_elements",
                 "revit_get_mep_topology",
                 "revit_get_parameter_values",
+                "revit_get_warnings",
                 "revit_preview_parameter_updates",
                 "revit_query_elements",
                 "revit_request_parameter_update_review"

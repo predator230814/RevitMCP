@@ -770,6 +770,27 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
 
     public Func<ApplyParameterUpdatesRequest, TimeSpan, CancellationToken, Task<ApplyParameterUpdatesResult>>? ApplyParameterUpdates { get; set; }
 
+    public int GetWarningsCalls { get; private set; }
+
+    public GetWarningsRequest? LastGetWarningsRequest { get; private set; }
+
+    public TimeSpan LastGetWarningsTimeout { get; private set; }
+
+    public Func<GetWarningsRequest, TimeSpan, CancellationToken, Task<GetWarningsResult>>? GetWarnings { get; set; }
+
+    public Task<GetWarningsResult> GetWarningsAsync(
+        GetWarningsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        GetWarningsCalls++;
+        LastGetWarningsRequest = request;
+        LastGetWarningsTimeout = timeout;
+        return GetWarnings is null
+            ? throw new NotSupportedException("This recording client does not implement revit.get_warnings.")
+            : GetWarnings(request, timeout, cancellationToken);
+    }
+
     public Task<ApplyParameterUpdatesResult> ApplyParameterUpdatesAsync(
         ApplyParameterUpdatesRequest request,
         TimeSpan timeout,

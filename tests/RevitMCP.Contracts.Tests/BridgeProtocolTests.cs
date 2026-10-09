@@ -15,7 +15,8 @@ public sealed class BridgeProtocolTests
     [InlineData(8, true)]
     [InlineData(9, true)]
     [InlineData(10, true)]
-    [InlineData(11, false)]
+    [InlineData(11, true)]
+    [InlineData(12, false)]
     public void Get_context_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetContext(version));
@@ -32,7 +33,8 @@ public sealed class BridgeProtocolTests
     [InlineData(8, true)]
     [InlineData(9, true)]
     [InlineData(10, true)]
-    [InlineData(11, false)]
+    [InlineData(11, true)]
+    [InlineData(12, false)]
     public void Query_elements_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsQueryElements(version));
@@ -49,7 +51,8 @@ public sealed class BridgeProtocolTests
     [InlineData(8, true)]
     [InlineData(9, true)]
     [InlineData(10, true)]
-    [InlineData(11, false)]
+    [InlineData(11, true)]
+    [InlineData(12, false)]
     public void Get_elements_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetElements(version));
@@ -66,7 +69,8 @@ public sealed class BridgeProtocolTests
     [InlineData(8, true)]
     [InlineData(9, true)]
     [InlineData(10, true)]
-    [InlineData(11, false)]
+    [InlineData(11, true)]
+    [InlineData(12, false)]
     public void Describe_parameters_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsDescribeParameters(version));
@@ -83,7 +87,8 @@ public sealed class BridgeProtocolTests
     [InlineData(8, true)]
     [InlineData(9, true)]
     [InlineData(10, true)]
-    [InlineData(11, false)]
+    [InlineData(11, true)]
+    [InlineData(12, false)]
     public void Get_parameter_values_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetParameterValues(version));
@@ -92,7 +97,7 @@ public sealed class BridgeProtocolTests
     [Fact]
     public void Current_supported_versions_are_explicit_and_ordered()
     {
-        Assert.Equal(10, BridgeProtocol.CurrentVersion);
+        Assert.Equal(11, BridgeProtocol.CurrentVersion);
         Assert.Equal(new[] { 1 }, BridgeProtocol.HandshakeOnlyVersions);
         Assert.Equal(new[] { 2, 1 }, BridgeProtocol.GetContextVersions);
         Assert.Equal(new[] { 3, 2, 1 }, BridgeProtocol.QueryElementsVersions);
@@ -102,7 +107,8 @@ public sealed class BridgeProtocolTests
         Assert.Equal(new[] { 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.GetMepTopologyVersions);
         Assert.Equal(new[] { 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.PreviewParameterUpdatesVersions);
         Assert.Equal(new[] { 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.RequestParameterUpdateReviewVersions);
-        Assert.Equal(new[] { 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.SupportedVersions);
+        Assert.Equal(new[] { 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.ApplyParameterUpdatesVersions);
+        Assert.Equal(new[] { 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.SupportedVersions);
     }
 
     [Theory]
@@ -116,8 +122,9 @@ public sealed class BridgeProtocolTests
     [InlineData(8, true)]
     [InlineData(9, true)]
     [InlineData(10, true)]
-    [InlineData(11, false)]
-    public void Get_mep_topology_support_includes_v7_through_v10(int version, bool expected)
+    [InlineData(11, true)]
+    [InlineData(12, false)]
+    public void Get_mep_topology_support_includes_v7_through_v11(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetMepTopology(version));
     }
@@ -128,8 +135,9 @@ public sealed class BridgeProtocolTests
     [InlineData(8, true)]
     [InlineData(9, true)]
     [InlineData(10, true)]
-    [InlineData(11, false)]
-    public void Preview_parameter_updates_support_includes_v8_through_v10(int version, bool expected)
+    [InlineData(11, true)]
+    [InlineData(12, false)]
+    public void Preview_parameter_updates_support_includes_v8_through_v11(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsPreviewParameterUpdates(version));
     }
@@ -145,8 +153,9 @@ public sealed class BridgeProtocolTests
     [InlineData(8, false)]
     [InlineData(9, true)]
     [InlineData(10, true)]
-    [InlineData(11, false)]
-    public void Request_parameter_update_review_support_is_protocol_v9_and_v10(int version, bool expected)
+    [InlineData(11, true)]
+    [InlineData(12, false)]
+    public void Request_parameter_update_review_support_is_protocol_v9_through_v11(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsRequestParameterUpdateReview(version));
     }

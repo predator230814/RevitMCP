@@ -111,7 +111,8 @@ public sealed class ApplyParameterUpdatesMcpBoundaryTests
 
         var omitted = await service.ExecuteAsync(null!, new ApplyParameterUpdatesRequest { IntentRef = "intent-ref" }, CancellationToken.None);
         Assert.Equal(McpToolErrorCodes.InstanceNotFound, omitted.ErrorCode);
-        Assert.False(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
+        Assert.True(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
+        Assert.False(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
     }
 

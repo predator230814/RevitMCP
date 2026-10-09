@@ -25,7 +25,7 @@ public sealed class GetParameterValuesBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -79,7 +79,7 @@ public sealed class GetParameterValuesBridgeOrchestrationTests
             var registration = TestSupport.CreateRegistration("id-v7", pipe);
             return Task.FromResult(new RecordingBridgeClient
             {
-                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 11)),
+                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 12)),
                 GetParameterValues = (_, _, _) => throw new InvalidOperationException("GetParameterValues must not run for unknown v10.")
             });
         });
