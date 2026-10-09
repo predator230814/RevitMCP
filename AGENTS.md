@@ -6,6 +6,8 @@ This file defines the canonical working rules for AI coding agents contributing 
 
 The repository is the source of truth. Conversation memory, model memory, and previous chat sessions are not authoritative project state.
 
+Architecture, sequencing, and capability-design sessions follow `docs/TECH_LEAD.md`. That document does not replace these coding-agent rules.
+
 ## Source-of-truth order
 
 When information conflicts, use this order:

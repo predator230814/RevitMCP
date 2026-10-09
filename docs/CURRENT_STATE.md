@@ -930,3 +930,5 @@ PR #68 is merged. PR #69 is merged. ADR-0011, CAP-0008, and LIFECYCLE-0004 are *
 The process-owned LIFECYCLE-0004 apply-attempt store infrastructure is implemented. The process-owned ADR-0011 v1 local audit-writer infrastructure is implemented. The CAP-0008 apply path, Bridge protocol v10, and `revit_apply_parameter_updates` are implemented. Official MCP-client live functional validation on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353` is **PASS**. `tools/list` was exactly 9 and the selected Bridge protocol was 10.
 
 The remaining checkpoint is a later live exercise of induced Revit warning/error failure-dialog behavior, once a safe deterministic disposable scenario exists. That scenario was not run and is not passed.
+
+CAP-0009 `revit_get_warnings` is **Accepted**. Dave, Product Owner, accepted it on 2026-10-09. It is a bounded read of persistent failures posted on the active document. Acceptance does not implement Contracts, Addin, Bridge, or Server code, and it does not include user-interface work. The induced failure-dialog exercise remains deferred validation debt.

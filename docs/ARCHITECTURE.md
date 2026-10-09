@@ -54,13 +54,19 @@ Target conceptual layers:
 
 [ADR-0009](adr/ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) is **Accepted**. It separates model-facing MCP capabilities, human-facing MCP App interactions, persistent Revit writes, the trusted approval-provider boundary, and optional external orchestration.
 
-It does not change ADR-0007 or ADR-0008. Persistent writes remain on the ADR-0008 path. An MCP App is not a second Revit MCP service and is not a trusted approval provider. Current stdio operation remains valid. Acceptance does not authorize MCP Apps, app-only tools, CAP-0008, apply, Streamable HTTP, approval-provider code, MRTR or an SDK upgrade, orchestration implementation, temporary hide/isolate classification, or any production write.
+It does not change ADR-0007 or ADR-0008. Persistent writes remain on the ADR-0008 path. An MCP App is not a second Revit MCP service and is not a trusted approval provider. Current stdio operation remains valid.
+
+ADR-0009 acceptance did not itself authorize MCP Apps, app-only tools, Streamable HTTP, MRTR, an SDK upgrade, orchestration implementation, or temporary hide/isolate classification. Those remain unauthorized. The v1 approval provider and CAP-0008 were authorized later by their own accepted specifications.
 
 ## Accepted v1 approval authority
 
-[ADR-0010](adr/ADR-0010-revit-local-trusted-approval-authority.md) is **Accepted**. The v1 trusted approval authority is Revit-local and in-process inside `RevitMCP.Addin`. `DockablePane -> WPF -> local WebView2` is the accepted preferred v1 approval presentation direction, based on the merged feasibility spike. That presentation is not the approval authority. Production WebView2 UI code does not exist.
+[ADR-0010](adr/ADR-0010-revit-local-trusted-approval-authority.md) is **Accepted**. The v1 trusted approval authority is Revit-local and in-process inside `RevitMCP.Addin`. `DockablePane -> WPF -> local WebView2` is the accepted v1 approval presentation. That presentation is not the approval authority.
 
-Acceptance does not authorize approval-provider production code, production WebView2 UI, CAP-0008, apply, Bridge v9, a Server write tool, MRTR, an SDK upgrade, or any production write.
+The production approval presentation exists: a DockablePane, a WPF host, and a bundled local WebView2 page. WebView2 creation is lazy. The UI is presentation and input only. The native Addin remains the approval authority. UI messages carry only bounded current-session actions and cannot consume an approval.
+
+[CAP-0008](capabilities/CAP-0008-revit-apply-parameter-updates.md) `revit_apply_parameter_updates` is **Accepted** and implemented on Bridge protocol 10. Official MCP-client live functional validation on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353` is **PASS**. `tools/list` was exactly 9. Induced Revit warning/error failure-dialog behavior was not executed and remains deferred validation debt. That debt is not authorization for another write path.
+
+Still unauthorized: MCP Apps, app-only tools, Streamable HTTP, MRTR, an SDK upgrade, orchestration implementation, temporary hide/isolate classification, and any write path other than the accepted CAP-0008 parameter-apply path.
 
 ## Decisions intentionally not made yet
 
