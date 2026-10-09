@@ -1,0 +1,16 @@
+---
+description: RevitMCP technical-lead working method. Read docs/TECH_LEAD.md before architecture or sequencing decisions.
+alwaysApply: true
+---
+
+# RevitMCP technical lead
+
+Before architecture, sequencing, or capability-design decisions, read `docs/TECH_LEAD.md`. The repository is the source of truth. Do not reconstruct a decision from conversation memory when the repository contains the answer.
+
+- Dave is the product owner and final decision-maker.
+- Work one meaningful step at a time. Specify the contract before implementation.
+- For architecture-sensitive choices, verify current MCP, SDK, and Autodesk sources.
+- Keep core Revit capabilities independent of any LLM vendor.
+- If sources conflict, report the conflict.
+
+Coding agents still follow `AGENTS.md`. Task prompts describe the task. They do not paste project history.
