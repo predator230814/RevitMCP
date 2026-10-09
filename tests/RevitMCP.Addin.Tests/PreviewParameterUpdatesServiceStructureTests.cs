@@ -81,7 +81,7 @@ public sealed class PreviewParameterUpdatesServiceStructureTests
         Assert.Equal(1, Count(adapters, "new EphemeralWriteIntentStore()"));
         Assert.Equal(1, Count(adapters, "new OpenDocumentIdentityService()"));
         Assert.Contains("dispatcher.CreatePreviewParameterUpdates(metadata)", coordinator, StringComparison.Ordinal);
-        Assert.Contains("public const int CurrentVersion = ApplyParameterUpdatesVersion", protocol, StringComparison.Ordinal);
+        Assert.Contains("public const int CurrentVersion = GetWarningsVersion", protocol, StringComparison.Ordinal);
         Assert.Contains("PreviewParameterUpdatesVersion = 8", protocol, StringComparison.Ordinal);
         Assert.Contains("RequestParameterUpdateReviewVersion = 9", protocol, StringComparison.Ordinal);
         Assert.Contains("ApplyParameterUpdatesVersion = 10", protocol, StringComparison.Ordinal);

@@ -1,6 +1,6 @@
 # BRIDGE-0011: `revit.get_warnings` capability RPC
 
-- Status: Proposed
+- Status: Implemented. Live typed-Bridge validation and official MCP live validation have not been run.
 - Date: 2026-10-09
 - Introduced bridge protocol version: 11
 
@@ -8,7 +8,7 @@
 
 Define the local JSON-RPC Bridge operation that implements Accepted CAP-0009 `revit_get_warnings` and introduce bridge protocol version 11.
 
-This specification preserves the explicit typed RPC approach established by BRIDGE-0002 through BRIDGE-0010. It does not implement Contracts, Bridge code, Addin code, tests, Server registration, or MCP schemas. It does not introduce a generic capability registry, command envelope, or reflection-driven dispatch system.
+This specification preserves the explicit typed RPC approach established by BRIDGE-0002 through BRIDGE-0010. The RPC, protocol sets, Contracts, Addin, Bridge, tests, and the Server tool are implemented. It does not introduce a generic capability registry, command envelope, or reflection-driven dispatch system. Live Revit validation is a later checkpoint.
 
 ## Related accepted decisions
 
@@ -59,9 +59,7 @@ Lower prefixes remain unchanged, including a request-review host without apply a
 
 Get-warnings alone, or get-warnings without the complete v10 prefix, does not advertise v11. It falls back to the highest complete prefix that is actually present. With no inherited capabilities, that fallback is handshake-only v1.
 
-Unknown v12 supports nothing until a later specification says otherwise.
-
-This specification does not claim that protocol v11 is implemented.
+Protocol v11 is implemented. Unknown v12 supports nothing until a later specification says otherwise.
 
 ## Explicit capability-version rule
 
@@ -84,7 +82,7 @@ GetWarningsRequest
 GetWarningsResult
 ```
 
-Those types do not exist in the current repository. This specification names them; it does not add them.
+Those types live in `RevitMCP.Contracts`.
 
 The Bridge must not add:
 
@@ -354,13 +352,11 @@ It must not reference:
 
 `RevitMCP.Addin` owns `Document.GetWarnings()`, severity mapping, and element-ref resolution.
 
-`RevitMCP.Server` does not gain `revit_get_warnings` in this specification.
+`RevitMCP.Server` exposes `revit_get_warnings`. Live MCP validation has not been run.
 
 ## Handshake advertisement
 
-Current implemented runtime remains protocol v10 until a later implementation PR.
-
-After BRIDGE-0011 implementation, a full host advertises:
+A full host advertises:
 
 ```text
 SupportedVersions = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
@@ -386,13 +382,12 @@ BRIDGE-0011 is acceptable as a specification when:
 11. The Bridge does not reshape CAP-0009 results, including the optional `unmatched_element_refs` field.
 12. No generic registry, reflection dispatch, or Revit API leakage into Contracts/Bridge.
 13. Later automated tests cover advertisement, gating, inherited v11 eligibility, unknown v12 rejection, and capability-error survival. Addin coverage required by CAP-0009 stays in the Addin tests. Bridge tests do not redefine those rules.
-14. Later typed-Bridge live validation is required before a server contract and official MCP live validation.
-15. This specification does not implement Bridge, Addin, or Server code.
+14. Typed-Bridge live validation remains required before official MCP live validation. It has not been run.
+15. Bridge, Addin, and Server code for this RPC are implemented. That implementation is not a live validation result.
 
 ## Explicitly deferred
 
-- Contracts, Addin, Bridge, and Server implementation;
-- the MCP tool `revit_get_warnings`;
+- live typed-Bridge validation and official MCP live validation;
 - warning resolution, deletion, or suppression;
 - transaction failure dialogs;
 - generic capability registry;

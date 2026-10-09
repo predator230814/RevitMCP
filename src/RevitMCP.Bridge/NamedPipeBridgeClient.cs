@@ -416,6 +416,39 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         }
     }
 
+    public async Task<GetWarningsResult> GetWarningsAsync(
+        GetWarningsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<GetWarningsResult>(
+                "revit.get_warnings",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureGetWarningsAllowed,
+                "The Revit warnings request timed out.",
+                "The Revit warnings request could not be executed.")
+            .ConfigureAwait(false);
+    }
+
+    private void EnsureGetWarningsAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsGetWarnings(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.get_warnings requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
     private void EnsureGetMepTopologyAllowed()
     {
         EnsureCapabilityReady();

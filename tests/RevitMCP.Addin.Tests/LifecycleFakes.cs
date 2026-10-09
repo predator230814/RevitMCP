@@ -113,6 +113,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("apply.create");
         return new RecordingApplyParameterUpdatesService();
     }
+
+    public IRevitGetWarningsService? CreateGetWarnings(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("warnings.create");
+        return new RecordingGetWarningsService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -190,6 +197,16 @@ internal sealed class RecordingRequestParameterUpdateReviewService : IRevitReque
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording request-review does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingGetWarningsService : IRevitGetWarningsService
+{
+    public Task<GetWarningsResult> GetWarningsAsync(GetWarningsRequest request, CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording warnings does not execute Revit work.");
     }
 }
 
@@ -318,6 +335,8 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitApplyParameterUpdatesService? LastApplyParameterUpdates { get; private set; }
 
+    public IRevitGetWarningsService? LastGetWarnings { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
@@ -329,6 +348,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitPreviewParameterUpdatesService? previewParameterUpdates,
         IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview,
         IRevitApplyParameterUpdatesService? applyParameterUpdates,
+        IRevitGetWarningsService? getWarnings,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -341,7 +361,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         LastPreviewParameterUpdates = previewParameterUpdates;
         LastRequestParameterUpdateReview = requestParameterUpdateReview;
         LastApplyParameterUpdates = applyParameterUpdates;
-        LastApplyParameterUpdates = applyParameterUpdates;
+        LastGetWarnings = getWarnings;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

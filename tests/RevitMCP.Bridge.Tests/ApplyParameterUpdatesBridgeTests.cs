@@ -21,7 +21,7 @@ public sealed class ApplyParameterUpdatesBridgeTests
         var applyWithoutReview = NamedPipeBridgeHost.WithAdvertisedProtocol(
             metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, requestParameterUpdateReview: null, services.Apply);
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, v10.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.ApplyParameterUpdatesVersions, v10.SupportedProtocolVersions);
         Assert.Equal(10, v10.SupportedProtocolVersions.Max());
         Assert.Equal(BridgeProtocol.RequestParameterUpdateReviewVersions, v9.SupportedProtocolVersions);
         Assert.Equal(8, applyWithoutReview.SupportedProtocolVersions.Max());
@@ -48,11 +48,11 @@ public sealed class ApplyParameterUpdatesBridgeTests
     }
 
     [Fact]
-    public async Task Unknown_v11_is_rejected_and_capability_errors_are_preserved()
+    public async Task Unknown_v12_is_rejected_and_capability_errors_are_preserved()
     {
         var apply = new FakeApplyParameterUpdatesService();
-        var unknown = CreateAdapter(apply, 11);
-        await unknown.HandshakeAsync(Handshake("any", [11]), CancellationToken.None);
+        var unknown = CreateAdapter(apply, 12);
+        await unknown.HandshakeAsync(Handshake("any", [12]), CancellationToken.None);
         var future = await Assert.ThrowsAsync<LocalRpcException>(() =>
             unknown.ApplyParameterUpdatesAsync(Request(), CancellationToken.None));
         Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, ErrorCode(future));

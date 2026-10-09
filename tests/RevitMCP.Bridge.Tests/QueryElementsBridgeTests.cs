@@ -104,8 +104,8 @@ public sealed class QueryElementsBridgeTests
         Assert.True(BridgeProtocol.SupportsQueryElements(8));
         Assert.True(BridgeProtocol.SupportsGetContext(9));
         Assert.True(BridgeProtocol.SupportsQueryElements(9));
-        Assert.True(BridgeProtocol.SupportsGetContext(10)); Assert.False(BridgeProtocol.SupportsGetContext(11));
-        Assert.True(BridgeProtocol.SupportsQueryElements(10)); Assert.False(BridgeProtocol.SupportsQueryElements(11));
+        Assert.True(BridgeProtocol.SupportsGetContext(11)); Assert.False(BridgeProtocol.SupportsGetContext(12));
+        Assert.True(BridgeProtocol.SupportsQueryElements(11)); Assert.False(BridgeProtocol.SupportsQueryElements(12));
     }
 
     [Fact]

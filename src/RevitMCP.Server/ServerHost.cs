@@ -56,6 +56,8 @@ internal static class ServerHost
         services.AddSingleton<RequestParameterUpdateReviewMcpTools>();
         services.AddSingleton<ApplyParameterUpdatesApplicationService>();
         services.AddSingleton<ApplyParameterUpdatesMcpTools>();
+        services.AddSingleton<GetWarningsApplicationService>();
+        services.AddSingleton<GetWarningsMcpTools>();
         services.AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
@@ -73,6 +75,7 @@ internal static class ServerHost
             .WithGetMepTopologyTool()
             .WithPreviewParameterUpdatesTool()
             .WithRequestParameterUpdateReviewTool()
-            .WithApplyParameterUpdatesTool();
+            .WithApplyParameterUpdatesTool()
+            .WithGetWarningsTool();
     }
 }

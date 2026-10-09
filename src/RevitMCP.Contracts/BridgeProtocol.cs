@@ -22,7 +22,9 @@ public static class BridgeProtocol
 
     public const int ApplyParameterUpdatesVersion = 10;
 
-    public const int CurrentVersion = ApplyParameterUpdatesVersion;
+    public const int GetWarningsVersion = 11;
+
+    public const int CurrentVersion = GetWarningsVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -83,8 +85,23 @@ public static class BridgeProtocol
             HandshakeVersion
         ];
 
+    public static IReadOnlyList<int> ApplyParameterUpdatesVersions { get; } =
+        [
+            ApplyParameterUpdatesVersion,
+            RequestParameterUpdateReviewVersion,
+            PreviewParameterUpdatesVersion,
+            GetMepTopologyVersion,
+            GetParameterValuesVersion,
+            DescribeParametersVersion,
+            GetElementsVersion,
+            QueryElementsVersion,
+            GetContextVersion,
+            HandshakeVersion
+        ];
+
     public static IReadOnlyList<int> SupportedVersions { get; } =
         [
+            GetWarningsVersion,
             ApplyParameterUpdatesVersion,
             RequestParameterUpdateReviewVersion,
             PreviewParameterUpdatesVersion,
@@ -106,7 +123,8 @@ public static class BridgeProtocol
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
             or RequestParameterUpdateReviewVersion
-            or ApplyParameterUpdatesVersion;
+            or ApplyParameterUpdatesVersion
+            or GetWarningsVersion;
 
     public static bool SupportsQueryElements(int version) =>
         version is QueryElementsVersion
@@ -116,7 +134,8 @@ public static class BridgeProtocol
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
             or RequestParameterUpdateReviewVersion
-            or ApplyParameterUpdatesVersion;
+            or ApplyParameterUpdatesVersion
+            or GetWarningsVersion;
 
     public static bool SupportsGetElements(int version) =>
         version is GetElementsVersion
@@ -125,7 +144,8 @@ public static class BridgeProtocol
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
             or RequestParameterUpdateReviewVersion
-            or ApplyParameterUpdatesVersion;
+            or ApplyParameterUpdatesVersion
+            or GetWarningsVersion;
 
     public static bool SupportsDescribeParameters(int version) =>
         version is DescribeParametersVersion
@@ -133,29 +153,38 @@ public static class BridgeProtocol
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
             or RequestParameterUpdateReviewVersion
-            or ApplyParameterUpdatesVersion;
+            or ApplyParameterUpdatesVersion
+            or GetWarningsVersion;
 
     public static bool SupportsGetParameterValues(int version) =>
         version is GetParameterValuesVersion
             or GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
             or RequestParameterUpdateReviewVersion
-            or ApplyParameterUpdatesVersion;
+            or ApplyParameterUpdatesVersion
+            or GetWarningsVersion;
 
     public static bool SupportsGetMepTopology(int version) =>
         version is GetMepTopologyVersion
             or PreviewParameterUpdatesVersion
             or RequestParameterUpdateReviewVersion
-            or ApplyParameterUpdatesVersion;
+            or ApplyParameterUpdatesVersion
+            or GetWarningsVersion;
 
     public static bool SupportsPreviewParameterUpdates(int version) =>
         version is PreviewParameterUpdatesVersion
             or RequestParameterUpdateReviewVersion
-            or ApplyParameterUpdatesVersion;
+            or ApplyParameterUpdatesVersion
+            or GetWarningsVersion;
 
     public static bool SupportsRequestParameterUpdateReview(int version) =>
-        version is RequestParameterUpdateReviewVersion or ApplyParameterUpdatesVersion;
+        version is RequestParameterUpdateReviewVersion
+            or ApplyParameterUpdatesVersion
+            or GetWarningsVersion;
 
     public static bool SupportsApplyParameterUpdates(int version) =>
-        version is ApplyParameterUpdatesVersion;
+        version is ApplyParameterUpdatesVersion or GetWarningsVersion;
+
+    public static bool SupportsGetWarnings(int version) =>
+        version is GetWarningsVersion;
 }

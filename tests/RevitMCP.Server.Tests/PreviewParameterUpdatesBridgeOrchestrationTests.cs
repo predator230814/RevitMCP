@@ -16,7 +16,7 @@ public sealed class PreviewParameterUpdatesBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -62,7 +62,7 @@ public sealed class PreviewParameterUpdatesBridgeOrchestrationTests
 
     [Theory]
     [InlineData(7)]
-    [InlineData(11)]
+    [InlineData(12)]
     public async Task Selected_unsupported_protocol_does_not_invoke_preview(int selectedVersion)
     {
         var discovery = new FakeDiscovery();

@@ -9,7 +9,7 @@
 
 This specification is **Accepted**. Dave, Product Owner, accepted it on 2026-10-09.
 
-Acceptance does not implement the capability. No Addin, Bridge, Server, protocol-version, or test code is included. Implementation starts only through the later bridge and server specifications named below. User-interface work is outside this acceptance.
+The capability, bridge protocol version 11, and the MCP tool `revit_get_warnings` are implemented. Live typed-Bridge validation and official MCP live validation have not been run. User-interface work remains outside this capability.
 
 ## Purpose
 
@@ -606,9 +606,9 @@ CAP-0009 accepted
 -> official MCP live validation
 ```
 
-The bridge contract is [BRIDGE-0011](../bridge/BRIDGE-0011-get-warnings-capability-rpc.md). It assigns the protocol version and preserves current capabilities by explicit version sets. Do not implement that version by numeric `>=` behavior. This capability specification does not assign the version number.
+The bridge contract is [BRIDGE-0011](../bridge/BRIDGE-0011-get-warnings-capability-rpc.md). It assigns protocol version 11 and preserves current capabilities by explicit version sets. That version is not implemented by numeric `>=` behavior. This capability specification does not assign the version number.
 
-This document does not implement the capability, the bridge method, or the MCP tool.
+Contracts, Addin, Bridge, and the Server tool are implemented. The next checkpoint is live typed-Bridge validation, then official MCP live validation. Neither has been run.
 
 ## References
 
