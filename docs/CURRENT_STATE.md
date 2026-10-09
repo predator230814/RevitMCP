@@ -932,3 +932,5 @@ The process-owned LIFECYCLE-0004 apply-attempt store infrastructure is implement
 The remaining checkpoint is a later live exercise of induced Revit warning/error failure-dialog behavior, once a safe deterministic disposable scenario exists. That scenario was not run and is not passed.
 
 CAP-0009 `revit_get_warnings` is **Accepted**. Dave, Product Owner, accepted it on 2026-10-09. It is a bounded read of persistent failures posted on the active document. Acceptance does not implement Contracts, Addin, Bridge, or Server code, and it does not include user-interface work. The induced failure-dialog exercise remains deferred validation debt.
+
+BRIDGE-0011 is **Proposed**. It names `revit.get_warnings` on bridge protocol version 11 and preserves protocol versions 1 through 10 by explicit sets. It is not implemented. Unknown v12 is unsupported.

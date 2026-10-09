@@ -35,7 +35,7 @@ Full supported prefix:
 [10,9,8,7,6,5,4,3,2,1]
 ```
 
-Unknown v11 supports nothing until a later specification says otherwise.
+Protocol v11 is defined by BRIDGE-0011 and is not implemented by this document. Unknown v12 supports nothing until a later specification says otherwise.
 
 A host may advertise v10 only when it has the complete inherited v9 surface plus a functional apply service. If apply exists without request-review, the host does not advertise v10. Lower prefixes remain available.
 

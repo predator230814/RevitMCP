@@ -606,7 +606,7 @@ CAP-0009 accepted
 -> official MCP live validation
 ```
 
-The bridge contract must add one explicit new protocol version and preserve current capabilities by explicit version sets. Do not implement that version by numeric `>=` behavior. Do not assign the version number in this specification.
+The bridge contract is [BRIDGE-0011](../bridge/BRIDGE-0011-get-warnings-capability-rpc.md). It assigns the protocol version and preserves current capabilities by explicit version sets. Do not implement that version by numeric `>=` behavior. This capability specification does not assign the version number.
 
 This document does not implement the capability, the bridge method, or the MCP tool.
 
