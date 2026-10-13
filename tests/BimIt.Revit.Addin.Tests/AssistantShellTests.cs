@@ -316,6 +316,78 @@ public sealed class AssistantShellTests
     }
 
     [Fact]
+    public async Task Hung_ipc_is_killed_before_revit_shutdown_returns()
+    {
+        var order = new List<string>();
+        var events = new List<string>();
+        var coordinator = new AddinLifecycleCoordinator(
+            new RecordingDispatcherFactory(events),
+            new RecordingBridgeFactory(events),
+            new FixedMetadataSource(),
+            startupTimeout: TimeSpan.FromSeconds(2),
+            shutdownTimeout: TimeSpan.FromSeconds(2));
+        coordinator.Prepare(new RecordingBootstrapSubscription());
+        coordinator.TryBootstrap(new LifecycleRevitRuntime("2026", "26.5.0.55"));
+
+        var factory = new RecordingProcessFactory();
+        var link = new ScriptedLink { Status = ReadyStatus(), HoldShutdown = true, ShutdownOrder = order };
+        var shell = CreateShell(coordinator.InstanceId, factory, link, FastTimeouts());
+        await shell.OpenSessionAsync();
+        factory.Handles[0].OnKill = () => order.Add("process-kill");
+
+        var approval = new ApprovalUiRuntime();
+        approval.RegisterSurface(new RecordingApprovalSurface(() => order.Add("approval-shutdown")));
+
+        var started = DateTime.UtcNow;
+        AddinHostShutdown.Complete(coordinator, shell, approval);
+        var elapsed = DateTime.UtcNow - started;
+
+        Assert.True(elapsed < TimeSpan.FromSeconds(2));
+        Assert.Equal(AddinLifecycleState.Stopped, coordinator.State);
+        Assert.Equal(AssistantProcessPhase.Stopped, shell.Processes.Phase);
+        Assert.True(factory.Handles[0].Killed);
+        Assert.True(approval.IsStopped);
+        Assert.Equal(new[] { "ipc-shutdown", "process-kill", "approval-shutdown" }, order);
+
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "RevitMcpApplication.cs"));
+        var shutdown = Slice(source, "public Result OnShutdown", "private void OnBootstrapSender");
+        Assert.Contains("AddinHostShutdown.Complete(_lifecycle, _assistant, _approvalUi)", shutdown, StringComparison.Ordinal);
+        Assert.Contains("return Result.Succeeded", shutdown, StringComparison.Ordinal);
+        Assert.DoesNotContain("Result.Failed", shutdown, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Wait(", shutdown, StringComparison.Ordinal);
+        var hostShutdown = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "AddinHostShutdown.cs"));
+        Assert.Contains("assistant?.ShutdownForHost()", hostShutdown, StringComparison.Ordinal);
+        Assert.Contains("approvalUi?.Shutdown()", hostShutdown, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Wait(", hostShutdown, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Assistant_shutdown_failure_still_kills_the_process_and_stops_approval()
+    {
+        var events = new List<string>();
+        var coordinator = new AddinLifecycleCoordinator(
+            new RecordingDispatcherFactory(events),
+            new RecordingBridgeFactory(events),
+            new FixedMetadataSource(),
+            startupTimeout: TimeSpan.FromSeconds(2),
+            shutdownTimeout: TimeSpan.FromSeconds(2));
+        coordinator.Prepare(new RecordingBootstrapSubscription());
+        coordinator.TryBootstrap(new LifecycleRevitRuntime("2026", "26.5.0.55"));
+
+        var factory = new RecordingProcessFactory();
+        var link = new ScriptedLink { Status = ReadyStatus(), FailShutdown = true };
+        var shell = CreateShell(coordinator.InstanceId, factory, link, FastTimeouts());
+        await shell.OpenSessionAsync();
+        var approval = new ApprovalUiRuntime();
+        AddinHostShutdown.Complete(coordinator, shell, approval);
+
+        Assert.Equal(AddinLifecycleState.Stopped, coordinator.State);
+        Assert.True(factory.Handles[0].Killed);
+        Assert.Equal(AssistantProcessPhase.Stopped, shell.Processes.Phase);
+        Assert.True(approval.IsStopped);
+    }
+
+    [Fact]
     public void Retry_control_posts_the_bounded_retry_intent()
     {
         var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
@@ -434,10 +506,13 @@ public sealed class AssistantShellTests
 
             public bool Killed => Kills > 0;
 
+            public Action? OnKill { get; set; }
+
             public void Kill()
             {
                 Kills++;
                 HasExited = true;
+                OnKill?.Invoke();
             }
 
             public void Dispose()
@@ -465,6 +540,10 @@ public sealed class AssistantShellTests
         public bool HoldRun { get; set; }
 
         public bool HoldShutdown { get; set; }
+
+        public bool FailShutdown { get; set; }
+
+        public List<string>? ShutdownOrder { get; set; }
 
         private readonly TaskCompletionSource _connect = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -500,6 +579,35 @@ public sealed class AssistantShellTests
             return Result;
         }
 
-        public Task ShutdownAsync() => HoldShutdown ? Task.Delay(Timeout.Infinite) : Task.CompletedTask;
+        public Task ShutdownAsync()
+        {
+            ShutdownOrder?.Add("ipc-shutdown");
+            if (FailShutdown)
+            {
+                return Task.FromException(new IOException("pipe occupied"));
+            }
+
+            return HoldShutdown ? Task.Delay(Timeout.Infinite) : Task.CompletedTask;
+        }
+    }
+
+    private sealed class RecordingApprovalSurface : IApprovalPaneSurface
+    {
+        private readonly Action _onDispose;
+
+        public RecordingApprovalSurface(Action onDispose)
+        {
+            _onDispose = onDispose;
+        }
+
+        public void BeginAfterShow()
+        {
+        }
+
+        public void Post(string json)
+        {
+        }
+
+        public void DisposeSurface() => _onDispose();
     }
 }

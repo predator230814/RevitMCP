@@ -111,7 +111,7 @@ is_read_only: boolean
 is_modified: boolean
 ```
 
-`document_id` is the opaque open-document identity owned by ADR-0006. The add-in assigns it from the existing open-document identity service for the lifetime of that open document. It is not derived from path, title, username, or cloud metadata. Bridge protocol v12 includes it on an active document. A negotiated v11 connection omits it. See [BRIDGE-0012](../bridge/BRIDGE-0012-context-document-identity.md).
+`document_id` is the opaque open-document identity owned by ADR-0006. The add-in assigns it from the existing open-document identity service for the lifetime of that open document. It is not derived from path, title, username, or cloud metadata. A current Bridge v12 host always includes it on an active document. That v12 guarantee is not a universal legacy wire guarantee: a negotiated Bridge v2 through v11 connection omits `document_id`. See [BRIDGE-0012](../bridge/BRIDGE-0012-context-document-identity.md).
 
 When no active document exists, `document` is `null`.
 
@@ -261,6 +261,8 @@ Future additions that expose more document or cloud metadata require an explicit
 
 The MCP adapter should provide a strict output schema and return the machine-readable result as structured content.
 
+While the Server still accepts Bridge v2 through v12 for `revit_get_context`, the output schema declares `document.document_id` as a string and does not put it in `required`. A successful result from a negotiated v11 Bridge can omit it without contradicting that schema. A current v12 host still always produces it. Workflows that need the id, including Analyze Warnings, treat its absence as `bridge_v12_required`.
+
 A concise human-readable text summary may accompany the structured result, but downstream clients must not be required to parse prose to obtain the contract fields.
 
 ## Acceptance criteria
@@ -273,7 +275,7 @@ CAP-0001 is considered correctly implemented when all of the following are true:
 4. With multiple ready instances and no `instance_id`, the call returns `INSTANCE_REQUIRED` and enough candidate metadata for the agent to retry explicitly.
 5. An explicit unknown instance returns `INSTANCE_NOT_FOUND`.
 6. An explicit registered but unreachable instance returns `INSTANCE_UNAVAILABLE` or the equivalent deterministic unavailable state established by the bridge implementation.
-7. With an active project document, the result returns the defined instance, document, active-view, and selection-count fields. On Bridge v12 the document includes a stable opaque `document_id`. On Bridge v11 that field is absent.
+7. With an active project document, the result returns the defined instance, document, active-view, and selection-count fields. On Bridge v12 the document includes a stable opaque `document_id`. On Bridge v11 and earlier that field is absent. The MCP output schema keeps `document_id` declared and does not require it while those legacy versions remain supported.
 8. With an active family document, `document.kind` is `family`.
 9. With Revit open and no active document, the call succeeds with `document: null`, `active_view: null`, and selection count `0`.
 10. Selected element identifiers are not returned; only the selection count is returned.

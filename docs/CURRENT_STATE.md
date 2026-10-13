@@ -12,8 +12,8 @@ The pane can request three existing read workflows: `revit_get_context`, `revit_
 
 On a current v12 host the three actions are real reads:
 
-- Model Context calls `revit_get_context`. An active document includes opaque `document_id`.
-- Analyze Warnings uses that `document_id` and calls `revit_get_warnings`. It does not invent an id. A context result without `document_id` is reported as a Bridge v12 compatibility error and does not call warnings.
+- Model Context calls `revit_get_context`. A current v12 host includes opaque `document_id` on an active document. The MCP output schema declares that field without requiring it, because a negotiated Bridge v2 through v11 result still omits it. The v12 guarantee is not the universal legacy wire shape.
+- Analyze Warnings uses that `document_id` and calls `revit_get_warnings`. It does not invent an id. A context result without `document_id` is reported as `bridge_v12_required` and does not call warnings.
 - Active View Elements calls `revit_query_elements` with `scope=active_view`, `filters={}`, and `limit=25`. Document scope still requires at least one filter.
 
 ## Validated head

@@ -115,20 +115,33 @@ internal sealed class AssistantShell
         }
     }
 
-    public async Task ShutdownAsync()
+    public Task ShutdownAsync()
+    {
+        ShutdownForHost();
+        return Task.CompletedTask;
+    }
+
+    internal void ShutdownForHost()
     {
         StopProcessWatch();
         try
         {
-            await _link.ShutdownAsync().WaitAsync(_timeouts.Shutdown).ConfigureAwait(false);
+            _link.ShutdownAsync().Wait(_timeouts.Shutdown);
         }
         catch (Exception)
         {
-            // Assistant shutdown must not fail Revit shutdown. The process kill below is the fallback.
+            // A hung or failed pipe must not skip the process-kill fallback.
         }
 
         _processes.Shutdown();
-        _pane?.DisposeSurface();
+        try
+        {
+            _pane?.DisposeSurface();
+        }
+        catch (Exception)
+        {
+            // Pane disposal cannot block the process-kill fallback or Revit shutdown.
+        }
     }
 
     internal void ObserveAssistantProcess()

@@ -60,6 +60,8 @@ Unknown protocol version 13 supports nothing until a later specification lists i
 
 ## Wire behavior
 
-When the selected protocol supports the v12 document-identity guarantee, an active document object includes `document_id`. When the selected protocol does not, the Bridge omits `document_id` before the result leaves the connection. The field is not set to an empty string and is not invented by the client.
+When the selected protocol supports the v12 document-identity guarantee, an active document object includes `document_id`. A current v12 host always produces that field. When the selected protocol does not, the Bridge omits `document_id` before the result leaves the connection. The field is not set to an empty string and is not invented by the client.
+
+The v12 guarantee is a host and protocol guarantee. It is not a universal legacy wire guarantee. The Server still accepts `revit_get_context` on Bridge v2 through v11, and those results omit `document_id`. The MCP output schema therefore declares `document_id` without requiring it. Assistant workflows that need the id still report `bridge_v12_required` when it is absent.
 
 When the selected protocol does not support an unfiltered active-view query, an empty `filters` object is rejected with `INVALID_QUERY` before the query service runs. A v12 connection accepts that object only for `active_view`.

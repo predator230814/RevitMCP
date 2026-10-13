@@ -122,24 +122,7 @@ public sealed class RevitMcpApplication : IExternalApplication
 
     public Result OnShutdown(UIControlledApplication application)
     {
-        try
-        {
-            _lifecycle.Shutdown();
-        }
-        finally
-        {
-            try
-            {
-                _assistant?.ShutdownAsync().Wait(TimeSpan.FromSeconds(3));
-            }
-            catch (Exception)
-            {
-                // Assistant shutdown cannot fail Revit shutdown.
-            }
-
-            _approvalUi?.Shutdown();
-        }
-
+        AddinHostShutdown.Complete(_lifecycle, _assistant, _approvalUi);
         return Result.Succeeded;
     }
 

@@ -65,8 +65,12 @@ public sealed class GetContextMcpBoundaryTests
         Assert.False(documentObject.GetProperty("additionalProperties").GetBoolean());
         var documentRequired = documentObject.GetProperty("required").EnumerateArray().Select(value => value.GetString()).ToArray();
         Assert.Equal(
-            new[] { "document_id", "title", "kind", "is_workshared", "is_model_in_cloud", "is_read_only", "is_modified" },
+            new[] { "title", "kind", "is_workshared", "is_model_in_cloud", "is_read_only", "is_modified" },
             documentRequired);
+        Assert.DoesNotContain("document_id", documentRequired);
+        var documentId = documentObject.GetProperty("properties").GetProperty("document_id");
+        Assert.Equal("string", documentId.GetProperty("type").GetString());
+        Assert.Equal(1, documentId.GetProperty("minLength").GetInt32());
         var documentProperties = documentObject.GetProperty("properties").EnumerateObject().Select(property => property.Name).ToArray();
         Assert.Contains("document_id", documentProperties);
         Assert.DoesNotContain("path", documentProperties);
@@ -84,6 +88,57 @@ public sealed class GetContextMcpBoundaryTests
         var selection = root.GetProperty("properties").GetProperty("selection");
         Assert.False(selection.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(0, selection.GetProperty("properties").GetProperty("count").GetProperty("minimum").GetInt32());
+    }
+
+    [Fact]
+    public async Task Negotiated_v11_success_may_omit_document_id_without_contradicting_the_output_schema()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("id-v11", "pipe-v11", protocolVersion: 11));
+        int? selected = null;
+        var factory = new RecordingBridgeClientFactory
+        {
+            Connect = (pipe, _, _) =>
+            {
+                var registration = TestSupport.CreateRegistration("id-v11", pipe);
+                return Task.FromResult(new RecordingBridgeClient
+                {
+                    Handshake = (_, _) =>
+                    {
+                        var handshake = TestSupport.CreateHandshake(registration, selectedProtocolVersion: 11);
+                        selected = handshake.SelectedProtocolVersion;
+                        return Task.FromResult(handshake);
+                    },
+                    GetContext = (_, _, _) => Task.FromResult(ActiveDocument("id-v11", documentId: null))
+                });
+            }
+        };
+        var outcome = await new GetContextApplicationService(discovery, factory, new ServerTimeouts
+        {
+            BootstrapTimeout = TimeSpan.FromMilliseconds(40),
+            CapabilityTimeout = TimeSpan.FromMilliseconds(60)
+        }).ExecuteAsync(null, CancellationToken.None);
+
+        Assert.Equal(11, selected);
+        Assert.True(outcome.IsSuccess);
+        Assert.Null(outcome.Result!.Document!.DocumentId);
+
+        var call = GetContextCallResultFactory.FromOutcome(
+            outcome,
+            GetContextCallResultFactory.StructuredOutputSinceProtocolVersion);
+        Assert.False(call.IsError);
+        var structured = call.StructuredContent!.Value;
+        var document = structured.GetProperty("document");
+        Assert.False(document.TryGetProperty("document_id", out _));
+        Assert.Equal("Project1", document.GetProperty("title").GetString());
+        AssertSatisfiesOutputSchema(Cap0001JsonSchemas.Output, structured);
+
+        var currentHost = GetContextCallResultFactory.Success(
+            ActiveDocument("id-v12", "doc-opaque"),
+            GetContextCallResultFactory.StructuredOutputSinceProtocolVersion);
+        var currentDocument = currentHost.StructuredContent!.Value.GetProperty("document");
+        Assert.Equal("doc-opaque", currentDocument.GetProperty("document_id").GetString());
+        AssertSatisfiesOutputSchema(Cap0001JsonSchemas.Output, currentHost.StructuredContent!.Value);
     }
 
     [Fact]
@@ -325,5 +380,124 @@ public sealed class GetContextMcpBoundaryTests
         var kinds = property.GetProperty("anyOf").EnumerateArray().Select(option => option.GetProperty("type").GetString()).ToArray();
         Assert.Contains("null", kinds);
         Assert.Contains("object", kinds);
+    }
+
+    private static GetContextResult ActiveDocument(string instanceId, string? documentId)
+    {
+        return new GetContextResult
+        {
+            Instance = new GetContextInstance
+            {
+                InstanceId = instanceId,
+                RevitVersion = "2026",
+                RevitBuild = "26.5.0.55"
+            },
+            Document = new GetContextDocument
+            {
+                DocumentId = documentId,
+                Title = "Project1",
+                Kind = GetContextDocumentKind.Project,
+                IsWorkshared = false,
+                IsModelInCloud = false,
+                IsReadOnly = false,
+                IsModified = true
+            },
+            ActiveView = new GetContextActiveView
+            {
+                ElementId = "100",
+                Name = "Level 1",
+                ViewType = "FloorPlan"
+            },
+            Selection = new GetContextSelection { Count = 2 }
+        };
+    }
+
+    private static void AssertSatisfiesOutputSchema(JsonElement schema, JsonElement instance)
+    {
+        Assert.True(Satisfies(schema, instance), instance.GetRawText());
+    }
+
+    private static bool Satisfies(JsonElement schema, JsonElement instance)
+    {
+        if (schema.TryGetProperty("anyOf", out var anyOf))
+        {
+            return anyOf.EnumerateArray().Any(branch => Satisfies(branch, instance));
+        }
+
+        var type = schema.GetProperty("type").GetString();
+        switch (type)
+        {
+            case "null":
+                return instance.ValueKind == JsonValueKind.Null;
+            case "string":
+                if (instance.ValueKind != JsonValueKind.String)
+                {
+                    return false;
+                }
+
+                if (schema.TryGetProperty("minLength", out var minLength)
+                    && instance.GetString()!.Length < minLength.GetInt32())
+                {
+                    return false;
+                }
+
+                if (schema.TryGetProperty("enum", out var enumValues)
+                    && !enumValues.EnumerateArray().Any(value => value.GetString() == instance.GetString()))
+                {
+                    return false;
+                }
+
+                return true;
+            case "boolean":
+                return instance.ValueKind is JsonValueKind.True or JsonValueKind.False;
+            case "integer":
+                if (instance.ValueKind != JsonValueKind.Number || !instance.TryGetInt32(out var number))
+                {
+                    return false;
+                }
+
+                return !schema.TryGetProperty("minimum", out var minimum) || number >= minimum.GetInt32();
+            case "object":
+                if (instance.ValueKind != JsonValueKind.Object)
+                {
+                    return false;
+                }
+
+                var properties = schema.GetProperty("properties");
+                if (schema.TryGetProperty("required", out var required))
+                {
+                    foreach (var name in required.EnumerateArray())
+                    {
+                        if (!instance.TryGetProperty(name.GetString()!, out _))
+                        {
+                            return false;
+                        }
+                    }
+                }
+
+                var closed = schema.TryGetProperty("additionalProperties", out var additional)
+                    && additional.ValueKind == JsonValueKind.False;
+                foreach (var property in instance.EnumerateObject())
+                {
+                    if (!properties.TryGetProperty(property.Name, out var propertySchema))
+                    {
+                        if (closed)
+                        {
+                            return false;
+                        }
+
+                        continue;
+                    }
+
+                    if (!Satisfies(propertySchema, property.Value))
+                    {
+                        return false;
+                    }
+                }
+
+                return true;
+            default:
+                return false;
+        }
     }
 }

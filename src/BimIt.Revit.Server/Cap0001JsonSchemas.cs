@@ -40,7 +40,7 @@ internal static class Cap0001JsonSchemas
                 {
                   "type": "object",
                   "additionalProperties": false,
-                  "required": ["document_id", "title", "kind", "is_workshared", "is_model_in_cloud", "is_read_only", "is_modified"],
+                  "required": ["title", "kind", "is_workshared", "is_model_in_cloud", "is_read_only", "is_modified"],
                   "properties": {
                     "document_id": { "type": "string", "minLength": 1 },
                     "title": { "type": "string" },
