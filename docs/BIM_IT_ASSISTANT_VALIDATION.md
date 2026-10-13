@@ -2,7 +2,7 @@
 
 Primary target: Revit 2026.5 build 26.5.0.55.
 
-This checklist is for a person at a running Revit session. Automated tests do not open Revit. No model mutation is expected from the three v1 actions. Do not treat this document as a merge pass. Live Revit validation is still required.
+This checklist is for a person at a running Revit session. Automated tests do not open Revit. No model mutation is expected from the three v1 actions. Do not treat this document as a merge pass. The read path below was exercised on 2026-10-13. Approval smoke is still pending.
 
 ## Build and load
 
@@ -63,3 +63,34 @@ The pane must not invent a document id. If context has a document and no `docume
 19. Close Revit and confirm the Assistant and its child MCP Server exit.
 
 The three actions are read workflows. They must not change the model.
+
+## Live record — 2026-10-13
+
+Host: Revit 2026.5, build `26.5.0.55`. The first process had Snowdon Towers Sample Plumbing open. The second process had Snowdon Towers Sample Electrical open. Both active views were COVER SHEET. This record is not a merge pass.
+
+| Check | Result |
+| --- | --- |
+| Model Context | PASS |
+| Analyze Warnings | PASS — 7 warnings |
+| Active View Elements | PASS — 24/24 |
+| kill/retry | PASS |
+| external MCP | PASS |
+| two Revit instances | PASS |
+| per-instance shutdown | PASS |
+| quick-action visibility | UX follow-up |
+| Approval smoke | still pending |
+
+Observed:
+
+- The ribbon button appears with no icon. No `BimIt.Revit.Assistant.exe` or `BimIt.Revit.Server.exe` starts before the click.
+- The pane reaches Revit / Bridge ready, Assistant ready, and MCP ready. AI Provider stays "Not configured".
+- Model Context reported Revit 2026 (26.5.0.55), the open project, COVER SHEET, and selection count 0.
+- Analyze Warnings displayed a real result: Matched 7, Warning 7, error 0, document corruption 0, other 0, with element truncation. An external `BimIt.Revit.Server` call on the same Plumbing session returned `document_id` `04dc9749-6f0b-426c-bb04-4e10cb4faad6`. The pane did not report `bridge_v12_required`.
+- Active View Elements displayed Matched 24, Returned 24 for the active view. That is the v12 `scope=active_view`, `filters: {}` query, under the limit of 25.
+- Closing, reopening, and redocking the pane kept one Assistant process. The session timeline survived closing the pane. New chat cleared it.
+- Killing the Assistant left Revit / Bridge ready, set Assistant and MCP to unavailable, and showed Retry. Retry returned both to ready with one new pair of processes.
+- A second stdio `BimIt.Revit.Server` called `revit_get_context` while the pane stayed ready, then that extra server was closed.
+- Two Revit processes produced two Assistant processes and two Server processes. Context stayed on each open document: Plumbing in one, Electrical in the other. Closing the Electrical process left one pair. Closing the last Revit removed both processes.
+- After the first result, the three quick-action buttons scroll above the visible pane. `/context`, `/warnings`, and `/active-view` still run. That visibility is a UX follow-up, not a failed read.
+- BIM-IT Revit Approval does not appear under View > User Interface. The read workflows did not open it. Approval smoke is still pending.
+- The first click failed because `ShowBimItAssistantCommand` had no `Transaction` attribute. The live click succeeded after the attribute was added. The committed mode is `TransactionMode.Manual`.

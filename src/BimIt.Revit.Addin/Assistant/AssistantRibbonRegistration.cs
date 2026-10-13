@@ -1,3 +1,4 @@
+using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
 
@@ -57,6 +58,7 @@ internal static class AssistantRibbonRegistration
     }
 }
 
+[Transaction(TransactionMode.Manual)]
 public sealed class ShowBimItAssistantCommand : IExternalCommand
 {
     public Result Execute(ExternalCommandData commandData, ref string message, ElementSet elements)

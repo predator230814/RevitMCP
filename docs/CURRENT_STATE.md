@@ -6,7 +6,7 @@ RevitMCP was renamed to BIM-IT Revit MCP. Current projects are `BimIt.Revit.Cont
 
 ## Assistant shell
 
-BIM-IT Assistant v1 is implemented as a lazy DockablePane and a separate local process. It is not live-validated in Revit yet. The checklist is [BIM_IT_ASSISTANT_VALIDATION.md](BIM_IT_ASSISTANT_VALIDATION.md). Primary target: Revit 2026.5 build `26.5.0.55`.
+BIM-IT Assistant v1 is implemented as a lazy DockablePane and a separate local process. The read path was exercised on Revit 2026.5 build `26.5.0.55` on 2026-10-13. Approval smoke is still pending, and quick-action visibility is a UX follow-up. The record is [BIM_IT_ASSISTANT_VALIDATION.md](BIM_IT_ASSISTANT_VALIDATION.md).
 
 The pane can request three existing read workflows: `revit_get_context`, `revit_get_warnings`, and `revit_query_elements`. It binds every call to the hosting Revit `instance_id`. It does not start during Revit startup. It does not approve writes. No LLM provider, skill, tool-permission policy, or persistent chat history is implemented. AI Provider status is "Not configured".
 

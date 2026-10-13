@@ -21,8 +21,20 @@ public sealed class AssistantShellTests
 
         var ribbon = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "AssistantRibbonRegistration.cs"));
         Assert.Contains("AssistantRibbon.StartsAssistantWhenRegistered", ribbon, StringComparison.Ordinal);
+        Assert.Contains("class ShowBimItAssistantCommand : IExternalCommand", ribbon, StringComparison.Ordinal);
         Assert.DoesNotContain("Process.Start", ribbon, StringComparison.Ordinal);
         Assert.DoesNotContain("EnsureStarted", ribbon, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Show_command_declares_a_manual_transaction_attribute()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "AssistantRibbonRegistration.cs"));
+        var command = Slice(source, "[Transaction(TransactionMode.Manual)]", "internal static class AssistantCommandBridge");
+
+        Assert.Contains("public sealed class ShowBimItAssistantCommand : IExternalCommand", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("TransactionMode.ReadOnly", command, StringComparison.Ordinal);
+        Assert.DoesNotContain("new Transaction", command, StringComparison.Ordinal);
     }
 
     [Fact]
