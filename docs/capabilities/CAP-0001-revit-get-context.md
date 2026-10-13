@@ -102,6 +102,7 @@ revit_build: string
 When an active document exists:
 
 ```text
+document_id: string
 title: string
 kind: "project" | "family"
 is_workshared: boolean
@@ -109,6 +110,8 @@ is_model_in_cloud: boolean
 is_read_only: boolean
 is_modified: boolean
 ```
+
+`document_id` is the opaque open-document identity owned by ADR-0006. The add-in assigns it from the existing open-document identity service for the lifetime of that open document. It is not derived from path, title, username, or cloud metadata. Bridge protocol v12 includes it on an active document. A negotiated v11 connection omits it. See [BRIDGE-0012](../bridge/BRIDGE-0012-context-document-identity.md).
 
 When no active document exists, `document` is `null`.
 
@@ -150,6 +153,7 @@ A separate future capability may expose selection contents when required.
     "revit_build": "26.x"
   },
   "document": {
+    "document_id": "4f8c1a0e-6b2d-4e77-9c31-0a6d5e2b91f4",
     "title": "Hospital-MEP",
     "kind": "project",
     "is_workshared": true,
@@ -269,7 +273,7 @@ CAP-0001 is considered correctly implemented when all of the following are true:
 4. With multiple ready instances and no `instance_id`, the call returns `INSTANCE_REQUIRED` and enough candidate metadata for the agent to retry explicitly.
 5. An explicit unknown instance returns `INSTANCE_NOT_FOUND`.
 6. An explicit registered but unreachable instance returns `INSTANCE_UNAVAILABLE` or the equivalent deterministic unavailable state established by the bridge implementation.
-7. With an active project document, the result returns the defined instance, document, active-view, and selection-count fields.
+7. With an active project document, the result returns the defined instance, document, active-view, and selection-count fields. On Bridge v12 the document includes a stable opaque `document_id`. On Bridge v11 that field is absent.
 8. With an active family document, `document.kind` is `family`.
 9. With Revit open and no active document, the call succeeds with `document: null`, `active_view: null`, and selection count `0`.
 10. Selected element identifiers are not returned; only the selection count is returned.

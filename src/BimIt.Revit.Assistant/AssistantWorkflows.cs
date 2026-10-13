@@ -143,9 +143,9 @@ public static class AssistantWorkflows
         {
             return new AssistantWorkflowResult(
                 "Warnings",
-                "revit_get_context confirmed an active document, but that accepted result does not include document_id. revit_get_warnings requires document_id, so this slice does not invent one or call the warnings tool.",
+                "The connected BIM-IT Revit MCP host did not include document_id on the active document. Bridge protocol v12 is required for Analyze Warnings. No document id was invented, and revit_get_warnings was not called.",
                 true,
-                "document_id_unavailable");
+                "bridge_v12_required");
         }
 
         var warnings = await session.CallAsync(
@@ -227,7 +227,7 @@ public static class AssistantWorkflows
             {
                 return error with
                 {
-                    Body = error.Body + " The accepted revit_query_elements contract requires at least one filter. This action sent an empty filter object and does not add a new query capability.",
+                    Body = error.Body + " A Bridge host that has not negotiated protocol v12 still requires at least one filter. This action sent an empty filter object for active_view.",
                 };
             }
 

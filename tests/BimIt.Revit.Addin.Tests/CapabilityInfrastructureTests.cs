@@ -58,7 +58,12 @@ public sealed class CapabilityInfrastructureTests
         var adapters = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", "Lifecycle", "RevitLifecycleAdapters.cs"));
         var coordinator = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", "Lifecycle", "AddinLifecycleCoordinator.cs"));
 
-        Assert.Contains("new RevitGetContextService(_dispatcher, metadata)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitGetContextService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
+        var context = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", "Capabilities", "RevitGetContextService.cs"));
+        Assert.Contains("_identity.GetId(document)", context, StringComparison.Ordinal);
+        Assert.DoesNotContain("PathName", context, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetCloudModelPath", context, StringComparison.Ordinal);
+        Assert.DoesNotContain("Username", context, StringComparison.Ordinal);
         Assert.Contains("new RevitQueryElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitDescribeParametersService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);

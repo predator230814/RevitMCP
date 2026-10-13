@@ -2,7 +2,7 @@
 
 ## Status
 
-The trusted approval presentation is implemented. It is a DockablePane titled "RevitMCP Approval", hosted as WPF and a bundled local WebView2 at `https://revitmcp-approval.local/`. The native add-in remains the only approval authority. WebView2 is presentation and input.
+The trusted approval presentation is implemented. It is a DockablePane titled "BIM-IT Revit Approval", hosted as WPF and a bundled local WebView2 at `https://revitmcp-approval.local/`. The pane GUID is unchanged. The native add-in remains the only approval authority. WebView2 is presentation and input.
 
 BIM-IT Assistant v1 is a second DockablePane, also WPF and a bundled local WebView2, at `https://bimit-revit-assistant.local/`. It is a session-only conversational shell for three existing read workflows. Its AI Provider indicator says "Not configured". It is not a trusted approval surface, and it has no approval action. [ADR-0013](adr/ADR-0013-bim-it-assistant-local-architecture.md) separates the two panes.
 

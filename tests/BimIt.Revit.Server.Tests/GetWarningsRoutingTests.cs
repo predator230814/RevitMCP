@@ -10,6 +10,7 @@ public sealed class GetWarningsRoutingTests
     {
         Assert.False(InstanceTargetResolver.IsGetWarningsEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
         Assert.True(InstanceTargetResolver.IsGetWarningsEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
-        Assert.False(InstanceTargetResolver.IsGetWarningsEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
+        Assert.True(InstanceTargetResolver.IsGetWarningsEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
+        Assert.False(InstanceTargetResolver.IsGetWarningsEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
     }
 }

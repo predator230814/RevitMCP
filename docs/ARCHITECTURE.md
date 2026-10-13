@@ -117,4 +117,4 @@ Not implemented:
 - arbitrary Revit API execution;
 - Inspect Selection or selected MEP exploration.
 
-`revit_get_context` does not return `document_id`. `revit_get_warnings` requires one. The warnings action reports that gap instead of inventing an id. `revit_query_elements` rejects an empty filter object. The active-view action sends that accepted shape and reports the contract error. Neither action adds a new capability.
+Bridge v12 returns `document_id` on an active CAP-0001 document and accepts `revit_query_elements` with `scope=active_view` and `filters: {}`. Document scope still requires a filter. A negotiated v11 connection keeps the older wire behavior. The Assistant does not invent a document id.

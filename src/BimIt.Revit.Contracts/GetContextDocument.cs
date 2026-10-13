@@ -4,6 +4,10 @@ namespace BimIt.Revit.Contracts;
 
 public sealed class GetContextDocument
 {
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonPropertyName("document_id")]
+    public string? DocumentId { get; init; }
+
     [JsonPropertyName("title")]
     public required string Title { get; init; }
 

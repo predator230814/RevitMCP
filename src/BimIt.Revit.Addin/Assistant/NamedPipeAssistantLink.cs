@@ -40,7 +40,8 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
             }
 
             var client = AssistantPipeStreams.CreateClient(pipeName);
-            await client.ConnectAsync(5_000, cancellationToken).ConfigureAwait(false);
+            var connectMilliseconds = (int)Math.Clamp(AssistantIpcTimeouts.Default.Connect.TotalMilliseconds, 1, int.MaxValue);
+            await client.ConnectAsync(connectMilliseconds, cancellationToken).ConfigureAwait(false);
             _stream = client;
             var hello = new AssistantIpcMessage(
                 AssistantIpcKind.Hello,
@@ -102,9 +103,14 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
         }
     }
 
-    public async Task ShutdownAsync()
+    public Task ShutdownAsync() => ShutdownAsync(AssistantIpcTimeouts.Default.Shutdown);
+
+    public async Task ShutdownAsync(TimeSpan timeout)
     {
-        await _gate.WaitAsync().ConfigureAwait(false);
+        if (!await _gate.WaitAsync(timeout).ConfigureAwait(false))
+        {
+            return;
+        }
         try
         {
             if (_stream is null)
@@ -130,7 +136,8 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
                     null,
                     null,
                     false);
-                await AssistantPipeFrames.WriteAsync(_stream, AssistantIpc.Serialize(message), CancellationToken.None).ConfigureAwait(false);
+                using var shutdown = new CancellationTokenSource(timeout);
+                await AssistantPipeFrames.WriteAsync(_stream, AssistantIpc.Serialize(message), shutdown.Token).ConfigureAwait(false);
             }
             catch (Exception)
             {

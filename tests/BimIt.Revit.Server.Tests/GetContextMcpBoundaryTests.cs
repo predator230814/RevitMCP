@@ -65,8 +65,15 @@ public sealed class GetContextMcpBoundaryTests
         Assert.False(documentObject.GetProperty("additionalProperties").GetBoolean());
         var documentRequired = documentObject.GetProperty("required").EnumerateArray().Select(value => value.GetString()).ToArray();
         Assert.Equal(
-            new[] { "title", "kind", "is_workshared", "is_model_in_cloud", "is_read_only", "is_modified" },
+            new[] { "document_id", "title", "kind", "is_workshared", "is_model_in_cloud", "is_read_only", "is_modified" },
             documentRequired);
+        var documentProperties = documentObject.GetProperty("properties").EnumerateObject().Select(property => property.Name).ToArray();
+        Assert.Contains("document_id", documentProperties);
+        Assert.DoesNotContain("path", documentProperties);
+        Assert.DoesNotContain("username", documentProperties);
+        Assert.DoesNotContain("user_name", documentProperties);
+        Assert.DoesNotContain("cloud_project", documentProperties);
+        Assert.DoesNotContain("cloud_region", documentProperties);
         Assert.Equal(
             new[] { "project", "family" },
             documentObject.GetProperty("properties").GetProperty("kind").GetProperty("enum").EnumerateArray().Select(value => value.GetString()).ToArray());

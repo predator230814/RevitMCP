@@ -3,6 +3,7 @@ const welcome = document.getElementById("welcome");
 const timeline = document.getElementById("timeline");
 const diagnostics = document.getElementById("diagnostics-panel");
 const command = document.getElementById("command");
+const retry = document.getElementById("retry");
 
 function post(message) {
   window.chrome.webview.postMessage(message);
@@ -22,6 +23,8 @@ function render(snapshot) {
     chip("MCP", status.mcp || "unavailable"),
     chip("AI Provider", status.aiProvider || "Not configured")
   ].join("");
+  const unavailable = status.assistant === "unavailable" || status.mcp === "unavailable";
+  retry.hidden = !unavailable;
   const messages = snapshot.messages || [];
   welcome.hidden = messages.length > 0;
   timeline.innerHTML = messages.map((message) => {
@@ -62,6 +65,7 @@ document.querySelectorAll("[data-action]").forEach((button) => {
 });
 
 document.getElementById("new-chat").addEventListener("click", () => post({ type: "newConversation" }));
+retry.addEventListener("click", () => post({ type: "retryConnection" }));
 document.getElementById("diagnostics").addEventListener("click", () => post({ type: "openDiagnostics" }));
 document.getElementById("composer").addEventListener("submit", (event) => {
   event.preventDefault();

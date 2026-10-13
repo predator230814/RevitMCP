@@ -29,10 +29,15 @@ internal static class QueryElementsRequestValidator
             throw InvalidQuery();
         }
 
-        ValidateFilters(request.Filters);
+        ValidateFilters(request.Filters, request.Scope != QueryScope.ActiveView);
     }
 
     public static void ValidateFilters(QueryElementFilters filters)
+    {
+        ValidateFilters(filters, requireFilter: true);
+    }
+
+    public static void ValidateFilters(QueryElementFilters filters, bool requireFilter)
     {
         ArgumentNullException.ThrowIfNull(filters);
 
@@ -43,7 +48,7 @@ internal static class QueryElementsRequestValidator
         hasFilter |= ValidateArray(filters.LevelNames);
         hasFilter |= ValidateText(filters.TextContains);
 
-        if (!hasFilter)
+        if (!hasFilter && requireFilter)
         {
             throw InvalidQuery();
         }

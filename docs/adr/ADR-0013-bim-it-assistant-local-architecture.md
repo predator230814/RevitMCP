@@ -100,4 +100,4 @@ Conceptual separation to preserve:
 - Assistant process health is not a prerequisite for the Bridge, approval, or external MCP clients.
 - v1 chat state is in memory for the current Revit session only.
 - AI provider status is "Not configured" until a later adapter exists.
-- CAP-0001 does not return `document_id`. CAP-0009 requires it, and CAP-0002 rejects an empty `filters` object. The v1 Assistant calls those tools as they exist and reports the contract result. Changing those contracts is follow-up work, not part of this ADR.
+- When this ADR was accepted, CAP-0001 did not return `document_id` and CAP-0002 rejected an empty `filters` object. [BRIDGE-0012](../bridge/BRIDGE-0012-context-document-identity.md) later amends those contracts on protocol v12. v11 wire behavior is unchanged. The Assistant still does not invent a document id.

@@ -18,4 +18,13 @@ public sealed class QueryElementFilters
 
     [JsonPropertyName("text_contains")]
     public string? TextContains { get; init; }
+
+    public bool HasAny()
+    {
+        return CategoryNames is { Count: > 0 }
+            || FamilyNames is { Count: > 0 }
+            || TypeNames is { Count: > 0 }
+            || LevelNames is { Count: > 0 }
+            || !string.IsNullOrEmpty(TextContains);
+    }
 }

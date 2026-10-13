@@ -33,6 +33,21 @@ public sealed class QueryElementsRequestValidatorTests
     }
 
     [Fact]
+    public void Active_view_accepts_an_empty_filter_object()
+    {
+        QueryElementsRequestValidator.Validate(Request(QueryScope.ActiveView, new QueryElementFilters(), 25));
+    }
+
+    [Fact]
+    public void Active_view_empty_array_is_still_invalid()
+    {
+        var exception = Assert.Throws<BridgeException>(() =>
+            QueryElementsRequestValidator.Validate(
+                Request(QueryScope.ActiveView, new QueryElementFilters { CategoryNames = [] }, 25)));
+        Assert.Equal(CapabilityErrorCodes.InvalidQuery, exception.ErrorCode);
+    }
+
+    [Fact]
     public void All_null_filters_are_invalid()
     {
         var exception = Assert.Throws<BridgeException>(() =>

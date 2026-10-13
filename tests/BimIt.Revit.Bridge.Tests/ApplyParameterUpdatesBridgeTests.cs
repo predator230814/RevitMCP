@@ -48,11 +48,11 @@ public sealed class ApplyParameterUpdatesBridgeTests
     }
 
     [Fact]
-    public async Task Unknown_v12_is_rejected_and_capability_errors_are_preserved()
+    public async Task Unknown_v13_is_rejected_and_capability_errors_are_preserved()
     {
         var apply = new FakeApplyParameterUpdatesService();
-        var unknown = CreateAdapter(apply, 12);
-        await unknown.HandshakeAsync(Handshake("any", [12]), CancellationToken.None);
+        var unknown = CreateAdapter(apply, 13);
+        await unknown.HandshakeAsync(Handshake("any", [13]), CancellationToken.None);
         var future = await Assert.ThrowsAsync<LocalRpcException>(() =>
             unknown.ApplyParameterUpdatesAsync(Request(), CancellationToken.None));
         Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, ErrorCode(future));

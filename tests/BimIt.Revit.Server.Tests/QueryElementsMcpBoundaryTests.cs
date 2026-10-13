@@ -54,7 +54,10 @@ public sealed class QueryElementsMcpBoundaryTests
     {
         var filters = CreateProtocolTool().InputSchema.GetProperty("properties").GetProperty("filters");
         Assert.False(filters.GetProperty("additionalProperties").GetBoolean());
-        Assert.Equal(1, filters.GetProperty("minProperties").GetInt32());
+        Assert.False(filters.TryGetProperty("minProperties", out _));
+        var documentScope = CreateProtocolTool().InputSchema.GetProperty("allOf")[0];
+        Assert.Equal("document", documentScope.GetProperty("if").GetProperty("properties").GetProperty("scope").GetProperty("const").GetString());
+        Assert.Equal(1, documentScope.GetProperty("then").GetProperty("properties").GetProperty("filters").GetProperty("minProperties").GetInt32());
 
         var names = filters.GetProperty("properties").EnumerateObject().Select(property => property.Name).ToArray();
         Assert.Equal(new[] { "category_names", "family_names", "type_names", "level_names", "text_contains" }, names);

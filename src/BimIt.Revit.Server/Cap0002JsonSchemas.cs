@@ -24,7 +24,6 @@ internal static class Cap0002JsonSchemas
             "filters": {
               "type": "object",
               "additionalProperties": false,
-              "minProperties": 1,
               "properties": {
                 "category_names": {
                   "type": "array",
@@ -79,7 +78,20 @@ internal static class Cap0002JsonSchemas
               "maximum": 100,
               "default": 50
             }
-          }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": { "scope": { "const": "document" } },
+                "required": ["scope"]
+              },
+              "then": {
+                "properties": {
+                  "filters": { "minProperties": 1 }
+                }
+              }
+            }
+          ]
         }
         """);
 

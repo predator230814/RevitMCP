@@ -26,7 +26,7 @@ internal sealed class QueryElementsMcpTools
     public async Task<CallToolResult> QueryElementsAsync(
         McpServer server,
         [Description("Query scope: document or active_view.")] string scope,
-        [Description("Bounded element filters. At least one filter is required.")] QueryElementFilters filters,
+        [Description("Bounded element filters. Document scope requires at least one filter. Active view accepts an empty filter object.")] QueryElementFilters filters,
         [Description("Opaque RevitMCP instance identifier.")] string? instance_id = null,
         [Description("Opaque active-document guard.")] string? document_id = null,
         [Description("Maximum number of element references to return.")] int limit = QueryElementsToolMetadata.DefaultLimit,
@@ -39,7 +39,7 @@ internal sealed class QueryElementsMcpTools
                 "The query request is invalid.");
         }
 
-        if (filters is null)
+        if (filters is null || (parsedScope == QueryScope.Document && !filters.HasAny()))
         {
             return McpCallResultFactory.Error(
                 CapabilityErrorCodes.InvalidQuery,

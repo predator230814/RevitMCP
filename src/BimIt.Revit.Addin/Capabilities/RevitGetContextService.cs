@@ -1,6 +1,7 @@
 using Autodesk.Revit.UI;
 using BimIt.Revit.Addin.Compatibility;
 using BimIt.Revit.Addin.Execution;
+using BimIt.Revit.Addin.Identity;
 using BimIt.Revit.Bridge;
 using BimIt.Revit.Contracts;
 
@@ -10,13 +11,19 @@ internal sealed class RevitGetContextService : IRevitCapabilityService
 {
     private readonly RevitExecutionDispatcher _dispatcher;
     private readonly BridgeInstanceMetadata _metadata;
+    private readonly OpenDocumentIdentityService _identity;
 
-    public RevitGetContextService(RevitExecutionDispatcher dispatcher, BridgeInstanceMetadata metadata)
+    public RevitGetContextService(
+        RevitExecutionDispatcher dispatcher,
+        BridgeInstanceMetadata metadata,
+        OpenDocumentIdentityService identity)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(metadata);
+        ArgumentNullException.ThrowIfNull(identity);
         _dispatcher = dispatcher;
         _metadata = metadata;
+        _identity = identity;
     }
 
     public async Task<GetContextResult> GetContextAsync(GetContextRequest request, CancellationToken cancellationToken)
@@ -73,6 +80,7 @@ internal sealed class RevitGetContextService : IRevitCapabilityService
             Instance = instance,
             Document = new GetContextDocument
             {
+                DocumentId = _identity.GetId(document),
                 Title = document.Title,
                 Kind = document.IsFamilyDocument ? GetContextDocumentKind.Family : GetContextDocumentKind.Project,
                 IsWorkshared = document.IsWorkshared,

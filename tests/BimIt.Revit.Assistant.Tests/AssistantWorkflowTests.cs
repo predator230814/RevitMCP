@@ -68,7 +68,8 @@ public sealed class AssistantWorkflowTests
         var result = await AssistantWorkflows.RunAsync(session, InstanceId, AssistantWorkflowName.Warnings, CancellationToken.None);
 
         Assert.DoesNotContain(session.Calls, call => call.Tool == AssistantTools.GetWarnings);
-        Assert.Equal("document_id_unavailable", result.ErrorCode);
+        Assert.Equal("bridge_v12_required", result.ErrorCode);
+        Assert.Contains("Bridge protocol v12", result.Body, StringComparison.Ordinal);
         Assert.True(result.IsError);
     }
 

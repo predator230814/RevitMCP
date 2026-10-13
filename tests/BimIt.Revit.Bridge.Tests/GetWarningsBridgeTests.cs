@@ -38,15 +38,16 @@ public sealed class GetWarningsBridgeTests
             services.Apply);
 
         Assert.Equal(BridgeProtocol.SupportedVersions, v11.SupportedProtocolVersions);
-        Assert.Equal(11, v11.SupportedProtocolVersions.Max());
+        Assert.Equal(12, v11.SupportedProtocolVersions.Max());
         Assert.Equal(BridgeProtocol.ApplyParameterUpdatesVersions, v10.SupportedProtocolVersions);
         Assert.DoesNotContain(11, v10.SupportedProtocolVersions);
+        Assert.DoesNotContain(12, v10.SupportedProtocolVersions);
     }
 
     [Theory]
     [InlineData(10)]
-    [InlineData(12)]
-    public async Task Get_warnings_is_rejected_outside_v11(int version)
+    [InlineData(13)]
+    public async Task Get_warnings_is_rejected_outside_v11_and_v12(int version)
     {
         var service = new FakeGetWarningsService();
         var adapter = Adapter(service, version);
@@ -55,6 +56,19 @@ public sealed class GetWarningsBridgeTests
             adapter.GetWarningsAsync(Request(), CancellationToken.None));
         Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, ErrorCode(rejected));
         Assert.Equal(0, service.InvokeCount);
+    }
+
+    [Theory]
+    [InlineData(11)]
+    [InlineData(12)]
+    public async Task Get_warnings_is_allowed_on_v11_and_v12(int version)
+    {
+        var service = new FakeGetWarningsService();
+        var adapter = Adapter(service, version);
+        await adapter.HandshakeAsync(Handshake(), CancellationToken.None);
+        var result = await adapter.GetWarningsAsync(Request(), CancellationToken.None);
+        Assert.Equal(0, result.MatchedCount);
+        Assert.Equal(1, service.InvokeCount);
     }
 
     [Fact]

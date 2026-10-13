@@ -73,7 +73,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
 
         try
         {
-            return await _capability.GetContextAsync(request, cancellationToken).ConfigureAwait(false);
+            var result = await _capability.GetContextAsync(request, cancellationToken).ConfigureAwait(false);
+            return BridgeContextProtocol.ForSelectedVersion(result, Volatile.Read(ref _selectedProtocolVersion));
         }
         catch (OperationCanceledException)
         {
@@ -106,6 +107,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
 
         try
         {
+            EnsureQueryFiltersMatchSelectedProtocol(request);
             return await _query.QueryElementsAsync(request, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -417,6 +419,21 @@ internal sealed class StreamJsonRpcBridgeAdapter
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit warnings request could not be executed."));
         }
+    }
+
+    private void EnsureQueryFiltersMatchSelectedProtocol(QueryElementsRequest request)
+    {
+        var selected = Volatile.Read(ref _selectedProtocolVersion);
+        if (request.Filters is null
+            || BridgeProtocol.SupportsActiveViewUnfilteredQuery(selected)
+            || request.Filters.HasAny())
+        {
+            return;
+        }
+
+        throw new BridgeException(
+            CapabilityErrorCodes.InvalidQuery,
+            "The query request is invalid.");
     }
 
     private void EnsureCapabilityAllowed(Func<int, bool> isSupported, string incompatibleMessage)

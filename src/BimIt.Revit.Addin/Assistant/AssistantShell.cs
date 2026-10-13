@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text.Json;
+using System.Threading;
 using Autodesk.Revit.UI;
 using BimIt.Revit.Assistant.Ipc;
 
@@ -14,7 +15,10 @@ internal sealed class AssistantShell
     private readonly AssistantProcessSupervisor _processes;
     private readonly IAssistantLink _link;
     private readonly AssistantConversation _conversation = new();
+    private readonly AssistantIpcTimeouts _timeouts;
     private readonly object _gate = new();
+    private Task? _startup;
+    private Timer? _processWatch;
     private AssistantPaneHost? _pane;
     private string? _pipeName;
     private bool _openRequested;
@@ -31,13 +35,15 @@ internal sealed class AssistantShell
         Func<bool> bridgeReady,
         Func<(string? Version, string? Build)> revitIdentity,
         IAssistantProcessFactory processes,
-        IAssistantLink link)
+        IAssistantLink link,
+        AssistantIpcTimeouts? timeouts = null)
     {
         _instanceId = instanceId;
         _bridgeReady = bridgeReady;
         _revitIdentity = revitIdentity;
         _processes = new AssistantProcessSupervisor(processes);
         _link = link;
+        _timeouts = timeouts ?? AssistantIpcTimeouts.Default;
     }
 
     public AssistantConversation Conversation => _conversation;
@@ -71,8 +77,10 @@ internal sealed class AssistantShell
         }
 
         _pane?.NotifyOpened();
-        _ = EnsureAssistantAsync();
+        _ = OpenSessionAsync();
     }
+
+    internal Task OpenSessionAsync() => EnsureAssistantAsync();
 
     public void ReceivePageMessage(string json)
     {
@@ -109,27 +117,64 @@ internal sealed class AssistantShell
 
     public async Task ShutdownAsync()
     {
+        StopProcessWatch();
         try
         {
-            await _link.ShutdownAsync().ConfigureAwait(false);
+            await _link.ShutdownAsync().WaitAsync(_timeouts.Shutdown).ConfigureAwait(false);
         }
         catch (Exception)
         {
-            // Assistant shutdown must not fail Revit shutdown.
+            // Assistant shutdown must not fail Revit shutdown. The process kill below is the fallback.
         }
 
         _processes.Shutdown();
         _pane?.DisposeSurface();
     }
 
-    private async Task EnsureAssistantAsync()
+    internal void ObserveAssistantProcess()
     {
-        if (_processes.Phase == AssistantProcessPhase.Ready && _mcpState == "ready")
+        if (!_processes.ObserveExit())
         {
-            PostSnapshot();
             return;
         }
 
+        lock (_gate)
+        {
+            _assistantState = "unavailable";
+            _mcpState = "unavailable";
+            _statusError = _processes.Failure;
+        }
+
+        PostSnapshot();
+    }
+
+    private Task EnsureAssistantAsync()
+    {
+        lock (_gate)
+        {
+            if (IsSessionReady())
+            {
+                PostSnapshot();
+                return Task.CompletedTask;
+            }
+
+            if (_startup is { IsCompleted: false })
+            {
+                return _startup;
+            }
+
+            _startup = StartAssistantCoreAsync();
+            return _startup;
+        }
+    }
+
+    private bool IsSessionReady()
+    {
+        return _processes.Phase == AssistantProcessPhase.Ready && _mcpState == "ready" && _processes.IsAlive;
+    }
+
+    private async Task StartAssistantCoreAsync()
+    {
         var executable = AssistantDeployment.FindAssistant(typeof(AssistantShell).Assembly.Location);
         if (executable is null)
         {
@@ -161,32 +206,85 @@ internal sealed class AssistantShell
 
         try
         {
+            using var connect = new CancellationTokenSource(_timeouts.Connect);
             var status = await _link.ConnectAsync(
                 _pipeName,
                 _instanceId(),
                 identity.Version,
                 identity.Build,
                 _bridgeReady(),
-                CancellationToken.None).ConfigureAwait(false);
+                connect.Token).ConfigureAwait(false);
             ApplyStatus(status);
+            if (_mcpState == "ready")
+            {
+                StartProcessWatch();
+            }
         }
         catch (Exception exception)
         {
             _processes.MarkFailed(exception.Message);
             _assistantState = "unavailable";
             _mcpState = "unavailable";
-            _statusError = exception.Message;
+            _statusError = exception is OperationCanceledException
+                ? "The Assistant connection timed out."
+                : exception.Message;
             PostSnapshot();
         }
     }
 
-    private async Task RestartAsync()
+    private Task RestartAsync()
     {
-        await _link.ShutdownAsync().ConfigureAwait(false);
+        Task previous;
+        lock (_gate)
+        {
+            previous = _startup ?? Task.CompletedTask;
+            _startup = RestartCoreAsync(previous);
+            return _startup;
+        }
+    }
+
+    private async Task RestartCoreAsync(Task previous)
+    {
+        try
+        {
+            await previous.ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // The failed session is replaced by this retry.
+        }
+
+        StopProcessWatch();
+        try
+        {
+            await _link.ShutdownAsync().WaitAsync(_timeouts.Shutdown).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Process shutdown below is the fallback when the pipe does not close in time.
+        }
+
         _processes.Shutdown();
-        _assistantState = "unavailable";
-        _mcpState = "unavailable";
-        await EnsureAssistantAsync().ConfigureAwait(false);
+        lock (_gate)
+        {
+            _assistantState = "unavailable";
+            _mcpState = "unavailable";
+            _statusError = null;
+        }
+
+        await StartAssistantCoreAsync().ConfigureAwait(false);
+    }
+
+    private void StartProcessWatch()
+    {
+        StopProcessWatch();
+        _processWatch = new Timer(_ => ObserveAssistantProcess(), null, _timeouts.ProcessWatch, _timeouts.ProcessWatch);
+    }
+
+    private void StopProcessWatch()
+    {
+        _processWatch?.Dispose();
+        _processWatch = null;
     }
 
     private async Task HandleCommandAsync(string text)
@@ -251,7 +349,8 @@ internal sealed class AssistantShell
                 return;
             }
 
-            var result = await _link.RunAsync(Guid.NewGuid().ToString("N"), workflow.Value, CancellationToken.None).ConfigureAwait(false);
+            using var workflowTimeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await _link.RunAsync(Guid.NewGuid().ToString("N"), workflow.Value, workflowTimeout.Token).ConfigureAwait(false);
             if (result is null || result.Kind != AssistantIpcKind.WorkflowResult)
             {
                 _conversation.Add("error", "Assistant", "The Assistant did not return a result.");
@@ -265,11 +364,13 @@ internal sealed class AssistantShell
         }
         catch (Exception exception)
         {
-            _processes.MarkFailed(exception.Message);
+            var timedOut = exception is OperationCanceledException;
+            var message = timedOut ? "The Assistant workflow timed out. It was not sent again." : exception.Message;
+            _processes.MarkFailed(message);
             _assistantState = "unavailable";
             _mcpState = "unavailable";
-            _statusError = exception.Message;
-            _conversation.Add("error", "Assistant", exception.Message);
+            _statusError = message;
+            _conversation.Add("error", "Assistant", message);
         }
         finally
         {

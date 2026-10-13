@@ -16,6 +16,7 @@ public sealed class AssistantShellTests
         Assert.Equal("BIM-IT\nAssistant", AssistantRibbon.ButtonText);
         Assert.NotEqual(ApprovalPaneIds.PaneId, AssistantPaneIds.PaneId);
         Assert.Equal(new Guid("C3A91E74-5D28-4B6F-A0E1-9F4C2B7D18A5"), ApprovalPaneIds.PaneId);
+        Assert.Equal("BIM-IT Revit Approval", ApprovalPaneIds.Title);
         Assert.Equal(new Guid("7B6E1D42-9A38-4C15-8F60-2D4A9E0C5B17"), AssistantPaneIds.PaneId);
 
         var ribbon = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "AssistantRibbonRegistration.cs"));
@@ -202,14 +203,149 @@ public sealed class AssistantShellTests
         Assert.DoesNotContain("Directory.", conversation, StringComparison.Ordinal);
     }
 
-    private static AssistantShell CreateShell(string instanceId, RecordingProcessFactory factory, ScriptedLink link)
+    [Fact]
+    public async Task Concurrent_startup_uses_one_process_and_one_pipe()
+    {
+        var factory = new RecordingProcessFactory();
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus(),
+            HoldConnect = true,
+            Result = new AssistantIpcMessage(
+                AssistantIpcKind.WorkflowResult,
+                null,
+                null,
+                null,
+                false,
+                "req",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Model context",
+                "Revit 2026.",
+                false),
+        };
+        var shell = CreateShell("instance-race", factory, link, FastTimeouts());
+
+        var first = shell.OpenSessionAsync();
+        var second = shell.OpenSessionAsync();
+        shell.ReceivePageMessage("""{"type":"runQuickAction","action":"context"}""");
+        await WaitFor(() => link.Connects == 1);
+        await Task.Delay(40);
+        Assert.Equal(1, link.Connects);
+        Assert.Equal(1, factory.Starts);
+        Assert.Single(link.PipeNames);
+
+        link.ReleaseConnect();
+        await Task.WhenAll(first, second);
+        await WaitFor(() => link.Workflows.Count == 1);
+        Assert.Equal(AssistantProcessPhase.Ready, shell.Processes.Phase);
+        Assert.Equal(0, factory.Handles[0].Kills);
+        await shell.ShutdownAsync();
+    }
+
+    [Fact]
+    public async Task Double_open_does_not_kill_a_ready_process()
+    {
+        var factory = new RecordingProcessFactory();
+        var link = new ScriptedLink { Status = ReadyStatus() };
+        var shell = CreateShell("instance-ready", factory, link, FastTimeouts());
+
+        await shell.OpenSessionAsync();
+        await shell.OpenSessionAsync();
+
+        Assert.Equal(1, factory.Starts);
+        Assert.Equal(1, link.Connects);
+        Assert.Equal(0, factory.Handles[0].Kills);
+        Assert.Equal(AssistantProcessPhase.Ready, shell.Processes.Phase);
+        await shell.ShutdownAsync();
+    }
+
+    [Fact]
+    public async Task Unexpected_exit_becomes_unavailable_and_retry_starts_a_new_session()
+    {
+        var factory = new RecordingProcessFactory();
+        var link = new ScriptedLink { Status = ReadyStatus() };
+        var shell = CreateShell("instance-retry", factory, link, FastTimeouts());
+        await shell.OpenSessionAsync();
+
+        factory.Handles[0].HasExited = true;
+        shell.ObserveAssistantProcess();
+        Assert.Equal(AssistantProcessPhase.Failed, shell.Processes.Phase);
+
+        shell.ReceivePageMessage("""{"type":"retryConnection"}""");
+        await WaitFor(() => factory.Starts == 2);
+        Assert.Equal(2, link.Connects);
+        Assert.Equal(2, link.PipeNames.Distinct(StringComparer.Ordinal).Count());
+        Assert.Equal(AssistantProcessPhase.Ready, shell.Processes.Phase);
+        Assert.NotEqual(link.PipeNames[0], link.PipeNames[1]);
+        await shell.ShutdownAsync();
+    }
+
+    [Fact]
+    public async Task Workflow_timeout_does_not_send_the_tool_again()
+    {
+        var factory = new RecordingProcessFactory();
+        var link = new ScriptedLink { Status = ReadyStatus(), HoldRun = true };
+        var shell = CreateShell("instance-timeout", factory, link, FastTimeouts());
+        await shell.OpenSessionAsync();
+
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"/context"}""");
+        await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("timed out", StringComparison.Ordinal)));
+
+        Assert.Single(link.Workflows);
+        Assert.Contains(shell.Conversation.Entries, entry => entry.Body.Contains("was not sent again", StringComparison.Ordinal));
+        Assert.Equal(AssistantProcessPhase.Failed, shell.Processes.Phase);
+        await shell.ShutdownAsync();
+    }
+
+    [Fact]
+    public async Task Shutdown_completes_when_the_pipe_does_not_close()
+    {
+        var factory = new RecordingProcessFactory();
+        var link = new ScriptedLink { Status = ReadyStatus(), HoldShutdown = true };
+        var shell = CreateShell("instance-shutdown", factory, link, FastTimeouts());
+        await shell.OpenSessionAsync();
+
+        await shell.ShutdownAsync();
+        Assert.Equal(AssistantProcessPhase.Stopped, shell.Processes.Phase);
+        Assert.True(factory.Handles[0].Killed);
+    }
+
+    [Fact]
+    public void Retry_control_posts_the_bounded_retry_intent()
+    {
+        var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
+        var script = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
+        Assert.Contains("id=\"retry\"", html, StringComparison.Ordinal);
+        Assert.Contains("retryConnection", script, StringComparison.Ordinal);
+    }
+
+    private static AssistantIpcTimeouts FastTimeouts()
+    {
+        return new AssistantIpcTimeouts(
+            TimeSpan.FromSeconds(2),
+            TimeSpan.FromMilliseconds(80),
+            TimeSpan.FromMilliseconds(40),
+            TimeSpan.FromSeconds(30));
+    }
+
+    private static AssistantShell CreateShell(
+        string instanceId,
+        RecordingProcessFactory factory,
+        ScriptedLink link,
+        AssistantIpcTimeouts? timeouts = null)
     {
         return new AssistantShell(
             () => instanceId,
             () => true,
             () => ("2026", "26.5.0.55"),
             factory,
-            link);
+            link,
+            timeouts);
     }
 
     private static AssistantIpcMessage ReadyStatus()
@@ -274,6 +410,8 @@ public sealed class AssistantShellTests
 
         public List<string> Arguments { get; } = [];
 
+        public List<Handle> Handles { get; } = [];
+
         public IAssistantProcessHandle Start(string fileName, string arguments)
         {
             if (Fail)
@@ -283,15 +421,23 @@ public sealed class AssistantShellTests
 
             Starts++;
             Arguments.Add(arguments);
-            return new Handle();
+            var handle = new Handle();
+            Handles.Add(handle);
+            return handle;
         }
 
-        private sealed class Handle : IAssistantProcessHandle
+        internal sealed class Handle : IAssistantProcessHandle
         {
-            public bool HasExited => false;
+            public bool HasExited { get; set; }
+
+            public int Kills { get; private set; }
+
+            public bool Killed => Kills > 0;
 
             public void Kill()
             {
+                Kills++;
+                HasExited = true;
             }
 
             public void Dispose()
@@ -310,7 +456,21 @@ public sealed class AssistantShellTests
 
         public List<AssistantWorkflowName> Workflows { get; } = [];
 
-        public Task<AssistantIpcMessage?> ConnectAsync(
+        public List<string> PipeNames { get; } = [];
+
+        public int Connects { get; private set; }
+
+        public bool HoldConnect { get; set; }
+
+        public bool HoldRun { get; set; }
+
+        public bool HoldShutdown { get; set; }
+
+        private readonly TaskCompletionSource _connect = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public void ReleaseConnect() => _connect.TrySetResult();
+
+        public async Task<AssistantIpcMessage?> ConnectAsync(
             string pipeName,
             string instanceId,
             string? revitVersion,
@@ -318,16 +478,28 @@ public sealed class AssistantShellTests
             bool bridgeReady,
             CancellationToken cancellationToken)
         {
+            Connects++;
+            PipeNames.Add(pipeName);
             SeenInstance = instanceId;
-            return Task.FromResult(Status);
+            if (HoldConnect)
+            {
+                await _connect.Task.WaitAsync(cancellationToken);
+            }
+
+            return Status;
         }
 
-        public Task<AssistantIpcMessage?> RunAsync(string requestId, AssistantWorkflowName workflow, CancellationToken cancellationToken)
+        public async Task<AssistantIpcMessage?> RunAsync(string requestId, AssistantWorkflowName workflow, CancellationToken cancellationToken)
         {
             Workflows.Add(workflow);
-            return Task.FromResult(Result);
+            if (HoldRun)
+            {
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+
+            return Result;
         }
 
-        public Task ShutdownAsync() => Task.CompletedTask;
+        public Task ShutdownAsync() => HoldShutdown ? Task.Delay(Timeout.Infinite) : Task.CompletedTask;
     }
 }

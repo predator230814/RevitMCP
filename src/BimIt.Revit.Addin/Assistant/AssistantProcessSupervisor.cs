@@ -37,6 +37,37 @@ internal sealed class AssistantProcessSupervisor
 
     public int StartCount { get; private set; }
 
+    public bool IsAlive
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _process is { HasExited: false };
+            }
+        }
+    }
+
+    public bool ObserveExit()
+    {
+        lock (_gate)
+        {
+            if (_process is not { HasExited: true } || Phase is AssistantProcessPhase.Stopped or AssistantProcessPhase.NotStarted)
+            {
+                return false;
+            }
+
+            if (Phase == AssistantProcessPhase.Failed)
+            {
+                return false;
+            }
+
+            Phase = AssistantProcessPhase.Failed;
+            Failure = "The Assistant process exited.";
+            return true;
+        }
+    }
+
     public string? Failure { get; private set; }
 
     public void OnRevitStartup()

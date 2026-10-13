@@ -180,6 +180,7 @@ public sealed class GetContextContractTests
             typeof(GetContextInstance).GetProperties().Select(property => property.Name).OrderBy(name => name).ToArray());
         Assert.Equal(
             [
+                nameof(GetContextDocument.DocumentId),
                 nameof(GetContextDocument.IsModelInCloud),
                 nameof(GetContextDocument.IsModified),
                 nameof(GetContextDocument.IsReadOnly),
@@ -222,6 +223,53 @@ public sealed class GetContextContractTests
         Assert.Null(zero.Document);
         Assert.Null(zero.ActiveView);
         Assert.Equal(0, zero.Selection.Count);
+    }
+
+    [Fact]
+    public void Active_document_includes_document_id_without_path_user_or_cloud_fields()
+    {
+        var result = CreateProjectResult();
+        result = new GetContextResult
+        {
+            Instance = result.Instance,
+            Document = new GetContextDocument
+            {
+                DocumentId = "doc-opaque",
+                Title = result.Document!.Title,
+                Kind = result.Document.Kind,
+                IsWorkshared = result.Document.IsWorkshared,
+                IsModelInCloud = result.Document.IsModelInCloud,
+                IsReadOnly = result.Document.IsReadOnly,
+                IsModified = result.Document.IsModified
+            },
+            ActiveView = result.ActiveView,
+            Selection = result.Selection
+        };
+
+        var json = JsonSerializer.Serialize(result, ContractJson.Options);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal("doc-opaque", document.RootElement.GetProperty("document").GetProperty("document_id").GetString());
+        foreach (var fragment in ForbiddenPropertyFragments)
+        {
+            Assert.DoesNotContain(fragment, json, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
+    public void Missing_document_id_is_omitted_so_v11_shape_stays_unchanged()
+    {
+        var json = JsonSerializer.Serialize(CreateProjectResult(), ContractJson.Options);
+        Assert.DoesNotContain("document_id", json, StringComparison.Ordinal);
+        Assert.Contains("\"title\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void No_active_document_remains_null()
+    {
+        var json = JsonSerializer.Serialize(CreateZeroDocumentResult(), ContractJson.Options);
+        using var document = JsonDocument.Parse(json);
+        Assert.Equal(JsonValueKind.Null, document.RootElement.GetProperty("document").ValueKind);
+        Assert.DoesNotContain("document_id", json, StringComparison.Ordinal);
     }
 
     private static GetContextResult CreateZeroDocumentResult()
