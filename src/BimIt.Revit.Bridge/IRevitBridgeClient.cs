@@ -1,0 +1,49 @@
+using BimIt.Revit.Contracts;
+
+namespace BimIt.Revit.Bridge;
+
+public interface IRevitBridgeClient : IAsyncDisposable
+{
+    Task<BridgeHandshakeResult> HandshakeAsync(BridgeHandshakeRequest request, CancellationToken cancellationToken);
+
+    Task<GetContextResult> GetContextAsync(GetContextRequest request, TimeSpan timeout, CancellationToken cancellationToken);
+
+    Task<QueryElementsResult> QueryElementsAsync(QueryElementsRequest request, TimeSpan timeout, CancellationToken cancellationToken);
+
+    Task<GetElementsResult> GetElementsAsync(GetElementsRequest request, TimeSpan timeout, CancellationToken cancellationToken);
+
+    Task<DescribeParametersResult> DescribeParametersAsync(
+        DescribeParametersRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<GetParameterValuesResult> GetParameterValuesAsync(
+        GetParameterValuesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<GetMepTopologyResult> GetMepTopologyAsync(
+        GetMepTopologyRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<PreviewParameterUpdatesResult> PreviewParameterUpdatesAsync(
+        PreviewParameterUpdatesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<RequestParameterUpdateReviewResult> RequestParameterUpdateReviewAsync(
+        RequestParameterUpdateReviewRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<ApplyParameterUpdatesResult> ApplyParameterUpdatesAsync(
+        ApplyParameterUpdatesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<GetWarningsResult> GetWarningsAsync(
+        GetWarningsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+}

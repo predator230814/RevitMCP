@@ -21,14 +21,14 @@
     These paths must be set before Microsoft.Common.props is imported so 2025/2026
     (same TFM) and NuGet restore artifacts do not overwrite each other.
   -->
-  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'RevitMCP.Addin' AND ('$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027')">
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'BimIt.Revit.Addin' AND ('$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027')">
     <BaseOutputPath>bin\$(RevitVersion)\</BaseOutputPath>
     <BaseIntermediateOutputPath>obj\$(RevitVersion)\</BaseIntermediateOutputPath>
     <MSBuildProjectExtensionsPath>$(MSBuildProjectDirectory)\obj\$(RevitVersion)\</MSBuildProjectExtensionsPath>
     <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
   </PropertyGroup>
 
-  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'RevitMCP.Addin'">
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'BimIt.Revit.Addin'">
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2025'">$(Nice3pointRevitApi2025)</RevitApiPackageVersion>
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2026'">$(Nice3pointRevitApi2026)</RevitApiPackageVersion>
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2027'">$(Nice3pointRevitApi2027)</RevitApiPackageVersion>
