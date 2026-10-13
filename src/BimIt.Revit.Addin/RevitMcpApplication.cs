@@ -1,5 +1,6 @@
 using Autodesk.Revit.UI;
 using BimIt.Revit.Addin.Approval;
+using BimIt.Revit.Addin.Assistant;
 using BimIt.Revit.Addin.Identity;
 using BimIt.Revit.Addin.Lifecycle;
 
@@ -9,6 +10,7 @@ public sealed class RevitMcpApplication : IExternalApplication
 {
     private readonly RevitExecutionDispatcherFactory? _productionDispatchers;
     private readonly ApprovalUiRuntime? _approvalUi;
+    private readonly AssistantShell? _assistant;
     private readonly AddinLifecycleCoordinator _lifecycle;
 
     public RevitMcpApplication()
@@ -22,6 +24,14 @@ public sealed class RevitMcpApplication : IExternalApplication
             _productionDispatchers,
             new NamedPipeLifecycleBridgeFactory(),
             new ProcessRuntimeMetadataSource());
+        _assistant = new AssistantShell(
+            () => _lifecycle.InstanceId,
+            () => _lifecycle.State == AddinLifecycleState.Ready,
+            () => (_lifecycle.Metadata?.RevitVersion, _lifecycle.Metadata?.RevitBuild),
+            new ProcessAssistantFactory(),
+            new NamedPipeAssistantLink());
+        AssistantCommandBridge.Attach(_assistant);
+        _assistant.OnRevitStartup();
     }
 
     internal RevitMcpApplication(AddinLifecycleCoordinator lifecycle)
@@ -82,6 +92,22 @@ public sealed class RevitMcpApplication : IExternalApplication
                         _approvalUi.MarkUnavailable();
                     }
                 }
+
+                if (_assistant is not null)
+                {
+                    try
+                    {
+                        application.RegisterDockablePane(
+                            new DockablePaneId(AssistantPaneIds.PaneId),
+                            AssistantPaneIds.Title,
+                            new AssistantPaneProvider(_assistant));
+                        AssistantRibbonRegistration.Register(application);
+                    }
+                    catch (Exception)
+                    {
+                        // Ribbon or pane registration failure leaves the Bridge and Approval usable.
+                    }
+                }
             }
 
             BeginStartup(new RevitIdlingScheduler(application));
@@ -102,6 +128,15 @@ public sealed class RevitMcpApplication : IExternalApplication
         }
         finally
         {
+            try
+            {
+                _assistant?.ShutdownAsync().Wait(TimeSpan.FromSeconds(3));
+            }
+            catch (Exception)
+            {
+                // Assistant shutdown cannot fail Revit shutdown.
+            }
+
             _approvalUi?.Shutdown();
         }
 

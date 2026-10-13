@@ -45,6 +45,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BimIt.Revit.Bridge\BimIt.Revit.Bridge.csproj" />
+    <ProjectReference Include="..\BimIt.Revit.Assistant.Ipc\BimIt.Revit.Assistant.Ipc.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -69,6 +70,9 @@
     <Content Include="Approval\Ui\index.html" Link="ui\index.html" CopyToOutputDirectory="Always" />
     <Content Include="Approval\Ui\app.js" Link="ui\app.js" CopyToOutputDirectory="Always" />
     <Content Include="Approval\Ui\app.css" Link="ui\app.css" CopyToOutputDirectory="Always" />
+    <Content Include="Assistant\Ui\index.html" Link="assistant-ui\index.html" CopyToOutputDirectory="Always" />
+    <Content Include="Assistant\Ui\app.js" Link="assistant-ui\app.js" CopyToOutputDirectory="Always" />
+    <Content Include="Assistant\Ui\app.css" Link="assistant-ui\app.css" CopyToOutputDirectory="Always" />
   </ItemGroup>
 
   <ItemGroup>
@@ -113,6 +117,9 @@
     <Copy SourceFiles="Approval\Ui\index.html" DestinationFiles="$(OutputPath)ui\index.html" SkipUnchangedFiles="false" />
     <Copy SourceFiles="Approval\Ui\app.js" DestinationFiles="$(OutputPath)ui\app.js" SkipUnchangedFiles="false" />
     <Copy SourceFiles="Approval\Ui\app.css" DestinationFiles="$(OutputPath)ui\app.css" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="Assistant\Ui\index.html" DestinationFiles="$(OutputPath)assistant-ui\index.html" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="Assistant\Ui\app.js" DestinationFiles="$(OutputPath)assistant-ui\app.js" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="Assistant\Ui\app.css" DestinationFiles="$(OutputPath)assistant-ui\app.css" SkipUnchangedFiles="false" />
   </Target>
 
   <Target Name="AssertAddinRuntimePayload" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
@@ -125,6 +132,9 @@
     <Error
       Text="BimIt.Revit.Contracts.dll is missing from add-in output at $(OutputPath)."
       Condition="!Exists('$(OutputPath)BimIt.Revit.Contracts.dll')" />
+    <Error
+      Text="BimIt.Revit.Assistant.Ipc.dll is missing from add-in output at $(OutputPath)."
+      Condition="!Exists('$(OutputPath)BimIt.Revit.Assistant.Ipc.dll')" />
     <Error
       Text="StreamJsonRpc.dll is missing from add-in output at $(OutputPath). CopyLocalLockFileAssemblies must copy the Bridge NuGet runtime graph."
       Condition="!Exists('$(OutputPath)StreamJsonRpc.dll')" />
@@ -143,6 +153,9 @@
     <Error
       Text="Bundled approval UI assets are missing from $(OutputPath)ui."
       Condition="!Exists('$(OutputPath)ui\index.html') OR !Exists('$(OutputPath)ui\app.js') OR !Exists('$(OutputPath)ui\app.css')" />
+    <Error
+      Text="Bundled Assistant UI assets are missing from $(OutputPath)assistant-ui."
+      Condition="!Exists('$(OutputPath)assistant-ui\index.html') OR !Exists('$(OutputPath)assistant-ui\app.js') OR !Exists('$(OutputPath)assistant-ui\app.css')" />
   </Target>
 
   <Target Name="ReportRevitBuild" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
