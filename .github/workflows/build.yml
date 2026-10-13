@@ -7,7 +7,7 @@ on:
 
 jobs:
   non-revit:
-    name: Contracts, Bridge, Server, Addin tests
+    name: Contracts, Bridge, Server, Assistant, Addin tests
     runs-on: windows-latest
     steps:
       - name: Checkout
@@ -23,9 +23,12 @@ jobs:
           dotnet restore src/BimIt.Revit.Contracts/BimIt.Revit.Contracts.csproj
           dotnet restore src/BimIt.Revit.Bridge/BimIt.Revit.Bridge.csproj
           dotnet restore src/BimIt.Revit.Server/BimIt.Revit.Server.csproj
+          dotnet restore src/BimIt.Revit.Assistant.Ipc/BimIt.Revit.Assistant.Ipc.csproj
+          dotnet restore src/BimIt.Revit.Assistant/BimIt.Revit.Assistant.csproj
           dotnet restore tests/BimIt.Revit.Contracts.Tests/BimIt.Revit.Contracts.Tests.csproj
           dotnet restore tests/BimIt.Revit.Bridge.Tests/BimIt.Revit.Bridge.Tests.csproj
           dotnet restore tests/BimIt.Revit.Server.Tests/BimIt.Revit.Server.Tests.csproj
+          dotnet restore tests/BimIt.Revit.Assistant.Tests/BimIt.Revit.Assistant.Tests.csproj
           dotnet restore tests/BimIt.Revit.Addin.Tests/BimIt.Revit.Addin.Tests.csproj -p:RevitVersion=2026
 
       - name: Build non-Revit projects
@@ -33,9 +36,12 @@ jobs:
           dotnet build src/BimIt.Revit.Contracts/BimIt.Revit.Contracts.csproj --no-restore --configuration Release
           dotnet build src/BimIt.Revit.Bridge/BimIt.Revit.Bridge.csproj --no-restore --configuration Release
           dotnet build src/BimIt.Revit.Server/BimIt.Revit.Server.csproj --no-restore --configuration Release
+          dotnet build src/BimIt.Revit.Assistant.Ipc/BimIt.Revit.Assistant.Ipc.csproj --no-restore --configuration Release
+          dotnet build src/BimIt.Revit.Assistant/BimIt.Revit.Assistant.csproj --no-restore --configuration Release
           dotnet build tests/BimIt.Revit.Contracts.Tests/BimIt.Revit.Contracts.Tests.csproj --no-restore --configuration Release
           dotnet build tests/BimIt.Revit.Bridge.Tests/BimIt.Revit.Bridge.Tests.csproj --no-restore --configuration Release
           dotnet build tests/BimIt.Revit.Server.Tests/BimIt.Revit.Server.Tests.csproj --no-restore --configuration Release
+          dotnet build tests/BimIt.Revit.Assistant.Tests/BimIt.Revit.Assistant.Tests.csproj --no-restore --configuration Release
           dotnet build tests/BimIt.Revit.Addin.Tests/BimIt.Revit.Addin.Tests.csproj --no-restore --configuration Release -p:RevitVersion=2026
 
       - name: Test non-Revit projects
@@ -43,6 +49,7 @@ jobs:
           dotnet test tests/BimIt.Revit.Contracts.Tests/BimIt.Revit.Contracts.Tests.csproj --no-build --configuration Release
           dotnet test tests/BimIt.Revit.Bridge.Tests/BimIt.Revit.Bridge.Tests.csproj --no-build --configuration Release
           dotnet test tests/BimIt.Revit.Server.Tests/BimIt.Revit.Server.Tests.csproj --no-build --configuration Release
+          dotnet test tests/BimIt.Revit.Assistant.Tests/BimIt.Revit.Assistant.Tests.csproj --no-build --configuration Release
           dotnet test tests/BimIt.Revit.Addin.Tests/BimIt.Revit.Addin.Tests.csproj --no-build --configuration Release -p:RevitVersion=2026
 
   addin:
@@ -95,6 +102,7 @@ jobs:
             "BimIt.Revit.Addin.dll",
             "BimIt.Revit.Bridge.dll",
             "BimIt.Revit.Contracts.dll",
+            "BimIt.Revit.Assistant.Ipc.dll",
             "StreamJsonRpc.dll",
             "Nerdbank.Streams.dll"
           )

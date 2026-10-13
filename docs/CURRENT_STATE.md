@@ -1,6 +1,19 @@
-# RevitMCP Current State
+# BIM-IT Revit MCP Current State
 
-_Last updated: 2026-10-09_
+_Last updated: 2026-10-13_
+
+RevitMCP was renamed to BIM-IT Revit MCP. Current projects are `BimIt.Revit.Contracts`, `BimIt.Revit.Bridge`, `BimIt.Revit.Addin`, `BimIt.Revit.Server`, and `BimIt.Revit.Assistant`. MCP tool names, Bridge method names, protocol versions, the Approval pane GUID, audit domain strings, and the `LocalAppData\RevitMCP` storage root are unchanged. The historical validation narrative below keeps the RevitMCP names and SHAs it recorded.
+
+## Assistant shell
+
+BIM-IT Assistant v1 is implemented as a lazy DockablePane and a separate local process. It is not live-validated in Revit yet. The checklist is [BIM_IT_ASSISTANT_VALIDATION.md](BIM_IT_ASSISTANT_VALIDATION.md). Primary target: Revit 2026.5 build `26.5.0.55`.
+
+The pane can request three existing read workflows: `revit_get_context`, `revit_get_warnings`, and `revit_query_elements`. It binds every call to the hosting Revit `instance_id`. It does not start during Revit startup. It does not approve writes. No LLM provider, skill, tool-permission policy, or persistent chat history is implemented. AI Provider status is "Not configured".
+
+Two accepted-contract limits are visible in the pane:
+
+- Analyze Warnings calls `revit_get_context`. If a document is open, that result still has no `document_id`, and `revit_get_warnings` requires one. The pane reports `document_id_unavailable` and does not invent an id.
+- Active View Elements calls `revit_query_elements` with `scope=active_view`, `filters={}`, and `limit=25`. The accepted query contract requires at least one filter, so the current tool returns `INVALID_REQUEST`. The pane shows that contract error.
 
 ## Validated head
 
