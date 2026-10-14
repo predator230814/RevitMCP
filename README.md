@@ -4,7 +4,7 @@ Vendor-neutral Model Context Protocol capability layer for Autodesk Revit. The p
 
 BIM-IT Assistant is a separate local process and DockablePane. It is a client of this MCP service. Natural language is answered inside that process by a provider adapter. The first adapter is GitHub Copilot. External MCP clients do not need the Assistant or Copilot.
 
-A dogfood machine needs an existing GitHub Copilot sign-in for the Windows user. BIM-IT does not collect or store a GitHub token. The live checklist is [docs/BIM_IT_ASSISTANT_COPILOT_VALIDATION.md](docs/BIM_IT_ASSISTANT_COPILOT_VALIDATION.md).
+A dogfood machine needs GitHub CLI authentication for the Windows user (`gh auth login`). The Assistant runs Copilot in empty mode, which disables keytar, so a Copilot CLI keychain login is not a guaranteed credential. BIM-IT does not collect or store a GitHub token. The live checklist is [docs/BIM_IT_ASSISTANT_COPILOT_VALIDATION.md](docs/BIM_IT_ASSISTANT_COPILOT_VALIDATION.md).
 
 ## Building
 

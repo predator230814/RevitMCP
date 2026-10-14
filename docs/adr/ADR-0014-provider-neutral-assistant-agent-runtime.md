@@ -83,7 +83,7 @@ GitHub Copilot is not the Revit capability layer, the MCP server, the approval a
 
 The runtime contract is provider-neutral: initialize, send one turn, reset the conversation, and dispose. Provider status is `not_configured`, `starting`, `ready`, or `unavailable`. SDK types do not cross Assistant IPC or enter the Revit add-in.
 
-v1 authentication uses the SDK's logged-in-user path. There is no GitHub OAuth product UI, no stored BIM-IT token, and no token in IPC, the WebView, MCP arguments, or logs. v1 model selection is `auto`. There is no model picker and no token streaming. New Chat resets the provider session as well as the in-memory timeline. Chat history is not persisted.
+v1 authentication uses the SDK's logged-in-user path (`UseLoggedInUser`) with `CopilotClientMode.Empty` and an isolated `COPILOT_HOME`. Empty mode disables keytar (`COPILOT_DISABLE_KEYTAR=1`), so a Copilot CLI keychain login is not a guaranteed credential for this runtime. The reliable dogfood sign-in is GitHub CLI (`gh auth login`), which `UseLoggedInUser` can use. There is no GitHub OAuth product UI, no stored BIM-IT token, and no token in IPC, the WebView, MCP arguments, or logs. v1 model selection is `auto`. There is no model picker and no token streaming. New Chat resets the provider session as well as the in-memory timeline. Chat history is not persisted.
 
 Later adapters such as OpenAI, Anthropic, or a local model can implement the same runtime contract without changing Revit capability contracts.
 

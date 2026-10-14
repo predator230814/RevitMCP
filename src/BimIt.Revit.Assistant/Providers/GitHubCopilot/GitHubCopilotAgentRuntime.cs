@@ -31,20 +31,30 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
 
         Status = new AssistantProviderStatus(GitHubCopilotSessionBlueprint.ProviderName, AssistantProviderState.Starting, null, null);
         await Task.Yield();
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
-        await _gate.WaitAsync(linked.Token).ConfigureAwait(false);
+        using var budget = Budget(AssistantProviderTimeouts.Default.Initialization, cancellationToken);
+        var acquired = false;
         try
         {
+            await _gate.WaitAsync(budget.Token).ConfigureAwait(false);
+            acquired = true;
             if (_stop.IsCancellationRequested || Status.State == AssistantProviderState.Ready)
             {
                 return;
             }
 
             Status = new AssistantProviderStatus(GitHubCopilotSessionBlueprint.ProviderName, AssistantProviderState.Starting, null, null);
-            await StartSessionAsync(linked.Token).ConfigureAwait(false);
+            await StartSessionAsync(budget.Token).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (_stop.IsCancellationRequested)
         {
+        }
+        catch (OperationCanceledException)
+        {
+            if (Status.State != AssistantProviderState.Ready)
+            {
+                await StopQuietlyAsync().ConfigureAwait(false);
+                Status = Unavailable(AssistantProviderTimeouts.InitializationTimedOut);
+            }
         }
         catch (Exception exception)
         {
@@ -53,7 +63,10 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         }
         finally
         {
-            _gate.Release();
+            if (acquired)
+            {
+                _gate.Release();
+            }
         }
     }
 
@@ -72,19 +85,22 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             return new AssistantAgentTurn("BIM-IT Assistant", detail, !signIn);
         }
 
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
-        await _gate.WaitAsync(linked.Token).ConfigureAwait(false);
+        using var budget = Budget(AssistantProviderTimeouts.Default.Turn, cancellationToken);
+        var acquired = false;
+        _tools.ConsumeUsedTools();
         try
         {
+            await _gate.WaitAsync(budget.Token).ConfigureAwait(false);
+            acquired = true;
             if (_session is null)
             {
-                return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true);
+                return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, _tools.ConsumeUsedTools());
             }
 
             var message = await _session.SendAndWaitAsync(
                 new MessageOptions { Prompt = userText.Trim() },
-                TimeSpan.FromSeconds(90),
-                linked.Token).ConfigureAwait(false);
+                AssistantProviderTimeouts.Default.Turn,
+                budget.Token).ConfigureAwait(false);
             var data = message?.Data;
             RememberModel(data?.Model);
             var content = AssistantSafeText.Clean(data?.Content, 16_000);
@@ -93,7 +109,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                 content = "The assistant did not return an answer.";
             }
 
-            return new AssistantAgentTurn("BIM-IT Assistant", content, false);
+            return new AssistantAgentTurn("BIM-IT Assistant", content, false, _tools.ConsumeUsedTools());
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !_stop.IsCancellationRequested)
         {
@@ -108,38 +124,54 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                 }
             }
 
-            var safe = AssistantSafeText.Clean(exception.Message, 400);
-            Status = Unavailable(string.IsNullOrWhiteSpace(safe) ? "The AI provider did not answer." : safe);
-            return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError!, true);
+            var timedOut = exception is OperationCanceledException;
+            var safe = timedOut ? AssistantProviderTimeouts.TurnTimedOut : AssistantSafeText.Clean(exception.Message, 400);
+            Status = Unavailable(string.IsNullOrWhiteSpace(safe) ? AssistantProviderTimeouts.TurnTimedOut : safe);
+            return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError!, true, _tools.ConsumeUsedTools());
         }
         finally
         {
-            _gate.Release();
+            if (acquired)
+            {
+                _gate.Release();
+            }
         }
     }
 
     public async Task ResetConversationAsync(CancellationToken cancellationToken)
     {
-        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
-        await _gate.WaitAsync(linked.Token).ConfigureAwait(false);
+        using var budget = Budget(AssistantProviderTimeouts.Default.Reset, cancellationToken);
+        var acquired = false;
         try
         {
+            await _gate.WaitAsync(budget.Token).ConfigureAwait(false);
+            acquired = true;
             await DisposeSessionAsync().ConfigureAwait(false);
             if (_client is null || Status.State == AssistantProviderState.Unavailable)
             {
                 return;
             }
 
-            _session = await CreateSessionAsync(linked.Token).ConfigureAwait(false);
+            _session = await CreateSessionAsync(budget.Token).ConfigureAwait(false);
             Status = ReadyStatus();
         }
-        catch (Exception exception) when (exception is not OperationCanceledException || !_stop.IsCancellationRequested)
+        catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+        {
+        }
+        catch (OperationCanceledException)
+        {
+            Status = Unavailable(AssistantProviderTimeouts.ResetTimedOut);
+        }
+        catch (Exception exception)
         {
             Status = Unavailable(AssistantSafeText.Clean(exception.Message, 400));
         }
         finally
         {
-            _gate.Release();
+            if (acquired)
+            {
+                _gate.Release();
+            }
         }
     }
 
@@ -209,6 +241,13 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         }
 
         Status = Status with { Model = model };
+    }
+
+    private CancellationTokenSource Budget(TimeSpan budget, CancellationToken cancellationToken)
+    {
+        var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _stop.Token);
+        linked.CancelAfter(budget);
+        return linked;
     }
 
     private AssistantProviderStatus ReadyStatus()

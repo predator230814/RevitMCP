@@ -1,6 +1,6 @@
 namespace BimIt.Revit.Assistant;
 
-public sealed record AssistantAgentTurn(string Title, string Body, bool IsError);
+public sealed record AssistantAgentTurn(string Title, string Body, bool IsError, IReadOnlyList<string>? UsedTools = null);
 
 public interface IAssistantAgentRuntime : IAsyncDisposable
 {

@@ -364,7 +364,11 @@ internal sealed class AssistantShell
             }
 
             ApplyProvider(result);
-            _conversation.Add(result.IsError ? "error" : "assistant", result.Title ?? "BIM-IT Assistant", result.Body ?? "");
+            _conversation.Add(
+                result.IsError ? "error" : "assistant",
+                result.Title ?? "BIM-IT Assistant",
+                result.Body ?? "",
+                UsedLabel(result.UsedTools));
         }
         catch (Exception exception)
         {
@@ -527,11 +531,20 @@ internal sealed class AssistantShell
 
     private string SerializeSnapshot()
     {
-        var messages = _conversation.Entries.Select(entry => new Dictionary<string, string>
+        var messages = _conversation.Entries.Select(entry =>
         {
-            ["role"] = entry.Role,
-            ["title"] = entry.Title,
-            ["body"] = entry.Body,
+            var message = new Dictionary<string, string>
+            {
+                ["role"] = entry.Role,
+                ["title"] = entry.Title,
+                ["body"] = entry.Body,
+            };
+            if (!string.IsNullOrWhiteSpace(entry.Used))
+            {
+                message["used"] = entry.Used;
+            }
+
+            return message;
         }).ToArray();
         return JsonSerializer.Serialize(new Dictionary<string, object?>
         {
@@ -553,6 +566,32 @@ internal sealed class AssistantShell
             ["messages"] = messages,
             ["empty"] = messages.Length == 0,
         });
+    }
+
+    private static string? UsedLabel(IReadOnlyList<string>? names)
+    {
+        if (names is null || names.Count == 0)
+        {
+            return null;
+        }
+
+        var labels = new List<string>();
+        foreach (var name in names)
+        {
+            var label = name switch
+            {
+                "bimit_get_model_context" => "Model context",
+                "bimit_get_warnings" => "Analyze warnings",
+                "bimit_get_active_view_elements" => "Active view",
+                _ => null,
+            };
+            if (label is not null && !labels.Contains(label, StringComparer.Ordinal))
+            {
+                labels.Add(label);
+            }
+        }
+
+        return labels.Count == 0 ? null : "Used: " + string.Join(", ", labels);
     }
 
     private void ApplyProvider(AssistantIpcMessage status)

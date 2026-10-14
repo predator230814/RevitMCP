@@ -127,7 +127,8 @@ internal static class AssistantHost
         AssistantHostOptions options,
         IAssistantToolSession? session,
         IAssistantAgentRuntime? runtime,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        AssistantProviderTimeouts? providerTimeouts = null)
     {
         McpAssistantToolSession? ownedSession = null;
         if (session is null)
@@ -167,7 +168,8 @@ internal static class AssistantHost
                 : new UnavailableAssistantAgentRuntime(readiness.Error);
         }
 
-        var providerStart = StartProviderAsync(runtime, cancellationToken);
+        var timeouts = providerTimeouts ?? AssistantProviderTimeouts.Default;
+        var providerStart = StartProviderAsync(runtime, timeouts, cancellationToken);
         try
         {
             await WriteAsync(server, Status(readiness, runtime.Status), cancellationToken).ConfigureAwait(false);
@@ -199,22 +201,27 @@ internal static class AssistantHost
 
                 if (parsed.Message.Kind == AssistantIpcKind.ResetConversation)
                 {
+                    var resetFinished = false;
                     try
                     {
-                        await runtime.ResetConversationAsync(cancellationToken).ConfigureAwait(false);
+                        resetFinished = await RunBudgetAsync(
+                            runtime.ResetConversationAsync,
+                            timeouts.Reset,
+                            cancellationToken).ConfigureAwait(false);
                     }
                     catch (Exception)
                     {
                         // The runtime records provider failure. MCP readiness stays as it was.
                     }
 
-                    await WriteAsync(server, Status(readiness, runtime.Status), cancellationToken).ConfigureAwait(false);
+                    var provider = ProviderForReport(runtime.Status, resetFinished, AssistantProviderTimeouts.ResetTimedOut);
+                    await WriteAsync(server, Status(readiness, provider), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
                 if (parsed.Message.Kind == AssistantIpcKind.Chat)
                 {
-                    await WriteAsync(server, await ChatAsync(runtime, parsed.Message, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, await ChatAsync(runtime, parsed.Message, timeouts, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -276,11 +283,14 @@ internal static class AssistantHost
         }
     }
 
-    private static async Task StartProviderAsync(IAssistantAgentRuntime runtime, CancellationToken cancellationToken)
+    private static async Task StartProviderAsync(
+        IAssistantAgentRuntime runtime,
+        AssistantProviderTimeouts timeouts,
+        CancellationToken cancellationToken)
     {
         try
         {
-            await runtime.InitializeAsync(cancellationToken).ConfigureAwait(false);
+            await RunBudgetAsync(runtime.InitializeAsync, timeouts.Initialization, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception)
         {
@@ -291,41 +301,175 @@ internal static class AssistantHost
     private static async Task<AssistantIpcMessage> ChatAsync(
         IAssistantAgentRuntime runtime,
         AssistantIpcMessage message,
+        AssistantProviderTimeouts timeouts,
         CancellationToken cancellationToken)
     {
+        if (runtime.Status.State != AssistantProviderState.Ready)
+        {
+            var ready = false;
+            try
+            {
+                ready = await RunBudgetAsync(runtime.InitializeAsync, timeouts.Initialization, cancellationToken).ConfigureAwait(false);
+            }
+            catch (Exception exception)
+            {
+                return ChatResult(message.RequestId, ProviderForReport(runtime.Status, false, AssistantSafeText.Clean(exception.Message, 500)), null);
+            }
+
+            if (!ready || runtime.Status.State != AssistantProviderState.Ready)
+            {
+                return ChatResult(
+                    message.RequestId,
+                    ProviderForReport(runtime.Status, ready, AssistantProviderTimeouts.InitializationTimedOut),
+                    null);
+            }
+        }
+
         AssistantAgentTurn turn;
+        var turnFinished = true;
         try
         {
-            turn = await runtime.SendAsync(message.Text ?? "", cancellationToken).ConfigureAwait(false);
+            var pending = RunBudgetAsync(
+                token => runtime.SendAsync(message.Text ?? "", token),
+                timeouts.Turn,
+                cancellationToken);
+            var (finished, value) = await pending.ConfigureAwait(false);
+            turnFinished = finished;
+            turn = finished && value is not null
+                ? value
+                : new AssistantAgentTurn("BIM-IT Assistant", AssistantProviderTimeouts.TurnTimedOut, true, []);
         }
         catch (Exception exception)
         {
-            turn = new AssistantAgentTurn("BIM-IT Assistant", AssistantSafeText.Clean(exception.Message, 500), true);
+            turn = new AssistantAgentTurn("BIM-IT Assistant", AssistantSafeText.Clean(exception.Message, 500), true, []);
         }
 
-        var body = turn.Body.Length > AssistantIpc.MaxTextLength ? turn.Body[..AssistantIpc.MaxTextLength] : turn.Body;
-        var status = runtime.Status;
+        return ChatResult(message.RequestId, ProviderForReport(runtime.Status, turnFinished, AssistantProviderTimeouts.TurnTimedOut), turn);
+    }
+
+    private static async Task<bool> RunBudgetAsync(Func<CancellationToken, Task> action, TimeSpan budget, CancellationToken cancellationToken)
+    {
+        var (finished, _) = await RunBudgetAsync(
+            async token =>
+            {
+                await action(token).ConfigureAwait(false);
+                return true;
+            },
+            budget,
+            cancellationToken).ConfigureAwait(false);
+        return finished;
+    }
+
+    private static async Task<(bool Finished, T? Value)> RunBudgetAsync<T>(
+        Func<CancellationToken, Task<T>> action,
+        TimeSpan budget,
+        CancellationToken cancellationToken)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        linked.CancelAfter(budget);
+        using var grace = new CancellationTokenSource();
+        var pending = action(linked.Token);
+        var delay = DelayQuiet(budget + AssistantProviderTimeouts.Default.CompletionGrace, grace.Token);
+        var winner = await Task.WhenAny(pending, delay).ConfigureAwait(false);
+        if (winner == pending)
+        {
+            grace.Cancel();
+            return (true, await pending.ConfigureAwait(false));
+        }
+
+        _ = pending.ContinueWith(
+            static task => _ = task.Exception,
+            CancellationToken.None,
+            TaskContinuationOptions.OnlyOnFaulted,
+            TaskScheduler.Default);
+        return (false, default);
+    }
+
+    private static async Task DelayQuiet(TimeSpan time, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await Task.Delay(time, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private static AssistantProviderStatus ProviderForReport(AssistantProviderStatus status, bool finished, string timeoutMessage)
+    {
+        if (finished && status.State != AssistantProviderState.Starting)
+        {
+            return status;
+        }
+
+        var name = string.IsNullOrWhiteSpace(status.Name) ? GitHubCopilotSessionBlueprint.ProviderName : status.Name;
+        var error = finished && !string.IsNullOrWhiteSpace(status.SafeError) ? status.SafeError : timeoutMessage;
+        if (string.IsNullOrWhiteSpace(error))
+        {
+            error = timeoutMessage;
+        }
+
+        return new AssistantProviderStatus(name, AssistantProviderState.Unavailable, null, AssistantSafeText.Clean(error, 500));
+    }
+
+    private static AssistantIpcMessage ChatResult(string? requestId, AssistantProviderStatus status, AssistantAgentTurn? turn)
+    {
+        var signIn = string.Equals(status.SafeError, GitHubCopilotSessionBlueprint.SignInRequired, StringComparison.Ordinal);
+        var body = AssistantSafeText.Clean(turn?.Body ?? status.SafeError, AssistantIpc.MaxTextLength);
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            body = signIn ? GitHubCopilotSessionBlueprint.SignInRequired : "The AI provider is unavailable.";
+        }
+
+        var isError = turn is null ? !signIn : turn.IsError && !signIn;
         return new AssistantIpcMessage(
             AssistantIpcKind.ChatResult,
             null,
             null,
             null,
             false,
-            message.RequestId,
+            requestId,
             null,
             null,
             null,
             null,
             null,
             null,
-            turn.Title,
+            string.IsNullOrWhiteSpace(turn?.Title) ? "BIM-IT Assistant" : turn.Title,
             body,
-            turn.IsError,
+            isError,
             string.IsNullOrWhiteSpace(status.Name) ? null : status.Name,
             status.StateToken,
             AssistantProviderStatus.IsModelToken(status.Model) ? status.Model : null,
             string.IsNullOrWhiteSpace(status.SafeError) ? null : AssistantSafeText.Clean(status.SafeError, 500),
-            status.Label);
+            status.Label,
+            null,
+            UsedToolNames(turn?.UsedTools));
+    }
+
+    private static IReadOnlyList<string> UsedToolNames(IReadOnlyList<string>? names)
+    {
+        if (names is null || names.Count == 0)
+        {
+            return [];
+        }
+
+        var accepted = new List<string>(Math.Min(names.Count, AssistantIpc.MaxUsedToolCount));
+        foreach (var name in names)
+        {
+            if (accepted.Count == AssistantIpc.MaxUsedToolCount)
+            {
+                break;
+            }
+
+            if (AssistantIpc.IsModelToolName(name))
+            {
+                accepted.Add(name);
+            }
+        }
+
+        return accepted;
     }
 
     private static AssistantIpcMessage Status(AssistantMcpReadiness readiness, AssistantProviderStatus provider)

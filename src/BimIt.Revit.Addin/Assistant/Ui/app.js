@@ -30,7 +30,8 @@ function render(snapshot) {
   welcome.hidden = messages.length > 0;
   timeline.innerHTML = messages.map((message) => {
     const role = message.role === "error" ? "error" : message.role === "user" ? "user" : "assistant";
-    return `<li class="msg ${role}"><h3>${escapeHtml(message.title || "")}</h3><p>${escapeHtml(message.body || "")}</p></li>`;
+    const used = message.used ? `<p class="used">${escapeHtml(message.used)}</p>` : "";
+    return `<li class="msg ${role}"><h3>${escapeHtml(message.title || "")}</h3><p>${escapeHtml(message.body || "")}</p>${used}</li>`;
   }).join("");
   if (status.diagnostics) {
     const names = (status.toolNames || []).join("\n");

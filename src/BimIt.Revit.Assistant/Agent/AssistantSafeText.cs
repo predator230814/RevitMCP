@@ -26,7 +26,7 @@ internal static partial class AssistantSafeText
     [GeneratedRegex(@"(?i)(bearer\s+)\S+", RegexOptions.CultureInvariant)]
     private static partial Regex BearerPattern();
 
-    [GeneratedRegex(@"(?i)\b(ghp_|gho_|github_pat_|sk-|xox[baprs]-)[A-Za-z0-9_\-]+", RegexOptions.CultureInvariant)]
+    [GeneratedRegex(@"(?i)\b(github_pat_|ghp_|gho_|ghu_|ghs_|ghr_|sk-|xox[baprs]-)[A-Za-z0-9_\-]+", RegexOptions.CultureInvariant)]
     private static partial Regex TokenPattern();
 
     [GeneratedRegex(@"[A-Za-z]:\\[^\s""']+|\\\\[^\s""']+", RegexOptions.CultureInvariant)]

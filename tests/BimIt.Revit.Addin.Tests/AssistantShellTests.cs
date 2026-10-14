@@ -203,7 +203,8 @@ public sealed class AssistantShellTests
                 "ready",
                 "auto",
                 null,
-                "GitHub Copilot · auto"),
+                "GitHub Copilot · auto",
+                UsedTools: ["bimit_get_warnings"]),
         };
         var shell = CreateShell(instanceId, factory, link);
         shell.OnRevitStartup();
@@ -230,6 +231,7 @@ public sealed class AssistantShellTests
 
         shell.ReceivePageMessage("""{"type":"sendCommand","text":"show me the ducts"}""");
         await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("There are 7 warnings.", StringComparison.Ordinal)));
+        Assert.Contains(shell.Conversation.Entries, entry => entry.Used == "Used: Analyze warnings");
         Assert.Equal(["show me the ducts"], link.Chats);
         Assert.Equal(3, link.Workflows.Count);
         Assert.Equal(1, factory.Starts);
@@ -498,6 +500,8 @@ public sealed class AssistantShellTests
         Assert.Contains("data-action=\"context\"", html, StringComparison.Ordinal);
         Assert.Contains("data-action=\"warnings\"", html, StringComparison.Ordinal);
         Assert.Contains("data-action=\"activeView\"", html, StringComparison.Ordinal);
+        var script = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
+        Assert.Contains("message.used", script, StringComparison.Ordinal);
     }
 
     [Fact]

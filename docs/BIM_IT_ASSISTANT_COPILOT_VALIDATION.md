@@ -8,7 +8,13 @@ Package: `GitHub.Copilot.SDK` 1.0.21, referenced only by `BimIt.Revit.Assistant`
 
 ## Dogfood sign-in
 
-BIM-IT does not show a GitHub OAuth window and does not store a token. The adapter uses the Copilot SDK logged-in-user path (`UseLoggedInUser`). Before the check, sign in to GitHub Copilot on this Windows user with the Copilot CLI (`copilot login`) or the GitHub CLI credentials that the Copilot runtime already accepts. A missing sign-in must leave MCP ready and must not crash the Assistant.
+BIM-IT does not show a GitHub OAuth window and does not store a token. The adapter uses the Copilot SDK logged-in-user path (`UseLoggedInUser`) in `CopilotClientMode.Empty`. Empty mode disables keytar, so credentials saved by `copilot login` in the system keychain are not guaranteed to be visible. Before the check, sign in with GitHub CLI:
+
+```powershell
+gh auth login
+```
+
+A missing sign-in must leave MCP ready and must not crash the Assistant.
 
 Build the same Release outputs as [BIM_IT_ASSISTANT_VALIDATION.md](BIM_IT_ASSISTANT_VALIDATION.md). Load the Revit 2026 add-in from the repository output so the Assistant and Server can be found beside it.
 
@@ -25,7 +31,7 @@ Build the same Release outputs as [BIM_IT_ASSISTANT_VALIDATION.md](BIM_IT_ASSIST
 9. Analyze Warnings still returns the real warning result.
 10. Active View Elements still returns the real active-view query.
 11. Type `Analyse les warnings de ce modèle.`
-12. Confirm the model calls the BIM-IT warnings tool.
+12. Confirm the answer includes `Used: Analyze warnings`. That line is the evidence that the model invoked `bimit_get_warnings`.
 13. Confirm that tool uses the existing MCP Server and Bridge v12 path.
 14. Confirm the natural-language answer matches the real warning result.
 15. Ask `Combien y en a?` Confirm the count stays on the warning result already retrieved.

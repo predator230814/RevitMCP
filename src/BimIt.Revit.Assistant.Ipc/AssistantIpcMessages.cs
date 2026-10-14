@@ -44,7 +44,8 @@ public sealed record AssistantIpcMessage(
     string? ProviderModel = null,
     string? ProviderError = null,
     string? ProviderLabel = null,
-    string? Text = null);
+    string? Text = null,
+    IReadOnlyList<string>? UsedTools = null);
 
 public readonly record struct AssistantIpcParse(bool Accepted, AssistantIpcMessage? Message, string Reason)
 {
@@ -62,6 +63,8 @@ public static class AssistantIpc
     public const int MaxTextLength = 16_000;
 
     public const int MaxChatTextLength = 2_000;
+
+    public const int MaxUsedToolCount = 8;
 
     public static readonly JsonSerializerOptions Options = new()
     {
@@ -172,6 +175,7 @@ public static class AssistantIpc
                 ProviderModel = message.ProviderModel,
                 ProviderError = message.ProviderError,
                 ProviderLabel = message.ProviderLabel,
+                UsedTools = message.UsedTools ?? [],
             },
             AssistantIpcKind.ResetConversation => new Envelope { Type = "resetConversation" },
             AssistantIpcKind.QueryStatus => new Envelope { Type = "queryStatus" },
@@ -182,9 +186,14 @@ public static class AssistantIpc
 
     public static bool GrantsApprovalAuthority => false;
 
+    public static bool IsModelToolName(string? name)
+    {
+        return name is "bimit_get_model_context" or "bimit_get_warnings" or "bimit_get_active_view_elements";
+    }
+
     private static AssistantIpcParse ParseHello(Envelope body)
     {
-        if (!IsBoundedId(body.InstanceId))
+        if (!IsBoundedId(body.InstanceId) || body.UsedTools is not null)
         {
             return AssistantIpcParse.Reject("instance");
         }
@@ -209,7 +218,7 @@ public static class AssistantIpc
 
     private static AssistantIpcParse ParseRun(Envelope body)
     {
-        if (!IsBoundedId(body.RequestId) || !TryWorkflow(body.Workflow, out var workflow))
+        if (!IsBoundedId(body.RequestId) || !TryWorkflow(body.Workflow, out var workflow) || body.UsedTools is not null)
         {
             return AssistantIpcParse.Reject("workflow");
         }
@@ -234,7 +243,11 @@ public static class AssistantIpc
 
     private static AssistantIpcParse ParseStatus(Envelope body)
     {
-        if (!IsState(body.AssistantState) || !IsState(body.McpState) || !IsProviderState(body.ProviderState) || !IsModelToken(body.ProviderModel))
+        if (body.UsedTools is not null
+            || !IsState(body.AssistantState)
+            || !IsState(body.McpState)
+            || !IsProviderState(body.ProviderState)
+            || !IsModelToken(body.ProviderModel))
         {
             return AssistantIpcParse.Reject("status");
         }
@@ -275,7 +288,7 @@ public static class AssistantIpc
 
     private static AssistantIpcParse ParseChat(Envelope body)
     {
-        if (HasProvider(body) || body.Workflow is not null || body.Title is not null || body.Body is not null)
+        if (HasProvider(body) || body.UsedTools is not null || body.Workflow is not null || body.Title is not null || body.Body is not null)
         {
             return AssistantIpcParse.Reject("chat");
         }
@@ -321,7 +334,7 @@ public static class AssistantIpc
             return AssistantIpcParse.Reject("chat");
         }
 
-        if (body.ProviderName is { Length: > 64 } || body.ProviderLabel is { Length: > 160 })
+        if (body.ProviderName is { Length: > 64 } || body.ProviderLabel is { Length: > 160 } || !TryUsedTools(body.UsedTools, out var usedTools))
         {
             return AssistantIpcParse.Reject("chat");
         }
@@ -347,7 +360,8 @@ public static class AssistantIpc
             body.ProviderModel,
             Bound(body.ProviderError, 500),
             Bound(body.ProviderLabel, 160),
-            null));
+            null,
+            usedTools));
     }
 
     private static AssistantIpcParse ParseSignal(Envelope body, AssistantIpcKind kind)
@@ -358,6 +372,7 @@ public static class AssistantIpc
             || body.Title is not null
             || body.Body is not null
             || HasProvider(body)
+            || body.UsedTools is not null
             || body.InstanceId is not null)
         {
             return AssistantIpcParse.Reject("signal");
@@ -374,7 +389,7 @@ public static class AssistantIpc
             return AssistantIpcParse.Reject("result");
         }
 
-        if (body.Title.Length > 200 || body.Body.Length > MaxTextLength)
+        if (body.Title.Length > 200 || body.Body.Length > MaxTextLength || body.UsedTools is not null)
         {
             return AssistantIpcParse.Reject("result");
         }
@@ -425,6 +440,24 @@ public static class AssistantIpc
             AssistantWorkflowName.ActiveView => "activeView",
             _ => null,
         };
+    }
+
+    private static bool TryUsedTools(IReadOnlyList<string>? names, out IReadOnlyList<string> used)
+    {
+        if (names is null)
+        {
+            used = [];
+            return true;
+        }
+
+        if (names.Count > MaxUsedToolCount || names.Any(name => !IsModelToolName(name)))
+        {
+            used = [];
+            return false;
+        }
+
+        used = names;
+        return true;
     }
 
     private static bool IsBoundedId(string? value)
@@ -510,5 +543,7 @@ public static class AssistantIpc
         public string? ProviderLabel { get; set; }
 
         public string? Text { get; set; }
+
+        public IReadOnlyList<string>? UsedTools { get; set; }
     }
 }

@@ -139,6 +139,7 @@ main {
 .msg.error { border-color: var(--error); }
 .msg h3 { margin: 0 0 4px; font-size: 13px; }
 .msg p { margin: 0; white-space: pre-wrap; color: var(--ink); }
+.msg .used { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 
 .diagnostics {
   margin: 8px 12px;

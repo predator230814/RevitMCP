@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using BimIt.Revit.Assistant.Ipc;
 using BimIt.Revit.Contracts;
 
 namespace BimIt.Revit.Assistant;
@@ -27,6 +28,8 @@ internal sealed class BimItAgentReadTools
         "shell",
     ];
 
+    private readonly object _usedLock = new();
+    private readonly List<string> _used = [];
     private readonly IAssistantToolSession _session;
     private readonly string _instanceId;
 
@@ -44,6 +47,16 @@ internal sealed class BimItAgentReadTools
     public static bool IsExposed(string? toolName)
     {
         return toolName is not null && Names.Contains(toolName, StringComparer.Ordinal);
+    }
+
+    public IReadOnlyList<string> ConsumeUsedTools()
+    {
+        lock (_usedLock)
+        {
+            var copy = _used.ToArray();
+            _used.Clear();
+            return copy;
+        }
     }
 
     public async Task<IReadOnlyDictionary<string, object?>> InvokeAsync(string toolName, CancellationToken cancellationToken)
@@ -64,6 +77,7 @@ internal sealed class BimItAgentReadTools
 
     private async Task<IReadOnlyDictionary<string, object?>> ModelContextAsync(CancellationToken cancellationToken)
     {
+        RecordUse(ModelContext);
         var call = await _session.CallAsync(
             AssistantTools.GetContext,
             new Dictionary<string, object?> { ["instance_id"] = _instanceId },
@@ -73,6 +87,7 @@ internal sealed class BimItAgentReadTools
 
     private async Task<IReadOnlyDictionary<string, object?>> WarningsAsync(CancellationToken cancellationToken)
     {
+        RecordUse(Warnings);
         var context = await ReadContextAsync(cancellationToken).ConfigureAwait(false);
         if (context.Error is not null)
         {
@@ -104,6 +119,7 @@ internal sealed class BimItAgentReadTools
 
     private async Task<IReadOnlyDictionary<string, object?>> ActiveViewAsync(CancellationToken cancellationToken)
     {
+        RecordUse(ActiveViewElements);
         var context = await ReadContextAsync(cancellationToken).ConfigureAwait(false);
         if (context.Error is not null)
         {
@@ -175,6 +191,19 @@ internal sealed class BimItAgentReadTools
             ["ok"] = true,
             ["result"] = result,
         };
+    }
+
+    private void RecordUse(string toolName)
+    {
+        lock (_usedLock)
+        {
+            if (_used.Count >= AssistantIpc.MaxUsedToolCount || !IsExposed(toolName))
+            {
+                return;
+            }
+
+            _used.Add(toolName);
+        }
     }
 
     private static IReadOnlyDictionary<string, object?> Fail(string code, string message)
