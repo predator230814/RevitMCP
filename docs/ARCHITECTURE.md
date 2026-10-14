@@ -1,4 +1,6 @@
-# RevitMCP Architecture
+# BIM-IT Revit MCP Architecture
+
+RevitMCP was renamed to BIM-IT Revit MCP. Historical sections below keep the name they used when they were written. Current assemblies use the `BimIt.Revit` namespaces. See [ADR-0012](adr/ADR-0012-bim-it-product-family-and-specialized-mcp-services.md).
 
 ## Status
 
@@ -91,3 +93,28 @@ Architecture research must compare relevant implementations critically. The purp
 ## Change policy
 
 Significant architecture changes require an ADR. If code and architecture documentation conflict, the conflict must be surfaced and resolved rather than silently normalized.
+
+## BIM-IT Assistant
+
+[ADR-0013](adr/ADR-0013-bim-it-assistant-local-architecture.md) is **Accepted**. BIM-IT Assistant is a separate local process. The Revit ribbon opens one DockablePane. That pane hosts WPF and a lazy local WebView2. The WebView talks only to the add-in through a closed message set. The add-in talks to the Assistant process over a current-user Named Pipe. The Assistant is an MCP client of `BimIt.Revit.Server` over stdio. The server still uses the existing Bridge.
+
+External MCP clients launch `BimIt.Revit.Server` directly. They do not need the Assistant. The Approval DockablePane remains the trusted approval authority. The Assistant pane cannot approve, preview, or apply a controlled write.
+
+Implemented in this slice:
+
+- one BIM-IT Assistant ribbon button and one new DockablePane;
+- session-only chat timeline with Model Context, Analyze Warnings, and Active View Elements;
+- truthful Revit/Bridge, Assistant, MCP, and AI Provider status. AI Provider is "Not configured".
+
+Not implemented:
+
+- an LLM provider;
+- skills;
+- tool-permission policy;
+- persistent chat history;
+- MCP Apps;
+- HTTP or remote MCP;
+- arbitrary Revit API execution;
+- Inspect Selection or selected MEP exploration.
+
+Bridge v12 returns `document_id` on an active CAP-0001 document and accepts `revit_query_elements` with `scope=active_view` and `filters: {}`. Document scope still requires a filter. A negotiated v11 connection keeps the older wire behavior. The Assistant does not invent a document id.

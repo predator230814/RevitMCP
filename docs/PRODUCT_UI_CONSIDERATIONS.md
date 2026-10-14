@@ -2,11 +2,15 @@
 
 ## Status
 
-The preferred v1 approval presentation direction is accepted. A production UI implementation does not exist. Broader product UI and chat questions remain open.
+The trusted approval presentation is implemented. It is a DockablePane titled "BIM-IT Revit Approval", hosted as WPF and a bundled local WebView2 at `https://revitmcp-approval.local/`. The pane GUID is unchanged. The native add-in remains the only approval authority. WebView2 is presentation and input.
 
-[ADR-0009](adr/ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) is **Accepted**. It separates model-facing capabilities, human-facing MCP App interaction, and the trusted approval-provider boundary. It does not select the broader product UI. An MCP App may later present an approval screen, but that screen is not automatically a trusted approval provider. Persistent writes remain governed by ADR-0008.
+BIM-IT Assistant v1 is a second DockablePane, also WPF and a bundled local WebView2, at `https://bimit-revit-assistant.local/`. It is a session-only conversational shell for three existing read workflows. Its AI Provider indicator says "Not configured". It is not a trusted approval surface, and it has no approval action. [ADR-0013](adr/ADR-0013-bim-it-assistant-local-architecture.md) separates the two panes.
 
-[ADR-0010](adr/ADR-0010-revit-local-trusted-approval-authority.md) is **Accepted**. The preferred v1 approval presentation direction is `DockablePane -> WPF -> bundled local WebView2`. Native `RevitMCP.Addin` remains the trusted approval authority. WebView2 remains presentation and input, not authority. A production UI implementation does not exist. The broader questions below stay open.
+[ADR-0009](adr/ADR-0009-agent-human-interaction-and-trusted-approval-boundary.md) is **Accepted**. It separates model-facing capabilities, human-facing MCP App interaction, and the trusted approval-provider boundary. An MCP App is not implemented. An MCP App may later present an approval screen, but that screen is not automatically a trusted approval provider. Persistent writes remain governed by ADR-0008.
+
+[ADR-0010](adr/ADR-0010-revit-local-trusted-approval-authority.md) is **Accepted**. The approval presentation direction `DockablePane -> WPF -> bundled local WebView2` is what the Approval pane implements. Native add-in code remains the trusted approval authority.
+
+The Assistant follows the system light/dark preference through CSS `prefers-color-scheme`. Binding the pane to the Revit UI theme is a follow-up, left undone so this slice does not take a multi-version theme API dependency.
 
 ## Why this matters
 

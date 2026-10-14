@@ -97,7 +97,7 @@ CAP-0002 v1 does not accept arbitrary view ids.
 
 ### `filters`
 
-Required object. At least one filter property must be present.
+Required object. `scope=document` requires at least one filter property. `scope=active_view` accepts `filters: {}` on Bridge protocol v12 and remains bounded by `limit`. A negotiated v11 connection still rejects an empty filter object for both scopes. An unfiltered whole-document query is invalid on every protocol version.
 
 Supported v1 properties:
 
@@ -414,7 +414,7 @@ Legacy fallback may serialize one compact JSON text result only when the officia
 
 - Output is bounded to at most 100 element references.
 - Default output returns at most 50 references.
-- At least one filter is required; whole-model unfiltered enumeration is not a normal CAP-0002 call.
+- Document scope requires at least one filter. Whole-model unfiltered enumeration is not a CAP-0002 call. Active-view scope may use an empty filter object and stays bounded by `limit`.
 - Every filter array is bounded to at most 20 values and individual filter strings are bounded to at most 256 characters.
 - The capability returns references, not element DTOs.
 - `matched_count` is computed server-side/Revit-side so the LLM does not need a broad payload to count matches.
@@ -439,7 +439,7 @@ CAP-0002 is acceptable when:
 4. omitted `document_id` targets the active document and returns its identity;
 5. explicit mismatched `document_id` fails with `DOCUMENT_CONTEXT_CHANGED` and does not query another document;
 6. document and active-view scopes behave deterministically and active-view failure never widens silently to document scope;
-7. at least one filter is required;
+7. document scope requires at least one filter, and active-view scope accepts an empty filter object only on Bridge v12;
 8. filter arrays are bounded to 20 values and filter strings to 256 characters;
 9. supported filters follow the exact AND/OR/text semantics above;
 10. Revit `ElementType` objects are excluded from returned query population;

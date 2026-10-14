@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>BIM-IT Assistant</title>
+  <link rel="stylesheet" href="app.css" />
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="eyebrow">BIM-IT</p>
+      <h1>BIM-IT Assistant</h1>
+    </div>
+    <div class="header-actions">
+      <button id="retry" type="button" hidden>Retry</button>
+      <button id="diagnostics" type="button">Diagnostics</button>
+      <button id="new-chat" type="button">New chat</button>
+    </div>
+  </header>
+  <section class="status" id="status" aria-label="Connection status"></section>
+  <main id="main">
+    <section class="welcome" id="welcome">
+      <h2>This Revit session.</h2>
+      <p>This session can run the current BIM-IT Revit MCP read workflows. No AI provider is configured yet.</p>
+      <div class="cards">
+        <button type="button" data-action="context"><strong>Model context</strong><span>Active document, view, and selection count.</span></button>
+        <button type="button" data-action="warnings"><strong>Analyze warnings</strong><span>Counts, definitions, and returned warnings.</span></button>
+        <button type="button" data-action="activeView"><strong>Active view elements</strong><span>Query the active view through MCP.</span></button>
+      </div>
+    </section>
+    <ol class="timeline" id="timeline"></ol>
+    <pre class="diagnostics" id="diagnostics-panel" hidden></pre>
+  </main>
+  <form class="composer" id="composer">
+    <label class="sr" for="command">Message</label>
+    <textarea id="command" rows="2" placeholder="Try /context, /warnings, or /active-view"></textarea>
+    <button type="submit">Send</button>
+  </form>
+  <script src="app.js"></script>
+</body>
+</html>

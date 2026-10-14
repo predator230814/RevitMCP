@@ -1,0 +1,8 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>BimIt.Revit.Assistant.Ipc</RootNamespace>
+    <AssemblyName>BimIt.Revit.Assistant.Ipc</AssemblyName>
+    <Description>Current-user Named Pipe contract between the Revit add-in and the BIM-IT Assistant process.</Description>
+  </PropertyGroup>
+</Project>

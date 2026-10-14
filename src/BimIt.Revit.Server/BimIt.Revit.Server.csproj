@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>BimIt.Revit.Server</RootNamespace>
+    <AssemblyName>BimIt.Revit.Server</AssemblyName>
+    <Description>Out-of-process MCP server host. No Autodesk Revit API dependency.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="ModelContextProtocol" />
+    <ProjectReference Include="..\BimIt.Revit.Bridge\BimIt.Revit.Bridge.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="BimIt.Revit.Server.Tests" />
+  </ItemGroup>
+</Project>

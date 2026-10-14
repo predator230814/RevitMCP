@@ -1,0 +1,71 @@
+using BimIt.Revit.Bridge;
+
+namespace BimIt.Revit.Addin.Lifecycle;
+
+internal interface IBootstrapSubscription : IDisposable
+{
+}
+
+internal interface IBootstrapScheduler
+{
+    IBootstrapSubscription Subscribe(Action<object> onBootstrap);
+}
+
+internal interface ILifecycleDispatcher : IDisposable
+{
+    void Stop();
+
+    IRevitCapabilityService? CreateCapability(BridgeInstanceMetadata metadata);
+
+    IRevitQueryElementsService? CreateQuery(BridgeInstanceMetadata metadata);
+
+    IRevitGetElementsService? CreateGetElements(BridgeInstanceMetadata metadata);
+
+    IRevitDescribeParametersService? CreateDescribeParameters(BridgeInstanceMetadata metadata);
+
+    IRevitGetParameterValuesService? CreateGetParameterValues(BridgeInstanceMetadata metadata);
+
+    IRevitGetMepTopologyService? CreateGetMepTopology(BridgeInstanceMetadata metadata);
+
+    IRevitPreviewParameterUpdatesService? CreatePreviewParameterUpdates(BridgeInstanceMetadata metadata);
+
+    IRevitRequestParameterUpdateReviewService? CreateRequestParameterUpdateReview(BridgeInstanceMetadata metadata);
+
+    IRevitApplyParameterUpdatesService? CreateApplyParameterUpdates(BridgeInstanceMetadata metadata);
+
+    IRevitGetWarningsService? CreateGetWarnings(BridgeInstanceMetadata metadata);
+}
+
+internal interface ILifecycleBridge : IAsyncDisposable
+{
+    bool HasRegistration { get; }
+}
+
+internal interface ILifecycleDispatcherFactory
+{
+    ILifecycleDispatcher Create();
+}
+
+internal interface ILifecycleBridgeFactory
+{
+    ILifecycleBridge Start(
+        BridgeInstanceMetadata metadata,
+        IRevitCapabilityService? capability,
+        IRevitQueryElementsService? query,
+        IRevitGetElementsService? getElements,
+        IRevitDescribeParametersService? describeParameters,
+        IRevitGetParameterValuesService? getParameterValues,
+        IRevitGetMepTopologyService? getMepTopology,
+        IRevitPreviewParameterUpdatesService? previewParameterUpdates,
+        IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview,
+        IRevitApplyParameterUpdatesService? applyParameterUpdates,
+        IRevitGetWarningsService? getWarnings,
+        CancellationToken cancellationToken);
+}
+
+internal interface IRuntimeMetadataSource
+{
+    BridgeInstanceMetadata Capture(string instanceId, LifecycleRevitRuntime revit);
+}
+
+internal readonly record struct LifecycleRevitRuntime(string VersionNumber, string VersionBuild);

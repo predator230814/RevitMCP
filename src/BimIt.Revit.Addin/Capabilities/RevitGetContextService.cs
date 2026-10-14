@@ -1,0 +1,105 @@
+using Autodesk.Revit.UI;
+using BimIt.Revit.Addin.Compatibility;
+using BimIt.Revit.Addin.Execution;
+using BimIt.Revit.Addin.Identity;
+using BimIt.Revit.Bridge;
+using BimIt.Revit.Contracts;
+
+namespace BimIt.Revit.Addin.Capabilities;
+
+internal sealed class RevitGetContextService : IRevitCapabilityService
+{
+    private readonly RevitExecutionDispatcher _dispatcher;
+    private readonly BridgeInstanceMetadata _metadata;
+    private readonly OpenDocumentIdentityService _identity;
+
+    public RevitGetContextService(
+        RevitExecutionDispatcher dispatcher,
+        BridgeInstanceMetadata metadata,
+        OpenDocumentIdentityService identity)
+    {
+        ArgumentNullException.ThrowIfNull(dispatcher);
+        ArgumentNullException.ThrowIfNull(metadata);
+        ArgumentNullException.ThrowIfNull(identity);
+        _dispatcher = dispatcher;
+        _metadata = metadata;
+        _identity = identity;
+    }
+
+    public async Task<GetContextResult> GetContextAsync(GetContextRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        try
+        {
+            return await _dispatcher.EnqueueAsync(Collect, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (RevitExecutionException)
+        {
+            throw new BridgeException(
+                CapabilityErrorCodes.ExecutionFailed,
+                "The Revit context could not be collected.");
+        }
+        catch (Exception)
+        {
+            throw new BridgeException(
+                CapabilityErrorCodes.ExecutionFailed,
+                "The Revit context could not be collected.");
+        }
+    }
+
+    private GetContextResult Collect(UIApplication application)
+    {
+        var instance = new GetContextInstance
+        {
+            InstanceId = _metadata.InstanceId,
+            RevitVersion = _metadata.RevitVersion,
+            RevitBuild = _metadata.RevitBuild
+        };
+
+        var uiDocument = application.ActiveUIDocument;
+        if (uiDocument is null)
+        {
+            return new GetContextResult
+            {
+                Instance = instance,
+                Document = null,
+                ActiveView = null,
+                Selection = new GetContextSelection { Count = 0 }
+            };
+        }
+
+        var document = uiDocument.Document;
+        var view = uiDocument.ActiveView;
+        return new GetContextResult
+        {
+            Instance = instance,
+            Document = new GetContextDocument
+            {
+                DocumentId = _identity.GetId(document),
+                Title = document.Title,
+                Kind = document.IsFamilyDocument ? GetContextDocumentKind.Family : GetContextDocumentKind.Project,
+                IsWorkshared = document.IsWorkshared,
+                IsModelInCloud = document.IsModelInCloud,
+                IsReadOnly = document.IsReadOnly,
+                IsModified = document.IsModified
+            },
+            ActiveView = view is null
+                ? null
+                : new GetContextActiveView
+                {
+                    ElementId = RevitElementIds.Format(view.Id),
+                    Name = view.Name,
+                    ViewType = view.ViewType.ToString()
+                },
+            Selection = new GetContextSelection
+            {
+                Count = uiDocument.Selection.GetElementIds().Count
+            }
+        };
+    }
+}

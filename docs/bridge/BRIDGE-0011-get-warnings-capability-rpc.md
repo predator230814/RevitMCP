@@ -59,7 +59,7 @@ Lower prefixes remain unchanged, including a request-review host without apply a
 
 Get-warnings alone, or get-warnings without the complete v10 prefix, does not advertise v11. It falls back to the highest complete prefix that is actually present. With no inherited capabilities, that fallback is handshake-only v1.
 
-Protocol v11 is implemented. Unknown v12 supports nothing until a later specification says otherwise.
+Protocol v11 is implemented. This specification does not include `document_id` on `revit.get_context` and does not accept an empty `revit.query_elements` filter object. [BRIDGE-0012](BRIDGE-0012-context-document-identity.md) later specifies protocol v12 for those amendments. Unknown protocol versions that no accepted specification lists remain unsupported.
 
 ## Explicit capability-version rule
 
@@ -363,6 +363,8 @@ SupportedVersions = [11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
 CurrentVersion = 11
 ```
 
+That block is the v11 full-host advertisement. [BRIDGE-0012](BRIDGE-0012-context-document-identity.md) changes the full-host list to include protocol 12. It does not change this v11 record.
+
 Handshake itself remains cached metadata only. It must not inspect the Revit model or invoke EXEC-0001.
 
 ## Acceptance criteria
@@ -371,11 +373,11 @@ BRIDGE-0011 is acceptable as a specification when:
 
 1. Protocol 11 adds exactly `revit.get_warnings` and preserves the explicit inherited sets above.
 2. Capability support is explicit set membership, never numeric `>=`.
-3. Unknown v12 supports none until explicitly accepted.
+3. At the time of this specification, unknown v12 supports none. BRIDGE-0012 later accepts v12 and leaves unknown v13 unsupported.
 4. A host may advertise `[11,10,9,8,7,6,5,4,3,2,1]` only when the complete v10 prefix plus get-warnings is functional.
 5. Get-warnings without that prefix does not advertise v11.
 6. The RPC uses transport-neutral `GetWarningsRequest` / `GetWarningsResult` with no request `instance_id`.
-7. Host and typed-client gating reject get-warnings on v1..v10 and unknown v12.
+7. Host and typed-client gating reject get-warnings on v1..v10. This specification also rejected unknown v12. BRIDGE-0012 adds v12 to get-warnings and rejects unknown v13.
 8. Inherited methods explicitly include v11 after implementation.
 9. Timeouts, cancellation, and no-retry behavior reuse the existing capability model.
 10. Empty warnings and unknown element refs remain successful structured results.

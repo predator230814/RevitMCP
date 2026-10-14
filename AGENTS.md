@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This file defines the canonical working rules for AI coding agents contributing to RevitMCP.
+This file defines the canonical working rules for AI coding agents contributing to BIM-IT Revit MCP. RevitMCP was renamed to BIM-IT Revit MCP. Historical ADRs and validation records keep the name used when they were written. Current code projects use the `BimIt.Revit` namespaces.
 
 The repository is the source of truth. Conversation memory, model memory, and previous chat sessions are not authoritative project state.
 
