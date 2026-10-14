@@ -1,6 +1,6 @@
 # BIM-IT Revit MCP Current State
 
-_Last updated: 2026-10-13_
+_Last updated: 2026-10-14_
 
 RevitMCP was renamed to BIM-IT Revit MCP. Current projects are `BimIt.Revit.Contracts`, `BimIt.Revit.Bridge`, `BimIt.Revit.Addin`, `BimIt.Revit.Server`, and `BimIt.Revit.Assistant`. MCP tool names, Bridge method names, protocol versions, the Approval pane GUID, audit domain strings, and the `LocalAppData\RevitMCP` storage root are unchanged. The historical validation narrative below keeps the RevitMCP names and SHAs it recorded.
 
@@ -10,7 +10,7 @@ BIM-IT Assistant is a lazy DockablePane and a separate local process. The read p
 
 The pane can request three existing read workflows: `revit_get_context`, `revit_get_warnings`, and `revit_query_elements`. It binds every call to the hosting Revit `instance_id`. It does not start during Revit startup. It does not approve writes. Chat state stays in memory for the current Revit session.
 
-[ADR-0014](adr/ADR-0014-provider-neutral-assistant-agent-runtime.md) adds a provider-neutral agent runtime inside `BimIt.Revit.Assistant`. The first adapter is `GitHub.Copilot.SDK` 1.0.21, running in empty mode with three custom read tools. Those tools call the existing MCP session. They do not call the Bridge or the Revit API. Natural language uses that runtime. `/context`, `/warnings`, and `/active-view` stay on the deterministic workflow path. Provider status is independent of MCP status. Live Copilot validation is not recorded yet. The checklist is [BIM_IT_ASSISTANT_COPILOT_VALIDATION.md](BIM_IT_ASSISTANT_COPILOT_VALIDATION.md).
+[ADR-0014](adr/ADR-0014-provider-neutral-assistant-agent-runtime.md) adds a provider-neutral agent runtime inside `BimIt.Revit.Assistant`. The first adapter is `GitHub.Copilot.SDK` 1.0.21, running in empty mode with three custom read tools. Those tools call the existing MCP session. They do not call the Bridge or the Revit API. Natural language uses that runtime. `/context`, `/warnings`, and `/active-view` stay on the deterministic workflow path. Provider status is independent of MCP status. The Copilot live checklist was exercised on Revit 2026.5 build `26.5.0.55` on 2026-10-14 at `3b565be310b977ee65fb830d64cbe5074e8b7853`. That record is not a merge pass. The checklist is [BIM_IT_ASSISTANT_COPILOT_VALIDATION.md](BIM_IT_ASSISTANT_COPILOT_VALIDATION.md).
 
 On a current v12 host the three actions are real reads:
 
