@@ -2,7 +2,7 @@
 
 Primary target: Revit 2026.5 build 26.5.0.55.
 
-This checklist is for a person at a running Revit session. Automated tests do not open Revit. No model mutation is expected from the three v1 actions. Do not treat this document as a merge pass. The read path and the Approval smoke below were exercised on 2026-10-13. Quick-action visibility remains a UX follow-up.
+This checklist is for a person at a running Revit session. Automated tests do not open Revit. No model mutation is expected from the three v1 actions. Do not treat this document as a merge pass. The read path and the Approval smoke below were exercised on 2026-10-13. Natural-language Copilot behavior is a later checklist: [BIM_IT_ASSISTANT_COPILOT_VALIDATION.md](BIM_IT_ASSISTANT_COPILOT_VALIDATION.md).
 
 ## Build and load
 
@@ -38,7 +38,7 @@ On this v12 host:
 - Analyze Warnings calls `revit_get_warnings` with that `document_id` and renders the real result, including zero warnings and truncation.
 - Active View Elements calls `revit_query_elements` with `scope=active_view`, `filters: {}`, and `limit=25`, and renders the real result.
 
-The pane must not invent a document id. If context has a document and no `document_id`, Analyze Warnings reports a Bridge v12 compatibility error and does not call warnings. Document scope still rejects an empty filter object. AI Provider stays "Not configured". Natural language stays in the session timeline and is answered with that fact.
+The pane must not invent a document id. If context has a document and no `document_id`, Analyze Warnings reports a Bridge v12 compatibility error and does not call warnings. Document scope still rejects an empty filter object. The 2026-10-13 shell record below observed AI Provider as "Not configured". Current builds follow [BIM_IT_ASSISTANT_COPILOT_VALIDATION.md](BIM_IT_ASSISTANT_COPILOT_VALIDATION.md) for natural language.
 
 ## Checklist
 
@@ -47,7 +47,7 @@ The pane must not invent a document id. If context has a document and no `docume
 3. Confirm no Assistant or MCP Server process started merely because Revit started.
 4. Click BIM-IT Assistant.
 5. Confirm the pane opens and the WebView renders.
-6. Confirm status moves truthfully through Revit/Bridge, then Assistant, then MCP. AI Provider stays "Not configured".
+6. Confirm status moves truthfully through Revit/Bridge, then Assistant, then MCP. The 2026-10-13 record below observed AI Provider as "Not configured".
 7. Open diagnostics and confirm `tools/list` reports the current 10-tool MCP surface.
 8. Run Model Context. Confirm the result matches the open session and includes `document_id` when a document is open.
 9. Run Analyze Warnings. Confirm a real `revit_get_warnings` result, including a zero-warning model if that is the open document.

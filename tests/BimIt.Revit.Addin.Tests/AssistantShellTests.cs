@@ -183,6 +183,27 @@ public sealed class AssistantShellTests
                 "Model context",
                 "Revit 2026.",
                 false),
+            ChatResult = new AssistantIpcMessage(
+                AssistantIpcKind.ChatResult,
+                null,
+                null,
+                null,
+                false,
+                "chat",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "BIM-IT Assistant",
+                "There are 7 warnings.",
+                false,
+                "GitHub Copilot",
+                "ready",
+                "auto",
+                null,
+                "GitHub Copilot · auto"),
         };
         var shell = CreateShell(instanceId, factory, link);
         shell.OnRevitStartup();
@@ -205,9 +226,12 @@ public sealed class AssistantShellTests
         shell.ReceivePageMessage("""{"type":"newConversation"}""");
         Assert.Empty(shell.Conversation.Entries);
         Assert.NotEqual(conversationId, shell.Conversation.ConversationId);
+        await WaitFor(() => link.Resets == 1);
 
         shell.ReceivePageMessage("""{"type":"sendCommand","text":"show me the ducts"}""");
-        Assert.Contains(shell.Conversation.Entries, entry => entry.Body.Contains("No AI provider is configured yet", StringComparison.Ordinal));
+        await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("There are 7 warnings.", StringComparison.Ordinal)));
+        Assert.Equal(["show me the ducts"], link.Chats);
+        Assert.Equal(3, link.Workflows.Count);
         Assert.Equal(1, factory.Starts);
 
         var conversation = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "AssistantConversation.cs"));
@@ -400,6 +424,83 @@ public sealed class AssistantShellTests
     }
 
     [Fact]
+    public async Task Provider_unavailable_leaves_mcp_ready_and_quick_actions_work()
+    {
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus() with
+            {
+                ProviderName = "GitHub Copilot",
+                ProviderState = "unavailable",
+                ProviderLabel = "GitHub Copilot · unavailable",
+                ProviderError = "GitHub Copilot sign-in is required.",
+            },
+            Result = new AssistantIpcMessage(
+                AssistantIpcKind.WorkflowResult,
+                null,
+                null,
+                null,
+                false,
+                "req",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Warnings",
+                "Matched 0.",
+                false),
+            ChatResult = new AssistantIpcMessage(
+                AssistantIpcKind.ChatResult,
+                null,
+                null,
+                null,
+                false,
+                "chat",
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "BIM-IT Assistant",
+                "GitHub Copilot sign-in is required. Quick actions still work.",
+                false,
+                "GitHub Copilot",
+                "unavailable",
+                null,
+                "GitHub Copilot sign-in is required.",
+                "GitHub Copilot · unavailable"),
+        };
+        var shell = CreateShell("instance-provider", new RecordingProcessFactory(), link, FastTimeouts());
+        await shell.OpenSessionAsync();
+
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Analyse les warnings de ce modèle."}""");
+        await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("sign-in is required", StringComparison.Ordinal)));
+        Assert.Equal(AssistantProcessPhase.Ready, shell.Processes.Phase);
+        Assert.Empty(link.Workflows);
+
+        shell.ReceivePageMessage("""{"type":"runQuickAction","action":"warnings"}""");
+        await WaitFor(() => link.Workflows.Count == 1);
+        Assert.Equal(AssistantWorkflowName.Warnings, link.Workflows[0]);
+        Assert.Equal(AssistantProcessPhase.Ready, shell.Processes.Phase);
+        await shell.ShutdownAsync();
+    }
+
+    [Fact]
+    public void Quick_actions_stay_beside_the_composer()
+    {
+        var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
+        var mainEnd = html.IndexOf("</main>", StringComparison.Ordinal);
+        var row = html.IndexOf("class=\"quick-row\"", StringComparison.Ordinal);
+        Assert.True(mainEnd >= 0 && row > mainEnd);
+        Assert.Contains("data-action=\"context\"", html, StringComparison.Ordinal);
+        Assert.Contains("data-action=\"warnings\"", html, StringComparison.Ordinal);
+        Assert.Contains("data-action=\"activeView\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Retry_control_posts_the_bounded_retry_intent()
     {
         var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
@@ -414,7 +515,8 @@ public sealed class AssistantShellTests
             TimeSpan.FromSeconds(2),
             TimeSpan.FromMilliseconds(80),
             TimeSpan.FromMilliseconds(40),
-            TimeSpan.FromSeconds(30));
+            TimeSpan.FromSeconds(30),
+            TimeSpan.FromSeconds(2));
     }
 
     private static AssistantShell CreateShell(
@@ -539,9 +641,15 @@ public sealed class AssistantShellTests
 
         public AssistantIpcMessage? Result { get; set; }
 
+        public AssistantIpcMessage? ChatResult { get; set; }
+
         public string? SeenInstance { get; private set; }
 
         public List<AssistantWorkflowName> Workflows { get; } = [];
+
+        public List<string> Chats { get; } = [];
+
+        public int Resets { get; private set; }
 
         public List<string> PipeNames { get; } = [];
 
@@ -589,6 +697,23 @@ public sealed class AssistantShellTests
             }
 
             return Result;
+        }
+
+        public Task<AssistantIpcMessage?> ChatAsync(string requestId, string text, CancellationToken cancellationToken)
+        {
+            Chats.Add(text);
+            return Task.FromResult(ChatResult);
+        }
+
+        public Task<AssistantIpcMessage?> ResetConversationAsync(CancellationToken cancellationToken)
+        {
+            Resets++;
+            return Task.FromResult(Status);
+        }
+
+        public Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(Status);
         }
 
         public Task ShutdownAsync()
