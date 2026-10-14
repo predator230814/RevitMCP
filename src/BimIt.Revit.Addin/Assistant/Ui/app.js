@@ -9,10 +9,11 @@ function post(message) {
   window.chrome.webview.postMessage(message);
 }
 
-function chip(label, value) {
-  const bad = value === "unavailable";
-  const wait = value === "starting";
-  return `<span class="chip${bad ? " bad" : ""}${wait ? " wait" : ""}">${label}: ${value}</span>`;
+function chip(label, value, state) {
+  const tone = state || value;
+  const bad = tone === "unavailable";
+  const wait = tone === "starting";
+  return `<span class="chip${bad ? " bad" : ""}${wait ? " wait" : ""}">${label}: ${escapeHtml(value)}</span>`;
 }
 
 function render(snapshot) {
@@ -21,7 +22,7 @@ function render(snapshot) {
     chip("Revit / Bridge", status.revitBridge || "unavailable"),
     chip("Assistant", status.assistant || "unavailable"),
     chip("MCP", status.mcp || "unavailable"),
-    chip("AI Provider", status.aiProvider || "Not configured")
+    chip("AI Provider", status.aiProvider || "Not configured", status.aiProviderState)
   ].join("");
   const unavailable = status.assistant === "unavailable" || status.mcp === "unavailable";
   retry.hidden = !unavailable;
@@ -34,12 +35,12 @@ function render(snapshot) {
   if (status.diagnostics) {
     const names = (status.toolNames || []).join("\n");
     diagnostics.hidden = false;
-    diagnostics.textContent = `Tools: ${status.toolCount ?? 0}\n${names}${status.error ? "\n" + status.error : ""}`;
+    diagnostics.textContent = `Tools: ${status.toolCount ?? 0}\n${names}${status.error ? "\n" + status.error : ""}${status.providerError ? "\n" + status.providerError : ""}`;
   } else {
     diagnostics.hidden = true;
   }
   if (status.busy) {
-    timeline.insertAdjacentHTML("beforeend", `<li class="msg"><h3>Working</h3><p>Running the Revit MCP workflow.</p></li>`);
+    timeline.insertAdjacentHTML("beforeend", `<li class="msg"><h3>Working</h3><p>Waiting for the Assistant.</p></li>`);
   }
 }
 
