@@ -92,7 +92,7 @@ Later adapters such as OpenAI, Anthropic, or a local model can implement the sam
 - Natural language is answered from the Assistant process. Slash commands and the three quick actions stay on the deterministic workflow path.
 - MCP readiness and provider readiness are independent. Quick actions still run when the provider is unavailable.
 - The Assistant still cannot approve a write. CAP-0008 and the Approval pane GUID are unchanged.
-- Empty-mode Copilot state lives under `%LOCALAPPDATA%\BIM-IT\Assistant\CopilotRuntime\` for one Assistant process and is deleted on the way out. It is not BIM-IT chat history.
+- Empty-mode Copilot state lives under `%LOCALAPPDATA%\BIM-IT\Assistant\CopilotRuntime\` for one Assistant process. BIM-IT performs bounded best-effort deletion on exit; a directory may remain if the OS or provider still holds it after the retry budget. It is not BIM-IT chat history.
 - Skills, persistent history, a general tool-permission UI, write tools from chat, streaming, and MCP Apps remain unimplemented.
 
 ## References
