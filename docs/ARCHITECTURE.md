@@ -98,20 +98,28 @@ Significant architecture changes require an ADR. If code and architecture docume
 
 [ADR-0013](adr/ADR-0013-bim-it-assistant-local-architecture.md) is **Accepted**. BIM-IT Assistant is a separate local process. The Revit ribbon opens one DockablePane. That pane hosts WPF and a lazy local WebView2. The WebView talks only to the add-in through a closed message set. The add-in talks to the Assistant process over a current-user Named Pipe. The Assistant is an MCP client of `BimIt.Revit.Server` over stdio. The server still uses the existing Bridge.
 
+[ADR-0014](adr/ADR-0014-provider-neutral-assistant-agent-runtime.md) is **Accepted**. The LLM provider sits inside `BimIt.Revit.Assistant`. The first adapter is GitHub Copilot SDK 1.0.21 in empty mode. It exposes three BIM-IT read tools that call the existing MCP session. Revit, Bridge, MCP, and the AI provider are independent status lines. The add-in and the WebView do not reference the Copilot SDK.
+
 External MCP clients launch `BimIt.Revit.Server` directly. They do not need the Assistant. The Approval DockablePane remains the trusted approval authority. The Assistant pane cannot approve, preview, or apply a controlled write.
 
-Implemented in this slice:
+Implemented:
 
-- one BIM-IT Assistant ribbon button and one new DockablePane;
+- one BIM-IT Assistant ribbon button and one DockablePane;
 - session-only chat timeline with Model Context, Analyze Warnings, and Active View Elements;
-- truthful Revit/Bridge, Assistant, MCP, and AI Provider status. AI Provider is "Not configured".
+- a provider-neutral agent runtime and a GitHub Copilot adapter;
+- natural-language turns that call the three read tools through the existing MCP client;
+- logged-in-user Copilot authentication, with no BIM-IT token store;
+- truthful Revit/Bridge, Assistant, MCP, and AI Provider status.
 
 Not implemented:
 
-- an LLM provider;
+- an OpenAI, Anthropic, or local-model provider;
+- GitHub OAuth product UI;
 - skills;
-- tool-permission policy;
+- a general tool-permission UI;
 - persistent chat history;
+- write tools from chat;
+- token streaming;
 - MCP Apps;
 - HTTP or remote MCP;
 - arbitrary Revit API execution;

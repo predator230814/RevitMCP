@@ -39,7 +39,7 @@ body {
   color: var(--ink);
 }
 
-.top, .status, .composer, .welcome, .timeline, .diagnostics {
+.top, .status, .welcome, .timeline, .diagnostics {
   padding-left: 12px;
   padding-right: 12px;
 }
@@ -139,6 +139,7 @@ main {
 .msg.error { border-color: var(--error); }
 .msg h3 { margin: 0 0 4px; font-size: 13px; }
 .msg p { margin: 0; white-space: pre-wrap; color: var(--ink); }
+.msg .used { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
 
 .diagnostics {
   margin: 8px 12px;
@@ -153,10 +154,28 @@ main {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px;
-  padding-top: 8px;
-  padding-bottom: 10px;
+  padding: 0;
+  background: var(--bg);
+}
+
+.dock {
   border-top: 1px solid var(--line);
   background: var(--bg);
+  padding: 8px 12px 10px;
+}
+
+.quick-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.quick-row button {
+  padding: 4px 8px;
+  font-size: 12px;
+  background: var(--panel);
+  color: var(--ink);
 }
 
 textarea {

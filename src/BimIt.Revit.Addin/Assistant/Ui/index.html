@@ -23,7 +23,7 @@
   <main id="main">
     <section class="welcome" id="welcome">
       <h2>This Revit session.</h2>
-      <p>This session can run the current BIM-IT Revit MCP read workflows. No AI provider is configured yet.</p>
+      <p>Ask about this model, or run a read workflow. Answers use the current BIM-IT Revit MCP session.</p>
       <div class="cards">
         <button type="button" data-action="context"><strong>Model context</strong><span>Active document, view, and selection count.</span></button>
         <button type="button" data-action="warnings"><strong>Analyze warnings</strong><span>Counts, definitions, and returned warnings.</span></button>
@@ -33,11 +33,18 @@
     <ol class="timeline" id="timeline"></ol>
     <pre class="diagnostics" id="diagnostics-panel" hidden></pre>
   </main>
-  <form class="composer" id="composer">
-    <label class="sr" for="command">Message</label>
-    <textarea id="command" rows="2" placeholder="Try /context, /warnings, or /active-view"></textarea>
-    <button type="submit">Send</button>
-  </form>
+  <div class="dock">
+    <div class="quick-row" aria-label="Quick actions">
+      <button type="button" data-action="context">Model context</button>
+      <button type="button" data-action="warnings">Analyze warnings</button>
+      <button type="button" data-action="activeView">Active view</button>
+    </div>
+    <form class="composer" id="composer">
+      <label class="sr" for="command">Message</label>
+      <textarea id="command" rows="2" placeholder="Ask about this model, or use /context, /warnings, /active-view"></textarea>
+      <button type="submit">Send</button>
+    </form>
+  </div>
   <script src="app.js"></script>
 </body>
 </html>

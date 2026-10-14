@@ -1,6 +1,6 @@
 namespace BimIt.Revit.Addin.Assistant;
 
-internal sealed record AssistantTranscriptEntry(string Role, string Title, string Body);
+internal sealed record AssistantTranscriptEntry(string Role, string Title, string Body, string? Used = null);
 
 internal sealed class AssistantConversation
 {
@@ -15,9 +15,9 @@ internal sealed class AssistantConversation
 
     public IReadOnlyList<AssistantTranscriptEntry> Entries => _entries;
 
-    public void Add(string role, string title, string body)
+    public void Add(string role, string title, string body, string? used = null)
     {
-        _entries.Add(new AssistantTranscriptEntry(role, title, body));
+        _entries.Add(new AssistantTranscriptEntry(role, title, body, used));
     }
 
     public void Reset()

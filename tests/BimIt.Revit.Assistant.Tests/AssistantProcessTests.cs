@@ -30,6 +30,10 @@ public sealed class AssistantProcessTests
         Assert.Contains("revit_get_warnings", status.Message.ToolNames!);
         Assert.Contains("revit_query_elements", status.Message.ToolNames!);
         Assert.DoesNotContain(status.Message.ToolNames!, name => name.Contains("approve", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("ready", status.Message.AssistantState);
+        Assert.Contains(status.Message.ProviderState, new[] { "starting", "ready", "unavailable" });
+        Assert.DoesNotContain("ghp_", status.Message.ProviderError ?? "", StringComparison.Ordinal);
+        Assert.DoesNotContain("github_pat_", status.Message.ProviderLabel ?? "", StringComparison.Ordinal);
 
         await AssistantPipeFrames.WriteAsync(
             client,
