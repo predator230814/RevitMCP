@@ -2,7 +2,7 @@
 
 Primary target: Revit 2026.5 build 26.5.0.55.
 
-This checklist is for a person at a running Revit session. Automated tests do not open Revit. No model mutation is expected from the three v1 actions. Do not treat this document as a merge pass. The read path below was exercised on 2026-10-13. Approval smoke is still pending.
+This checklist is for a person at a running Revit session. Automated tests do not open Revit. No model mutation is expected from the three v1 actions. Do not treat this document as a merge pass. The read path and the Approval smoke below were exercised on 2026-10-13. Quick-action visibility remains a UX follow-up.
 
 ## Build and load
 
@@ -78,7 +78,7 @@ Host: Revit 2026.5, build `26.5.0.55`. The first process had Snowdon Towers Samp
 | two Revit instances | PASS |
 | per-instance shutdown | PASS |
 | quick-action visibility | UX follow-up |
-| Approval smoke | still pending |
+| Approval smoke | PASS |
 
 Observed:
 
@@ -92,5 +92,6 @@ Observed:
 - A second stdio `BimIt.Revit.Server` called `revit_get_context` while the pane stayed ready, then that extra server was closed.
 - Two Revit processes produced two Assistant processes and two Server processes. Context stayed on each open document: Plumbing in one, Electrical in the other. Closing the Electrical process left one pair. Closing the last Revit removed both processes.
 - After the first result, the three quick-action buttons scroll above the visible pane. `/context`, `/warnings`, and `/active-view` still run. That visibility is a UX follow-up, not a failed read.
-- BIM-IT Revit Approval does not appear under View > User Interface. The read workflows did not open it. Approval smoke is still pending.
+- BIM-IT Revit Approval does not appear under View > User Interface. The read workflows did not open it.
+- Approval smoke, same Plumbing session, `document_id` `f77533b8-3869-4c55-8770-ef5485a02ebc`: preview of Project Information / Author from `Autodesk` to `RevitMCP-PR77-SMOKE` returned ready, and `is_modified` stayed false. `revit_request_parameter_update_review` returned `Started` and opened a pane titled BIM-IT Revit Approval. The pane showed the current value, the proposed value, and Approve, Reject, and Cancel. Cancel returned the pane to "No approval request is currently active." Approve was not used, and apply was not called. The Approval pane GUID remains `C3A91E74-5D28-4B6F-A0E1-9F4C2B7D18A5`.
 - The first click failed because `ShowBimItAssistantCommand` had no `Transaction` attribute. The live click succeeded after the attribute was added. The committed mode is `TransactionMode.Manual`.
