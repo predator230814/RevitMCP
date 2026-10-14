@@ -1,4 +1,5 @@
 using BimIt.Revit.Assistant.Ipc;
+using BimIt.Revit.Assistant.Providers.GitHubCopilot;
 
 namespace BimIt.Revit.Assistant;
 
@@ -117,10 +118,28 @@ internal sealed record AssistantHostOptions(string PipeName, string InstanceId, 
 
 internal static class AssistantHost
 {
-    public static async Task<int> RunAsync(AssistantHostOptions options, CancellationToken cancellationToken = default)
+    public static Task<int> RunAsync(AssistantHostOptions options, CancellationToken cancellationToken = default)
     {
-        var serverPath = AssistantExecutableLocator.ResolveServer(options.ServerPath, AppContext.BaseDirectory);
-        await using var session = serverPath is null ? null : new McpAssistantToolSession(serverPath);
+        return RunAsync(options, session: null, runtime: null, cancellationToken);
+    }
+
+    internal static async Task<int> RunAsync(
+        AssistantHostOptions options,
+        IAssistantToolSession? session,
+        IAssistantAgentRuntime? runtime,
+        CancellationToken cancellationToken = default)
+    {
+        McpAssistantToolSession? ownedSession = null;
+        if (session is null)
+        {
+            var serverPath = AssistantExecutableLocator.ResolveServer(options.ServerPath, AppContext.BaseDirectory);
+            if (serverPath is not null)
+            {
+                ownedSession = new McpAssistantToolSession(serverPath);
+                session = ownedSession;
+            }
+        }
+
         await using var server = AssistantPipeStreams.CreateServer(options.PipeName);
         using var connectTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         connectTimeout.CancelAfter(TimeSpan.FromSeconds(30));
@@ -130,62 +149,186 @@ internal static class AssistantHost
         var hello = AssistantIpc.Parse(helloJson);
         if (!hello.Accepted || hello.Message?.Kind != AssistantIpcKind.Hello || !string.Equals(hello.Message.InstanceId, options.InstanceId, StringComparison.Ordinal))
         {
+            if (ownedSession is not null)
+            {
+                await ownedSession.DisposeAsync().ConfigureAwait(false);
+            }
+
             return 3;
         }
 
         var readiness = session is null
             ? new AssistantMcpReadiness(false, 0, [], "BimIt.Revit.Server executable was not found.")
             : await session.InitializeAsync(cancellationToken).ConfigureAwait(false);
-        await WriteAsync(server, Status(readiness), cancellationToken).ConfigureAwait(false);
-
-        while (!cancellationToken.IsCancellationRequested)
+        if (runtime is null)
         {
-            var json = await AssistantPipeFrames.ReadAsync(server, cancellationToken).ConfigureAwait(false);
-            if (json is null)
-            {
-                break;
-            }
-
-            var parsed = AssistantIpc.Parse(json);
-            if (!parsed.Accepted || parsed.Message is null)
-            {
-                continue;
-            }
-
-            if (parsed.Message.Kind == AssistantIpcKind.Shutdown)
-            {
-                break;
-            }
-
-            if (parsed.Message.Kind != AssistantIpcKind.RunWorkflow || session is null || !readiness.Ready)
-            {
-                if (parsed.Message.RequestId is not null)
-                {
-                    await WriteAsync(
-                        server,
-                        Result(parsed.Message.RequestId, new AssistantWorkflowResult(
-                            "Assistant",
-                            readiness.Error ?? "The Assistant MCP client is not ready.",
-                            true,
-                            "mcp_unavailable")),
-                        cancellationToken).ConfigureAwait(false);
-                }
-
-                continue;
-            }
-
-            var workflow = await AssistantWorkflows.RunAsync(
-                session,
-                options.InstanceId,
-                parsed.Message.Workflow!.Value,
-                cancellationToken).ConfigureAwait(false);
-            await WriteAsync(server, Result(parsed.Message.RequestId!, workflow), cancellationToken).ConfigureAwait(false);
+            runtime = readiness.Ready && session is not null
+                ? new GitHubCopilotAgentRuntime(session, options.InstanceId)
+                : new UnavailableAssistantAgentRuntime(readiness.Error);
         }
 
-        return 0;
+        var providerStart = StartProviderAsync(runtime, cancellationToken);
+        try
+        {
+            await WriteAsync(server, Status(readiness, runtime.Status), cancellationToken).ConfigureAwait(false);
+
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                var json = await AssistantPipeFrames.ReadAsync(server, cancellationToken).ConfigureAwait(false);
+                if (json is null)
+                {
+                    break;
+                }
+
+                var parsed = AssistantIpc.Parse(json);
+                if (!parsed.Accepted || parsed.Message is null)
+                {
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.Shutdown)
+                {
+                    break;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.QueryStatus)
+                {
+                    await WriteAsync(server, Status(readiness, runtime.Status), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.ResetConversation)
+                {
+                    try
+                    {
+                        await runtime.ResetConversationAsync(cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (Exception)
+                    {
+                        // The runtime records provider failure. MCP readiness stays as it was.
+                    }
+
+                    await WriteAsync(server, Status(readiness, runtime.Status), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.Chat)
+                {
+                    await WriteAsync(server, await ChatAsync(runtime, parsed.Message, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind != AssistantIpcKind.RunWorkflow || session is null || !readiness.Ready)
+                {
+                    if (parsed.Message.RequestId is not null)
+                    {
+                        await WriteAsync(
+                            server,
+                            Result(parsed.Message.RequestId, new AssistantWorkflowResult(
+                                "Assistant",
+                                readiness.Error ?? "The Assistant MCP client is not ready.",
+                                true,
+                                "mcp_unavailable")),
+                            cancellationToken).ConfigureAwait(false);
+                    }
+
+                    continue;
+                }
+
+                var workflow = await AssistantWorkflows.RunAsync(
+                    session,
+                    options.InstanceId,
+                    parsed.Message.Workflow!.Value,
+                    cancellationToken).ConfigureAwait(false);
+                await WriteAsync(server, Result(parsed.Message.RequestId!, workflow), cancellationToken).ConfigureAwait(false);
+            }
+
+            return 0;
+        }
+        finally
+        {
+            try
+            {
+                await runtime.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(4)).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+            }
+
+            try
+            {
+                await providerStart.WaitAsync(TimeSpan.FromSeconds(1)).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+            }
+
+            if (ownedSession is not null)
+            {
+                try
+                {
+                    await ownedSession.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(3)).ConfigureAwait(false);
+                }
+                catch (Exception)
+                {
+                }
+            }
+        }
     }
 
-    private static AssistantIpcMessage Status(AssistantMcpReadiness readiness)
+    private static async Task StartProviderAsync(IAssistantAgentRuntime runtime, CancellationToken cancellationToken)
+    {
+        try
+        {
+            await runtime.InitializeAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+            // Provider startup must not end the Assistant process.
+        }
+    }
+
+    private static async Task<AssistantIpcMessage> ChatAsync(
+        IAssistantAgentRuntime runtime,
+        AssistantIpcMessage message,
+        CancellationToken cancellationToken)
+    {
+        AssistantAgentTurn turn;
+        try
+        {
+            turn = await runtime.SendAsync(message.Text ?? "", cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            turn = new AssistantAgentTurn("BIM-IT Assistant", AssistantSafeText.Clean(exception.Message, 500), true);
+        }
+
+        var body = turn.Body.Length > AssistantIpc.MaxTextLength ? turn.Body[..AssistantIpc.MaxTextLength] : turn.Body;
+        var status = runtime.Status;
+        return new AssistantIpcMessage(
+            AssistantIpcKind.ChatResult,
+            null,
+            null,
+            null,
+            false,
+            message.RequestId,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            turn.Title,
+            body,
+            turn.IsError,
+            string.IsNullOrWhiteSpace(status.Name) ? null : status.Name,
+            status.StateToken,
+            AssistantProviderStatus.IsModelToken(status.Model) ? status.Model : null,
+            string.IsNullOrWhiteSpace(status.SafeError) ? null : AssistantSafeText.Clean(status.SafeError, 500),
+            status.Label);
+    }
+
+    private static AssistantIpcMessage Status(AssistantMcpReadiness readiness, AssistantProviderStatus provider)
     {
         return new AssistantIpcMessage(
             AssistantIpcKind.Status,
@@ -202,7 +345,12 @@ internal static class AssistantHost
             readiness.Error,
             null,
             null,
-            false);
+            false,
+            string.IsNullOrWhiteSpace(provider.Name) ? null : provider.Name,
+            provider.StateToken,
+            AssistantProviderStatus.IsModelToken(provider.Model) ? provider.Model : null,
+            string.IsNullOrWhiteSpace(provider.SafeError) ? null : AssistantSafeText.Clean(provider.SafeError, 500),
+            provider.Label);
     }
 
     private static AssistantIpcMessage Result(string requestId, AssistantWorkflowResult workflow)

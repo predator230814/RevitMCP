@@ -15,6 +15,12 @@ internal interface IAssistantLink
 
     Task<AssistantIpcMessage?> RunAsync(string requestId, AssistantWorkflowName workflow, CancellationToken cancellationToken);
 
+    Task<AssistantIpcMessage?> ChatAsync(string requestId, string text, CancellationToken cancellationToken);
+
+    Task<AssistantIpcMessage?> ResetConversationAsync(CancellationToken cancellationToken);
+
+    Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken);
+
     Task ShutdownAsync();
 }
 
@@ -103,6 +109,39 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
         }
     }
 
+    public Task<AssistantIpcMessage?> ChatAsync(string requestId, string text, CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(
+            new AssistantIpcMessage(
+                AssistantIpcKind.Chat,
+                null,
+                null,
+                null,
+                false,
+                requestId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                Text: text),
+            cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> ResetConversationAsync(CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(Signal(AssistantIpcKind.ResetConversation), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(Signal(AssistantIpcKind.QueryStatus), cancellationToken);
+    }
+
     public Task ShutdownAsync() => ShutdownAsync(AssistantIpcTimeouts.Default.Shutdown);
 
     public async Task ShutdownAsync(TimeSpan timeout)
@@ -157,6 +196,30 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
     {
         await ShutdownAsync().ConfigureAwait(false);
         _gate.Dispose();
+    }
+
+    private async Task<AssistantIpcMessage?> ExchangeAsync(AssistantIpcMessage message, CancellationToken cancellationToken)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_stream is null)
+            {
+                return null;
+            }
+
+            await AssistantPipeFrames.WriteAsync(_stream, AssistantIpc.Serialize(message), cancellationToken).ConfigureAwait(false);
+            return await ReadAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private static AssistantIpcMessage Signal(AssistantIpcKind kind)
+    {
+        return new AssistantIpcMessage(kind, null, null, null, false, null, null, null, null, null, null, null, null, null, false);
     }
 
     private async Task<AssistantIpcMessage?> ReadAsync(CancellationToken cancellationToken)

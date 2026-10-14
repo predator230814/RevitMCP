@@ -29,6 +29,11 @@ internal sealed class AssistantShell
     private int? _toolCount;
     private IReadOnlyList<string> _toolNames = [];
     private string? _statusError;
+    private string _providerState = "not_configured";
+    private string _providerLabel = "Not configured";
+    private string? _providerError;
+    private CancellationTokenSource? _providerPoll;
+    private Task _sequence = Task.CompletedTask;
 
     public AssistantShell(
         Func<string> instanceId,
@@ -96,14 +101,15 @@ internal sealed class AssistantShell
                 PostSnapshot();
                 break;
             case AssistantPageIntent.RunQuickAction:
-                _ = RunWorkflowAsync(parsed.Action!, DisplayCommand(parsed.Action!));
+                Sequence(() => RunWorkflowAsync(parsed.Action!, DisplayCommand(parsed.Action!)));
                 break;
             case AssistantPageIntent.SendCommand:
-                _ = HandleCommandAsync(parsed.Text!);
+                Sequence(() => HandleCommandAsync(parsed.Text!));
                 break;
             case AssistantPageIntent.NewConversation:
                 _conversation.Reset();
                 PostSnapshot();
+                Sequence(ResetProviderAsync);
                 break;
             case AssistantPageIntent.OpenDiagnostics:
                 _diagnostics = !_diagnostics;
@@ -123,6 +129,7 @@ internal sealed class AssistantShell
 
     internal void ShutdownForHost()
     {
+        StopProviderPoll();
         StopProcessWatch();
         try
         {
@@ -267,6 +274,7 @@ internal sealed class AssistantShell
             // The failed session is replaced by this retry.
         }
 
+        StopProviderPoll();
         StopProcessWatch();
         try
         {
@@ -282,6 +290,9 @@ internal sealed class AssistantShell
         {
             _assistantState = "unavailable";
             _mcpState = "unavailable";
+            _providerState = "not_configured";
+            _providerLabel = "Not configured";
+            _providerError = null;
             _statusError = null;
         }
 
@@ -310,17 +321,103 @@ internal sealed class AssistantShell
             "/active-view" => "activeView",
             _ => null,
         };
-        if (workflow is null)
+        if (workflow is not null)
         {
-            _conversation.Add(
-                "assistant",
-                "BIM-IT Assistant",
-                "No AI provider is configured yet. Use Model Context, Analyze Warnings, Active View Elements, or the commands /context, /warnings, and /active-view.");
-            PostSnapshot();
+            await RunWorkflowAsync(workflow, text).ConfigureAwait(false);
             return;
         }
 
-        await RunWorkflowAsync(workflow, text).ConfigureAwait(false);
+        await RunChatAsync(text).ConfigureAwait(false);
+    }
+
+    private async Task RunChatAsync(string text)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        PostSnapshot();
+        try
+        {
+            if (_mcpState != "ready")
+            {
+                await EnsureAssistantAsync().ConfigureAwait(false);
+            }
+
+            if (_mcpState != "ready")
+            {
+                _conversation.Add("error", "Assistant", _statusError ?? "The Assistant is not ready.");
+                return;
+            }
+
+            using var chatTimeout = new CancellationTokenSource(_timeouts.Chat);
+            var result = await _link.ChatAsync(Guid.NewGuid().ToString("N"), text, chatTimeout.Token).ConfigureAwait(false);
+            if (result is null || result.Kind != AssistantIpcKind.ChatResult)
+            {
+                _conversation.Add("error", "Assistant", "The Assistant did not return an answer.");
+                _processes.MarkFailed("missing chat result");
+                _assistantState = "unavailable";
+                _mcpState = "unavailable";
+                return;
+            }
+
+            ApplyProvider(result);
+            _conversation.Add(result.IsError ? "error" : "assistant", result.Title ?? "BIM-IT Assistant", result.Body ?? "");
+        }
+        catch (Exception exception)
+        {
+            var timedOut = exception is OperationCanceledException;
+            var message = timedOut
+                ? "The AI provider did not answer in time. The Assistant connection was closed and was not sent again."
+                : exception.Message;
+            _processes.MarkFailed(message);
+            _assistantState = "unavailable";
+            _mcpState = "unavailable";
+            _providerState = "unavailable";
+            _providerLabel = "GitHub Copilot · unavailable";
+            _statusError = message;
+            _conversation.Add("error", "Assistant", message);
+        }
+        finally
+        {
+            _busy = false;
+            PostSnapshot();
+        }
+    }
+
+    private async Task ResetProviderAsync()
+    {
+        _conversation.Reset();
+        PostSnapshot();
+        if (_mcpState != "ready")
+        {
+            return;
+        }
+
+        try
+        {
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var status = await _link.ResetConversationAsync(timeout.Token).ConfigureAwait(false);
+            if (status?.Kind == AssistantIpcKind.Status)
+            {
+                ApplyProvider(status);
+                PostSnapshot();
+            }
+        }
+        catch (Exception exception)
+        {
+            var message = exception is OperationCanceledException
+                ? "The conversation reset timed out."
+                : exception.Message;
+            _processes.MarkFailed(message);
+            _assistantState = "unavailable";
+            _mcpState = "unavailable";
+            _statusError = message;
+            _conversation.Add("error", "Assistant", message);
+            PostSnapshot();
+        }
     }
 
     private async Task RunWorkflowAsync(string action, string userTitle)
@@ -408,9 +505,11 @@ internal sealed class AssistantShell
             _toolCount = status.ToolCount;
             _toolNames = status.ToolNames ?? [];
             _statusError = status.Error;
+            ApplyProvider(status);
             if (_mcpState == "ready")
             {
                 _processes.MarkReady();
+                StartProviderPoll();
             }
             else
             {
@@ -442,7 +541,9 @@ internal sealed class AssistantShell
                 ["revitBridge"] = _bridgeReady() ? "ready" : "unavailable",
                 ["assistant"] = _assistantState,
                 ["mcp"] = _mcpState,
-                ["aiProvider"] = "Not configured",
+                ["aiProvider"] = _providerLabel,
+                ["aiProviderState"] = _providerState,
+                ["providerError"] = _providerError,
                 ["toolCount"] = _toolCount,
                 ["toolNames"] = _toolNames,
                 ["error"] = _statusError,
@@ -452,6 +553,104 @@ internal sealed class AssistantShell
             ["messages"] = messages,
             ["empty"] = messages.Length == 0,
         });
+    }
+
+    private void ApplyProvider(AssistantIpcMessage status)
+    {
+        if (status.ProviderState is null)
+        {
+            return;
+        }
+
+        _providerState = status.ProviderState;
+        if (!string.IsNullOrWhiteSpace(status.ProviderLabel))
+        {
+            _providerLabel = status.ProviderLabel;
+        }
+
+        _providerError = status.ProviderError;
+    }
+
+    private void StartProviderPoll()
+    {
+        if (_providerState != "starting" || _providerPoll is not null)
+        {
+            return;
+        }
+
+        var poll = new CancellationTokenSource();
+        _providerPoll = poll;
+        _ = PollProviderAsync(poll.Token);
+    }
+
+    private void StopProviderPoll()
+    {
+        _providerPoll?.Cancel();
+        _providerPoll?.Dispose();
+        _providerPoll = null;
+    }
+
+    private async Task PollProviderAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            for (var attempt = 0; attempt < 60 && !cancellationToken.IsCancellationRequested; attempt++)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(500), cancellationToken).ConfigureAwait(false);
+                if (_providerState != "starting")
+                {
+                    return;
+                }
+
+                try
+                {
+                    using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    timeout.CancelAfter(_timeouts.Connect);
+                    var status = await _link.QueryStatusAsync(timeout.Token).ConfigureAwait(false);
+                    if (status?.Kind == AssistantIpcKind.Status)
+                    {
+                        ApplyProvider(status);
+                        PostSnapshot();
+                    }
+                }
+                catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+                {
+                }
+
+                if (_providerState != "starting")
+                {
+                    return;
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+        catch (Exception)
+        {
+        }
+    }
+
+    private void Sequence(Func<Task> action)
+    {
+        lock (_gate)
+        {
+            var previous = _sequence;
+            _sequence = InvokeAfter(previous, action);
+        }
+    }
+
+    private static async Task InvokeAfter(Task previous, Func<Task> action)
+    {
+        try
+        {
+            await previous.ConfigureAwait(false);
+        }
+        catch (Exception)
+        {
+        }
+
+        await action().ConfigureAwait(false);
     }
 
     private static string DisplayCommand(string action)
