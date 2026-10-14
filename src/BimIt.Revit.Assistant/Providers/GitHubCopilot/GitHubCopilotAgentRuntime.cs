@@ -87,11 +87,11 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
 
         using var budget = Budget(AssistantProviderTimeouts.Default.Turn, cancellationToken);
         var acquired = false;
-        _tools.ConsumeUsedTools();
         try
         {
             await _gate.WaitAsync(budget.Token).ConfigureAwait(false);
             acquired = true;
+            _tools.ConsumeUsedTools();
             if (_session is null)
             {
                 return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, _tools.ConsumeUsedTools());

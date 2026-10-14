@@ -481,6 +481,66 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
+    public void Runtime_directory_delete_retries_a_busy_directory_then_stops()
+    {
+        var waits = new List<TimeSpan>();
+        var deletes = 0;
+        CopilotRuntimeDirectory.TryDelete(
+            "runtime-dir",
+            attempts: 3,
+            delay: TimeSpan.FromMilliseconds(10),
+            wait: waits.Add,
+            exists: _ => true,
+            delete: (_, _) =>
+            {
+                deletes++;
+                if (deletes < 3)
+                {
+                    throw new IOException("busy");
+                }
+            });
+
+        Assert.Equal(3, deletes);
+        Assert.Equal(2, waits.Count);
+        Assert.Equal(TimeSpan.FromMilliseconds(10), waits[0]);
+        Assert.Equal(TimeSpan.FromMilliseconds(20), waits[1]);
+
+        var exhausted = 0;
+        var exhaustedWaits = 0;
+        CopilotRuntimeDirectory.TryDelete(
+            "runtime-dir",
+            attempts: CopilotRuntimeDirectory.DeleteAttempts,
+            delay: CopilotRuntimeDirectory.DeleteDelay,
+            wait: _ => exhaustedWaits++,
+            exists: _ => true,
+            delete: (_, _) =>
+            {
+                exhausted++;
+                throw new UnauthorizedAccessException("locked");
+            });
+        Assert.Equal(CopilotRuntimeDirectory.DeleteAttempts, exhausted);
+        Assert.Equal(CopilotRuntimeDirectory.DeleteAttempts - 1, exhaustedWaits);
+    }
+
+    [Fact]
+    public void Used_tool_buffer_is_cleared_after_the_turn_gate_is_acquired()
+    {
+        var source = File.ReadAllText(Path.Combine(
+            RepoRoot(),
+            "src",
+            "BimIt.Revit.Assistant",
+            "Providers",
+            "GitHubCopilot",
+            "GitHubCopilotAgentRuntime.cs"));
+        var sendStart = source.IndexOf("public async Task<AssistantAgentTurn> SendAsync", StringComparison.Ordinal);
+        var sendEnd = source.IndexOf("public async Task ResetConversationAsync", StringComparison.Ordinal);
+        var send = source[sendStart..sendEnd];
+        var wait = send.IndexOf("await _gate.WaitAsync", StringComparison.Ordinal);
+        var clear = send.IndexOf("_tools.ConsumeUsedTools()", StringComparison.Ordinal);
+        Assert.True(wait >= 0 && clear > wait);
+    }
+
+    [Fact]
     public void Assistant_source_does_not_create_a_chat_transcript_store()
     {
         var root = Path.Combine(RepoRoot(), "src", "BimIt.Revit.Assistant");

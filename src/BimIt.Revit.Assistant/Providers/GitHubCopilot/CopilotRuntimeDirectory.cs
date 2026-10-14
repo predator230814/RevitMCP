@@ -14,22 +14,54 @@ internal static class CopilotRuntimeDirectory
         return path;
     }
 
+    public const int DeleteAttempts = 4;
+
+    public static readonly TimeSpan DeleteDelay = TimeSpan.FromMilliseconds(50);
+
     public static void TryDelete(string? path)
     {
-        if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+        TryDelete(path, DeleteAttempts, DeleteDelay, Thread.Sleep, Directory.Exists, (target, recursive) => Directory.Delete(target, recursive));
+    }
+
+    internal static void TryDelete(
+        string? path,
+        int attempts,
+        TimeSpan delay,
+        Action<TimeSpan> wait,
+        Func<string, bool> exists,
+        Action<string, bool> delete)
+    {
+        if (string.IsNullOrWhiteSpace(path) || attempts < 1)
         {
             return;
         }
 
-        try
+        for (var attempt = 1; attempt <= attempts; attempt++)
         {
-            Directory.Delete(path, recursive: true);
-        }
-        catch (IOException)
-        {
-        }
-        catch (UnauthorizedAccessException)
-        {
+            if (!exists(path))
+            {
+                return;
+            }
+
+            try
+            {
+                delete(path, true);
+                return;
+            }
+            catch (IOException) when (attempt < attempts)
+            {
+                wait(TimeSpan.FromMilliseconds(delay.TotalMilliseconds * attempt));
+            }
+            catch (UnauthorizedAccessException) when (attempt < attempts)
+            {
+                wait(TimeSpan.FromMilliseconds(delay.TotalMilliseconds * attempt));
+            }
+            catch (IOException)
+            {
+            }
+            catch (UnauthorizedAccessException)
+            {
+            }
         }
     }
 }

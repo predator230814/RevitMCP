@@ -162,6 +162,8 @@ internal sealed class AssistantShell
         {
             _assistantState = "unavailable";
             _mcpState = "unavailable";
+            _providerState = "unavailable";
+            _providerLabel = "GitHub Copilot · unavailable";
             _statusError = _processes.Failure;
         }
 
@@ -529,7 +531,7 @@ internal sealed class AssistantShell
         _pane?.Post(SerializeSnapshot());
     }
 
-    private string SerializeSnapshot()
+    internal string SerializeSnapshot()
     {
         var messages = _conversation.Entries.Select(entry =>
         {

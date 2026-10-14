@@ -306,13 +306,29 @@ public sealed class AssistantShellTests
     public async Task Unexpected_exit_becomes_unavailable_and_retry_starts_a_new_session()
     {
         var factory = new RecordingProcessFactory();
-        var link = new ScriptedLink { Status = ReadyStatus() };
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus() with
+            {
+                ProviderState = "ready",
+                ProviderModel = "gpt-6-luna",
+                ProviderLabel = "GitHub Copilot · gpt-6-luna",
+            },
+        };
         var shell = CreateShell("instance-retry", factory, link, FastTimeouts());
         await shell.OpenSessionAsync();
+        Assert.Contains("gpt-6-luna", shell.SerializeSnapshot(), StringComparison.Ordinal);
 
         factory.Handles[0].HasExited = true;
         shell.ObserveAssistantProcess();
         Assert.Equal(AssistantProcessPhase.Failed, shell.Processes.Phase);
+        var exited = shell.SerializeSnapshot();
+        Assert.Contains("\"revitBridge\":\"ready\"", exited, StringComparison.Ordinal);
+        Assert.Contains("\"assistant\":\"unavailable\"", exited, StringComparison.Ordinal);
+        Assert.Contains("\"mcp\":\"unavailable\"", exited, StringComparison.Ordinal);
+        Assert.Contains("\"aiProvider\":\"GitHub Copilot \\u00B7 unavailable\"", exited, StringComparison.Ordinal);
+        Assert.Contains("\"aiProviderState\":\"unavailable\"", exited, StringComparison.Ordinal);
+        Assert.DoesNotContain("gpt-6-luna", exited, StringComparison.Ordinal);
 
         shell.ReceivePageMessage("""{"type":"retryConnection"}""");
         await WaitFor(() => factory.Starts == 2);
