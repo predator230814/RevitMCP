@@ -1,6 +1,6 @@
 # SERVER-0010: stdio `revit_get_selection` tool
 
-- Status: Accepted. Implemented. Official MCP-client live validation is pending.
+- Status: Accepted. Implemented. Official MCP-client live validation is recorded and is not a merge verdict.
 - Date: 2026-10-14
 
 ## Purpose
@@ -9,7 +9,7 @@ Expose accepted CAP-0010 `revit_get_selection` through the existing standalone `
 
 SERVER-0010 applies the existing read-tool pattern to accepted CAP-0010 / BRIDGE-0013. It does not create a new architecture decision, server process, transport, or generic capability framework.
 
-This specification is implemented. Production `tools/list` contains exactly 11 tools, including `revit_get_selection`. Official MCP-client live validation in Revit 2026.5 is pending. The checklist is [CAP_0010_SELECTION_MCP_VALIDATION.md](../CAP_0010_SELECTION_MCP_VALIDATION.md). That checklist is not a pass.
+This specification is implemented. Production `tools/list` contains exactly 11 tools, including `revit_get_selection`. Official MCP-client live validation on Revit 2026.5 is recorded in [CAP_0010_SELECTION_MCP_VALIDATION.md](../CAP_0010_SELECTION_MCP_VALIDATION.md). That record is not a merge verdict.
 
 The implemented `revit_get_warnings` tool has no `SERVER-00xx` specification file. This specification does not add one. SERVER-0010 is the get-selection tool.
 
@@ -65,28 +65,21 @@ stdout remains reserved for MCP protocol traffic. Diagnostics must not contamina
 
 Tool registration remains explicit. Do not switch to assembly-wide scanning, reflection-driven discovery, a generic tool registry, or dynamic tool-list exposure.
 
-Current production `tools/list` remains exactly:
+Production `tools/list` is exactly these 11 tools, in ordinal order:
 
 ```text
-revit_get_context
-revit_query_elements
-revit_get_elements
-revit_describe_parameters
-revit_get_parameter_values
-revit_get_mep_topology
-revit_preview_parameter_updates
-revit_request_parameter_update_review
 revit_apply_parameter_updates
-revit_get_warnings
-```
-
-After later SERVER-0010 implementation, `tools/list` is expected to contain those ten tools plus:
-
-```text
+revit_describe_parameters
+revit_get_context
+revit_get_elements
+revit_get_mep_topology
+revit_get_parameter_values
 revit_get_selection
+revit_get_warnings
+revit_preview_parameter_updates
+revit_query_elements
+revit_request_parameter_update_review
 ```
-
-That is 11 tools. This specification does not claim that the eleventh tool exists now.
 
 No Bridge/internal JSON-RPC method is exposed directly as an MCP tool. `revit.get_selection` remains a Bridge RPC, not an MCP tool name.
 
@@ -262,7 +255,7 @@ The Server must not sort, uniquify, recount, truncate again, or rewrite CAP-0010
 
 ## Routing
 
-When implemented, add an explicit resolver and eligibility predicate for get-selection, following the current per-tool routing pattern.
+`InstanceTargetResolver` has an explicit resolver and eligibility predicate for get-selection, following the current per-tool routing pattern.
 
 Use an explicit protocol predicate for get-selection. Eligibility is protocol `{13}` only.
 
@@ -296,7 +289,7 @@ CAP-0001 through CAP-0009 semantics stay unchanged. CAP-0001 continues to return
 
 ## Application service
 
-When implemented, add a get-selection application service following the current read-tool services.
+`GetSelectionApplicationService` follows the current read-tool services.
 
 Accepted capability errors:
 
@@ -330,7 +323,7 @@ Other Bridge, IO, or bootstrap failures map through the existing `INSTANCE_UNAVA
 
 Do not convert an empty selection into a failure.
 
-Server implementation is not complete, and must not start, before typed Bridge live validation of BRIDGE-0013 has passed. CAP-0010 is not implementation-complete before official MCP-client live validation of this tool has passed.
+Typed Bridge live validation of BRIDGE-0013 passed before this Server tool was exposed. Official MCP-client live validation is recorded separately and is not a merge verdict.
 
 ## Outcome
 
@@ -340,13 +333,11 @@ Failure contains the existing error code and message. Routing failures keep the 
 
 ## Registration
 
-When implemented, register the application service and the tool explicitly.
+`ServerHost` registers `GetSelectionApplicationService` and `GetSelectionMcpTools`, then calls `.WithGetSelectionTool()`.
 
-Register exactly one new MCP tool. After that implementation, `tools/list` must expose exactly 11 tools.
+That registration adds exactly one MCP tool. `tools/list` exposes exactly 11 tools.
 
 Do not use assembly scanning.
-
-This specification does not change `ServerHost` and does not register the tool.
 
 ## Success and error MCP behavior
 
@@ -427,10 +418,10 @@ If a later implementation discovers that a lower-layer production change appears
 
 ## Acceptance criteria
 
-SERVER-0010 is acceptable as a specification when:
+SERVER-0010 is implemented when:
 
-1. It specifies one additional MCP tool, `revit_get_selection`, and does not register it.
-2. Production `tools/list` remains exactly the ten current tools. The expected count after implementation is 11.
+1. It exposes one additional MCP tool, `revit_get_selection`.
+2. Production `tools/list` contains exactly 11 tools.
 3. Bridge eligibility is protocol `{13}` only, by explicit membership, never `version >= 13`.
 4. Input is the closed CAP-0010 object. `instance_id` stays routing-only. `document_id` is an optional exact guard. `limit` is 1..100 with default 25.
 5. Malformed MCP input and unknown properties return `INVALID_REQUEST` before discovery. Transport-neutral limit failures remain `INVALID_SELECTION`.
@@ -439,12 +430,11 @@ SERVER-0010 is acceptable as a specification when:
 8. Errors are `isError = true`, with `structuredContent` absent and one compact JSON text error.
 9. Annotations are `readOnlyHint: true` and `openWorldHint: false`.
 10. The Server does not reshape CAP-0010 results and does not call Revit APIs.
-11. Typed Bridge live validation remains a prerequisite for considering the Server implementation complete.
-12. This specification does not implement the tool and does not add a retroactive warnings Server specification.
+11. Typed Bridge live validation of BRIDGE-0013 passed before the Server tool was exposed.
+12. The tool is implemented. This work does not add a retroactive warnings Server specification.
 
 ## Explicitly deferred
 
-- tool registration and Server implementation;
 - linked-document selection contents and link-document addressing;
 - subelements, faces, edges, and geometry references;
 - `GetReferences`-based selection;

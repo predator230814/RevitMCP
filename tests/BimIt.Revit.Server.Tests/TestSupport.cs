@@ -47,6 +47,7 @@ internal static class TestSupport
             AddinVersion = registration.AddinVersion,
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
+                BridgeProtocol.GetSelectionVersion => BridgeProtocol.SupportedVersions,
                 BridgeProtocol.RequestParameterUpdateReviewVersion => BridgeProtocol.SupportedVersions,
                 BridgeProtocol.PreviewParameterUpdatesVersion => BridgeProtocol.PreviewParameterUpdatesVersions,
                 BridgeProtocol.GetMepTopologyVersion => BridgeProtocol.GetMepTopologyVersions,
