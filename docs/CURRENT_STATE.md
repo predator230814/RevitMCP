@@ -18,6 +18,16 @@ On a current v12 host the three actions are real reads:
 - Analyze Warnings uses that `document_id` and calls `revit_get_warnings`. It does not invent an id. A context result without `document_id` is reported as `bridge_v12_required` and does not call warnings.
 - Active View Elements calls `revit_query_elements` with `scope=active_view`, `filters={}`, and `limit=25`. Document scope still requires at least one filter.
 
+## Selection read specification
+
+Dave, Product Owner, accepted three specifications on 2026-10-14:
+
+- [CAP-0010](capabilities/CAP-0010-revit-get-selection.md) `revit_get_selection`
+- [BRIDGE-0013](bridge/BRIDGE-0013-get-selection-capability-rpc.md) `revit.get_selection` on bridge protocol 13
+- [SERVER-0010](server/SERVER-0010-stdio-get-selection-tool.md)
+
+They are accepted specifications. They are not implemented. Production Bridge remains protocol v12. Production `tools/list` remains exactly 10 tools. Assistant Inspect Selection is not implemented, including `bimit_inspect_selection` and `bimit_explore_selected_mep`. Production still rejects protocol 13 because BRIDGE-0013 is not implemented.
+
 ## Validated head
 
 This record was written while PR #72 was still a draft. Merged history before that PR does not include the CAP-0008 slice. The validated SHA is `517bca8ddb8ecf3bab11cb14738ef8e0c9937353`.
