@@ -44,6 +44,11 @@ internal static class InstanceTargetResolver
         return Resolve(discovered, instanceId, IsGetWarningsEligible);
     }
 
+    public static TargetResolution ResolveForGetSelection(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        return Resolve(discovered, instanceId, IsGetSelectionEligible);
+    }
+
     public static TargetResolution ResolveForPreviewParameterUpdates(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
     {
         return Resolve(discovered, instanceId, IsPreviewParameterUpdatesEligible);
@@ -82,6 +87,11 @@ internal static class InstanceTargetResolver
     public static bool IsGetWarningsEligible(DiscoveredInstance instance)
     {
         return IsEligible(instance, BridgeProtocol.SupportsGetWarnings);
+    }
+
+    public static bool IsGetSelectionEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsGetSelection);
     }
 
     public static bool IsPreviewParameterUpdatesEligible(DiscoveredInstance instance)
