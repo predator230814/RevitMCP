@@ -9,7 +9,7 @@
 
 This specification is **Accepted**. Dave, Product Owner, accepted it on 2026-10-14.
 
-Implementation is not part of this specification. Contracts and the Addin service are implemented. Bridge protocol version 13 is implemented. The MCP tool `revit_get_selection` is not implemented. Production `tools/list` remains exactly 10 tools. Typed Bridge live validation in Revit is pending.
+Implementation is not part of this specification. Contracts and the Addin service are implemented. Bridge protocol version 13 is implemented. The MCP tool `revit_get_selection` is not implemented. Production `tools/list` remains exactly 10 tools. Typed Bridge live validation on Revit 2026.5 is recorded in [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](../CAP_0010_SELECTION_BRIDGE_VALIDATION.md). That record is not a merge verdict.
 
 ## Purpose
 

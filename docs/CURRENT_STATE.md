@@ -30,7 +30,7 @@ CAP-0010 is implemented through Contracts, the Addin service, and the typed Brid
 
 The MCP Server tool is not implemented. Production `tools/list` remains exactly 10 tools. Inherited capabilities may negotiate protocol 13 because they share `BridgeProtocol`. Assistant Inspect Selection is not implemented, including `bimit_inspect_selection` and `bimit_explore_selected_mep`.
 
-Typed Bridge live validation of `revit.get_selection` in Revit 2026.5 is still pending. The checklist is [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](CAP_0010_SELECTION_BRIDGE_VALIDATION.md). It is not a pass.
+Typed Bridge live validation of `revit.get_selection` was run on Revit 2026.5 build `26.5.0.55` against code SHA `3f6f57024be0600486f717b71162e08da285d45d`. The record is [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](CAP_0010_SELECTION_BRIDGE_VALIDATION.md). That record is not a merge verdict. The MCP tool and Assistant Inspect Selection remain unimplemented.
 
 ## Validated head
 
