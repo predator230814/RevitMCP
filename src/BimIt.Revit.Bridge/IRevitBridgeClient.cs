@@ -46,4 +46,9 @@ public interface IRevitBridgeClient : IAsyncDisposable
         GetWarningsRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken);
+
+    Task<GetSelectionResult> GetSelectionAsync(
+        GetSelectionRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
 }

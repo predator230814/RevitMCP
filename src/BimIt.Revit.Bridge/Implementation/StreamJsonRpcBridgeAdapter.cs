@@ -16,6 +16,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitRequestParameterUpdateReviewService? _requestParameterUpdateReview;
     private readonly IRevitApplyParameterUpdatesService? _applyParameterUpdates;
     private readonly IRevitGetWarningsService? _getWarnings;
+    private readonly IRevitGetSelectionService? _getSelection;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -29,7 +30,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitPreviewParameterUpdatesService? previewParameterUpdates = null,
         IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview = null,
         IRevitApplyParameterUpdatesService? applyParameterUpdates = null,
-        IRevitGetWarningsService? getWarnings = null)
+        IRevitGetWarningsService? getWarnings = null,
+        IRevitGetSelectionService? getSelection = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -42,6 +44,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _requestParameterUpdateReview = requestParameterUpdateReview;
         _applyParameterUpdates = applyParameterUpdates;
         _getWarnings = getWarnings;
+        _getSelection = getSelection;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -418,6 +421,43 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit warnings request could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.get_selection")]
+    public async Task<GetSelectionResult> GetSelectionAsync(
+        GetSelectionRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsGetSelection,
+            "revit.get_selection is not available on this connection.");
+        if (_getSelection is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.get_selection is not available on this endpoint."));
+        }
+
+        try
+        {
+            return await _getSelection.GetSelectionAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The Revit selection request could not be executed."));
         }
     }
 

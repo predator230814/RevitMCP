@@ -778,6 +778,17 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
 
     public Func<GetWarningsRequest, TimeSpan, CancellationToken, Task<GetWarningsResult>>? GetWarnings { get; set; }
 
+    public Task<GetSelectionResult> GetSelectionAsync(
+        GetSelectionRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.get_selection.");
+    }
+
     public Task<GetWarningsResult> GetWarningsAsync(
         GetWarningsRequest request,
         TimeSpan timeout,

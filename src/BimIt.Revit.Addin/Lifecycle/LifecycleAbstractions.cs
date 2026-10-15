@@ -34,6 +34,8 @@ internal interface ILifecycleDispatcher : IDisposable
     IRevitApplyParameterUpdatesService? CreateApplyParameterUpdates(BridgeInstanceMetadata metadata);
 
     IRevitGetWarningsService? CreateGetWarnings(BridgeInstanceMetadata metadata);
+
+    IRevitGetSelectionService? CreateGetSelection(BridgeInstanceMetadata metadata);
 }
 
 internal interface ILifecycleBridge : IAsyncDisposable
@@ -60,6 +62,7 @@ internal interface ILifecycleBridgeFactory
         IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview,
         IRevitApplyParameterUpdatesService? applyParameterUpdates,
         IRevitGetWarningsService? getWarnings,
+        IRevitGetSelectionService? getSelection,
         CancellationToken cancellationToken);
 }
 

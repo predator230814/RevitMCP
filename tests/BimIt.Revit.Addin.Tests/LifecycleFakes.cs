@@ -120,6 +120,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("warnings.create");
         return new RecordingGetWarningsService();
     }
+
+    public IRevitGetSelectionService? CreateGetSelection(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("selection.create");
+        return new RecordingGetSelectionService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -197,6 +204,16 @@ internal sealed class RecordingRequestParameterUpdateReviewService : IRevitReque
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording request-review does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingGetSelectionService : IRevitGetSelectionService
+{
+    public Task<GetSelectionResult> GetSelectionAsync(GetSelectionRequest request, CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording selection does not execute Revit work.");
     }
 }
 
@@ -337,6 +354,8 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitGetWarningsService? LastGetWarnings { get; private set; }
 
+    public IRevitGetSelectionService? LastGetSelection { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
@@ -349,6 +368,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview,
         IRevitApplyParameterUpdatesService? applyParameterUpdates,
         IRevitGetWarningsService? getWarnings,
+        IRevitGetSelectionService? getSelection,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -362,6 +382,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         LastRequestParameterUpdateReview = requestParameterUpdateReview;
         LastApplyParameterUpdates = applyParameterUpdates;
         LastGetWarnings = getWarnings;
+        LastGetSelection = getSelection;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

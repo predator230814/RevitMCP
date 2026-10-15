@@ -21,7 +21,8 @@ public sealed class GetElementsRoutingTests
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
-        Assert.False(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
+        Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
+        Assert.False(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 14)));
     }
 
     [Fact]
@@ -39,7 +40,8 @@ public sealed class GetElementsRoutingTests
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
-        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
+        Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
+        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 14)));
 
         Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v2", "pipe-v2", protocolVersion: 2)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v3", "pipe-v3", protocolVersion: 3)));
@@ -52,7 +54,8 @@ public sealed class GetElementsRoutingTests
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
-        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
+        Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
+        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 14)));
     }
 
     [Fact]

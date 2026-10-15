@@ -26,7 +26,9 @@ public static class BridgeProtocol
 
     public const int ContextDocumentIdentityVersion = 12;
 
-    public const int CurrentVersion = ContextDocumentIdentityVersion;
+    public const int GetSelectionVersion = 13;
+
+    public const int CurrentVersion = GetSelectionVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -101,8 +103,25 @@ public static class BridgeProtocol
             HandshakeVersion
         ];
 
+    public static IReadOnlyList<int> ContextDocumentIdentityVersions { get; } =
+        [
+            ContextDocumentIdentityVersion,
+            GetWarningsVersion,
+            ApplyParameterUpdatesVersion,
+            RequestParameterUpdateReviewVersion,
+            PreviewParameterUpdatesVersion,
+            GetMepTopologyVersion,
+            GetParameterValuesVersion,
+            DescribeParametersVersion,
+            GetElementsVersion,
+            QueryElementsVersion,
+            GetContextVersion,
+            HandshakeVersion
+        ];
+
     public static IReadOnlyList<int> SupportedVersions { get; } =
         [
+            GetSelectionVersion,
             ContextDocumentIdentityVersion,
             GetWarningsVersion,
             ApplyParameterUpdatesVersion,
@@ -128,7 +147,8 @@ public static class BridgeProtocol
             or RequestParameterUpdateReviewVersion
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
-            or ContextDocumentIdentityVersion;
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion;
 
     public static bool SupportsQueryElements(int version) =>
         version is QueryElementsVersion
@@ -140,7 +160,8 @@ public static class BridgeProtocol
             or RequestParameterUpdateReviewVersion
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
-            or ContextDocumentIdentityVersion;
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion;
 
     public static bool SupportsGetElements(int version) =>
         version is GetElementsVersion
@@ -151,7 +172,8 @@ public static class BridgeProtocol
             or RequestParameterUpdateReviewVersion
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
-            or ContextDocumentIdentityVersion;
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion;
 
     public static bool SupportsDescribeParameters(int version) =>
         version is DescribeParametersVersion
@@ -161,7 +183,8 @@ public static class BridgeProtocol
             or RequestParameterUpdateReviewVersion
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
-            or ContextDocumentIdentityVersion;
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion;
 
     public static bool SupportsGetParameterValues(int version) =>
         version is GetParameterValuesVersion
@@ -170,7 +193,8 @@ public static class BridgeProtocol
             or RequestParameterUpdateReviewVersion
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
-            or ContextDocumentIdentityVersion;
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion;
 
     public static bool SupportsGetMepTopology(int version) =>
         version is GetMepTopologyVersion
@@ -178,32 +202,39 @@ public static class BridgeProtocol
             or RequestParameterUpdateReviewVersion
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
-            or ContextDocumentIdentityVersion;
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion;
 
     public static bool SupportsPreviewParameterUpdates(int version) =>
         version is PreviewParameterUpdatesVersion
             or RequestParameterUpdateReviewVersion
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
-            or ContextDocumentIdentityVersion;
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion;
 
     public static bool SupportsRequestParameterUpdateReview(int version) =>
         version is RequestParameterUpdateReviewVersion
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
-            or ContextDocumentIdentityVersion;
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion;
 
     public static bool SupportsApplyParameterUpdates(int version) =>
         version is ApplyParameterUpdatesVersion
             or GetWarningsVersion
-            or ContextDocumentIdentityVersion;
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion;
 
     public static bool SupportsGetWarnings(int version) =>
-        version is GetWarningsVersion or ContextDocumentIdentityVersion;
+        version is GetWarningsVersion or ContextDocumentIdentityVersion or GetSelectionVersion;
 
     public static bool SupportsContextDocumentId(int version) =>
-        version is ContextDocumentIdentityVersion;
+        version is ContextDocumentIdentityVersion or GetSelectionVersion;
 
     public static bool SupportsActiveViewUnfilteredQuery(int version) =>
-        version is ContextDocumentIdentityVersion;
+        version is ContextDocumentIdentityVersion or GetSelectionVersion;
+
+    public static bool SupportsGetSelection(int version) =>
+        version is GetSelectionVersion;
 }

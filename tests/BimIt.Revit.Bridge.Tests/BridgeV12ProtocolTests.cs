@@ -36,10 +36,10 @@ public sealed class BridgeV12ProtocolTests
     }
 
     [Fact]
-    public async Task Unknown_v13_does_not_call_get_context()
+    public async Task Unknown_v14_does_not_call_get_context()
     {
         var capability = new FakeCapabilityService();
-        var adapter = Adapter(capability, new FakeQueryElementsService(), 13);
+        var adapter = Adapter(capability, new FakeQueryElementsService(), 14);
         await adapter.HandshakeAsync(Handshake(), CancellationToken.None);
         var rejected = await Assert.ThrowsAsync<LocalRpcException>(() =>
             adapter.GetContextAsync(new GetContextRequest(), CancellationToken.None));
