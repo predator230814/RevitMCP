@@ -52,7 +52,7 @@ internal sealed class McpAssistantToolSession : IAssistantToolSession, IAsyncDis
             return new AssistantToolCall(true, "mcp_unavailable", "The MCP client is not initialized.", null);
         }
 
-        if (AssistantTools.IsTrustedWriteTool(toolName) || !AssistantTools.WorkflowTools.Contains(toolName, StringComparer.Ordinal))
+        if (AssistantTools.IsTrustedWriteTool(toolName) || !AssistantTools.AllowedReadTools.Contains(toolName, StringComparer.Ordinal))
         {
             return new AssistantToolCall(true, "tool_not_allowed", "This Assistant workflow cannot call that tool.", null);
         }

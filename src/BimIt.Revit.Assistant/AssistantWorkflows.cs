@@ -28,7 +28,20 @@ public static class AssistantTools
 
     public const string QueryElements = "revit_query_elements";
 
+    public const string GetSelection = "revit_get_selection";
+
+    public const string GetElements = "revit_get_elements";
+
     public static readonly string[] WorkflowTools = [GetContext, GetWarnings, QueryElements];
+
+    public static readonly string[] AllowedReadTools =
+    [
+        GetContext,
+        GetWarnings,
+        QueryElements,
+        GetSelection,
+        GetElements,
+    ];
 
     public static bool IsTrustedWriteTool(string toolName)
     {

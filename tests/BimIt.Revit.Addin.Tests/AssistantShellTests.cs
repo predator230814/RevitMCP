@@ -233,6 +233,10 @@ public sealed class AssistantShellTests
         await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("There are 7 warnings.", StringComparison.Ordinal)));
         Assert.Contains(shell.Conversation.Entries, entry => entry.Used == "Used: Analyze warnings");
         Assert.Equal(["show me the ducts"], link.Chats);
+        link.ChatResult = link.ChatResult! with { UsedTools = ["bimit_inspect_selection"] };
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Qu'est-ce que j'ai sélectionné ?"}""");
+        await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Used == "Used: Inspect selection"));
+        Assert.Equal(["show me the ducts", "Qu'est-ce que j'ai sélectionné ?"], link.Chats);
         Assert.Equal(3, link.Workflows.Count);
         Assert.Equal(1, factory.Starts);
 
