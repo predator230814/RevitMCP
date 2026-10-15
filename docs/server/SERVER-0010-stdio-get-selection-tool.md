@@ -1,6 +1,6 @@
 # SERVER-0010: stdio `revit_get_selection` tool
 
-- Status: Accepted specification; not implemented.
+- Status: Accepted. Implemented. Official MCP-client live validation is pending.
 - Date: 2026-10-14
 
 ## Purpose
@@ -9,7 +9,7 @@ Expose accepted CAP-0010 `revit_get_selection` through the existing standalone `
 
 SERVER-0010 applies the existing read-tool pattern to accepted CAP-0010 / BRIDGE-0013. It does not create a new architecture decision, server process, transport, or generic capability framework.
 
-This specification does not implement Server code, schemas, tests, routing, or tool registration. Production `tools/list` remains exactly 10 tools. After a later implementation, and only after typed Bridge live validation of `revit.get_selection` has passed, `tools/list` is expected to contain 11 tools.
+This specification is implemented. Production `tools/list` contains exactly 11 tools, including `revit_get_selection`. Official MCP-client live validation in Revit 2026.5 is pending. The checklist is [CAP_0010_SELECTION_MCP_VALIDATION.md](../CAP_0010_SELECTION_MCP_VALIDATION.md). That checklist is not a pass.
 
 The implemented `revit_get_warnings` tool has no `SERVER-00xx` specification file. This specification does not add one. SERVER-0010 is the get-selection tool.
 
@@ -31,7 +31,7 @@ SERVER-0010 must not change CAP-0010 or BRIDGE-0013 semantics.
 
 ## Non-goals
 
-- implementing CAP-0010, BRIDGE-0013, or this tool in this specification;
+- changing CAP-0010 or BRIDGE-0013 while exposing this tool;
 - changing CAP-0001 so that it returns selected elements;
 - changing BRIDGE-0013 protocol sets or RPC method semantics;
 - requiring callers to send `instance_id`;

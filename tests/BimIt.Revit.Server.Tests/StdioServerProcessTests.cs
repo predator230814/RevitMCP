@@ -28,7 +28,7 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(10, tools.Count);
+        Assert.Equal(11, tools.Count);
         Assert.Equal(
             new[]
             {
@@ -38,6 +38,7 @@ public sealed class StdioServerProcessTests
                 GetElementsToolMetadata.Name,
                 GetMepTopologyToolMetadata.Name,
                 GetParameterValuesToolMetadata.Name,
+                GetSelectionToolMetadata.Name,
                 GetWarningsToolMetadata.Name,
                 PreviewParameterUpdatesToolMetadata.Name,
                 QueryElementsToolMetadata.Name,
@@ -53,6 +54,7 @@ public sealed class StdioServerProcessTests
                 "revit_get_elements",
                 "revit_get_mep_topology",
                 "revit_get_parameter_values",
+                "revit_get_selection",
                 "revit_get_warnings",
                 "revit_preview_parameter_updates",
                 "revit_query_elements",
@@ -95,6 +97,12 @@ public sealed class StdioServerProcessTests
         Assert.Equal(GetParameterValuesToolMetadata.Description, getParameterValues.Description);
         Assert.True(getParameterValues.ProtocolTool.Annotations?.ReadOnlyHint);
         Assert.False(getParameterValues.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var getSelection = Assert.Single(tools, tool => tool.Name == GetSelectionToolMetadata.Name);
+        Assert.Equal(GetSelectionToolMetadata.Title, getSelection.Title);
+        Assert.Equal(GetSelectionToolMetadata.Description, getSelection.Description);
+        Assert.True(getSelection.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(getSelection.ProtocolTool.Annotations?.OpenWorldHint);
 
         var getMepTopology = Assert.Single(tools, tool => tool.Name == GetMepTopologyToolMetadata.Name);
         Assert.Equal(GetMepTopologyToolMetadata.Title, getMepTopology.Title);
@@ -244,6 +252,19 @@ public sealed class StdioServerProcessTests
         Assert.DoesNotContain("NO_REVIT_INSTANCE", previewText, StringComparison.Ordinal);
         Assert.DoesNotContain("INVALID_PARAMETER_UPDATE_PREVIEW", previewText, StringComparison.Ordinal);
         Assert.DoesNotContain("revit.preview_parameter_updates", previewText, StringComparison.Ordinal);
+
+        var malformedSelection = await client.CallToolAsync(
+            GetSelectionToolMetadata.Name,
+            new Dictionary<string, object?>
+            {
+                ["limit"] = 0
+            });
+        Assert.True(malformedSelection.IsError);
+        var selectionText = Assert.IsType<TextContentBlock>(Assert.Single(malformedSelection.Content)).Text;
+        Assert.Contains(McpToolErrorCodes.InvalidRequest, selectionText, StringComparison.Ordinal);
+        Assert.DoesNotContain("NO_REVIT_INSTANCE", selectionText, StringComparison.Ordinal);
+        Assert.DoesNotContain("INVALID_SELECTION", selectionText, StringComparison.Ordinal);
+        Assert.DoesNotContain("revit.get_selection", selectionText, StringComparison.Ordinal);
 
         var malformedReview = await client.CallToolAsync(
             RequestParameterUpdateReviewToolMetadata.Name,

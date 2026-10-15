@@ -25,7 +25,7 @@ public sealed class AssistantProcessTests
         var status = AssistantIpc.Parse(await AssistantPipeFrames.ReadAsync(client, timeout.Token));
         Assert.True(status.Accepted);
         Assert.Equal("ready", status.Message!.McpState);
-        Assert.Equal(10, status.Message.ToolCount);
+        Assert.Equal(11, status.Message.ToolCount);
         Assert.Contains("revit_get_context", status.Message.ToolNames!);
         Assert.Contains("revit_get_warnings", status.Message.ToolNames!);
         Assert.Contains("revit_query_elements", status.Message.ToolNames!);
@@ -77,7 +77,7 @@ public sealed class AssistantProcessTests
         await using var session = new McpAssistantToolSession(server);
         var readiness = await session.InitializeAsync(CancellationToken.None);
         Assert.True(readiness.Ready);
-        Assert.Equal(10, readiness.ToolCount);
+        Assert.Equal(11, readiness.ToolCount);
 
         var refused = await session.CallAsync(
             "revit_apply_parameter_updates",
