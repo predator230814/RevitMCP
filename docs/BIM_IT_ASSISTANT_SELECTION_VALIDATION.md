@@ -1,6 +1,6 @@
 # BIM-IT Assistant selection validation
 
-Status: the main natural-language gate was observed on 2026-10-15. This record is not a merge verdict.
+Status: the main natural-language gate, an empty selection, and New Chat were observed on 2026-10-15. This record is not a merge verdict.
 
 Scope: natural language in BIM-IT Assistant to `bimit_inspect_selection` to the existing MCP session to `revit_get_selection` and `revit_get_elements` to Bridge to Revit 2026.5.
 
@@ -30,8 +30,8 @@ Host: Revit 2026. The add-in, Assistant, and Server were the local Release outpu
 | Check | Result |
 | --- | --- |
 | Two selected elements, "Qu'est-ce que j'ai sélectionné ?" | PASS — the pane identified a round conduit tee fitting on level L3 and a copper pipe on level Parking. The message showed `Used: Inspect selection`. The user supplied no ids. |
-| Empty selection | Not recorded in this run |
+| Empty selection | PASS — an empty selection was a successful answer, not an error. |
 | More than 10 selected elements | Not recorded in this run |
-| New Chat | Not recorded in this run |
+| New Chat | PASS — New Chat did not keep the previous selection facts without reading the selection again. |
 | Model Context, Analyze Warnings, Active View Elements | Not recorded in this run |
 | Provider-failure isolation | Not recorded in this run |
