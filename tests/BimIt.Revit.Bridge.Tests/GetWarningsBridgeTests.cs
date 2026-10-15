@@ -37,8 +37,9 @@ public sealed class GetWarningsBridgeTests
             services.Review,
             services.Apply);
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, v11.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.ContextDocumentIdentityVersions, v11.SupportedProtocolVersions);
         Assert.Equal(12, v11.SupportedProtocolVersions.Max());
+        Assert.DoesNotContain(13, v11.SupportedProtocolVersions);
         Assert.Equal(BridgeProtocol.ApplyParameterUpdatesVersions, v10.SupportedProtocolVersions);
         Assert.DoesNotContain(11, v10.SupportedProtocolVersions);
         Assert.DoesNotContain(12, v10.SupportedProtocolVersions);
@@ -46,8 +47,8 @@ public sealed class GetWarningsBridgeTests
 
     [Theory]
     [InlineData(10)]
-    [InlineData(13)]
-    public async Task Get_warnings_is_rejected_outside_v11_and_v12(int version)
+    [InlineData(14)]
+    public async Task Get_warnings_is_rejected_outside_its_explicit_set(int version)
     {
         var service = new FakeGetWarningsService();
         var adapter = Adapter(service, version);
@@ -61,7 +62,8 @@ public sealed class GetWarningsBridgeTests
     [Theory]
     [InlineData(11)]
     [InlineData(12)]
-    public async Task Get_warnings_is_allowed_on_v11_and_v12(int version)
+    [InlineData(13)]
+    public async Task Get_warnings_is_allowed_on_its_explicit_set(int version)
     {
         var service = new FakeGetWarningsService();
         var adapter = Adapter(service, version);

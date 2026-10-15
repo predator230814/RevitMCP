@@ -1,6 +1,6 @@
 # BRIDGE-0013: `revit.get_selection` capability RPC
 
-- Status: Accepted specification; not implemented.
+- Status: Accepted. Implemented through Contracts, Addin, and the typed Bridge. Live Revit 2026.5 validation is recorded and is not a merge verdict. The MCP tool is not implemented.
 - Date: 2026-10-14
 - Introduced bridge protocol version: 13
 
@@ -10,7 +10,7 @@ Define the local JSON-RPC Bridge operation that implements Accepted CAP-0010 `re
 
 This specification preserves the explicit typed RPC approach established by BRIDGE-0002 through BRIDGE-0012. It does not introduce a generic capability registry, command envelope, or reflection-driven dispatch system.
 
-Protocol v13, `revit.get_selection`, the Contracts types, the Addin service, and the typed client are not implemented by this specification. Production `BridgeProtocol.CurrentVersion` remains 12. Production still rejects protocol 13.
+This document is the specification. The Contracts types, the Addin service, protocol v13, `revit.get_selection`, and the typed client are implemented. `BridgeProtocol.CurrentVersion` is 13. Typed Bridge live validation on Revit 2026.5 build `26.5.0.55` is recorded in [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](../CAP_0010_SELECTION_BRIDGE_VALIDATION.md) against SHA `3f6f57024be0600486f717b71162e08da285d45d`. That record is not a merge verdict. The MCP tool remains unimplemented.
 
 [BRIDGE-0012](BRIDGE-0012-context-document-identity.md) recorded that unknown protocol version 13 supports nothing until a later specification lists it. This specification is that later specification. It does not rewrite the v12 record.
 

@@ -35,4 +35,6 @@ public static class CapabilityErrorCodes
     public const string InvalidApplyRequest = "INVALID_APPLY_REQUEST";
 
     public const string InvalidWarnings = "INVALID_WARNINGS";
+
+    public const string InvalidSelection = "INVALID_SELECTION";
 }

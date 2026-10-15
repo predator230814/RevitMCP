@@ -449,6 +449,39 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         }
     }
 
+    public async Task<GetSelectionResult> GetSelectionAsync(
+        GetSelectionRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<GetSelectionResult>(
+                "revit.get_selection",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureGetSelectionAllowed,
+                "The Revit selection request timed out.",
+                "The Revit selection request could not be executed.")
+            .ConfigureAwait(false);
+    }
+
+    private void EnsureGetSelectionAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsGetSelection(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.get_selection requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
     private void EnsureGetMepTopologyAllowed()
     {
         EnsureCapabilityReady();

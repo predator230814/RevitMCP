@@ -19,7 +19,8 @@ public sealed class RequestParameterUpdateReviewRoutingTests
         Assert.True(InstanceTargetResolver.IsRequestParameterUpdateReviewEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
         Assert.True(InstanceTargetResolver.IsRequestParameterUpdateReviewEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsRequestParameterUpdateReviewEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
-        Assert.False(InstanceTargetResolver.IsRequestParameterUpdateReviewEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
+        Assert.True(InstanceTargetResolver.IsRequestParameterUpdateReviewEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
+        Assert.False(InstanceTargetResolver.IsRequestParameterUpdateReviewEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 14)));
     }
 
     [Fact]
