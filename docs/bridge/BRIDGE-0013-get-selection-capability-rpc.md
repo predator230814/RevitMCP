@@ -1,6 +1,6 @@
 # BRIDGE-0013: `revit.get_selection` capability RPC
 
-- Status: Accepted. Implemented through Contracts, Addin, and the typed Bridge. Live Revit validation is pending. The MCP tool is not implemented.
+- Status: Accepted. Implemented through Contracts, Addin, and the typed Bridge. Live Revit 2026.5 validation is recorded and is not a merge verdict. The MCP tool is not implemented.
 - Date: 2026-10-14
 - Introduced bridge protocol version: 13
 
