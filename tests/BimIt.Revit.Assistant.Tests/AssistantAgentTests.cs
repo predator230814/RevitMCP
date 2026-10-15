@@ -349,6 +349,61 @@ public sealed class AssistantAgentTests
         var write = await new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId)
             .InvokeAsync("revit_apply_parameter_updates", CancellationToken.None);
         Assert.Equal("tool_not_allowed", write["code"]);
+
+        var typed = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success("""
+                {
+                  "context": { "document_id": "doc-9" },
+                  "selected_count": 1,
+                  "truncated": false,
+                  "element_refs": ["ref-1"]
+                }
+                """)
+            : Success("""
+                {
+                  "context": { "instance_id": "hidden", "document_id": "doc-9" },
+                  "elements": [
+                    {
+                      "element_ref": "ref-1",
+                      "status": "ok",
+                      "name": "PVC - DWV",
+                      "category_name": "Pipes",
+                      "family_name": "Pipe Types",
+                      "type_name": "PVC - DWV",
+                      "level_name": "L1",
+                      "parameters": [
+                        { "name": "Diameter", "source": "instance", "value_text": "4\"", "value_truncated": false }
+                      ]
+                    }
+                  ]
+                }
+                """));
+        var projected = await new BimItAgentReadTools(typed, InstanceId).InvokeAsync(BimItAgentReadTools.InspectSelection, CancellationToken.None);
+        var projectedItems = Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(projected["elements"]);
+        Assert.Equal(
+            ["element_ref", "status", "name", "category_name", "family_name", "type_name", "level_name"],
+            projectedItems[0].Keys);
+        Assert.False(projectedItems[0].ContainsKey("parameters"));
+
+        var untyped = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success("""
+                {
+                  "context": { "document_id": "doc-9" },
+                  "selected_count": 1,
+                  "truncated": false,
+                  "element_refs": ["ref-1"]
+                }
+                """)
+            : Success("""
+                {
+                  "context": { "instance_id": "hidden", "document_id": "doc-9" },
+                  "elements": [ { "element_ref": "ref-1", "status": "gone", "name": 12 } ]
+                }
+                """));
+        var rejected = await new BimItAgentReadTools(untyped, InstanceId).InvokeAsync(BimItAgentReadTools.InspectSelection, CancellationToken.None);
+        Assert.False((bool)rejected["ok"]!);
+        Assert.Equal("malformed", rejected["code"]);
+        Assert.Equal("The element result could not be read.", rejected["message"]);
     }
 
     [Fact]

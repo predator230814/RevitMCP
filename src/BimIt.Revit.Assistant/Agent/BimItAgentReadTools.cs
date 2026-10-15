@@ -354,61 +354,61 @@ internal sealed class BimItAgentReadTools
     private static bool TryReadElements(JsonElement? structured, out List<IReadOnlyDictionary<string, object?>> items)
     {
         items = [];
-        if (structured is not { ValueKind: JsonValueKind.Object } json
-            || !json.TryGetProperty("elements", out var elements)
-            || elements.ValueKind != JsonValueKind.Array)
+        if (structured is not { ValueKind: JsonValueKind.Object } json)
         {
             return false;
         }
 
-        foreach (var element in elements.EnumerateArray())
+        GetElementsResult? result;
+        try
         {
-            if (element.ValueKind != JsonValueKind.Object
-                || !TryText(element, "element_ref", required: true, out var elementRef)
-                || !TryText(element, "status", required: true, out var status))
-            {
-                return false;
-            }
+            result = json.Deserialize<GetElementsResult>(ContractJson.Options);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
 
-            if (!TryText(element, "name", required: false, out var name)
-                || !TryText(element, "category_name", required: false, out var categoryName)
-                || !TryText(element, "family_name", required: false, out var familyName)
-                || !TryText(element, "type_name", required: false, out var typeName)
-                || !TryText(element, "level_name", required: false, out var levelName))
+        if (result?.Elements is null)
+        {
+            return false;
+        }
+
+        foreach (var element in result.Elements)
+        {
+            if (string.IsNullOrEmpty(element.ElementRef) || StatusName(element.Status) is not string status)
             {
                 return false;
             }
 
             items.Add(new Dictionary<string, object?>
             {
-                ["element_ref"] = elementRef,
+                ["element_ref"] = element.ElementRef,
                 ["status"] = status,
-                ["name"] = name,
-                ["category_name"] = categoryName,
-                ["family_name"] = familyName,
-                ["type_name"] = typeName,
-                ["level_name"] = levelName,
+                ["name"] = Projected(element.Name),
+                ["category_name"] = Projected(element.CategoryName),
+                ["family_name"] = Projected(element.FamilyName),
+                ["type_name"] = Projected(element.TypeName),
+                ["level_name"] = Projected(element.LevelName),
             });
         }
 
         return true;
     }
 
-    private static bool TryText(JsonElement element, string name, bool required, out string? value)
+    private static string? Projected(ProjectedString value)
     {
-        value = null;
-        if (!element.TryGetProperty(name, out var property) || property.ValueKind == JsonValueKind.Null)
-        {
-            return !required;
-        }
+        return value.IsRequested ? value.Value : null;
+    }
 
-        if (property.ValueKind != JsonValueKind.String)
+    private static string? StatusName(GetElementResultStatus status)
+    {
+        return status switch
         {
-            return false;
-        }
-
-        value = property.GetString();
-        return !required || value is not null;
+            GetElementResultStatus.Ok => "ok",
+            GetElementResultStatus.NotFound => "not_found",
+            _ => null,
+        };
     }
 
     private sealed record ContextRead(
