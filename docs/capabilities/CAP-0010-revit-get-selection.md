@@ -40,7 +40,7 @@ revit_get_selection
 -> revit_get_mep_topology
 ```
 
-The intended design remains selection, then inspect, then optionally explore topology. This capability is not an inspect-everything call.
+The intended design remains selection, then inspect, then optionally explore topology, including item-level downstream failures. This capability is not an inspect-everything call.
 
 ## MCP tool
 
@@ -174,8 +174,9 @@ The count is computed before `limit` is applied.
 
 Array of opaque ADR-0006 strings.
 
-- the initial implementation may use `Element.UniqueId` internally;
-- the handle is the same opaque handle CAP-0002 returns, so a returned ref is valid input to later active-document capabilities for the same `document_id`;
+- CAP-0010 uses the same ADR-0006 opaque `element_ref` representation, currently backed by `Element.UniqueId`;
+- a returned ref is valid opaque input to a later capability for the same `document_id`;
+- valid input does not guarantee downstream success;
 - clients must not parse or infer the representation;
 - schemas must not declare UUID/GUID format;
 - values are unique by ordinal string equality;
@@ -239,11 +240,19 @@ CAP-0001 `selection.count` remains `UIDocument.Selection.GetElementIds().Count`.
 
 CAP-0010 `selected_count` is the unique resolved `element_ref` population before `limit`. The two integers are not required to be equal.
 
-An id returned by `GetElementIds()` that does not resolve to an element in the active document, or that cannot produce the CAP-0002 `element_ref`, is omitted from `selected_count` and from `element_refs`. This result has no unresolved-count field.
+An id returned by `GetElementIds()` that does not resolve to an element in the active document, or that cannot produce an ADR-0006 `element_ref`, is omitted from `selected_count` and from `element_refs`. This result has no unresolved-count field.
 
 A `RevitLinkInstance` that is itself present in `GetElementIds()` is an active-document element. It may be returned as that host element's `element_ref`. Contents of the link are not read.
 
-v1 does not apply the CAP-0002 exclusion of `ElementType`. Membership is `GetElementIds()` after the resolution rule above.
+### Downstream composability
+
+Membership comes from `UIDocument.Selection.GetElementIds()`. v1 does not add the CAP-0002 `ElementType` exclusion. This result has no new output field for element class.
+
+CAP-0010 uses the same ADR-0006 opaque `element_ref` representation, currently backed by `Element.UniqueId`. It may emit a ref that CAP-0002 itself would not emit, including an `ElementType` selected through the `GetElementIds()` surface.
+
+Downstream capabilities retain their own eligibility and status semantics. CAP-0003 and CAP-0006 may therefore report `not_found` for an `ElementType` ref. The selection, inspect, and optional topology workflow includes those item-level failures.
+
+"Valid input" means a valid opaque ref input. It does not guarantee that CAP-0002 would have emitted the ref, and it does not guarantee downstream success.
 
 ### Active document and family documents
 
