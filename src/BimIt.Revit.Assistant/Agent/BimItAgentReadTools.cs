@@ -15,11 +15,23 @@ internal sealed class BimItAgentReadTools
 
     public const string InspectSelection = "bimit_inspect_selection";
 
+    public const string ExploreSelectedMep = "bimit_explore_selected_mep";
+
     public const int ActiveViewLimit = 25;
 
     public const int InspectSelectionLimit = 10;
 
-    public static readonly string[] Names = [ModelContext, Warnings, ActiveViewElements, InspectSelection];
+    public const int ExploreSelectionLimit = 3;
+
+    public const int ExploreTopologyMaxDepth = 2;
+
+    public const int ExploreTopologyMaxElements = 25;
+
+    public const int ExploreTopologyMaxEdges = 40;
+
+    public const int ExploreDetailsLimit = 10;
+
+    public static readonly string[] Names = [ModelContext, Warnings, ActiveViewElements, InspectSelection, ExploreSelectedMep];
 
     private static readonly string[] DeniedTools =
     [
@@ -76,6 +88,7 @@ internal sealed class BimItAgentReadTools
             Warnings => await WarningsAsync(cancellationToken).ConfigureAwait(false),
             ActiveViewElements => await ActiveViewAsync(cancellationToken).ConfigureAwait(false),
             InspectSelection => await InspectSelectionAsync(cancellationToken).ConfigureAwait(false),
+            ExploreSelectedMep => await ExploreSelectedMepAsync(cancellationToken).ConfigureAwait(false),
             _ => Fail("tool_not_allowed", "That tool is not available to BIM-IT Assistant."),
         };
     }
@@ -234,6 +247,134 @@ internal sealed class BimItAgentReadTools
         };
     }
 
+    private async Task<IReadOnlyDictionary<string, object?>> ExploreSelectedMepAsync(CancellationToken cancellationToken)
+    {
+        RecordUse(ExploreSelectedMep);
+        var selection = await _session.CallAsync(
+            AssistantTools.GetSelection,
+            new Dictionary<string, object?>
+            {
+                ["instance_id"] = _instanceId,
+                ["limit"] = ExploreSelectionLimit,
+            },
+            cancellationToken).ConfigureAwait(false);
+        if (selection.IsError)
+        {
+            return Fail(selection);
+        }
+
+        if (!TryReadSelection(selection.Structured, out var documentId, out var selectedCount, out var selectionTruncated, out var refs))
+        {
+            return Fail("malformed", "The selection result could not be read.");
+        }
+
+        if (refs.Count == 0)
+        {
+            return EmptyExploration(selectedCount, selectionTruncated);
+        }
+
+        var topology = await _session.CallAsync(
+            AssistantTools.GetMepTopology,
+            new Dictionary<string, object?>
+            {
+                ["instance_id"] = _instanceId,
+                ["document_id"] = documentId,
+                ["seed_element_refs"] = refs,
+                ["max_depth"] = ExploreTopologyMaxDepth,
+                ["max_elements"] = ExploreTopologyMaxElements,
+                ["max_edges"] = ExploreTopologyMaxEdges,
+            },
+            cancellationToken).ConfigureAwait(false);
+        if (topology.IsError)
+        {
+            return Fail(topology);
+        }
+
+        if (!TryReadTopology(topology.Structured, out var graph))
+        {
+            return Fail("malformed", "The topology result could not be read.");
+        }
+
+        var items = new List<IReadOnlyDictionary<string, object?>>();
+        if (graph.NodeRefs.Count > 0)
+        {
+            var elements = await _session.CallAsync(
+                AssistantTools.GetElements,
+                new Dictionary<string, object?>
+                {
+                    ["instance_id"] = _instanceId,
+                    ["document_id"] = documentId,
+                    ["element_refs"] = graph.NodeRefs.Take(ExploreDetailsLimit).ToArray(),
+                    ["projection"] = new Dictionary<string, object?>
+                    {
+                        ["fields"] = new[]
+                        {
+                            "name",
+                            "category_name",
+                            "family_name",
+                            "type_name",
+                            "level_name",
+                        },
+                    },
+                },
+                cancellationToken).ConfigureAwait(false);
+            if (elements.IsError)
+            {
+                return Fail(elements);
+            }
+
+            if (!TryReadElements(elements.Structured, out items))
+            {
+                return Fail("malformed", "The element result could not be read.");
+            }
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["ok"] = true,
+            ["selected_count"] = selectedCount,
+            ["seed_count"] = refs.Count,
+            ["selection_truncated"] = selectionTruncated,
+            ["seeds"] = graph.Seeds,
+            ["topology"] = new Dictionary<string, object?>
+            {
+                ["node_count"] = graph.Nodes.Count,
+                ["edge_count"] = graph.Edges.Count,
+                ["nodes"] = graph.Nodes,
+                ["edges"] = graph.Edges,
+                ["truncated"] = graph.Truncated,
+                ["truncation_reasons"] = graph.Reasons,
+            },
+            ["described_count"] = items.Count,
+            ["details_truncated"] = graph.Nodes.Count > ExploreDetailsLimit,
+            ["elements"] = items,
+        };
+    }
+
+    private static IReadOnlyDictionary<string, object?> EmptyExploration(int selectedCount, bool selectionTruncated)
+    {
+        return new Dictionary<string, object?>
+        {
+            ["ok"] = true,
+            ["selected_count"] = selectedCount,
+            ["seed_count"] = 0,
+            ["selection_truncated"] = selectionTruncated,
+            ["seeds"] = Array.Empty<IReadOnlyDictionary<string, object?>>(),
+            ["topology"] = new Dictionary<string, object?>
+            {
+                ["node_count"] = 0,
+                ["edge_count"] = 0,
+                ["nodes"] = Array.Empty<IReadOnlyDictionary<string, object?>>(),
+                ["edges"] = Array.Empty<IReadOnlyDictionary<string, object?>>(),
+                ["truncated"] = false,
+                ["truncation_reasons"] = Array.Empty<string>(),
+            },
+            ["described_count"] = 0,
+            ["details_truncated"] = false,
+            ["elements"] = Array.Empty<IReadOnlyDictionary<string, object?>>(),
+        };
+    }
+
     private async Task<ContextRead> ReadContextAsync(CancellationToken cancellationToken)
     {
         var call = await _session.CallAsync(
@@ -286,6 +427,13 @@ internal sealed class BimItAgentReadTools
 
             _used.Add(toolName);
         }
+    }
+
+    private static IReadOnlyDictionary<string, object?> Fail(AssistantToolCall call)
+    {
+        return Fail(
+            string.IsNullOrWhiteSpace(call.ErrorCode) ? "mcp_error" : call.ErrorCode,
+            string.IsNullOrWhiteSpace(call.ErrorMessage) ? "The MCP tool returned an error." : call.ErrorMessage);
     }
 
     private static IReadOnlyDictionary<string, object?> Fail(string code, string message)
@@ -401,6 +549,103 @@ internal sealed class BimItAgentReadTools
         return value.IsRequested ? value.Value : null;
     }
 
+    private static bool TryReadTopology(JsonElement? structured, out TopologyView graph)
+    {
+        graph = new TopologyView([], [], [], [], false, []);
+        if (structured is not { ValueKind: JsonValueKind.Object } json)
+        {
+            return false;
+        }
+
+        GetMepTopologyResult? result;
+        try
+        {
+            result = json.Deserialize<GetMepTopologyResult>(ContractJson.Options);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (result?.Seeds is null || result.Nodes is null || result.Edges is null || result.TruncationReasons is null)
+        {
+            return false;
+        }
+
+        var seeds = new List<IReadOnlyDictionary<string, object?>>(result.Seeds.Count);
+        foreach (var seed in result.Seeds)
+        {
+            if (string.IsNullOrEmpty(seed.ElementRef) || SeedStatusName(seed.Status) is not string status)
+            {
+                return false;
+            }
+
+            seeds.Add(new Dictionary<string, object?>
+            {
+                ["element_ref"] = seed.ElementRef,
+                ["status"] = status,
+            });
+        }
+
+        var nodes = new List<IReadOnlyDictionary<string, object?>>(result.Nodes.Count);
+        var nodeRefs = new List<string>(result.Nodes.Count);
+        foreach (var node in result.Nodes)
+        {
+            if (string.IsNullOrEmpty(node.ElementRef))
+            {
+                return false;
+            }
+
+            nodeRefs.Add(node.ElementRef);
+            nodes.Add(new Dictionary<string, object?>
+            {
+                ["element_ref"] = node.ElementRef,
+                ["depth"] = node.Depth,
+            });
+        }
+
+        var edges = new List<IReadOnlyDictionary<string, object?>>(result.Edges.Count);
+        foreach (var edge in result.Edges)
+        {
+            if (string.IsNullOrEmpty(edge.ElementRefA) || string.IsNullOrEmpty(edge.ElementRefB) || edge.Domains is null)
+            {
+                return false;
+            }
+
+            var domains = new List<string>(edge.Domains.Count);
+            foreach (var domain in edge.Domains)
+            {
+                if (DomainName(domain) is not string name)
+                {
+                    return false;
+                }
+
+                domains.Add(name);
+            }
+
+            edges.Add(new Dictionary<string, object?>
+            {
+                ["element_ref_a"] = edge.ElementRefA,
+                ["element_ref_b"] = edge.ElementRefB,
+                ["domains"] = domains,
+            });
+        }
+
+        var reasons = new List<string>(result.TruncationReasons.Count);
+        foreach (var reason in result.TruncationReasons)
+        {
+            if (TruncationReasonName(reason) is not string name)
+            {
+                return false;
+            }
+
+            reasons.Add(name);
+        }
+
+        graph = new TopologyView(seeds, nodes, nodeRefs, edges, result.Truncated, reasons);
+        return true;
+    }
+
     private static string? StatusName(GetElementResultStatus status)
     {
         return status switch
@@ -410,6 +655,48 @@ internal sealed class BimItAgentReadTools
             _ => null,
         };
     }
+
+    private static string? SeedStatusName(MepTopologySeedStatus status)
+    {
+        return status switch
+        {
+            MepTopologySeedStatus.Ok => "ok",
+            MepTopologySeedStatus.NotFound => "not_found",
+            MepTopologySeedStatus.NoConnectors => "no_connectors",
+            _ => null,
+        };
+    }
+
+    private static string? DomainName(MepTopologyDomain domain)
+    {
+        return domain switch
+        {
+            MepTopologyDomain.Hvac => "hvac",
+            MepTopologyDomain.Piping => "piping",
+            MepTopologyDomain.Electrical => "electrical",
+            MepTopologyDomain.CableTrayConduit => "cable_tray_conduit",
+            _ => null,
+        };
+    }
+
+    private static string? TruncationReasonName(MepTopologyTruncationReason reason)
+    {
+        return reason switch
+        {
+            MepTopologyTruncationReason.Depth => "depth",
+            MepTopologyTruncationReason.Elements => "elements",
+            MepTopologyTruncationReason.Edges => "edges",
+            _ => null,
+        };
+    }
+
+    private sealed record TopologyView(
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> Seeds,
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> Nodes,
+        IReadOnlyList<string> NodeRefs,
+        IReadOnlyList<IReadOnlyDictionary<string, object?>> Edges,
+        bool Truncated,
+        IReadOnlyList<string> Reasons);
 
     private sealed record ContextRead(
         IReadOnlyDictionary<string, object?>? Error,

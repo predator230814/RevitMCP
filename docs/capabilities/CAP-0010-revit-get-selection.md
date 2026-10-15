@@ -9,7 +9,7 @@
 
 This specification is **Accepted**. Dave, Product Owner, accepted it on 2026-10-14.
 
-Implementation is not part of this specification. Contracts, the Addin service, Bridge protocol version 13, and the MCP tool `revit_get_selection` are implemented. Production `tools/list` contains exactly 11 tools. Official MCP-client live validation is recorded in [CAP_0010_SELECTION_MCP_VALIDATION.md](../CAP_0010_SELECTION_MCP_VALIDATION.md) and is not a merge verdict. Typed Bridge live validation on Revit 2026.5 is recorded in [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](../CAP_0010_SELECTION_BRIDGE_VALIDATION.md). Assistant `bimit_inspect_selection` is implemented and composes this capability through MCP. Live Assistant validation is pending. `bimit_explore_selected_mep` is not implemented.
+Implementation is not part of this specification. Contracts, the Addin service, Bridge protocol version 13, and the MCP tool `revit_get_selection` are implemented. Production `tools/list` contains exactly 11 tools. Official MCP-client live validation is recorded in [CAP_0010_SELECTION_MCP_VALIDATION.md](../CAP_0010_SELECTION_MCP_VALIDATION.md) and is not a merge verdict. Typed Bridge live validation on Revit 2026.5 is recorded in [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](../CAP_0010_SELECTION_BRIDGE_VALIDATION.md). Assistant `bimit_inspect_selection` is implemented and composes this capability through MCP. Assistant `bimit_explore_selected_mep` is implemented and composes this capability with physical MEP topology. Live validation of that exploration tool is pending.
 
 ## Purpose
 

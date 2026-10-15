@@ -32,6 +32,8 @@ public static class AssistantTools
 
     public const string GetElements = "revit_get_elements";
 
+    public const string GetMepTopology = "revit_get_mep_topology";
+
     public static readonly string[] WorkflowTools = [GetContext, GetWarnings, QueryElements];
 
     public static readonly string[] AllowedReadTools =
@@ -41,6 +43,7 @@ public static class AssistantTools
         QueryElements,
         GetSelection,
         GetElements,
+        GetMepTopology,
     ];
 
     public static bool IsTrustedWriteTool(string toolName)

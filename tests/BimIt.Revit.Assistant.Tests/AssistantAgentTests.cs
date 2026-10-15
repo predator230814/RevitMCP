@@ -37,7 +37,7 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
-    public void Copilot_session_is_empty_mode_with_only_the_four_read_tools()
+    public void Copilot_session_is_empty_mode_with_only_the_five_read_tools()
     {
         var directory = Directory.CreateTempSubdirectory("bimit-copilot-config-").FullName;
         try
@@ -87,6 +87,7 @@ public sealed class AssistantAgentTests
                     "custom:" + BimItAgentReadTools.Warnings,
                     "custom:" + BimItAgentReadTools.ActiveViewElements,
                     "custom:" + BimItAgentReadTools.InspectSelection,
+                    "custom:" + BimItAgentReadTools.ExploreSelectedMep,
                 ],
                 allowed.ToArray());
             Assert.DoesNotContain(allowed, name => name.Contains('*') || name.StartsWith("builtin:", StringComparison.Ordinal) || name.StartsWith("mcp:", StringComparison.Ordinal));
@@ -102,17 +103,21 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
-    public void Unexpected_permissions_fail_closed_and_the_four_tools_are_allowed()
+    public void Unexpected_permissions_fail_closed_and_the_five_tools_are_allowed()
     {
-        Assert.True(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
+        foreach (var name in BimItAgentReadTools.Names)
         {
-            ToolName = BimItAgentReadTools.Warnings,
-            ToolDescription = "warnings",
-        }));
-        Assert.True(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
+            Assert.True(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
+            {
+                ToolName = name,
+                ToolDescription = name,
+            }));
+        }
+
+        Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
         {
-            ToolName = BimItAgentReadTools.InspectSelection,
-            ToolDescription = "selection",
+            ToolName = "revit_get_mep_topology",
+            ToolDescription = "topology",
         }));
         Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
         {
@@ -210,6 +215,7 @@ public sealed class AssistantAgentTests
                 BimItAgentReadTools.Warnings,
                 BimItAgentReadTools.ActiveViewElements,
                 BimItAgentReadTools.InspectSelection,
+                BimItAgentReadTools.ExploreSelectedMep,
             ],
             BimItAgentReadTools.Names);
         Assert.Equal(
@@ -222,10 +228,12 @@ public sealed class AssistantAgentTests
                 AssistantTools.QueryElements,
                 AssistantTools.GetSelection,
                 AssistantTools.GetElements,
+                AssistantTools.GetMepTopology,
             ],
             AssistantTools.AllowedReadTools);
         Assert.DoesNotContain(AssistantTools.AllowedReadTools, AssistantTools.IsTrustedWriteTool);
-        Assert.DoesNotContain("revit_get_mep_topology", AssistantTools.AllowedReadTools);
+        Assert.DoesNotContain(AssistantTools.GetMepTopology, AssistantTools.WorkflowTools);
+        Assert.DoesNotContain(AssistantTools.GetMepTopology, BimItAgentReadTools.Names);
 
         var schema = GitHubCopilotSessionBlueprint.CreateTools(
             new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId))
@@ -404,6 +412,238 @@ public sealed class AssistantAgentTests
         Assert.False((bool)rejected["ok"]!);
         Assert.Equal("malformed", rejected["code"]);
         Assert.Equal("The element result could not be read.", rejected["message"]);
+    }
+
+    [Fact]
+    public async Task Explore_selected_mep_composes_bounded_physical_topology()
+    {
+        var exploreTool = GitHubCopilotSessionBlueprint.CreateTools(
+            new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId))
+            .Single(tool => tool.Name == BimItAgentReadTools.ExploreSelectedMep);
+        Assert.Equal(
+            "Explore the physical MEP connectivity around the currently selected Revit elements. Includes HVAC, piping, electrical, conduit and cable tray physical connections when Revit exposes them. Takes no arguments.",
+            exploreTool.Description);
+        var schema = exploreTool.JsonSchema.GetRawText();
+        Assert.DoesNotContain("instance_id", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("document_id", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("element_ref", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("domain", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("depth", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("limit", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("max_depth", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("max_elements", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("max_edges", schema, StringComparison.Ordinal);
+
+        var populated = new RecordingSession(tool => tool switch
+        {
+            AssistantTools.GetSelection => Success("""
+                {
+                  "context": { "instance_id": "hidden-instance", "document_id": "doc-9" },
+                  "selected_count": 8,
+                  "truncated": true,
+                  "element_refs": ["seed-z", "seed-a", "seed-m"]
+                }
+                """),
+            AssistantTools.GetMepTopology => Success(TopologyJson(11, truncated: true, """["depth","edges"]""")),
+            AssistantTools.GetElements => Success("""
+                {
+                  "context": { "instance_id": "hidden-instance", "document_id": "doc-9" },
+                  "elements": [
+                    { "element_ref": "seed-a", "status": "ok", "name": "PVC - DWV", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "PVC - DWV", "level_name": "L1" },
+                    { "element_ref": "seed-z", "status": "ok", "name": "Supply", "category_name": "Ducts", "family_name": "Duct Types", "type_name": "Supply", "level_name": "L1" },
+                    { "element_ref": "n1", "status": "ok", "name": "Elbow", "category_name": "Duct Fittings", "family_name": "Elbow", "type_name": "Standard", "level_name": "L1" },
+                    { "element_ref": "n2", "status": "ok", "name": "Tee", "category_name": "Pipe Fittings", "family_name": "Tee", "type_name": "Standard", "level_name": "L1" },
+                    { "element_ref": "n3", "status": "ok", "name": "Panel", "category_name": "Electrical Equipment", "family_name": "Panel", "type_name": "208V", "level_name": "L1" },
+                    { "element_ref": "n4", "status": "ok", "name": "Tray", "category_name": "Cable Trays", "family_name": "Tray", "type_name": "Ladder", "level_name": "L1" },
+                    { "element_ref": "n5", "status": "ok", "name": "Conduit", "category_name": "Conduits", "family_name": "Conduit", "type_name": "EMT", "level_name": "L1" },
+                    { "element_ref": "n6", "status": "ok", "name": "Device", "category_name": "Electrical Fixtures", "family_name": "Receptacle", "type_name": "Duplex", "level_name": "L1" },
+                    { "element_ref": "n7", "status": "ok", "name": "Fitting", "category_name": "Conduit Fittings", "family_name": "Coupling", "type_name": "Set Screw", "level_name": "L1" },
+                    { "element_ref": "n8", "status": "not_found" }
+                  ]
+                }
+                """),
+            _ => Error("unexpected", "unexpected " + tool),
+        });
+        var tools = new BimItAgentReadTools(populated, InstanceId);
+        var explored = await tools.InvokeAsync(BimItAgentReadTools.ExploreSelectedMep, CancellationToken.None);
+        Assert.True((bool)explored["ok"]!);
+        Assert.Equal(8, explored["selected_count"]);
+        Assert.Equal(3, explored["seed_count"]);
+        Assert.Equal(true, explored["selection_truncated"]);
+        Assert.Equal(10, explored["described_count"]);
+        Assert.Equal(true, explored["details_truncated"]);
+        Assert.False(explored.ContainsKey("instance_id"));
+        Assert.False(explored.ContainsKey("document_id"));
+        var shaped = JsonSerializer.Serialize(explored);
+        Assert.DoesNotContain("hidden-instance", shaped, StringComparison.Ordinal);
+        Assert.DoesNotContain("doc-hidden", shaped, StringComparison.Ordinal);
+        Assert.DoesNotContain("doc-9", shaped, StringComparison.Ordinal);
+        Assert.DoesNotContain(populated.Calls, call => call.Tool == AssistantTools.GetContext);
+        Assert.Equal(
+            [AssistantTools.GetSelection, AssistantTools.GetMepTopology, AssistantTools.GetElements],
+            populated.Calls.Select(call => call.Tool).ToArray());
+
+        var selectionCall = populated.Calls[0];
+        Assert.Equal(InstanceId, selectionCall.Arguments["instance_id"]);
+        Assert.Equal(BimItAgentReadTools.ExploreSelectionLimit, selectionCall.Arguments["limit"]);
+        Assert.Equal(3, selectionCall.Arguments["limit"]);
+        Assert.Equal(2, selectionCall.Arguments.Count);
+
+        var topologyCall = populated.Calls[1];
+        Assert.Equal(InstanceId, topologyCall.Arguments["instance_id"]);
+        Assert.Equal("doc-9", topologyCall.Arguments["document_id"]);
+        Assert.Equal(["seed-z", "seed-a", "seed-m"], Assert.IsAssignableFrom<IReadOnlyList<string>>(topologyCall.Arguments["seed_element_refs"]));
+        Assert.Equal(2, topologyCall.Arguments["max_depth"]);
+        Assert.Equal(25, topologyCall.Arguments["max_elements"]);
+        Assert.Equal(40, topologyCall.Arguments["max_edges"]);
+        Assert.False(topologyCall.Arguments.ContainsKey("domain"));
+        Assert.Equal(6, topologyCall.Arguments.Count);
+
+        var elementsCall = populated.Calls[2];
+        Assert.Equal(InstanceId, elementsCall.Arguments["instance_id"]);
+        Assert.Equal("doc-9", elementsCall.Arguments["document_id"]);
+        Assert.Equal(
+            ["seed-a", "seed-z", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8"],
+            Assert.IsAssignableFrom<IReadOnlyList<string>>(elementsCall.Arguments["element_refs"]));
+        var projection = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(elementsCall.Arguments["projection"]);
+        Assert.Equal(
+            ["name", "category_name", "family_name", "type_name", "level_name"],
+            Assert.IsAssignableFrom<IReadOnlyList<string>>(projection["fields"]));
+        Assert.Single(projection);
+
+        var seeds = Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(explored["seeds"]);
+        Assert.Equal(["ok", "not_found", "no_connectors"], seeds.Select(seed => seed["status"]).ToArray());
+        Assert.Equal(["seed-z", "seed-a", "seed-m"], seeds.Select(seed => seed["element_ref"]).ToArray());
+        var topology = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(explored["topology"]);
+        Assert.Equal(11, topology["node_count"]);
+        Assert.Equal(4, topology["edge_count"]);
+        Assert.Equal(true, topology["truncated"]);
+        Assert.Equal(["depth", "edges"], Assert.IsAssignableFrom<IReadOnlyList<string>>(topology["truncation_reasons"]));
+        var nodes = Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(topology["nodes"]);
+        Assert.Equal("seed-a", nodes[0]["element_ref"]);
+        Assert.Equal(0, nodes[0]["depth"]);
+        Assert.Equal(1, nodes[2]["depth"]);
+        Assert.Equal("n9", nodes[10]["element_ref"]);
+        var edges = Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(topology["edges"]);
+        Assert.Equal(["hvac"], Assert.IsAssignableFrom<IReadOnlyList<string>>(edges[0]["domains"]));
+        Assert.Equal(["piping"], Assert.IsAssignableFrom<IReadOnlyList<string>>(edges[1]["domains"]));
+        Assert.Equal(["electrical"], Assert.IsAssignableFrom<IReadOnlyList<string>>(edges[2]["domains"]));
+        Assert.Equal(["cable_tray_conduit"], Assert.IsAssignableFrom<IReadOnlyList<string>>(edges[3]["domains"]));
+        var items = Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(explored["elements"]);
+        Assert.Equal("not_found", items[9]["status"]);
+        Assert.Equal("n8", items[9]["element_ref"]);
+        Assert.Equal(
+            ["element_ref", "status", "name", "category_name", "family_name", "type_name", "level_name"],
+            items[0].Keys);
+        Assert.False(items[0].ContainsKey("parameters"));
+        Assert.Equal([BimItAgentReadTools.ExploreSelectedMep], tools.ConsumeUsedTools());
+
+        var exactTen = new RecordingSession(tool => tool switch
+        {
+            AssistantTools.GetSelection => Success(SelectionJson(1, false, """["seed-a"]""")),
+            AssistantTools.GetMepTopology => Success(TopologyJson(10, truncated: false, "[]")),
+            _ => Success("""
+                {
+                  "context": { "instance_id": "hidden-instance", "document_id": "doc-9" },
+                  "elements": [
+                    { "element_ref": "seed-a", "status": "ok", "name": "A", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "A", "level_name": "L1" },
+                    { "element_ref": "seed-z", "status": "ok", "name": "Z", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "Z", "level_name": "L1" },
+                    { "element_ref": "n1", "status": "ok", "name": "1", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "1", "level_name": "L1" },
+                    { "element_ref": "n2", "status": "ok", "name": "2", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "2", "level_name": "L1" },
+                    { "element_ref": "n3", "status": "ok", "name": "3", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "3", "level_name": "L1" },
+                    { "element_ref": "n4", "status": "ok", "name": "4", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "4", "level_name": "L1" },
+                    { "element_ref": "n5", "status": "ok", "name": "5", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "5", "level_name": "L1" },
+                    { "element_ref": "n6", "status": "ok", "name": "6", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "6", "level_name": "L1" },
+                    { "element_ref": "n7", "status": "ok", "name": "7", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "7", "level_name": "L1" },
+                    { "element_ref": "n8", "status": "ok", "name": "8", "category_name": "Pipes", "family_name": "Pipe Types", "type_name": "8", "level_name": "L1" }
+                  ]
+                }
+                """),
+        });
+        var ten = await new BimItAgentReadTools(exactTen, InstanceId).InvokeAsync(BimItAgentReadTools.ExploreSelectedMep, CancellationToken.None);
+        Assert.Equal(false, ten["details_truncated"]);
+        Assert.Equal(10, ten["described_count"]);
+        Assert.Equal(false, Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(ten["topology"])["truncated"]);
+        Assert.Equal(10, Assert.IsAssignableFrom<IReadOnlyList<string>>(exactTen.Calls[2].Arguments["element_refs"]).Count);
+
+        var emptySession = new RecordingSession(_ => Success(SelectionJson(0, false, "[]")));
+        var empty = await new BimItAgentReadTools(emptySession, InstanceId).InvokeAsync(BimItAgentReadTools.ExploreSelectedMep, CancellationToken.None);
+        Assert.True((bool)empty["ok"]!);
+        Assert.Equal(0, empty["selected_count"]);
+        Assert.Equal(0, empty["seed_count"]);
+        Assert.Equal(false, empty["selection_truncated"]);
+        Assert.Equal(0, empty["described_count"]);
+        Assert.Equal(false, empty["details_truncated"]);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(empty["seeds"]));
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(empty["elements"]));
+        var emptyTopology = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(empty["topology"]);
+        Assert.Equal(0, emptyTopology["node_count"]);
+        Assert.Equal(0, emptyTopology["edge_count"]);
+        Assert.Equal(false, emptyTopology["truncated"]);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<string>>(emptyTopology["truncation_reasons"]));
+        Assert.Equal(AssistantTools.GetSelection, Assert.Single(emptySession.Calls).Tool);
+
+        var bare = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success(SelectionJson(1, false, """["receptacle"]"""))
+            : Success("""
+                {
+                  "context": { "instance_id": "hidden-instance", "document_id": "doc-9" },
+                  "seeds": [ { "element_ref": "receptacle", "status": "no_connectors" } ],
+                  "nodes": [],
+                  "edges": [],
+                  "truncated": false,
+                  "truncation_reasons": []
+                }
+                """));
+        var noConnectors = await new BimItAgentReadTools(bare, InstanceId).InvokeAsync(BimItAgentReadTools.ExploreSelectedMep, CancellationToken.None);
+        Assert.True((bool)noConnectors["ok"]!);
+        Assert.Equal("no_connectors", Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(noConnectors["seeds"])[0]["status"]);
+        Assert.Equal(0, noConnectors["described_count"]);
+        Assert.Equal(false, noConnectors["details_truncated"]);
+        Assert.Equal([AssistantTools.GetSelection, AssistantTools.GetMepTopology], bare.Calls.Select(call => call.Tool).ToArray());
+
+        var selectionError = await new BimItAgentReadTools(
+            new RecordingSession(_ => Error("NO_ACTIVE_DOCUMENT", "No active Revit document is available. C:\\secret\\model.rvt ghp_secret")),
+            InstanceId).InvokeAsync(BimItAgentReadTools.ExploreSelectedMep, CancellationToken.None);
+        Assert.False((bool)selectionError["ok"]!);
+        Assert.Equal("NO_ACTIVE_DOCUMENT", selectionError["code"]);
+        var selectionMessage = Assert.IsType<string>(selectionError["message"]);
+        Assert.DoesNotContain("C:\\secret", selectionMessage, StringComparison.Ordinal);
+        Assert.DoesNotContain("ghp_secret", selectionMessage, StringComparison.Ordinal);
+
+        var topologyError = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success(SelectionJson(1, false, """["seed-a"]"""))
+            : Error("DOCUMENT_CONTEXT_CHANGED", "The supplied document_id does not match the active document. C:\\secret\\model.rvt"));
+        var staleTopology = await new BimItAgentReadTools(topologyError, InstanceId).InvokeAsync(BimItAgentReadTools.ExploreSelectedMep, CancellationToken.None);
+        Assert.False((bool)staleTopology["ok"]!);
+        Assert.Equal("DOCUMENT_CONTEXT_CHANGED", staleTopology["code"]);
+        Assert.DoesNotContain("C:\\secret", Assert.IsType<string>(staleTopology["message"]), StringComparison.Ordinal);
+        Assert.Equal(2, topologyError.Calls.Count);
+
+        var elementsError = new RecordingSession(tool => tool switch
+        {
+            AssistantTools.GetSelection => Success(SelectionJson(1, false, """["seed-a"]""")),
+            AssistantTools.GetMepTopology => Success(TopologyJson(1, truncated: false, "[]")),
+            _ => Error("DOCUMENT_CONTEXT_CHANGED", "The supplied document_id does not match the active document."),
+        });
+        var staleElements = await new BimItAgentReadTools(elementsError, InstanceId).InvokeAsync(BimItAgentReadTools.ExploreSelectedMep, CancellationToken.None);
+        Assert.Equal("DOCUMENT_CONTEXT_CHANGED", staleElements["code"]);
+        Assert.Equal(3, elementsError.Calls.Count);
+
+        var elementsFailure = new RecordingSession(tool => tool switch
+        {
+            AssistantTools.GetSelection => Success(SelectionJson(1, false, """["seed-a"]""")),
+            AssistantTools.GetMepTopology => Success(TopologyJson(1, truncated: false, "[]")),
+            _ => Error("REVIT_EXECUTION_FAILED", "The Revit call failed."),
+        });
+        var failedElements = await new BimItAgentReadTools(elementsFailure, InstanceId).InvokeAsync(BimItAgentReadTools.ExploreSelectedMep, CancellationToken.None);
+        Assert.Equal("REVIT_EXECUTION_FAILED", failedElements["code"]);
+        Assert.Equal(3, elementsFailure.Calls.Count);
+
+        await AssertMalformedTopologyAsync("""{ "context": { "instance_id": "hidden-instance", "document_id": "doc-9" }, "seeds": [ { "element_ref": "seed-a", "status": "circuit" } ], "nodes": [], "edges": [], "truncated": false, "truncation_reasons": [] }""");
+        await AssertMalformedTopologyAsync("""{ "context": { "instance_id": "hidden-instance", "document_id": "doc-9" }, "seeds": [ { "element_ref": "seed-a", "status": "ok" } ], "nodes": [ { "element_ref": "seed-a", "depth": 0 } ], "edges": [ { "element_ref_a": "seed-a", "element_ref_b": "n1", "domains": ["logical"] } ], "truncated": false, "truncation_reasons": [] }""");
+        await AssertMalformedTopologyAsync("""{ "context": { "instance_id": "hidden-instance", "document_id": "doc-9" }, "seeds": [ { "element_ref": "seed-a", "status": "ok" } ], "nodes": [ { "element_ref": "seed-a", "depth": 0 } ], "edges": [], "truncated": true, "truncation_reasons": ["circuits"] }""");
+        await AssertMalformedTopologyAsync("""{ "context": { "instance_id": "hidden-instance", "document_id": "doc-9" }, "seeds": [ { "element_ref": "seed-a", "status": 99 } ], "nodes": [], "edges": [], "truncated": false, "truncation_reasons": [] }""");
     }
 
     [Fact]
@@ -651,8 +891,11 @@ public sealed class AssistantAgentTests
         Assert.Equal(["bimit_get_warnings"], warningsTrace.Message!.UsedTools);
         var selectionTrace = AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["bimit_inspect_selection"]}""");
         Assert.Equal(["bimit_inspect_selection"], selectionTrace.Message!.UsedTools);
+        var mepTrace = AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["bimit_explore_selected_mep"]}""");
+        Assert.Equal(["bimit_explore_selected_mep"], mepTrace.Message!.UsedTools);
         Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_selection"]}""").Accepted);
         Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_elements"]}""").Accepted);
+        Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_mep_topology"]}""").Accepted);
         var emptyTrace = AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":[]}""");
         Assert.Empty(emptyTrace.Message!.UsedTools!);
 
@@ -859,6 +1102,62 @@ public sealed class AssistantAgentTests
         }
 
         return node.ToJsonString();
+    }
+
+    private static async Task AssertMalformedTopologyAsync(string topologyJson)
+    {
+        var session = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success(SelectionJson(1, false, """["seed-a"]"""))
+            : Success(topologyJson));
+        var rejected = await new BimItAgentReadTools(session, InstanceId).InvokeAsync(BimItAgentReadTools.ExploreSelectedMep, CancellationToken.None);
+        Assert.False((bool)rejected["ok"]!);
+        Assert.Equal("malformed", rejected["code"]);
+        Assert.Equal("The topology result could not be read.", rejected["message"]);
+        Assert.Equal([AssistantTools.GetSelection, AssistantTools.GetMepTopology], session.Calls.Select(call => call.Tool).ToArray());
+    }
+
+    private static string SelectionJson(int selectedCount, bool truncated, string refs)
+    {
+        return $$"""
+            {
+              "context": { "instance_id": "hidden-instance", "document_id": "doc-9" },
+              "selected_count": {{selectedCount}},
+              "truncated": {{(truncated ? "true" : "false")}},
+              "element_refs": {{refs}}
+            }
+            """;
+    }
+
+    private static string TopologyJson(int nodeCount, bool truncated, string reasons)
+    {
+        var nodeRefs = new[] { "seed-a", "seed-z", "n1", "n2", "n3", "n4", "n5", "n6", "n7", "n8", "n9" };
+        var nodes = string.Join(",", nodeRefs.Take(nodeCount).Select((elementRef, index) =>
+        {
+            var depth = index < 2 ? 0 : 1;
+            return $$$"""{"element_ref":"{{{elementRef}}}","depth":{{{depth}}}}""";
+        }));
+        var edges = nodeCount < 2
+            ? ""
+            : """
+              { "element_ref_a": "seed-a", "element_ref_b": "seed-z", "domains": ["hvac"] },
+              { "element_ref_a": "seed-a", "element_ref_b": "n1", "domains": ["piping"] },
+              { "element_ref_a": "n1", "element_ref_b": "n3", "domains": ["electrical"] },
+              { "element_ref_a": "n4", "element_ref_b": "n5", "domains": ["cable_tray_conduit"] }
+              """;
+        return $$"""
+            {
+              "context": { "instance_id": "hidden-instance", "document_id": "doc-hidden" },
+              "seeds": [
+                { "element_ref": "seed-z", "status": "ok" },
+                { "element_ref": "seed-a", "status": "not_found" },
+                { "element_ref": "seed-m", "status": "no_connectors" }
+              ],
+              "nodes": [{{nodes}}],
+              "edges": [{{edges}}],
+              "truncated": {{(truncated ? "true" : "false")}},
+              "truncation_reasons": {{reasons}}
+            }
+            """;
     }
 
     private static AssistantToolCall Success(string json)
