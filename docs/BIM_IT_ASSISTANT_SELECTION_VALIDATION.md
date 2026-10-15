@@ -1,6 +1,6 @@
 # BIM-IT Assistant selection validation
 
-Status: the main natural-language gate, an empty selection, and New Chat were observed on 2026-10-15. This record is not a merge verdict.
+Status: the requested live cases were observed on 2026-10-15. This record is not a merge verdict.
 
 Scope: natural language in BIM-IT Assistant to `bimit_inspect_selection` to the existing MCP session to `revit_get_selection` and `revit_get_elements` to Bridge to Revit 2026.5.
 
@@ -25,13 +25,13 @@ Record the Revit build, the commit SHA, and each case result in this file only a
 
 ## Live record — 2026-10-15
 
-Host: Revit 2026. The add-in, Assistant, and Server were the local Release outputs built from `496b1be986d1d88a97b3b5a797f8bad36a527dcd`. The development manifest loads `src\BimIt.Revit.Addin\bin\2026\Release\net8.0-windows\BimIt.Revit.Addin.dll`.
+Host: Revit 2026.5, build `26.5.0.55`. The running instance registered at `2026-10-15T17:44:54Z` as `e851ff64-0cfb-49db-ba7c-f420ea87f9cb`, with `revit_version` 2026 and `revit_build` `26.5.0.55`. The add-in, Assistant, and Server were the local Release outputs built from `496b1be986d1d88a97b3b5a797f8bad36a527dcd`. The development manifest loads `src\BimIt.Revit.Addin\bin\2026\Release\net8.0-windows\BimIt.Revit.Addin.dll`.
 
 | Check | Result |
 | --- | --- |
 | Two selected elements, "Qu'est-ce que j'ai sélectionné ?" | PASS — the pane identified a round conduit tee fitting on level L3 and a copper pipe on level Parking. The message showed `Used: Inspect selection`. The user supplied no ids. |
 | Empty selection | PASS — an empty selection was a successful answer, not an error. |
-| More than 10 selected elements | Not recorded in this run |
+| More than 10 selected elements | PASS — the answer kept the full selected count and showed that inspection stopped at 10. It did not present those 10 elements as the entire selection. |
 | New Chat | PASS — New Chat did not keep the previous selection facts without reading the selection again. |
-| Model Context, Analyze Warnings, Active View Elements | Not recorded in this run |
-| Provider-failure isolation | Not recorded in this run |
+| Model Context, Analyze Warnings, Active View Elements | PASS — all three quick actions still answered for the open session. |
+| Provider-failure isolation | PASS — a provider failure left Model Context, Analyze Warnings, and Active View Elements usable. |
