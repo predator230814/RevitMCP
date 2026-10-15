@@ -585,6 +585,7 @@ internal sealed class AssistantShell
                 "bimit_get_model_context" => "Model context",
                 "bimit_get_warnings" => "Analyze warnings",
                 "bimit_get_active_view_elements" => "Active view",
+                "bimit_inspect_selection" => "Inspect selection",
                 _ => null,
             };
             if (label is not null && !labels.Contains(label, StringComparer.Ordinal))

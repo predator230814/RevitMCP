@@ -85,6 +85,18 @@ public sealed class AssistantProcessTests
             CancellationToken.None);
         Assert.True(refused.IsError);
         Assert.Equal("tool_not_allowed", refused.ErrorCode);
+
+        var arbitrary = await session.CallAsync(
+            "revit_get_mep_topology",
+            new Dictionary<string, object?> { ["instance_id"] = "x" },
+            CancellationToken.None);
+        Assert.Equal("tool_not_allowed", arbitrary.ErrorCode);
+
+        var selection = await session.CallAsync(
+            "revit_get_selection",
+            new Dictionary<string, object?> { ["instance_id"] = "x", ["limit"] = 10 },
+            CancellationToken.None);
+        Assert.NotEqual("tool_not_allowed", selection.ErrorCode);
     }
 
     [Fact]

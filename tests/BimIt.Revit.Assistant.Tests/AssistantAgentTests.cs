@@ -37,7 +37,7 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
-    public void Copilot_session_is_empty_mode_with_only_the_three_read_tools()
+    public void Copilot_session_is_empty_mode_with_only_the_four_read_tools()
     {
         var directory = Directory.CreateTempSubdirectory("bimit-copilot-config-").FullName;
         try
@@ -86,6 +86,7 @@ public sealed class AssistantAgentTests
                     "custom:" + BimItAgentReadTools.ModelContext,
                     "custom:" + BimItAgentReadTools.Warnings,
                     "custom:" + BimItAgentReadTools.ActiveViewElements,
+                    "custom:" + BimItAgentReadTools.InspectSelection,
                 ],
                 allowed.ToArray());
             Assert.DoesNotContain(allowed, name => name.Contains('*') || name.StartsWith("builtin:", StringComparison.Ordinal) || name.StartsWith("mcp:", StringComparison.Ordinal));
@@ -101,12 +102,17 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
-    public void Unexpected_permissions_fail_closed_and_the_three_tools_are_allowed()
+    public void Unexpected_permissions_fail_closed_and_the_four_tools_are_allowed()
     {
         Assert.True(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
         {
             ToolName = BimItAgentReadTools.Warnings,
             ToolDescription = "warnings",
+        }));
+        Assert.True(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
+        {
+            ToolName = BimItAgentReadTools.InspectSelection,
+            ToolDescription = "selection",
         }));
         Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
         {
@@ -193,6 +199,211 @@ public sealed class AssistantAgentTests
         Assert.Equal(
             [BimItAgentReadTools.ModelContext, BimItAgentReadTools.Warnings, BimItAgentReadTools.ActiveViewElements],
             tools.ConsumeUsedTools());
+    }
+
+    [Fact]
+    public async Task Inspect_selection_composes_selection_and_elements_without_model_arguments()
+    {
+        Assert.Equal(
+            [
+                BimItAgentReadTools.ModelContext,
+                BimItAgentReadTools.Warnings,
+                BimItAgentReadTools.ActiveViewElements,
+                BimItAgentReadTools.InspectSelection,
+            ],
+            BimItAgentReadTools.Names);
+        Assert.Equal(
+            [AssistantTools.GetContext, AssistantTools.GetWarnings, AssistantTools.QueryElements],
+            AssistantTools.WorkflowTools);
+        Assert.Equal(
+            [
+                AssistantTools.GetContext,
+                AssistantTools.GetWarnings,
+                AssistantTools.QueryElements,
+                AssistantTools.GetSelection,
+                AssistantTools.GetElements,
+            ],
+            AssistantTools.AllowedReadTools);
+        Assert.DoesNotContain(AssistantTools.AllowedReadTools, AssistantTools.IsTrustedWriteTool);
+        Assert.DoesNotContain("revit_get_mep_topology", AssistantTools.AllowedReadTools);
+
+        var schema = GitHubCopilotSessionBlueprint.CreateTools(
+            new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId))
+            .Single(tool => tool.Name == BimItAgentReadTools.InspectSelection)
+            .JsonSchema.GetRawText();
+        Assert.DoesNotContain("instance_id", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("document_id", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("limit", schema, StringComparison.Ordinal);
+        Assert.DoesNotContain("element_ref", schema, StringComparison.Ordinal);
+
+        var populated = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success("""
+                {
+                  "context": { "instance_id": "hidden", "document_id": "doc-9" },
+                  "selected_count": 17,
+                  "truncated": true,
+                  "element_refs": ["ref-z", "ref-a"]
+                }
+                """)
+            : Success("""
+                {
+                  "context": { "instance_id": "hidden", "document_id": "doc-9" },
+                  "elements": [
+                    {
+                      "element_ref": "ref-z",
+                      "status": "ok",
+                      "name": "PVC - DWV",
+                      "category_name": "Pipes",
+                      "family_name": "Pipe Types",
+                      "type_name": "PVC - DWV",
+                      "level_name": "L1"
+                    },
+                    {
+                      "element_ref": "ref-a",
+                      "status": "not_found"
+                    }
+                  ]
+                }
+                """));
+        var tools = new BimItAgentReadTools(populated, InstanceId);
+        var inspected = await tools.InvokeAsync(BimItAgentReadTools.InspectSelection, CancellationToken.None);
+        Assert.True((bool)inspected["ok"]!);
+        Assert.Equal(17, inspected["selected_count"]);
+        Assert.Equal(2, inspected["inspected_count"]);
+        Assert.Equal(true, inspected["truncated"]);
+        Assert.False(inspected.ContainsKey("instance_id"));
+        Assert.False(inspected.ContainsKey("document_id"));
+        var selectionCall = populated.Calls[0];
+        Assert.Equal(AssistantTools.GetSelection, selectionCall.Tool);
+        Assert.Equal(InstanceId, selectionCall.Arguments["instance_id"]);
+        Assert.Equal(10, selectionCall.Arguments["limit"]);
+        Assert.Equal(2, selectionCall.Arguments.Count);
+        var elementsCall = populated.Calls[1];
+        Assert.Equal(AssistantTools.GetElements, elementsCall.Tool);
+        Assert.Equal(InstanceId, elementsCall.Arguments["instance_id"]);
+        Assert.Equal("doc-9", elementsCall.Arguments["document_id"]);
+        Assert.Equal(["ref-z", "ref-a"], Assert.IsAssignableFrom<IReadOnlyList<string>>(elementsCall.Arguments["element_refs"]));
+        var projection = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(elementsCall.Arguments["projection"]);
+        Assert.Equal(
+            ["name", "category_name", "family_name", "type_name", "level_name"],
+            Assert.IsAssignableFrom<IReadOnlyList<string>>(projection["fields"]));
+        var items = Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(inspected["elements"]);
+        Assert.Equal("not_found", items[1]["status"]);
+        Assert.Equal("ref-a", items[1]["element_ref"]);
+        Assert.Equal("Pipes", items[0]["category_name"]);
+        Assert.Equal([BimItAgentReadTools.InspectSelection], tools.ConsumeUsedTools());
+
+        var emptySession = new RecordingSession(_ => Success("""
+            {
+              "context": { "document_id": "doc-9" },
+              "selected_count": 0,
+              "truncated": false,
+              "element_refs": []
+            }
+            """));
+        var empty = await new BimItAgentReadTools(emptySession, InstanceId).InvokeAsync(BimItAgentReadTools.InspectSelection, CancellationToken.None);
+        Assert.True((bool)empty["ok"]!);
+        Assert.Equal(0, empty["selected_count"]);
+        Assert.Equal(0, empty["inspected_count"]);
+        Assert.Equal(false, empty["truncated"]);
+        Assert.Empty(Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(empty["elements"]));
+        Assert.Equal(AssistantTools.GetSelection, Assert.Single(emptySession.Calls).Tool);
+
+        var selectionError = await new BimItAgentReadTools(
+            new RecordingSession(_ => Error("NO_ACTIVE_DOCUMENT", "No active Revit document is available. C:\\secret\\model.rvt")),
+            InstanceId).InvokeAsync(BimItAgentReadTools.InspectSelection, CancellationToken.None);
+        Assert.False((bool)selectionError["ok"]!);
+        Assert.Equal("NO_ACTIVE_DOCUMENT", selectionError["code"]);
+        Assert.DoesNotContain("C:\\secret", Assert.IsType<string>(selectionError["message"]), StringComparison.Ordinal);
+
+        var changed = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success("""
+                {
+                  "context": { "document_id": "doc-9" },
+                  "selected_count": 1,
+                  "truncated": false,
+                  "element_refs": ["ref-1"]
+                }
+                """)
+            : Error("DOCUMENT_CONTEXT_CHANGED", "The supplied document_id does not match the active document."));
+        var stale = await new BimItAgentReadTools(changed, InstanceId).InvokeAsync(BimItAgentReadTools.InspectSelection, CancellationToken.None);
+        Assert.Equal("DOCUMENT_CONTEXT_CHANGED", stale["code"]);
+        Assert.Equal(2, changed.Calls.Count);
+
+        var elementsError = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success("""
+                {
+                  "context": { "document_id": "doc-9" },
+                  "selected_count": 1,
+                  "truncated": false,
+                  "element_refs": ["ref-1"]
+                }
+                """)
+            : Error("REVIT_EXECUTION_FAILED", "The Revit call failed."));
+        var failedElements = await new BimItAgentReadTools(elementsError, InstanceId).InvokeAsync(BimItAgentReadTools.InspectSelection, CancellationToken.None);
+        Assert.Equal("REVIT_EXECUTION_FAILED", failedElements["code"]);
+
+        var denied = await new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId)
+            .InvokeAsync("revit_get_mep_topology", CancellationToken.None);
+        Assert.Equal("tool_not_allowed", denied["code"]);
+        var write = await new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId)
+            .InvokeAsync("revit_apply_parameter_updates", CancellationToken.None);
+        Assert.Equal("tool_not_allowed", write["code"]);
+
+        var typed = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success("""
+                {
+                  "context": { "document_id": "doc-9" },
+                  "selected_count": 1,
+                  "truncated": false,
+                  "element_refs": ["ref-1"]
+                }
+                """)
+            : Success("""
+                {
+                  "context": { "instance_id": "hidden", "document_id": "doc-9" },
+                  "elements": [
+                    {
+                      "element_ref": "ref-1",
+                      "status": "ok",
+                      "name": "PVC - DWV",
+                      "category_name": "Pipes",
+                      "family_name": "Pipe Types",
+                      "type_name": "PVC - DWV",
+                      "level_name": "L1",
+                      "parameters": [
+                        { "name": "Diameter", "source": "instance", "value_text": "4\"", "value_truncated": false }
+                      ]
+                    }
+                  ]
+                }
+                """));
+        var projected = await new BimItAgentReadTools(typed, InstanceId).InvokeAsync(BimItAgentReadTools.InspectSelection, CancellationToken.None);
+        var projectedItems = Assert.IsAssignableFrom<IReadOnlyList<IReadOnlyDictionary<string, object?>>>(projected["elements"]);
+        Assert.Equal(
+            ["element_ref", "status", "name", "category_name", "family_name", "type_name", "level_name"],
+            projectedItems[0].Keys);
+        Assert.False(projectedItems[0].ContainsKey("parameters"));
+
+        var untyped = new RecordingSession(tool => tool == AssistantTools.GetSelection
+            ? Success("""
+                {
+                  "context": { "document_id": "doc-9" },
+                  "selected_count": 1,
+                  "truncated": false,
+                  "element_refs": ["ref-1"]
+                }
+                """)
+            : Success("""
+                {
+                  "context": { "instance_id": "hidden", "document_id": "doc-9" },
+                  "elements": [ { "element_ref": "ref-1", "status": "gone", "name": 12 } ]
+                }
+                """));
+        var rejected = await new BimItAgentReadTools(untyped, InstanceId).InvokeAsync(BimItAgentReadTools.InspectSelection, CancellationToken.None);
+        Assert.False((bool)rejected["ok"]!);
+        Assert.Equal("malformed", rejected["code"]);
+        Assert.Equal("The element result could not be read.", rejected["message"]);
     }
 
     [Fact]
@@ -438,6 +649,10 @@ public sealed class AssistantAgentTests
         Assert.False(AssistantIpc.Parse("""{"type":"chat","requestId":"abc","text":"hi","usedTools":["bimit_get_warnings"]}""").Accepted);
         var warningsTrace = AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["bimit_get_warnings"]}""");
         Assert.Equal(["bimit_get_warnings"], warningsTrace.Message!.UsedTools);
+        var selectionTrace = AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["bimit_inspect_selection"]}""");
+        Assert.Equal(["bimit_inspect_selection"], selectionTrace.Message!.UsedTools);
+        Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_selection"]}""").Accepted);
+        Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_elements"]}""").Accepted);
         var emptyTrace = AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":[]}""");
         Assert.Empty(emptyTrace.Message!.UsedTools!);
 

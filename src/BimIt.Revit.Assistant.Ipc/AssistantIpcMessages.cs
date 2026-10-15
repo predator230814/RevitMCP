@@ -188,7 +188,10 @@ public static class AssistantIpc
 
     public static bool IsModelToolName(string? name)
     {
-        return name is "bimit_get_model_context" or "bimit_get_warnings" or "bimit_get_active_view_elements";
+        return name is "bimit_get_model_context"
+            or "bimit_get_warnings"
+            or "bimit_get_active_view_elements"
+            or "bimit_inspect_selection";
     }
 
     private static AssistantIpcParse ParseHello(Envelope body)

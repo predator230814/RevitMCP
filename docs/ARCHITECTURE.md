@@ -98,7 +98,7 @@ Significant architecture changes require an ADR. If code and architecture docume
 
 [ADR-0013](adr/ADR-0013-bim-it-assistant-local-architecture.md) is **Accepted**. BIM-IT Assistant is a separate local process. The Revit ribbon opens one DockablePane. That pane hosts WPF and a lazy local WebView2. The WebView talks only to the add-in through a closed message set. The add-in talks to the Assistant process over a current-user Named Pipe. The Assistant is an MCP client of `BimIt.Revit.Server` over stdio. The server still uses the existing Bridge.
 
-[ADR-0014](adr/ADR-0014-provider-neutral-assistant-agent-runtime.md) is **Accepted**. The LLM provider sits inside `BimIt.Revit.Assistant`. The first adapter is GitHub Copilot SDK 1.0.21 in empty mode. It exposes three BIM-IT read tools that call the existing MCP session. Revit, Bridge, MCP, and the AI provider are independent status lines. The add-in and the WebView do not reference the Copilot SDK.
+[ADR-0014](adr/ADR-0014-provider-neutral-assistant-agent-runtime.md) is **Accepted**. The LLM provider sits inside `BimIt.Revit.Assistant`. The first adapter is GitHub Copilot SDK 1.0.21 in empty mode. ADR-0014 recorded the original three read tools. The current adapter exposes four BIM-IT read tools that call the existing MCP session: `bimit_get_model_context`, `bimit_get_warnings`, `bimit_get_active_view_elements`, and `bimit_inspect_selection`. `bimit_inspect_selection` composes `revit_get_selection` and `revit_get_elements`, injects the native instance id, and inspects at most 10 selected elements. It does not call MEP topology. Revit, Bridge, MCP, and the AI provider are independent status lines. The add-in and the WebView do not reference the Copilot SDK.
 
 External MCP clients launch `BimIt.Revit.Server` directly. They do not need the Assistant. The Approval DockablePane remains the trusted approval authority. The Assistant pane cannot approve, preview, or apply a controlled write.
 
@@ -107,7 +107,7 @@ Implemented:
 - one BIM-IT Assistant ribbon button and one DockablePane;
 - session-only chat timeline with Model Context, Analyze Warnings, and Active View Elements;
 - a provider-neutral agent runtime and a GitHub Copilot adapter;
-- natural-language turns that call the three read tools through the existing MCP client;
+- natural-language turns that call the four read tools through the existing MCP client;
 - logged-in-user Copilot authentication, with no BIM-IT token store;
 - truthful Revit/Bridge, Assistant, MCP, and AI Provider status.
 
@@ -123,6 +123,8 @@ Not implemented:
 - MCP Apps;
 - HTTP or remote MCP;
 - arbitrary Revit API execution;
-- Inspect Selection or selected MEP exploration.
+- a selection quick action or slash command;
+- selected MEP exploration (`bimit_explore_selected_mep`);
+- Assistant skills.
 
 Bridge v12 returns `document_id` on an active CAP-0001 document and accepts `revit_query_elements` with `scope=active_view` and `filters: {}`. Document scope still requires a filter. A negotiated v11 connection keeps the older wire behavior. The Assistant does not invent a document id.

@@ -13,9 +13,13 @@ internal sealed class BimItAgentReadTools
 
     public const string ActiveViewElements = "bimit_get_active_view_elements";
 
+    public const string InspectSelection = "bimit_inspect_selection";
+
     public const int ActiveViewLimit = 25;
 
-    public static readonly string[] Names = [ModelContext, Warnings, ActiveViewElements];
+    public const int InspectSelectionLimit = 10;
+
+    public static readonly string[] Names = [ModelContext, Warnings, ActiveViewElements, InspectSelection];
 
     private static readonly string[] DeniedTools =
     [
@@ -71,6 +75,7 @@ internal sealed class BimItAgentReadTools
             ModelContext => await ModelContextAsync(cancellationToken).ConfigureAwait(false),
             Warnings => await WarningsAsync(cancellationToken).ConfigureAwait(false),
             ActiveViewElements => await ActiveViewAsync(cancellationToken).ConfigureAwait(false),
+            InspectSelection => await InspectSelectionAsync(cancellationToken).ConfigureAwait(false),
             _ => Fail("tool_not_allowed", "That tool is not available to BIM-IT Assistant."),
         };
     }
@@ -152,6 +157,83 @@ internal sealed class BimItAgentReadTools
         return Shape(query, "The query result could not be read.");
     }
 
+    private async Task<IReadOnlyDictionary<string, object?>> InspectSelectionAsync(CancellationToken cancellationToken)
+    {
+        RecordUse(InspectSelection);
+        var selection = await _session.CallAsync(
+            AssistantTools.GetSelection,
+            new Dictionary<string, object?>
+            {
+                ["instance_id"] = _instanceId,
+                ["limit"] = InspectSelectionLimit,
+            },
+            cancellationToken).ConfigureAwait(false);
+        if (selection.IsError)
+        {
+            return Fail(
+                string.IsNullOrWhiteSpace(selection.ErrorCode) ? "mcp_error" : selection.ErrorCode,
+                string.IsNullOrWhiteSpace(selection.ErrorMessage) ? "The MCP tool returned an error." : selection.ErrorMessage);
+        }
+
+        if (!TryReadSelection(selection.Structured, out var documentId, out var selectedCount, out var truncated, out var refs))
+        {
+            return Fail("malformed", "The selection result could not be read.");
+        }
+
+        if (refs.Count == 0)
+        {
+            return new Dictionary<string, object?>
+            {
+                ["ok"] = true,
+                ["selected_count"] = selectedCount,
+                ["inspected_count"] = 0,
+                ["truncated"] = truncated,
+                ["elements"] = Array.Empty<IReadOnlyDictionary<string, object?>>(),
+            };
+        }
+
+        var elements = await _session.CallAsync(
+            AssistantTools.GetElements,
+            new Dictionary<string, object?>
+            {
+                ["instance_id"] = _instanceId,
+                ["document_id"] = documentId,
+                ["element_refs"] = refs,
+                ["projection"] = new Dictionary<string, object?>
+                {
+                    ["fields"] = new[]
+                    {
+                        "name",
+                        "category_name",
+                        "family_name",
+                        "type_name",
+                        "level_name",
+                    },
+                },
+            },
+            cancellationToken).ConfigureAwait(false);
+        if (elements.IsError)
+        {
+            return Fail(
+                string.IsNullOrWhiteSpace(elements.ErrorCode) ? "mcp_error" : elements.ErrorCode,
+                string.IsNullOrWhiteSpace(elements.ErrorMessage) ? "The MCP tool returned an error." : elements.ErrorMessage);
+        }
+
+        if (!TryReadElements(elements.Structured, out var items))
+        {
+            return Fail("malformed", "The element result could not be read.");
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["ok"] = true,
+            ["selected_count"] = selectedCount,
+            ["inspected_count"] = items.Count,
+            ["truncated"] = truncated,
+            ["elements"] = items,
+        };
+    }
+
     private async Task<ContextRead> ReadContextAsync(CancellationToken cancellationToken)
     {
         var call = await _session.CallAsync(
@@ -224,6 +306,109 @@ internal sealed class BimItAgentReadTools
         }
 
         return JsonNode.Parse(json.GetRawText());
+    }
+
+    private static bool TryReadSelection(
+        JsonElement? structured,
+        out string documentId,
+        out int selectedCount,
+        out bool truncated,
+        out List<string> refs)
+    {
+        documentId = "";
+        selectedCount = 0;
+        truncated = false;
+        refs = [];
+        if (structured is not { ValueKind: JsonValueKind.Object } json
+            || !json.TryGetProperty("context", out var context)
+            || context.ValueKind != JsonValueKind.Object
+            || !context.TryGetProperty("document_id", out var documentProperty)
+            || documentProperty.ValueKind != JsonValueKind.String
+            || documentProperty.GetString() is not string document
+            || !json.TryGetProperty("selected_count", out var countProperty)
+            || !countProperty.TryGetInt32(out selectedCount)
+            || selectedCount < 0
+            || !json.TryGetProperty("truncated", out var truncatedProperty)
+            || truncatedProperty.ValueKind is not JsonValueKind.True and not JsonValueKind.False
+            || !json.TryGetProperty("element_refs", out var refsProperty)
+            || refsProperty.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        truncated = truncatedProperty.GetBoolean();
+        foreach (var item in refsProperty.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.String || item.GetString() is not string elementRef)
+            {
+                return false;
+            }
+
+            refs.Add(elementRef);
+        }
+
+        documentId = document;
+        return true;
+    }
+
+    private static bool TryReadElements(JsonElement? structured, out List<IReadOnlyDictionary<string, object?>> items)
+    {
+        items = [];
+        if (structured is not { ValueKind: JsonValueKind.Object } json)
+        {
+            return false;
+        }
+
+        GetElementsResult? result;
+        try
+        {
+            result = json.Deserialize<GetElementsResult>(ContractJson.Options);
+        }
+        catch (JsonException)
+        {
+            return false;
+        }
+
+        if (result?.Elements is null)
+        {
+            return false;
+        }
+
+        foreach (var element in result.Elements)
+        {
+            if (string.IsNullOrEmpty(element.ElementRef) || StatusName(element.Status) is not string status)
+            {
+                return false;
+            }
+
+            items.Add(new Dictionary<string, object?>
+            {
+                ["element_ref"] = element.ElementRef,
+                ["status"] = status,
+                ["name"] = Projected(element.Name),
+                ["category_name"] = Projected(element.CategoryName),
+                ["family_name"] = Projected(element.FamilyName),
+                ["type_name"] = Projected(element.TypeName),
+                ["level_name"] = Projected(element.LevelName),
+            });
+        }
+
+        return true;
+    }
+
+    private static string? Projected(ProjectedString value)
+    {
+        return value.IsRequested ? value.Value : null;
+    }
+
+    private static string? StatusName(GetElementResultStatus status)
+    {
+        return status switch
+        {
+            GetElementResultStatus.Ok => "ok",
+            GetElementResultStatus.NotFound => "not_found",
+            _ => null,
+        };
     }
 
     private sealed record ContextRead(

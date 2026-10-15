@@ -171,6 +171,12 @@ public sealed class AssistantWorkflowTests
         Assert.True(AssistantTools.IsTrustedWriteTool("revit_preview_parameter_updates"));
         Assert.True(AssistantTools.IsTrustedWriteTool("revit_request_parameter_update_review"));
         Assert.DoesNotContain(AssistantTools.WorkflowTools, AssistantTools.IsTrustedWriteTool);
+        Assert.Equal(
+            [AssistantTools.GetContext, AssistantTools.GetWarnings, AssistantTools.QueryElements],
+            AssistantTools.WorkflowTools);
+        Assert.Contains(AssistantTools.GetSelection, AssistantTools.AllowedReadTools);
+        Assert.Contains(AssistantTools.GetElements, AssistantTools.AllowedReadTools);
+        Assert.DoesNotContain(AssistantTools.GetSelection, AssistantTools.WorkflowTools);
         Assert.False(AssistantIpc.Parse("""{"type":"approveIntent"}""").Accepted);
         Assert.False(AssistantIpc.Parse("""{"type":"hello","instanceId":"a","extra":1}""").Accepted);
         Assert.False(AssistantIpc.Parse("""{"type":"runWorkflow","requestId":"r","workflow":"apply"}""").Accepted);
