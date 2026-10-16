@@ -29,6 +29,9 @@ public sealed class AssistantProcessTests
         Assert.Contains("revit_get_context", status.Message.ToolNames!);
         Assert.Contains("revit_get_warnings", status.Message.ToolNames!);
         Assert.Contains("revit_query_elements", status.Message.ToolNames!);
+        Assert.Contains("revit_get_mep_topology", status.Message.ToolNames!);
+        Assert.DoesNotContain("bimit_explore_selected_mep", status.Message.ToolNames!);
+        Assert.Equal(11, status.Message.ToolNames!.Count);
         Assert.DoesNotContain(status.Message.ToolNames!, name => name.Contains("approve", StringComparison.OrdinalIgnoreCase));
         Assert.Equal("ready", status.Message.AssistantState);
         Assert.Contains(status.Message.ProviderState, new[] { "starting", "ready", "unavailable" });
@@ -87,10 +90,16 @@ public sealed class AssistantProcessTests
         Assert.Equal("tool_not_allowed", refused.ErrorCode);
 
         var arbitrary = await session.CallAsync(
-            "revit_get_mep_topology",
+            "revit_describe_parameters",
             new Dictionary<string, object?> { ["instance_id"] = "x" },
             CancellationToken.None);
         Assert.Equal("tool_not_allowed", arbitrary.ErrorCode);
+
+        var topology = await session.CallAsync(
+            "revit_get_mep_topology",
+            new Dictionary<string, object?> { ["instance_id"] = "x" },
+            CancellationToken.None);
+        Assert.NotEqual("tool_not_allowed", topology.ErrorCode);
 
         var selection = await session.CallAsync(
             "revit_get_selection",

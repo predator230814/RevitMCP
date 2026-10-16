@@ -586,6 +586,7 @@ internal sealed class AssistantShell
                 "bimit_get_warnings" => "Analyze warnings",
                 "bimit_get_active_view_elements" => "Active view",
                 "bimit_inspect_selection" => "Inspect selection",
+                "bimit_explore_selected_mep" => "Explore selected MEP",
                 _ => null,
             };
             if (label is not null && !labels.Contains(label, StringComparer.Ordinal))

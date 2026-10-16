@@ -174,9 +174,19 @@ public sealed class AssistantWorkflowTests
         Assert.Equal(
             [AssistantTools.GetContext, AssistantTools.GetWarnings, AssistantTools.QueryElements],
             AssistantTools.WorkflowTools);
-        Assert.Contains(AssistantTools.GetSelection, AssistantTools.AllowedReadTools);
-        Assert.Contains(AssistantTools.GetElements, AssistantTools.AllowedReadTools);
+        Assert.Equal(
+            [
+                AssistantTools.GetContext,
+                AssistantTools.GetWarnings,
+                AssistantTools.QueryElements,
+                AssistantTools.GetSelection,
+                AssistantTools.GetElements,
+                AssistantTools.GetMepTopology,
+            ],
+            AssistantTools.AllowedReadTools);
         Assert.DoesNotContain(AssistantTools.GetSelection, AssistantTools.WorkflowTools);
+        Assert.DoesNotContain(AssistantTools.GetMepTopology, AssistantTools.WorkflowTools);
+        Assert.DoesNotContain(AssistantTools.AllowedReadTools, AssistantTools.IsTrustedWriteTool);
         Assert.False(AssistantIpc.Parse("""{"type":"approveIntent"}""").Accepted);
         Assert.False(AssistantIpc.Parse("""{"type":"hello","instanceId":"a","extra":1}""").Accepted);
         Assert.False(AssistantIpc.Parse("""{"type":"runWorkflow","requestId":"r","workflow":"apply"}""").Accepted);

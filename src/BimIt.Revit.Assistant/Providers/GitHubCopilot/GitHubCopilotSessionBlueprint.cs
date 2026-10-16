@@ -51,6 +51,7 @@ internal static class GitHubCopilotSessionBlueprint
             Define(tools, BimItAgentReadTools.Warnings, "Read warnings for the active Revit document. Takes no arguments. An empty warning list is a real result."),
             Define(tools, BimItAgentReadTools.ActiveViewElements, "Read up to 25 elements in the active Revit view. Takes no arguments."),
             Define(tools, BimItAgentReadTools.InspectSelection, "Inspect up to 10 elements currently selected in Revit and return their basic name, category, family, type, and level information. Takes no arguments. An empty selection is a real result."),
+            Define(tools, BimItAgentReadTools.ExploreSelectedMep, "Explore the physical MEP connectivity around the currently selected Revit elements. Includes HVAC, piping, electrical, conduit and cable tray physical connections when Revit exposes them. Takes no arguments."),
         ];
     }
 
@@ -61,7 +62,7 @@ internal static class GitHubCopilotSessionBlueprint
         if (tools.Count != BimItAgentReadTools.Names.Length
             || tools.Select(tool => tool.Name).Except(BimItAgentReadTools.Names, StringComparer.Ordinal).Any())
         {
-            throw new ArgumentException("The Copilot session can expose only the four BIM-IT read tools.", nameof(tools));
+            throw new ArgumentException("The Copilot session can expose only the five BIM-IT read tools.", nameof(tools));
         }
 
         var allowed = new ToolSet();

@@ -191,7 +191,8 @@ public static class AssistantIpc
         return name is "bimit_get_model_context"
             or "bimit_get_warnings"
             or "bimit_get_active_view_elements"
-            or "bimit_inspect_selection";
+            or "bimit_inspect_selection"
+            or "bimit_explore_selected_mep";
     }
 
     private static AssistantIpcParse ParseHello(Envelope body)

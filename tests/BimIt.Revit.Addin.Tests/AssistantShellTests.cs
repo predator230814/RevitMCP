@@ -237,6 +237,15 @@ public sealed class AssistantShellTests
         shell.ReceivePageMessage("""{"type":"sendCommand","text":"Qu'est-ce que j'ai sélectionné ?"}""");
         await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Used == "Used: Inspect selection"));
         Assert.Equal(["show me the ducts", "Qu'est-ce que j'ai sélectionné ?"], link.Chats);
+        link.ChatResult = link.ChatResult! with { UsedTools = ["bimit_explore_selected_mep"] };
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Explore ce qui est connecté à cet élément."}""");
+        await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Used == "Used: Explore selected MEP"));
+        link.ChatResult = link.ChatResult! with { UsedTools = ["revit_get_mep_topology"], Body = "Internal topology name." };
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"nom interne"}""");
+        await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("Internal topology name.", StringComparison.Ordinal)));
+        Assert.Contains(
+            shell.Conversation.Entries,
+            entry => entry.Body.Contains("Internal topology name.", StringComparison.Ordinal) && entry.Used is null);
         Assert.Equal(3, link.Workflows.Count);
         Assert.Equal(1, factory.Starts);
 
