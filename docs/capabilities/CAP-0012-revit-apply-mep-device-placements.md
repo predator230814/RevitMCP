@@ -17,7 +17,11 @@ The apply follows accepted ADR-0008: intent lookup, document guard, exclusive ap
 
 Apply before approval returns `approval_required` and does not start a transaction.
 
-Stale revalidation fails closed when the template, symbol, category, host, level, location, straight host geometry, orientation, or target occupancy no longer matches the approved snapshot. It also fails closed when occupancy cannot be re-established. A stale intent requires a new preview and a new approval.
+Stale revalidation re-resolves the template and its placement strategy immediately before mutation. It fails closed when the active document, template, symbol, category, placement strategy, level, insertion point, orientation, human identity, or target occupancy no longer matches the approved snapshot. It also fails closed when occupancy cannot be re-established. Wall-hosted approval additionally fails when the host or wall geometry changed. Level-work-plane approval additionally fails when the work plane is no longer provably that level or the reference direction changed. A strategy change is stale. The apply never switches strategies. A stale intent requires a new preview and a new approval.
+
+Creation stays inside the one transaction and dispatches on the stored strategy. Level-based uses `NewFamilyInstance(XYZ, FamilySymbol, Level, StructuralType.NonStructural)`, then reproduces the approved rotation about a vertical axis through the insertion point and the approved flips. Wall-hosted keeps the host-and-level overload and the flip check. Level-work-plane uses `Level.GetPlaneReference()` and `NewFamilyInstance(Reference, XYZ, XYZ, FamilySymbol)` with the approved reference direction. The batch does not load a family, create a type, create a host, create a work plane, copy parameters, or route a circuit.
+
+Post-commit verification checks the created instance, symbol, category, level, location, placement strategy, and orientation. Wall-hosted verification also checks the approved wall. Level-work-plane verification checks that the level plane identity is still observable. Any mismatch is `committed_unverified`. The orientation check uses the same `1e-4` radian tolerance and does not accept a mismatch.
 
 ## Result
 

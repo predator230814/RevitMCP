@@ -155,11 +155,13 @@ internal sealed class RevitPreviewMepDevicePlacementsService : IRevitPreviewMepD
         for (var index = 0; index < request.Placements.Count; index++)
         {
             var placement = request.Placements[index];
-            double along;
+            double offsetX;
+            double offsetY;
             double vertical;
             try
             {
-                along = UnitUtils.ConvertToInternalUnits(placement.OffsetAlongHost, unit);
+                offsetX = UnitUtils.ConvertToInternalUnits(placement.OffsetX, unit);
+                offsetY = UnitUtils.ConvertToInternalUnits(placement.OffsetY, unit);
                 vertical = UnitUtils.ConvertToInternalUnits(placement.VerticalOffset, unit);
             }
             catch (Exception)
@@ -167,12 +169,18 @@ internal sealed class RevitPreviewMepDevicePlacementsService : IRevitPreviewMepD
                 throw Invalid();
             }
 
-            if (!MepDevicePlacementGeometry.WithinBounds(along, vertical))
+            if (!MepDevicePlacementGeometry.WithinBounds(offsetX, offsetY, vertical))
             {
                 throw Invalid();
             }
 
-            converted[index] = new MepConvertedPlacement(placement.OffsetAlongHost, placement.VerticalOffset, along, vertical);
+            converted[index] = new MepConvertedPlacement(
+                placement.OffsetX,
+                placement.OffsetY,
+                placement.VerticalOffset,
+                offsetX,
+                offsetY,
+                vertical);
         }
 
         return converted;

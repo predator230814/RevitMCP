@@ -10,6 +10,9 @@ public sealed class PreviewMepDeviceTemplate
     [JsonPropertyName("status")]
     public required PreviewMepDeviceTemplateStatus Status { get; init; }
 
+    [JsonPropertyName("placement_mode")]
+    public PreviewMepDevicePlacementMode? PlacementMode { get; init; }
+
     [JsonPropertyName("category_name")]
     public string? CategoryName { get; init; }
 

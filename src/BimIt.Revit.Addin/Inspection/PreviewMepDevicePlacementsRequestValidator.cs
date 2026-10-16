@@ -22,13 +22,14 @@ internal static class PreviewMepDevicePlacementsRequestValidator
             throw Invalid();
         }
 
-        var pairs = new HashSet<(double Along, double Vertical)>();
+        var triples = new HashSet<(double X, double Y, double Vertical)>();
         foreach (var placement in request.Placements)
         {
             if (placement is null
-                || !double.IsFinite(placement.OffsetAlongHost)
+                || !double.IsFinite(placement.OffsetX)
+                || !double.IsFinite(placement.OffsetY)
                 || !double.IsFinite(placement.VerticalOffset)
-                || !pairs.Add((placement.OffsetAlongHost, placement.VerticalOffset)))
+                || !triples.Add((placement.OffsetX, placement.OffsetY, placement.VerticalOffset)))
             {
                 throw Invalid();
             }

@@ -26,7 +26,7 @@ internal sealed class PreviewMepDevicePlacementsMcpTools
     public async Task<CallToolResult> PreviewMepDevicePlacementsAsync(
         McpServer server,
         [Description("Opaque active-document guard.")] string document_id,
-        [Description("Opaque existing wall-hosted MEP device used as the placement template.")] string template_element_ref,
+        [Description("Opaque existing MEP device used as the placement template.")] string template_element_ref,
         [Description("Forge type id of a Revit length unit.")] string length_unit_id,
         [Description("Signed offsets from the template, in request order.")] IReadOnlyList<PreviewMepDevicePlacement> placements,
         [Description("Opaque RevitMCP instance identifier.")] string? instance_id = null,
@@ -38,9 +38,10 @@ internal sealed class PreviewMepDevicePlacementsMcpTools
             || placements is null
             || placements.Count is < 1 or > 20
             || placements.Any(placement => placement is null
-                || !double.IsFinite(placement.OffsetAlongHost)
+                || !double.IsFinite(placement.OffsetX)
+                || !double.IsFinite(placement.OffsetY)
                 || !double.IsFinite(placement.VerticalOffset))
-            || HasDuplicatePairs(placements))
+            || HasDuplicateTriples(placements))
         {
             return McpCallResultFactory.Error(
                 McpToolErrorCodes.InvalidRequest,
@@ -60,12 +61,12 @@ internal sealed class PreviewMepDevicePlacementsMcpTools
             : McpCallResultFactory.Error(outcome.ErrorCode!, outcome.ErrorMessage!, outcome.Candidates);
     }
 
-    private static bool HasDuplicatePairs(IReadOnlyList<PreviewMepDevicePlacement> placements)
+    private static bool HasDuplicateTriples(IReadOnlyList<PreviewMepDevicePlacement> placements)
     {
-        var seen = new HashSet<(double Along, double Vertical)>();
+        var seen = new HashSet<(double X, double Y, double Vertical)>();
         foreach (var placement in placements)
         {
-            if (!seen.Add((placement.OffsetAlongHost, placement.VerticalOffset)))
+            if (!seen.Add((placement.OffsetX, placement.OffsetY, placement.VerticalOffset)))
             {
                 return true;
             }

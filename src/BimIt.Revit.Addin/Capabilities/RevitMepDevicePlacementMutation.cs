@@ -50,10 +50,21 @@ internal static class RevitMepDevicePlacementMutation
 
             if (document.GetElement(intent.TemplateElementRef) is not FamilyInstance template
                 || template.Symbol is not FamilySymbol symbol
-                || template.Host is not Wall wall
-                || document.GetElement(template.LevelId) is not Level level)
+                || document.GetElement(template.LevelId) is not Level level
+                || !MepCreationPlan.TrySelect(intent.Strategy, out _))
             {
                 return false;
+            }
+
+            Wall? wall = null;
+            if (intent.Strategy == MepPlacementStrategyKind.WallHosted)
+            {
+                if (template.Host is not Wall hostWall)
+                {
+                    return false;
+                }
+
+                wall = hostWall;
             }
 
             prepared = new PreparedBatch(document, documentId, intent, symbol, wall, level);
@@ -108,13 +119,9 @@ internal static class RevitMepDevicePlacementMutation
 
                 foreach (var item in prepared.Intent.Items)
                 {
-                    var created = prepared.Document.Create.NewFamilyInstance(
-                        new XYZ(item.Target.X, item.Target.Y, item.Target.Z),
-                        prepared.Symbol,
-                        prepared.Wall,
-                        prepared.Level,
-                        StructuralType.NonStructural);
-                    if (created is null || string.IsNullOrEmpty(created.UniqueId) || !MatchOrientation(created, prepared.Intent))
+                    if (!TryCreate(prepared, item, out var created)
+                        || string.IsNullOrEmpty(created.UniqueId)
+                        || !MatchOrientation(prepared.Document, created, prepared.Intent))
                     {
                         return Rollback(ref transaction);
                     }
@@ -145,25 +152,106 @@ internal static class RevitMepDevicePlacementMutation
         }
     }
 
-    private static bool MatchOrientation(FamilyInstance created, MepDevicePlacementIntent intent)
+    private static bool TryCreate(PreparedBatch prepared, MepDevicePlacementItem item, out FamilyInstance created)
     {
-        if (created.FacingFlipped != intent.FacingFlipped)
+        created = null!;
+        if (!MepCreationPlan.TrySelect(prepared.Intent.Strategy, out var overload))
         {
-            if (!created.CanFlipFacing || !created.flipFacing() || created.FacingFlipped != intent.FacingFlipped)
-            {
-                return false;
-            }
+            return false;
         }
 
-        if (created.HandFlipped != intent.HandFlipped)
+        var point = new XYZ(item.Target.X, item.Target.Y, item.Target.Z);
+        FamilyInstance? instance = overload switch
         {
-            if (!created.CanFlipHand || !created.flipHand() || created.HandFlipped != intent.HandFlipped)
-            {
-                return false;
-            }
+            MepCreationOverload.LevelPoint => prepared.Document.Create.NewFamilyInstance(
+                point,
+                prepared.Symbol,
+                prepared.Level,
+                StructuralType.NonStructural),
+            MepCreationOverload.WallHost => prepared.Wall is null
+                ? null
+                : prepared.Document.Create.NewFamilyInstance(
+                    point,
+                    prepared.Symbol,
+                    prepared.Wall,
+                    prepared.Level,
+                    StructuralType.NonStructural),
+            MepCreationOverload.LevelPlaneReference => TryCreateOnLevelPlane(prepared, point),
+            _ => null
+        };
+        if (instance is null)
+        {
+            return false;
         }
 
+        created = instance;
         return true;
+    }
+
+    private static FamilyInstance? TryCreateOnLevelPlane(PreparedBatch prepared, XYZ point)
+    {
+        if (prepared.Intent.ReferenceDirection is not { } direction)
+        {
+            return null;
+        }
+
+        var reference = prepared.Level.GetPlaneReference();
+        if (reference is null)
+        {
+            return null;
+        }
+
+        var referenceDirection = new XYZ(direction.X, direction.Y, 0);
+        if (referenceDirection.GetLength() <= 1e-9)
+        {
+            return null;
+        }
+
+        return prepared.Document.Create.NewFamilyInstance(reference, point, referenceDirection, prepared.Symbol);
+    }
+
+    private static bool MatchOrientation(Document document, FamilyInstance created, MepDevicePlacementIntent intent)
+    {
+        if (intent.Strategy != MepPlacementStrategyKind.WallHosted)
+        {
+            if (created.Location is not LocationPoint location || location.Point is null)
+            {
+                return false;
+            }
+
+            var delta = Math.Atan2(
+                Math.Sin(intent.Orientation.RotationRadians - location.Rotation),
+                Math.Cos(intent.Orientation.RotationRadians - location.Rotation));
+            if (Math.Abs(delta) > MepDevicePlacementGeometry.OrientationToleranceRadians)
+            {
+                var axis = Line.CreateBound(location.Point, new XYZ(location.Point.X, location.Point.Y, location.Point.Z + 1));
+                ElementTransformUtils.RotateElement(document, created.Id, axis, delta);
+            }
+        }
+
+        if (created.FacingFlipped != intent.Orientation.FacingFlipped)
+        {
+            if (!created.CanFlipFacing || !created.flipFacing() || created.FacingFlipped != intent.Orientation.FacingFlipped)
+            {
+                return false;
+            }
+        }
+
+        if (created.HandFlipped != intent.Orientation.HandFlipped)
+        {
+            if (!created.CanFlipHand || !created.flipHand() || created.HandFlipped != intent.Orientation.HandFlipped)
+            {
+                return false;
+            }
+        }
+
+        return created.Location is LocationPoint placed
+            && MepDevicePlacementGeometry.OrientationMatches(
+                intent.Strategy,
+                placed.Rotation,
+                created.FacingFlipped,
+                created.HandFlipped,
+                intent.Orientation);
     }
 
     private static ApplyMutationResult Rollback(ref Transaction? transaction)
@@ -233,15 +321,18 @@ internal static class RevitMepDevicePlacementMutation
                 if (created.Symbol is null
                     || !string.Equals(created.Symbol.UniqueId, prepared.Intent.SymbolElementRef, StringComparison.Ordinal)
                     || created.Category is null
-                    || !string.Equals(created.Category.BuiltInCategory.ToString(), prepared.Intent.CategoryToken, StringComparison.Ordinal)
-                    || created.Host is null
-                    || !string.Equals(created.Host.UniqueId, prepared.Intent.HostElementRef, StringComparison.Ordinal))
+                    || !string.Equals(created.Category.BuiltInCategory.ToString(), prepared.Intent.CategoryToken, StringComparison.Ordinal))
                 {
                     return false;
                 }
 
                 var level = prepared.Document.GetElement(created.LevelId) as Level;
                 if (level is null || !string.Equals(level.UniqueId, prepared.Intent.LevelElementRef, StringComparison.Ordinal))
+                {
+                    return false;
+                }
+
+                if (!StrategyStillMatches(prepared, created, level))
                 {
                     return false;
                 }
@@ -253,8 +344,12 @@ internal static class RevitMepDevicePlacementMutation
 
                 var actual = new MepPoint(location.Point.X, location.Point.Y, location.Point.Z);
                 if (!MepDevicePlacementGeometry.SamePoint(actual, prepared.Intent.Items[index].Target)
-                    || created.FacingFlipped != prepared.Intent.FacingFlipped
-                    || created.HandFlipped != prepared.Intent.HandFlipped)
+                    || !MepDevicePlacementGeometry.OrientationMatches(
+                        prepared.Intent.Strategy,
+                        location.Rotation,
+                        created.FacingFlipped,
+                        created.HandFlipped,
+                        prepared.Intent.Orientation))
                 {
                     return false;
                 }
@@ -344,12 +439,28 @@ internal static class RevitMepDevicePlacementMutation
         }
     }
 
+    private static bool StrategyStillMatches(PreparedBatch prepared, FamilyInstance created, Level level)
+    {
+        var placement = created.Symbol?.Family?.FamilyPlacementType;
+        return prepared.Intent.Strategy switch
+        {
+            MepPlacementStrategyKind.LevelBased => placement == FamilyPlacementType.OneLevelBased,
+            MepPlacementStrategyKind.WallHosted => placement == FamilyPlacementType.OneLevelBasedHosted
+                && prepared.Intent.Wall is not null
+                && created.Host is not null
+                && string.Equals(created.Host.UniqueId, prepared.Intent.Wall.HostElementRef, StringComparison.Ordinal),
+            MepPlacementStrategyKind.WorkPlaneBasedLevel => placement == FamilyPlacementType.WorkPlaneBased
+                && RevitMepDeviceTemplateReader.IsCurrentLevelWorkPlane(created, prepared.Document, level),
+            _ => false
+        };
+    }
+
     private readonly record struct PreparedBatch(
         Document Document,
         string DocumentId,
         MepDevicePlacementIntent Intent,
         FamilySymbol Symbol,
-        Wall Wall,
+        Wall? Wall,
         Level Level);
 
     private sealed class ApplyRollbackFailuresPreprocessor : IFailuresPreprocessor

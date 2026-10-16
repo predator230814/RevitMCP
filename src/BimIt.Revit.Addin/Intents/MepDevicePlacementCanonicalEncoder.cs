@@ -29,12 +29,12 @@ internal static class MepDevicePlacementCanonicalEncoder
             || !TryText(intent.CategoryName)
             || !TryText(intent.FamilyName)
             || !TryText(intent.TypeName)
-            || !TryText(intent.HostElementRef)
-            || !TryText(intent.HostName)
             || !TryText(intent.LevelElementRef)
             || !TryText(intent.LevelName)
+            || !double.IsFinite(intent.Orientation.RotationRadians)
             || intent.Items is null
-            || intent.Items.Count is < 1 or > 20)
+            || intent.Items.Count is < 1 or > 20
+            || !StrategyBindingIsComplete(intent))
         {
             return false;
         }
@@ -42,6 +42,7 @@ internal static class MepDevicePlacementCanonicalEncoder
         var buffer = new List<byte>(512);
         WriteString(buffer, Domain);
         WriteUInt32(buffer, SchemaVersion);
+        WriteUInt32(buffer, (uint)intent.Strategy);
         WriteString(buffer, instanceId);
         WriteString(buffer, documentId);
         WriteString(buffer, intent.LengthUnitId);
@@ -51,28 +52,31 @@ internal static class MepDevicePlacementCanonicalEncoder
         WriteString(buffer, intent.CategoryName);
         WriteString(buffer, intent.FamilyName);
         WriteString(buffer, intent.TypeName);
-        WriteString(buffer, intent.HostElementRef);
-        WriteString(buffer, intent.HostName);
         WriteString(buffer, intent.LevelElementRef);
         WriteString(buffer, intent.LevelName);
-        if (!TryWritePoint(buffer, intent.TemplateLocation)
-            || !TryWritePoint(buffer, intent.HostStart)
-            || !TryWritePoint(buffer, intent.HostEnd))
+        if (!TryWritePoint(buffer, intent.TemplateLocation))
         {
             return false;
         }
 
-        WriteBool(buffer, intent.FacingFlipped);
-        WriteBool(buffer, intent.HandFlipped);
-        WriteBool(buffer, intent.CanFlipFacing);
-        WriteBool(buffer, intent.CanFlipHand);
+        WriteDouble(buffer, CanonicalZero(intent.Orientation.RotationRadians));
+        WriteBool(buffer, intent.Orientation.FacingFlipped);
+        WriteBool(buffer, intent.Orientation.HandFlipped);
+        WriteBool(buffer, intent.Orientation.CanFlipFacing);
+        WriteBool(buffer, intent.Orientation.CanFlipHand);
+        if (!TryWriteStrategy(buffer, intent))
+        {
+            return false;
+        }
+
         WriteUInt32(buffer, (uint)intent.Items.Count);
         for (var index = 0; index < intent.Items.Count; index++)
         {
             var item = intent.Items[index];
             if (item is null
                 || item.RequestPosition != index + 1
-                || !double.IsFinite(item.OffsetAlongHost)
+                || !double.IsFinite(item.OffsetX)
+                || !double.IsFinite(item.OffsetY)
                 || !double.IsFinite(item.VerticalOffset)
                 || !TryWritePoint(buffer, item.Target))
             {
@@ -80,13 +84,50 @@ internal static class MepDevicePlacementCanonicalEncoder
             }
 
             WriteUInt32(buffer, (uint)item.RequestPosition);
-            WriteDouble(buffer, CanonicalZero(item.OffsetAlongHost));
+            WriteDouble(buffer, CanonicalZero(item.OffsetX));
+            WriteDouble(buffer, CanonicalZero(item.OffsetY));
             WriteDouble(buffer, CanonicalZero(item.VerticalOffset));
         }
 
         canonical = buffer.ToArray();
         fingerprint = IntentCanonicalEncoder.ToLowerHex(SHA256.HashData(canonical));
         return true;
+    }
+
+    private static bool StrategyBindingIsComplete(MepDevicePlacementIntent intent)
+    {
+        return intent.Strategy switch
+        {
+            MepPlacementStrategyKind.LevelBased => intent.Wall is null && intent.ReferenceDirection is null,
+            MepPlacementStrategyKind.WallHosted => intent.Wall is not null
+                && intent.ReferenceDirection is null
+                && TryText(intent.Wall.HostElementRef)
+                && TryText(intent.Wall.HostName),
+            MepPlacementStrategyKind.WorkPlaneBasedLevel => intent.Wall is null
+                && intent.ReferenceDirection is { } direction
+                && double.IsFinite(direction.X)
+                && double.IsFinite(direction.Y),
+            _ => false
+        };
+    }
+
+    private static bool TryWriteStrategy(List<byte> buffer, MepDevicePlacementIntent intent)
+    {
+        if (intent.Strategy == MepPlacementStrategyKind.WallHosted && intent.Wall is { } wall)
+        {
+            WriteString(buffer, wall.HostElementRef);
+            WriteString(buffer, wall.HostName);
+            return TryWritePoint(buffer, wall.HostStart) && TryWritePoint(buffer, wall.HostEnd);
+        }
+
+        if (intent.Strategy == MepPlacementStrategyKind.WorkPlaneBasedLevel && intent.ReferenceDirection is { } direction)
+        {
+            WriteDouble(buffer, CanonicalZero(direction.X));
+            WriteDouble(buffer, CanonicalZero(direction.Y));
+            return true;
+        }
+
+        return intent.Strategy == MepPlacementStrategyKind.LevelBased;
     }
 
     private static bool TryText(string? value)

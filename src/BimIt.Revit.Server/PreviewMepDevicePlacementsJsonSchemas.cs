@@ -22,9 +22,10 @@ internal static class PreviewMepDevicePlacementsJsonSchemas
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["offset_along_host", "vertical_offset"],
+                "required": ["offset_x", "offset_y", "vertical_offset"],
                 "properties": {
-                  "offset_along_host": { "type": "number" },
+                  "offset_x": { "type": "number" },
+                  "offset_y": { "type": "number" },
                   "vertical_offset": { "type": "number" }
                 }
               }
@@ -60,6 +61,10 @@ internal static class PreviewMepDevicePlacementsJsonSchemas
                   "type": "string",
                   "enum": ["ok", "not_found", "not_family_instance", "unsupported_category", "unsupported_placement", "unsupported_host", "unsupported_host_geometry", "unsupported_location", "unsupported_level"]
                 },
+                "placement_mode": {
+                  "type": "string",
+                  "enum": ["level_based", "wall_hosted", "work_plane_based_level", "work_plane_based_face", "work_plane_based_other"]
+                },
                 "category_name": { "type": "string" },
                 "family_name": { "type": "string" },
                 "type_name": { "type": "string" },
@@ -74,9 +79,10 @@ internal static class PreviewMepDevicePlacementsJsonSchemas
               "items": {
                 "type": "object",
                 "additionalProperties": false,
-                "required": ["offset_along_host", "vertical_offset", "status"],
+                "required": ["offset_x", "offset_y", "vertical_offset", "status"],
                 "properties": {
-                  "offset_along_host": { "type": "number" },
+                  "offset_x": { "type": "number" },
+                  "offset_y": { "type": "number" },
                   "vertical_offset": { "type": "number" },
                   "status": {
                     "type": "string",

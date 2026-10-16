@@ -1,5 +1,12 @@
 namespace BimIt.Revit.Addin.Intents;
 
+internal enum MepPlacementStrategyKind
+{
+    LevelBased = 1,
+    WallHosted = 2,
+    WorkPlaneBasedLevel = 3
+}
+
 internal readonly record struct MepPoint(double X, double Y, double Z)
 {
     public double DistanceTo(MepPoint other)
@@ -11,19 +18,50 @@ internal readonly record struct MepPoint(double X, double Y, double Z)
     }
 }
 
+internal readonly record struct MepOrientation(
+    double RotationRadians,
+    bool FacingFlipped,
+    bool HandFlipped,
+    bool CanFlipFacing,
+    bool CanFlipHand);
+
+internal readonly record struct MepPlanDirection(double X, double Y);
+
+internal sealed class MepWallBinding
+{
+    public MepWallBinding(string hostElementRef, string hostName, MepPoint hostStart, MepPoint hostEnd)
+    {
+        HostElementRef = hostElementRef;
+        HostName = hostName;
+        HostStart = hostStart;
+        HostEnd = hostEnd;
+    }
+
+    public string HostElementRef { get; }
+
+    public string HostName { get; }
+
+    public MepPoint HostStart { get; }
+
+    public MepPoint HostEnd { get; }
+}
+
 internal sealed class MepDevicePlacementItem
 {
-    public MepDevicePlacementItem(int requestPosition, double offsetAlongHost, double verticalOffset, MepPoint target)
+    public MepDevicePlacementItem(int requestPosition, double offsetX, double offsetY, double verticalOffset, MepPoint target)
     {
         RequestPosition = requestPosition;
-        OffsetAlongHost = offsetAlongHost;
+        OffsetX = offsetX;
+        OffsetY = offsetY;
         VerticalOffset = verticalOffset;
         Target = target;
     }
 
     public int RequestPosition { get; }
 
-    public double OffsetAlongHost { get; }
+    public double OffsetX { get; }
+
+    public double OffsetY { get; }
 
     public double VerticalOffset { get; }
 
@@ -36,6 +74,7 @@ internal sealed class MepDevicePlacementItem
 internal sealed class MepDevicePlacementIntent
 {
     public MepDevicePlacementIntent(
+        MepPlacementStrategyKind strategy,
         string lengthUnitId,
         string templateElementRef,
         string symbolElementRef,
@@ -43,19 +82,15 @@ internal sealed class MepDevicePlacementIntent
         string categoryName,
         string familyName,
         string typeName,
-        string hostElementRef,
-        string hostName,
         string levelElementRef,
         string levelName,
         MepPoint templateLocation,
-        MepPoint hostStart,
-        MepPoint hostEnd,
-        bool facingFlipped,
-        bool handFlipped,
-        bool canFlipFacing,
-        bool canFlipHand,
+        MepOrientation orientation,
+        MepWallBinding? wall,
+        MepPlanDirection? referenceDirection,
         IReadOnlyList<MepDevicePlacementItem> items)
     {
+        Strategy = strategy;
         LengthUnitId = lengthUnitId;
         TemplateElementRef = templateElementRef;
         SymbolElementRef = symbolElementRef;
@@ -63,19 +98,16 @@ internal sealed class MepDevicePlacementIntent
         CategoryName = categoryName;
         FamilyName = familyName;
         TypeName = typeName;
-        HostElementRef = hostElementRef;
-        HostName = hostName;
         LevelElementRef = levelElementRef;
         LevelName = levelName;
         TemplateLocation = templateLocation;
-        HostStart = hostStart;
-        HostEnd = hostEnd;
-        FacingFlipped = facingFlipped;
-        HandFlipped = handFlipped;
-        CanFlipFacing = canFlipFacing;
-        CanFlipHand = canFlipHand;
+        Orientation = orientation;
+        Wall = wall;
+        ReferenceDirection = referenceDirection;
         Items = items;
     }
+
+    public MepPlacementStrategyKind Strategy { get; }
 
     public string LengthUnitId { get; }
 
@@ -91,27 +123,17 @@ internal sealed class MepDevicePlacementIntent
 
     public string TypeName { get; }
 
-    public string HostElementRef { get; }
-
-    public string HostName { get; }
-
     public string LevelElementRef { get; }
 
     public string LevelName { get; }
 
     public MepPoint TemplateLocation { get; }
 
-    public MepPoint HostStart { get; }
+    public MepOrientation Orientation { get; }
 
-    public MepPoint HostEnd { get; }
+    public MepWallBinding? Wall { get; }
 
-    public bool FacingFlipped { get; }
-
-    public bool HandFlipped { get; }
-
-    public bool CanFlipFacing { get; }
-
-    public bool CanFlipHand { get; }
+    public MepPlanDirection? ReferenceDirection { get; }
 
     public IReadOnlyList<MepDevicePlacementItem> Items { get; }
 }

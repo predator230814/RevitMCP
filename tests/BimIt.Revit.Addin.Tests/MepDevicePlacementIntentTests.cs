@@ -30,6 +30,18 @@ public sealed class MepDevicePlacementIntentTests
         Assert.True(MepDevicePlacementCanonicalEncoder.TryEncode("instance-a", "doc-a", otherHost, out _, out var hostFingerprint));
         Assert.NotEqual(fingerprint, hostFingerprint);
 
+        var level = Sample(strategy: MepPlacementStrategyKind.LevelBased);
+        Assert.True(MepDevicePlacementCanonicalEncoder.TryEncode("instance-a", "doc-a", level, out _, out var levelFingerprint));
+        Assert.NotEqual(fingerprint, levelFingerprint);
+
+        var rotated = Sample(rotation: 0.4);
+        Assert.True(MepDevicePlacementCanonicalEncoder.TryEncode("instance-a", "doc-a", rotated, out _, out var rotationFingerprint));
+        Assert.NotEqual(fingerprint, rotationFingerprint);
+
+        var shiftedY = Sample([Item(1, 1200, 1), Item(2, 2400, 0)]);
+        Assert.True(MepDevicePlacementCanonicalEncoder.TryEncode("instance-a", "doc-a", shiftedY, out _, out var yFingerprint));
+        Assert.NotEqual(fingerprint, yFingerprint);
+
         Assert.True(IntentCanonicalEncoder.TryEncode(ParameterDraft(), out _, out _, out _, out var parameterCanonical, out _));
         Assert.DoesNotContain("mep_device_placements", Encoding.UTF8.GetString(parameterCanonical), StringComparison.Ordinal);
     }
@@ -129,8 +141,9 @@ public sealed class MepDevicePlacementIntentTests
         Assert.Contains("Duplex Receptacle", json, StringComparison.Ordinal);
         Assert.Contains("Basic Wall", json, StringComparison.Ordinal);
         using var rendered = JsonDocument.Parse(json);
-        Assert.Equal("1. +1200 mm along host, +0 mm vertical", rendered.RootElement.GetProperty("placementLines")[0].GetString());
-        Assert.Equal("2. +2400 mm along host, +0 mm vertical", rendered.RootElement.GetProperty("placementLines")[1].GetString());
+        Assert.Equal("Wall hosted", rendered.RootElement.GetProperty("placementLabel").GetString());
+        Assert.Equal("1. X +1200 mm, Y +0 mm, vertical +0 mm", rendered.RootElement.GetProperty("placementLines")[0].GetString());
+        Assert.Equal("2. X +2400 mm, Y +0 mm, vertical +0 mm", rendered.RootElement.GetProperty("placementLines")[1].GetString());
         Assert.DoesNotContain("templateElementRef", json, StringComparison.Ordinal);
         Assert.DoesNotContain(stored.MepDevicePlacements!.TemplateElementRef, json, StringComparison.Ordinal);
 
@@ -171,9 +184,15 @@ public sealed class MepDevicePlacementIntentTests
         };
     }
 
-    private static MepDevicePlacementIntent Sample(IReadOnlyList<MepDevicePlacementItem>? items = null, MepPoint? hostEnd = null)
+    private static MepDevicePlacementIntent Sample(
+        IReadOnlyList<MepDevicePlacementItem>? items = null,
+        MepPoint? hostEnd = null,
+        MepPlacementStrategyKind strategy = MepPlacementStrategyKind.WallHosted,
+        double rotation = 0)
     {
+        var stored = items ?? [Item(1, 1200, 0), Item(2, 2400, 0)];
         return new MepDevicePlacementIntent(
+            strategy,
             "autodesk.unit.unit:millimeters-1.0.1",
             "template-a",
             "symbol-a",
@@ -181,22 +200,19 @@ public sealed class MepDevicePlacementIntentTests
             "Electrical Fixtures",
             "Duplex Receptacle",
             "Standard",
-            "wall-a",
-            "Basic Wall",
             "level-a",
             "L4",
             new MepPoint(1, 0, 4),
-            new MepPoint(0, 0, 0),
-            hostEnd ?? new MepPoint(20, 0, 0),
-            false,
-            false,
-            true,
-            true,
-            items ?? [Item(1, 1200, 0), Item(2, 2400, 0)]);
+            new MepOrientation(rotation, false, false, true, true),
+            strategy == MepPlacementStrategyKind.WallHosted
+                ? new MepWallBinding("wall-a", "Basic Wall", new MepPoint(0, 0, 0), hostEnd ?? new MepPoint(20, 0, 0))
+                : null,
+            strategy == MepPlacementStrategyKind.WorkPlaneBasedLevel ? new MepPlanDirection(1, 0) : null,
+            stored);
     }
 
-    private static MepDevicePlacementItem Item(int position, double along, double vertical)
+    private static MepDevicePlacementItem Item(int position, double offsetX, double offsetY = 0, double vertical = 0)
     {
-        return new MepDevicePlacementItem(position, along, vertical, new MepPoint(along, 0, vertical));
+        return new MepDevicePlacementItem(position, offsetX, offsetY, vertical, new MepPoint(offsetX, offsetY, vertical));
     }
 }

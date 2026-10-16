@@ -192,6 +192,7 @@ public sealed class ApplyParameterUpdatesOrchestratorTests
     private static MepDevicePlacementIntent MepIntent()
     {
         return new MepDevicePlacementIntent(
+            MepPlacementStrategyKind.LevelBased,
             "autodesk.unit.unit:millimeters-1.0.1",
             "template-a",
             "symbol-a",
@@ -199,18 +200,13 @@ public sealed class ApplyParameterUpdatesOrchestratorTests
             "Electrical Fixtures",
             "Duplex Receptacle",
             "Standard",
-            "wall-a",
-            "Basic Wall",
             "level-a",
             "L4",
             new MepPoint(2, 0, 4),
-            new MepPoint(0, 0, 0),
-            new MepPoint(10, 0, 0),
-            false,
-            false,
-            true,
-            true,
-            [new MepDevicePlacementItem(1, 1200, 0, new MepPoint(5, 0, 4))]);
+            new MepOrientation(0.4, false, false, true, true),
+            null,
+            null,
+            [new MepDevicePlacementItem(1, 1200, 0, 0, new MepPoint(5, 0, 4))]);
     }
 
     private static IntentItemEntry Item(IntentTypedValue before, IntentTypedValue proposed)

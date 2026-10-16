@@ -37,6 +37,7 @@ internal sealed class ApprovalReviewRenderModel
 internal sealed class ApprovalMepDeviceReviewModel
 {
     public ApprovalMepDeviceReviewModel(
+        string placementLabel,
         string categoryName,
         string familyName,
         string typeName,
@@ -44,6 +45,7 @@ internal sealed class ApprovalMepDeviceReviewModel
         string levelName,
         IReadOnlyList<string> placementLines)
     {
+        PlacementLabel = placementLabel;
         CategoryName = categoryName;
         FamilyName = familyName;
         TypeName = typeName;
@@ -51,6 +53,8 @@ internal sealed class ApprovalMepDeviceReviewModel
         LevelName = levelName;
         PlacementLines = placementLines;
     }
+
+    public string PlacementLabel { get; }
 
     public string CategoryName { get; }
 
@@ -212,15 +216,18 @@ internal static class ApprovalReviewRenderer
 
             lines[index] = string.Concat(
                 item.RequestPosition.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                ". ",
-                MepLengthUnitLabel.Signed(item.OffsetAlongHost),
+                ". X ",
+                MepLengthUnitLabel.Signed(item.OffsetX),
                 " ",
                 unit,
-                " along host, ",
+                ", Y ",
+                MepLengthUnitLabel.Signed(item.OffsetY),
+                " ",
+                unit,
+                ", vertical ",
                 MepLengthUnitLabel.Signed(item.VerticalOffset),
                 " ",
-                unit,
-                " vertical");
+                unit);
         }
 
         model = new ApprovalReviewRenderModel(
@@ -229,13 +236,25 @@ internal static class ApprovalReviewRenderer
             binding.ExpiresAt,
             Array.Empty<ApprovalReviewItemModel>(),
             new ApprovalMepDeviceReviewModel(
+                PlacementLabel(intent.Strategy),
                 intent.CategoryName,
                 intent.FamilyName,
                 intent.TypeName,
-                intent.HostName,
+                intent.Wall?.HostName ?? string.Empty,
                 intent.LevelName,
                 Array.AsReadOnly(lines)));
         return true;
+    }
+
+    private static string PlacementLabel(MepPlacementStrategyKind strategy)
+    {
+        return strategy switch
+        {
+            MepPlacementStrategyKind.LevelBased => "Level based",
+            MepPlacementStrategyKind.WallHosted => "Wall hosted",
+            MepPlacementStrategyKind.WorkPlaneBasedLevel => "Level work plane",
+            _ => string.Empty
+        };
     }
 
     private static bool TryRenderItem(IntentItemEntry? item, int expectedPosition, out ApprovalReviewItemModel rendered)

@@ -22,6 +22,17 @@ public sealed class PreviewMepDevicePlacementsContractTests
     }
 
     [Theory]
+    [InlineData(PreviewMepDevicePlacementMode.LevelBased, "level_based")]
+    [InlineData(PreviewMepDevicePlacementMode.WallHosted, "wall_hosted")]
+    [InlineData(PreviewMepDevicePlacementMode.WorkPlaneBasedLevel, "work_plane_based_level")]
+    [InlineData(PreviewMepDevicePlacementMode.WorkPlaneBasedFace, "work_plane_based_face")]
+    [InlineData(PreviewMepDevicePlacementMode.WorkPlaneBasedOther, "work_plane_based_other")]
+    public void Placement_modes_serialize_as_closed_snake_case(PreviewMepDevicePlacementMode mode, string expected)
+    {
+        Assert.Equal("\"" + expected + "\"", JsonSerializer.Serialize(mode, ContractJson.Options));
+    }
+
+    [Theory]
     [InlineData(PreviewMepDevicePlacementItemStatus.Ok, "ok")]
     [InlineData(PreviewMepDevicePlacementItemStatus.OutOfHostBounds, "out_of_host_bounds")]
     [InlineData(PreviewMepDevicePlacementItemStatus.Occupied, "occupied")]
@@ -54,7 +65,7 @@ public sealed class PreviewMepDevicePlacementsContractTests
             Context = new PreviewMepDevicePlacementsContext { InstanceId = "instance-a", DocumentId = "doc-a" },
             Ready = false,
             Template = new PreviewMepDeviceTemplate { ElementRef = "template-a", Status = PreviewMepDeviceTemplateStatus.UnsupportedHost },
-            Items = [new PreviewMepDevicePlacementItem { OffsetAlongHost = 1, VerticalOffset = 0, Status = PreviewMepDevicePlacementItemStatus.UnsupportedPosition }]
+            Items = [new PreviewMepDevicePlacementItem { OffsetX = 1, OffsetY = 0, VerticalOffset = 0, Status = PreviewMepDevicePlacementItemStatus.UnsupportedPosition }]
         }, ContractJson.Options);
 
         using var document = JsonDocument.Parse(json);
@@ -79,13 +90,12 @@ public sealed class PreviewMepDevicePlacementsContractTests
                 FamilyName = "Duplex Receptacle",
                 TypeName = "Standard",
                 LevelName = "L4",
-                HostElementRef = "wall-a",
-                HostName = "Basic Wall"
+                PlacementMode = PreviewMepDevicePlacementMode.LevelBased
             },
             Items =
             [
-                new PreviewMepDevicePlacementItem { OffsetAlongHost = 1200, VerticalOffset = 0, Status = PreviewMepDevicePlacementItemStatus.Ok },
-                new PreviewMepDevicePlacementItem { OffsetAlongHost = 2400, VerticalOffset = 0, Status = PreviewMepDevicePlacementItemStatus.Ok }
+                new PreviewMepDevicePlacementItem { OffsetX = 1200, OffsetY = 0, VerticalOffset = 0, Status = PreviewMepDevicePlacementItemStatus.Ok },
+                new PreviewMepDevicePlacementItem { OffsetX = 2400, OffsetY = 0, VerticalOffset = 0, Status = PreviewMepDevicePlacementItemStatus.Ok }
             ],
             IntentRef = "abc",
             IntentFingerprint = "def",
@@ -93,8 +103,10 @@ public sealed class PreviewMepDevicePlacementsContractTests
         }, ContractJson.Options);
 
         using var document = JsonDocument.Parse(json);
-        Assert.Equal(1200, document.RootElement.GetProperty("items")[0].GetProperty("offset_along_host").GetDouble());
-        Assert.Equal(2400, document.RootElement.GetProperty("items")[1].GetProperty("offset_along_host").GetDouble());
+        Assert.Equal("level_based", document.RootElement.GetProperty("template").GetProperty("placement_mode").GetString());
+        Assert.Equal(1200, document.RootElement.GetProperty("items")[0].GetProperty("offset_x").GetDouble());
+        Assert.Equal(0, document.RootElement.GetProperty("items")[0].GetProperty("offset_y").GetDouble());
+        Assert.Equal(2400, document.RootElement.GetProperty("items")[1].GetProperty("offset_x").GetDouble());
         Assert.Equal("abc", document.RootElement.GetProperty("intent_ref").GetString());
     }
 

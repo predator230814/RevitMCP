@@ -9,7 +9,7 @@ internal static class ApprovalContent
     /// <summary>
     /// Production UI bundle revision. Bump it whenever index.html, app.js, or app.css changes.
     /// </summary>
-    public const string AssetRevision = "2026-10-16.1";
+    public const string AssetRevision = "2026-10-16.2";
 
     public static string IndexUri => LocalOrigin + "index.html?rev=" + AssetRevision;
 }

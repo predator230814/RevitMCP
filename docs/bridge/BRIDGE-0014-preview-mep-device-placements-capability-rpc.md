@@ -7,7 +7,7 @@
 
 `revit.preview_mep_device_placements` on bridge protocol 14.
 
-Support is the explicit set `{14,15,16}`.
+Support is the explicit set `{14,15,16}`. The draft request uses project-axis `offset_x`, `offset_y`, and `vertical_offset`. Protocol 14 was not bumped because this write has not merged.
 
 A host advertises `[14,13,12,11,10,9,8,7,6,5,4,3,2,1]` only when preview MEP placements is present together with the complete v13 prefix. A complete v13 host without this RPC still advertises `[13..1]`.
 

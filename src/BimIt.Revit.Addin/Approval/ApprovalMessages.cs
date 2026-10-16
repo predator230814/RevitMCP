@@ -181,6 +181,7 @@ internal static class ApprovalReviewJson
                 ["createdAt"] = model.CreatedAt,
                 ["expiresAt"] = model.ExpiresAt,
                 ["title"] = "Create MEP devices",
+                ["placementLabel"] = mep.PlacementLabel,
                 ["categoryName"] = mep.CategoryName,
                 ["familyName"] = mep.FamilyName,
                 ["typeName"] = mep.TypeName,
