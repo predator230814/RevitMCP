@@ -169,6 +169,7 @@ internal static class AssistantHost
         }
 
         var timeouts = providerTimeouts ?? AssistantProviderTimeouts.Default;
+        var documents = new AssistantDocumentStore();
         var providerStart = StartProviderAsync(runtime, timeouts, cancellationToken);
         try
         {
@@ -199,8 +200,32 @@ internal static class AssistantHost
                     continue;
                 }
 
+                if (parsed.Message.Kind == AssistantIpcKind.AttachDocument)
+                {
+                    AssistantIpcMessage documentResult;
+                    try
+                    {
+                        documentResult = DocumentResult(documents.Attach(parsed.Message.DocumentPath));
+                    }
+                    catch (Exception)
+                    {
+                        documentResult = DocumentFailure(AssistantDocumentErrors.ReadFailed, AssistantDocumentErrors.ReadFailedMessage);
+                    }
+
+                    await WriteAsync(server, documentResult, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.RemoveDocument)
+                {
+                    documents.Clear();
+                    await WriteAsync(server, DocumentCleared(), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
                 if (parsed.Message.Kind == AssistantIpcKind.ResetConversation)
                 {
+                    documents.Clear();
                     var resetFinished = false;
                     try
                     {
@@ -221,7 +246,7 @@ internal static class AssistantHost
 
                 if (parsed.Message.Kind == AssistantIpcKind.Chat)
                 {
-                    await WriteAsync(server, await ChatAsync(runtime, parsed.Message, timeouts, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, await ChatAsync(runtime, parsed.Message, documents.Current, timeouts, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -254,6 +279,7 @@ internal static class AssistantHost
         }
         finally
         {
+            documents.Clear();
             try
             {
                 await runtime.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(4)).ConfigureAwait(false);
@@ -301,6 +327,7 @@ internal static class AssistantHost
     private static async Task<AssistantIpcMessage> ChatAsync(
         IAssistantAgentRuntime runtime,
         AssistantIpcMessage message,
+        AssistantDocumentArtifact? attachment,
         AssistantProviderTimeouts timeouts,
         CancellationToken cancellationToken)
     {
@@ -330,7 +357,7 @@ internal static class AssistantHost
         try
         {
             var pending = RunBudgetAsync(
-                token => runtime.SendAsync(message.Text ?? "", token),
+                token => runtime.SendAsync(new AssistantAgentRequest(message.Text ?? "", attachment), token),
                 timeouts.Turn,
                 cancellationToken);
             var (finished, value) = await pending.ConfigureAwait(false);
@@ -470,6 +497,85 @@ internal static class AssistantHost
         }
 
         return accepted;
+    }
+
+    private static AssistantIpcMessage DocumentResult(AssistantDocumentReadResult result)
+    {
+        var artifact = result.Artifact;
+        if (artifact is { IsDisposed: false })
+        {
+            return new AssistantIpcMessage(
+                AssistantIpcKind.DocumentResult,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                Attached: true,
+                DisplayName: artifact.DisplayName,
+                DocumentKind: AssistantDocumentKinds.Wire(artifact.Kind),
+                SourceSizeBytes: artifact.SourceSizeBytes,
+                PageCount: artifact.PageCount,
+                VisualCount: artifact.VisualPages.Count > 0 ? artifact.VisualPages.Count : null,
+                Truncated: artifact.TextTruncated || artifact.VisualTruncated);
+        }
+
+        return DocumentFailure(
+            result.Code ?? AssistantDocumentErrors.ReadFailed,
+            result.Message ?? AssistantDocumentErrors.ReadFailedMessage);
+    }
+
+    private static AssistantIpcMessage DocumentFailure(string code, string message)
+    {
+        return new AssistantIpcMessage(
+            AssistantIpcKind.DocumentResult,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Attached: false,
+            DocumentCode: code,
+            DocumentMessage: message);
+    }
+
+    private static AssistantIpcMessage DocumentCleared()
+    {
+        return new AssistantIpcMessage(
+            AssistantIpcKind.DocumentResult,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Attached: false);
     }
 
     private static AssistantIpcMessage Status(AssistantMcpReadiness readiness, AssistantProviderStatus provider)

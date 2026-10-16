@@ -18,6 +18,7 @@ Accepted ADRs:
 - [ADR-0012](ADR-0012-bim-it-product-family-and-specialized-mcp-services.md) — BIM-IT product family and specialized MCP service identity
 - [ADR-0013](ADR-0013-bim-it-assistant-local-architecture.md) — BIM-IT Assistant local architecture and trusted-boundary separation
 - [ADR-0014](ADR-0014-provider-neutral-assistant-agent-runtime.md) — provider-neutral Assistant agent runtime and initial GitHub Copilot adapter
+- [ADR-0015](ADR-0015-assistant-document-intake.md) — Assistant document intake as conversation context
 
 RevitMCP was renamed to BIM-IT Revit MCP. ADR-0001 through ADR-0011 keep the name used when they were accepted. See ADR-0012.
 

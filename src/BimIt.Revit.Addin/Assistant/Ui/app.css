@@ -152,10 +152,39 @@ main {
 
 .composer {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: auto 1fr auto;
   gap: 8px;
   padding: 0;
   background: var(--bg);
+  align-items: start;
+}
+
+.attachment {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  padding: 6px 8px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.attachment-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.attachment strong, .attachment .sub {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment .sub {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .dock {

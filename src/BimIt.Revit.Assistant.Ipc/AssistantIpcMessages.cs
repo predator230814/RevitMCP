@@ -21,6 +21,9 @@ public enum AssistantIpcKind
     ChatResult,
     ResetConversation,
     QueryStatus,
+    AttachDocument,
+    RemoveDocument,
+    DocumentResult,
 }
 
 public sealed record AssistantIpcMessage(
@@ -45,7 +48,17 @@ public sealed record AssistantIpcMessage(
     string? ProviderError = null,
     string? ProviderLabel = null,
     string? Text = null,
-    IReadOnlyList<string>? UsedTools = null);
+    IReadOnlyList<string>? UsedTools = null,
+    string? DocumentPath = null,
+    bool? Attached = null,
+    string? DisplayName = null,
+    string? DocumentKind = null,
+    long? SourceSizeBytes = null,
+    int? PageCount = null,
+    int? VisualCount = null,
+    bool? Truncated = null,
+    string? DocumentCode = null,
+    string? DocumentMessage = null);
 
 public readonly record struct AssistantIpcParse(bool Accepted, AssistantIpcMessage? Message, string Reason)
 {
@@ -65,6 +78,14 @@ public static class AssistantIpc
     public const int MaxChatTextLength = 2_000;
 
     public const int MaxUsedToolCount = 8;
+
+    public const int MaxDocumentPathLength = 1_024;
+
+    public const long MaxDocumentBytes = 25L * 1024 * 1024;
+
+    public const int MaxDocumentNameLength = 180;
+
+    public const int MaxDocumentMessageLength = 500;
 
     public static readonly JsonSerializerOptions Options = new()
     {
@@ -106,6 +127,9 @@ public static class AssistantIpc
                 "chatResult" => ParseChatResult(body),
                 "resetConversation" => ParseSignal(body, AssistantIpcKind.ResetConversation),
                 "queryStatus" => ParseSignal(body, AssistantIpcKind.QueryStatus),
+                "attachDocument" => ParseAttach(body),
+                "removeDocument" => ParseSignal(body, AssistantIpcKind.RemoveDocument),
+                "documentResult" => ParseDocumentResult(body),
                 _ => AssistantIpcParse.Reject("unknown"),
             };
         }
@@ -179,6 +203,25 @@ public static class AssistantIpc
             },
             AssistantIpcKind.ResetConversation => new Envelope { Type = "resetConversation" },
             AssistantIpcKind.QueryStatus => new Envelope { Type = "queryStatus" },
+            AssistantIpcKind.AttachDocument => new Envelope
+            {
+                Type = "attachDocument",
+                Path = message.DocumentPath,
+            },
+            AssistantIpcKind.RemoveDocument => new Envelope { Type = "removeDocument" },
+            AssistantIpcKind.DocumentResult => new Envelope
+            {
+                Type = "documentResult",
+                Attached = message.Attached,
+                DisplayName = message.DisplayName,
+                DocumentKind = message.DocumentKind,
+                SourceSizeBytes = message.SourceSizeBytes,
+                PageCount = message.PageCount,
+                VisualCount = message.VisualCount,
+                Truncated = message.Truncated,
+                Code = message.DocumentCode,
+                DocumentMessage = message.DocumentMessage,
+            },
             _ => throw new ArgumentOutOfRangeException(nameof(message)),
         };
         return JsonSerializer.Serialize(envelope, Options);
@@ -197,7 +240,7 @@ public static class AssistantIpc
 
     private static AssistantIpcParse ParseHello(Envelope body)
     {
-        if (!IsBoundedId(body.InstanceId) || body.UsedTools is not null)
+        if (!IsBoundedId(body.InstanceId) || body.UsedTools is not null || HasDocument(body))
         {
             return AssistantIpcParse.Reject("instance");
         }
@@ -222,7 +265,7 @@ public static class AssistantIpc
 
     private static AssistantIpcParse ParseRun(Envelope body)
     {
-        if (!IsBoundedId(body.RequestId) || !TryWorkflow(body.Workflow, out var workflow) || body.UsedTools is not null)
+        if (!IsBoundedId(body.RequestId) || !TryWorkflow(body.Workflow, out var workflow) || body.UsedTools is not null || HasDocument(body))
         {
             return AssistantIpcParse.Reject("workflow");
         }
@@ -248,6 +291,7 @@ public static class AssistantIpc
     private static AssistantIpcParse ParseStatus(Envelope body)
     {
         if (body.UsedTools is not null
+            || HasDocument(body)
             || !IsState(body.AssistantState)
             || !IsState(body.McpState)
             || !IsProviderState(body.ProviderState)
@@ -292,7 +336,7 @@ public static class AssistantIpc
 
     private static AssistantIpcParse ParseChat(Envelope body)
     {
-        if (HasProvider(body) || body.UsedTools is not null || body.Workflow is not null || body.Title is not null || body.Body is not null)
+        if (HasProvider(body) || HasDocument(body) || body.UsedTools is not null || body.Workflow is not null || body.Title is not null || body.Body is not null)
         {
             return AssistantIpcParse.Reject("chat");
         }
@@ -328,7 +372,7 @@ public static class AssistantIpc
             return AssistantIpcParse.Reject("chat");
         }
 
-        if (body.Title.Length > 200 || body.Body.Length > MaxTextLength || body.Text is not null || body.Workflow is not null)
+        if (body.Title.Length > 200 || body.Body.Length > MaxTextLength || body.Text is not null || body.Workflow is not null || HasDocument(body))
         {
             return AssistantIpcParse.Reject("chat");
         }
@@ -377,7 +421,8 @@ public static class AssistantIpc
             || body.Body is not null
             || HasProvider(body)
             || body.UsedTools is not null
-            || body.InstanceId is not null)
+            || body.InstanceId is not null
+            || HasDocument(body))
         {
             return AssistantIpcParse.Reject("signal");
         }
@@ -393,7 +438,7 @@ public static class AssistantIpc
             return AssistantIpcParse.Reject("result");
         }
 
-        if (body.Title.Length > 200 || body.Body.Length > MaxTextLength || body.UsedTools is not null)
+        if (body.Title.Length > 200 || body.Body.Length > MaxTextLength || body.UsedTools is not null || HasDocument(body))
         {
             return AssistantIpcParse.Reject("result");
         }
@@ -414,6 +459,155 @@ public static class AssistantIpc
             body.Title,
             body.Body,
             body.IsError == true));
+    }
+
+    private static AssistantIpcParse ParseAttach(Envelope body)
+    {
+        if (!IsAcceptedPath(body.Path)
+            || HasDocumentMetadata(body)
+            || body.RequestId is not null
+            || body.Text is not null
+            || body.Workflow is not null
+            || body.InstanceId is not null
+            || body.UsedTools is not null
+            || HasProvider(body))
+        {
+            return AssistantIpcParse.Reject("path");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.AttachDocument,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            DocumentPath: body.Path));
+    }
+
+    private static AssistantIpcParse ParseDocumentResult(Envelope body)
+    {
+        if (body.Path is not null
+            || body.RequestId is not null
+            || body.Text is not null
+            || body.Workflow is not null
+            || body.Title is not null
+            || body.Body is not null
+            || body.UsedTools is not null
+            || HasProvider(body)
+            || body.InstanceId is not null
+            || body.Attached is null)
+        {
+            return AssistantIpcParse.Reject("document");
+        }
+
+        if (body.Attached == true)
+        {
+            if (!IsDisplayName(body.DisplayName)
+                || !IsDocumentKind(body.DocumentKind)
+                || body.SourceSizeBytes is null
+                || body.SourceSizeBytes < 0
+                || body.SourceSizeBytes > MaxDocumentBytes
+                || body.Code is not null
+                || body.DocumentMessage is not null
+                || !IsOptionalCount(body.PageCount, 100_000)
+                || !IsOptionalCount(body.VisualCount, 8))
+            {
+                return AssistantIpcParse.Reject("document");
+            }
+
+            return AssistantIpcParse.Accept(new AssistantIpcMessage(
+                AssistantIpcKind.DocumentResult,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                Attached: true,
+                DisplayName: body.DisplayName,
+                DocumentKind: body.DocumentKind,
+                SourceSizeBytes: body.SourceSizeBytes,
+                PageCount: body.PageCount,
+                VisualCount: body.VisualCount,
+                Truncated: body.Truncated == true));
+        }
+
+        if (body.DisplayName is not null
+            || body.DocumentKind is not null
+            || body.SourceSizeBytes is not null
+            || body.PageCount is not null
+            || body.VisualCount is not null
+            || body.Truncated is not null)
+        {
+            return AssistantIpcParse.Reject("document");
+        }
+
+        if (body.Code is null && body.DocumentMessage is null)
+        {
+            return AssistantIpcParse.Accept(new AssistantIpcMessage(
+                AssistantIpcKind.DocumentResult,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                Attached: false));
+        }
+
+        if (!IsDocumentCode(body.Code)
+            || string.IsNullOrWhiteSpace(body.DocumentMessage)
+            || body.DocumentMessage.Length > MaxDocumentMessageLength
+            || ContainsPath(body.DocumentMessage))
+        {
+            return AssistantIpcParse.Reject("document");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.DocumentResult,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Attached: false,
+            DocumentCode: body.Code,
+            DocumentMessage: body.DocumentMessage));
     }
 
     private static bool TryWorkflow(string? value, out AssistantWorkflowName workflow)
@@ -485,6 +679,79 @@ public static class AssistantIpc
             || (value.Length <= 80 && value.All(character => char.IsAsciiLetterOrDigit(character) || character is '.' or '_' or ':' or '-'));
     }
 
+    private static bool HasDocument(Envelope body)
+    {
+        return body.Path is not null || HasDocumentMetadata(body);
+    }
+
+    private static bool HasDocumentMetadata(Envelope body)
+    {
+        return body.Attached is not null
+            || body.DisplayName is not null
+            || body.DocumentKind is not null
+            || body.SourceSizeBytes is not null
+            || body.PageCount is not null
+            || body.VisualCount is not null
+            || body.Truncated is not null
+            || body.Code is not null
+            || body.DocumentMessage is not null;
+    }
+
+    private static bool IsAcceptedPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || path.Length > MaxDocumentPathLength || path.Contains("://", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        foreach (var character in path)
+        {
+            if (char.IsControl(character))
+            {
+                return false;
+            }
+        }
+
+        return path.IndexOfAny(Path.GetInvalidPathChars()) < 0 && Path.IsPathRooted(path);
+    }
+
+    private static bool IsDisplayName(string? name)
+    {
+        return !string.IsNullOrWhiteSpace(name)
+            && name.Length <= MaxDocumentNameLength
+            && !name.Contains('\\')
+            && !name.Contains('/')
+            && !ContainsPath(name)
+            && name.All(character => !char.IsControl(character));
+    }
+
+    private static bool IsDocumentKind(string? kind)
+    {
+        return kind is "pdf" or "image" or "word" or "spreadsheet" or "text" or "markdown" or "csv" or "json";
+    }
+
+    private static bool IsDocumentCode(string? code)
+    {
+        return code is "unsupported_document"
+            or "document_too_large"
+            or "document_invalid"
+            or "document_read_failed"
+            or "pdf_render_failed";
+    }
+
+    private static bool IsOptionalCount(int? value, int max)
+    {
+        return value is null || (value >= 0 && value <= max);
+    }
+
+    private static bool ContainsPath(string? value)
+    {
+        return value is not null
+            && (value.Contains(":\\", StringComparison.Ordinal)
+                || value.Contains("\\\\", StringComparison.Ordinal)
+                || value.Contains("://", StringComparison.Ordinal));
+    }
+
     private static bool HasProvider(Envelope body)
     {
         return body.ProviderName is not null
@@ -549,5 +816,28 @@ public static class AssistantIpc
         public string? Text { get; set; }
 
         public IReadOnlyList<string>? UsedTools { get; set; }
+
+        public string? Path { get; set; }
+
+        public bool? Attached { get; set; }
+
+        public string? DisplayName { get; set; }
+
+        [JsonPropertyName("kind")]
+        public string? DocumentKind { get; set; }
+
+        public long? SourceSizeBytes { get; set; }
+
+        public int? PageCount { get; set; }
+
+        public int? VisualCount { get; set; }
+
+        public bool? Truncated { get; set; }
+
+        [JsonPropertyName("code")]
+        public string? Code { get; set; }
+
+        [JsonPropertyName("message")]
+        public string? DocumentMessage { get; set; }
     }
 }

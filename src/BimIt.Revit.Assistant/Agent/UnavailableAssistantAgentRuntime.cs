@@ -20,7 +20,7 @@ internal sealed class UnavailableAssistantAgentRuntime : IAssistantAgentRuntime
         return Task.CompletedTask;
     }
 
-    public Task<AssistantAgentTurn> SendAsync(string userText, CancellationToken cancellationToken)
+    public Task<AssistantAgentTurn> SendAsync(AssistantAgentRequest request, CancellationToken cancellationToken)
     {
         return Task.FromResult(new AssistantAgentTurn("BIM-IT Assistant", _message, true));
     }

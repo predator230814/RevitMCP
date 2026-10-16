@@ -19,6 +19,10 @@ internal interface IAssistantLink
 
     Task<AssistantIpcMessage?> ResetConversationAsync(CancellationToken cancellationToken);
 
+    Task<AssistantIpcMessage?> AttachDocumentAsync(string path, CancellationToken cancellationToken);
+
+    Task<AssistantIpcMessage?> RemoveDocumentAsync(CancellationToken cancellationToken);
+
     Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken);
 
     Task ShutdownAsync();
@@ -135,6 +139,34 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
     public Task<AssistantIpcMessage?> ResetConversationAsync(CancellationToken cancellationToken)
     {
         return ExchangeAsync(Signal(AssistantIpcKind.ResetConversation), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> AttachDocumentAsync(string path, CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(
+            new AssistantIpcMessage(
+                AssistantIpcKind.AttachDocument,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                DocumentPath: path),
+            cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> RemoveDocumentAsync(CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(Signal(AssistantIpcKind.RemoveDocument), cancellationToken);
     }
 
     public Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken)

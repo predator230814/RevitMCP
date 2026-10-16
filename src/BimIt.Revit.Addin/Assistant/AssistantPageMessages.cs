@@ -11,6 +11,8 @@ internal enum AssistantPageIntent
     NewConversation,
     OpenDiagnostics,
     RetryConnection,
+    AttachDocument,
+    RemoveDocument,
 }
 
 internal readonly record struct AssistantPageParse(bool Accepted, AssistantPageIntent Intent, string? Action, string? Text, string Reason)
@@ -64,6 +66,8 @@ internal static class AssistantPageMessages
                 "newConversation" => AssistantPageParse.Accept(AssistantPageIntent.NewConversation),
                 "openDiagnostics" => AssistantPageParse.Accept(AssistantPageIntent.OpenDiagnostics),
                 "retryConnection" => AssistantPageParse.Accept(AssistantPageIntent.RetryConnection),
+                "attachDocument" => AssistantPageParse.Accept(AssistantPageIntent.AttachDocument),
+                "removeDocument" => AssistantPageParse.Accept(AssistantPageIntent.RemoveDocument),
                 _ => AssistantPageParse.Reject("unknown"),
             };
         }
