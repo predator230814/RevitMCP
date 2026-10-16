@@ -37,4 +37,6 @@ public static class CapabilityErrorCodes
     public const string InvalidWarnings = "INVALID_WARNINGS";
 
     public const string InvalidSelection = "INVALID_SELECTION";
+
+    public const string InvalidMepDevicePlacement = "INVALID_MEP_DEVICE_PLACEMENT";
 }

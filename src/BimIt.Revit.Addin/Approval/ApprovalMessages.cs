@@ -171,6 +171,25 @@ internal static class ApprovalReviewJson
             };
         }
 
+        if (model.MepDevices is { } mep)
+        {
+            return JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["type"] = "renderReview",
+                ["reviewKind"] = "mep_device_placements",
+                ["sessionRef"] = model.SessionRef,
+                ["createdAt"] = model.CreatedAt,
+                ["expiresAt"] = model.ExpiresAt,
+                ["title"] = "Create MEP devices",
+                ["categoryName"] = mep.CategoryName,
+                ["familyName"] = mep.FamilyName,
+                ["typeName"] = mep.TypeName,
+                ["hostName"] = mep.HostName,
+                ["levelName"] = mep.LevelName,
+                ["placementLines"] = mep.PlacementLines,
+            }, Options);
+        }
+
         return JsonSerializer.Serialize(new Dictionary<string, object?>
         {
             ["type"] = "renderReview",

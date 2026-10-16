@@ -44,7 +44,8 @@ internal readonly record struct ApprovalSnapshot(
     string DocumentId,
     DateTimeOffset DecisionTimestamp,
     string ProviderMethod,
-    DateTimeOffset EffectiveExpiry);
+    DateTimeOffset EffectiveExpiry,
+    ControlledWriteIntentKind IntentKind = ControlledWriteIntentKind.ParameterUpdates);
 
 internal readonly record struct ApprovalConsumeResult(ApprovalConsumeStatus Status, ApprovalSnapshot? Snapshot);
 
@@ -87,6 +88,11 @@ internal sealed class RevitLocalApprovalProviderStateMachine
 
     public ApprovalReviewResult BeginReview(string? intentRef, string? activeDocumentId)
     {
+        return BeginReview(intentRef, activeDocumentId, ControlledWriteIntentKind.ParameterUpdates);
+    }
+
+    public ApprovalReviewResult BeginReview(string? intentRef, string? activeDocumentId, ControlledWriteIntentKind expectedKind)
+    {
         lock (_gate)
         {
             if (_stopped)
@@ -95,19 +101,19 @@ internal sealed class RevitLocalApprovalProviderStateMachine
             }
 
             InvalidateStaleSession(activeDocumentId);
-            if (!TryLive(intentRef, out var entry) || !IsRequestedDocument(activeDocumentId, entry))
+            if (!TryExpected(intentRef, expectedKind, out var binding) || !IsRequestedDocument(activeDocumentId, binding))
             {
                 return UnavailableReview();
             }
 
-            if (TryMatchingDecision(entry, out _))
+            if (TryMatchingDecision(binding, out _))
             {
                 return new ApprovalReviewResult(ApprovalReviewStatus.Terminal, null);
             }
 
             if (_session is not null)
             {
-                if (SameIntent(_session, entry))
+                if (SameIntent(_session, binding))
                 {
                     return new ApprovalReviewResult(ApprovalReviewStatus.AlreadyActive, _session.SessionRef);
                 }
@@ -120,7 +126,7 @@ internal sealed class RevitLocalApprovalProviderStateMachine
                 return UnavailableReview();
             }
 
-            _session = new ActiveSession(sessionRef, entry.IntentRef, entry.IntentFingerprint, entry.InstanceId, entry.DocumentId);
+            _session = new ActiveSession(sessionRef, binding);
             return new ApprovalReviewResult(ApprovalReviewStatus.Started, sessionRef);
         }
     }
@@ -170,14 +176,19 @@ internal sealed class RevitLocalApprovalProviderStateMachine
 
     public ApprovalConsumeResult TryConsumeApproved(string? intentRef)
     {
+        return TryConsumeApproved(intentRef, ControlledWriteIntentKind.ParameterUpdates);
+    }
+
+    public ApprovalConsumeResult TryConsumeApproved(string? intentRef, ControlledWriteIntentKind expectedKind)
+    {
         lock (_gate)
         {
-            if (_stopped || !TryLive(intentRef, out var entry) || !TryMatchingDecision(entry, out var decision) || decision is null)
+            if (_stopped || !TryExpected(intentRef, expectedKind, out var binding) || !TryMatchingDecision(binding, out var decision) || decision is null)
             {
                 return NotApproved();
             }
 
-            if (!decision.Approved || decision.Consumed)
+            if (!decision.Approved || decision.Consumed || decision.Kind != expectedKind)
             {
                 return NotApproved();
             }
@@ -192,7 +203,8 @@ internal sealed class RevitLocalApprovalProviderStateMachine
                     decision.DocumentId,
                     decision.DecidedAt,
                     decision.ProviderMethod,
-                    decision.EffectiveExpiry));
+                    decision.EffectiveExpiry,
+                    decision.Kind));
         }
     }
 
@@ -281,18 +293,18 @@ internal sealed class RevitLocalApprovalProviderStateMachine
                 return new ApprovalCommandResult(ApprovalCommandStatus.InvalidSession);
             }
 
-            if (!TryLive(_session.IntentRef, out var entry) || !SessionMatches(entry, _session) || !SameDocument(activeDocumentId, _session.DocumentId))
+            if (!TryExpected(_session.IntentRef, _session.Kind, out var binding) || !SessionMatches(binding, _session) || !SameDocument(activeDocumentId, _session.DocumentId))
             {
                 _session = null;
                 return new ApprovalCommandResult(ApprovalCommandStatus.Unavailable);
             }
 
-            if (_decisions.TryGetValue(entry.IntentRef, out var existing))
+            if (_decisions.TryGetValue(binding.IntentRef, out var existing))
             {
                 _session = null;
-                if (!Matches(entry, existing))
+                if (!Matches(binding, existing))
                 {
-                    _decisions.Remove(entry.IntentRef);
+                    _decisions.Remove(binding.IntentRef);
                     return new ApprovalCommandResult(ApprovalCommandStatus.Unavailable);
                 }
 
@@ -305,16 +317,12 @@ internal sealed class RevitLocalApprovalProviderStateMachine
             }
 
             _decisions.Add(
-                entry.IntentRef,
+                binding.IntentRef,
                 new TerminalDecision(
-                    entry.IntentRef,
-                    entry.IntentFingerprint,
-                    entry.InstanceId,
-                    entry.DocumentId,
+                    binding,
                     approved,
                     _clock.GetUtcNow(),
-                    _providerMethod,
-                    entry.ExpiresAt));
+                    _providerMethod));
             _session = null;
             return new ApprovalCommandResult(ApprovalCommandStatus.Recorded);
         }
@@ -333,43 +341,48 @@ internal sealed class RevitLocalApprovalProviderStateMachine
         }
     }
 
-    private bool TryMatchingDecision(IntentEntry entry, out TerminalDecision? decision)
+    private bool TryMatchingDecision(ControlledWriteIntentBinding binding, out TerminalDecision? decision)
     {
         decision = null;
-        if (!_decisions.TryGetValue(entry.IntentRef, out var stored))
+        if (!_decisions.TryGetValue(binding.IntentRef, out var stored))
         {
             return false;
         }
 
-        if (Matches(entry, stored))
+        if (Matches(binding, stored))
         {
             decision = stored;
             return true;
         }
 
-        _decisions.Remove(entry.IntentRef);
+        _decisions.Remove(binding.IntentRef);
         return false;
     }
 
     private bool SessionStillBound(ActiveSession session)
     {
-        return TryLive(session.IntentRef, out var entry) && SessionMatches(entry, session);
+        return TryExpected(session.IntentRef, session.Kind, out var binding) && SessionMatches(binding, session);
     }
 
     private bool DecisionStillBound(TerminalDecision decision)
     {
-        return TryLive(decision.IntentRef, out var entry) && Matches(entry, decision);
+        return TryExpected(decision.IntentRef, decision.Kind, out var binding) && Matches(binding, decision);
     }
 
-    private bool TryLive(string? intentRef, out IntentEntry entry)
+    private bool TryExpected(string? intentRef, ControlledWriteIntentKind expectedKind, out ControlledWriteIntentBinding binding)
     {
-        entry = null!;
-        if (intentRef is null || !_intents.TryGet(intentRef, out var stored) || stored is null)
+        binding = null!;
+        if (intentRef is null || !_intents.TryGetControlled(intentRef, out var stored) || stored is null)
         {
             return false;
         }
 
-        entry = stored;
+        if (stored.Binding.Kind != expectedKind)
+        {
+            return false;
+        }
+
+        binding = stored.Binding;
         return true;
     }
 
@@ -396,30 +409,32 @@ internal sealed class RevitLocalApprovalProviderStateMachine
         return true;
     }
 
-    private static bool IsRequestedDocument(string? activeDocumentId, IntentEntry entry)
+    private static bool IsRequestedDocument(string? activeDocumentId, ControlledWriteIntentBinding binding)
     {
-        return SameDocument(activeDocumentId, entry.DocumentId);
+        return SameDocument(activeDocumentId, binding.DocumentId);
     }
 
-    private static bool SameIntent(ActiveSession session, IntentEntry entry)
+    private static bool SameIntent(ActiveSession session, ControlledWriteIntentBinding binding)
     {
-        return SessionMatches(entry, session);
+        return SessionMatches(binding, session);
     }
 
-    private static bool SessionMatches(IntentEntry entry, ActiveSession session)
+    private static bool SessionMatches(ControlledWriteIntentBinding binding, ActiveSession session)
     {
-        return string.Equals(entry.IntentRef, session.IntentRef, StringComparison.Ordinal)
-            && string.Equals(entry.IntentFingerprint, session.Fingerprint, StringComparison.Ordinal)
-            && string.Equals(entry.InstanceId, session.InstanceId, StringComparison.Ordinal)
-            && string.Equals(entry.DocumentId, session.DocumentId, StringComparison.Ordinal);
+        return binding.Kind == session.Kind
+            && string.Equals(binding.IntentRef, session.IntentRef, StringComparison.Ordinal)
+            && string.Equals(binding.IntentFingerprint, session.Fingerprint, StringComparison.Ordinal)
+            && string.Equals(binding.InstanceId, session.InstanceId, StringComparison.Ordinal)
+            && string.Equals(binding.DocumentId, session.DocumentId, StringComparison.Ordinal);
     }
 
-    private static bool Matches(IntentEntry entry, TerminalDecision decision)
+    private static bool Matches(ControlledWriteIntentBinding binding, TerminalDecision decision)
     {
-        return string.Equals(entry.IntentRef, decision.IntentRef, StringComparison.Ordinal)
-            && string.Equals(entry.IntentFingerprint, decision.Fingerprint, StringComparison.Ordinal)
-            && string.Equals(entry.InstanceId, decision.InstanceId, StringComparison.Ordinal)
-            && string.Equals(entry.DocumentId, decision.DocumentId, StringComparison.Ordinal);
+        return binding.Kind == decision.Kind
+            && string.Equals(binding.IntentRef, decision.IntentRef, StringComparison.Ordinal)
+            && string.Equals(binding.IntentFingerprint, decision.Fingerprint, StringComparison.Ordinal)
+            && string.Equals(binding.InstanceId, decision.InstanceId, StringComparison.Ordinal)
+            && string.Equals(binding.DocumentId, decision.DocumentId, StringComparison.Ordinal);
     }
 
     private static bool SameDocument(string? activeDocumentId, string documentId)
@@ -445,16 +460,19 @@ internal sealed class RevitLocalApprovalProviderStateMachine
 
     private sealed class ActiveSession
     {
-        public ActiveSession(string sessionRef, string intentRef, string fingerprint, string instanceId, string documentId)
+        public ActiveSession(string sessionRef, ControlledWriteIntentBinding binding)
         {
             SessionRef = sessionRef;
-            IntentRef = intentRef;
-            Fingerprint = fingerprint;
-            InstanceId = instanceId;
-            DocumentId = documentId;
+            Kind = binding.Kind;
+            IntentRef = binding.IntentRef;
+            Fingerprint = binding.IntentFingerprint;
+            InstanceId = binding.InstanceId;
+            DocumentId = binding.DocumentId;
         }
 
         public string SessionRef { get; }
+
+        public ControlledWriteIntentKind Kind { get; }
 
         public string IntentRef { get; }
 
@@ -468,24 +486,23 @@ internal sealed class RevitLocalApprovalProviderStateMachine
     private sealed class TerminalDecision
     {
         public TerminalDecision(
-            string intentRef,
-            string fingerprint,
-            string instanceId,
-            string documentId,
+            ControlledWriteIntentBinding binding,
             bool approved,
             DateTimeOffset decidedAt,
-            string providerMethod,
-            DateTimeOffset effectiveExpiry)
+            string providerMethod)
         {
-            IntentRef = intentRef;
-            Fingerprint = fingerprint;
-            InstanceId = instanceId;
-            DocumentId = documentId;
+            Kind = binding.Kind;
+            IntentRef = binding.IntentRef;
+            Fingerprint = binding.IntentFingerprint;
+            InstanceId = binding.InstanceId;
+            DocumentId = binding.DocumentId;
             Approved = approved;
             DecidedAt = decidedAt;
             ProviderMethod = providerMethod;
-            EffectiveExpiry = effectiveExpiry;
+            EffectiveExpiry = binding.ExpiresAt;
         }
+
+        public ControlledWriteIntentKind Kind { get; }
 
         public string IntentRef { get; }
 

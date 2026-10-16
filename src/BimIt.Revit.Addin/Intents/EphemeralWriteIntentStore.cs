@@ -67,17 +67,73 @@ internal sealed class EphemeralWriteIntentStore
 
             var createdAt = _clock.GetUtcNow();
             var expiresAt = createdAt + Lifetime;
-            var stored = new StoredIntent(
+            var entry = new IntentEntry(
                 intentRef,
                 fingerprint,
                 IntentCanonicalEncoder.SchemaVersion,
                 createdAt,
                 expiresAt,
-                _clock.GetTimestamp(),
                 instanceId,
                 documentId,
                 items);
-            _entries.Add(intentRef, stored);
+            var binding = new ControlledWriteIntentBinding(
+                intentRef,
+                fingerprint,
+                ControlledWriteIntentKind.ParameterUpdates,
+                IntentCanonicalEncoder.SchemaVersion,
+                createdAt,
+                expiresAt,
+                instanceId,
+                documentId,
+                items.Count);
+            _entries.Add(intentRef, new StoredIntent(
+                new ControlledWriteIntent(binding, entry, null),
+                _clock.GetTimestamp()));
+            return new IntentCreateResult(IntentStoreCreateStatus.Created, intentRef, fingerprint, expiresAt);
+        }
+    }
+
+    public IntentCreateResult TryCreateMep(string instanceId, string documentId, MepDevicePlacementIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        if (!MepDevicePlacementCanonicalEncoder.TryEncode(instanceId, documentId, intent, out _, out var fingerprint))
+        {
+            return new IntentCreateResult(IntentStoreCreateStatus.Rejected, null, null, null);
+        }
+
+        lock (_gate)
+        {
+            if (_closed || _clock.TimestampFrequency <= 0)
+            {
+                return new IntentCreateResult(IntentStoreCreateStatus.Rejected, null, null, null);
+            }
+
+            PurgeExpiredCore();
+            if (_entries.Count >= LiveCapacity)
+            {
+                return new IntentCreateResult(IntentStoreCreateStatus.CapacityReached, null, null, null);
+            }
+
+            if (!TryAllocateRef(out var intentRef))
+            {
+                return new IntentCreateResult(IntentStoreCreateStatus.Rejected, null, null, null);
+            }
+
+            var createdAt = _clock.GetUtcNow();
+            var expiresAt = createdAt + Lifetime;
+            var binding = new ControlledWriteIntentBinding(
+                intentRef,
+                fingerprint,
+                ControlledWriteIntentKind.MepDevicePlacements,
+                MepDevicePlacementCanonicalEncoder.SchemaVersion,
+                createdAt,
+                expiresAt,
+                instanceId,
+                documentId,
+                intent.Items.Count);
+            _entries.Add(intentRef, new StoredIntent(
+                new ControlledWriteIntent(binding, null, intent),
+                _clock.GetTimestamp()));
             return new IntentCreateResult(IntentStoreCreateStatus.Created, intentRef, fingerprint, expiresAt);
         }
     }
@@ -85,6 +141,18 @@ internal sealed class EphemeralWriteIntentStore
     public bool TryGet(string intentRef, out IntentEntry? entry)
     {
         entry = null;
+        if (!TryGetControlled(intentRef, out var stored) || stored?.ParameterUpdates is null)
+        {
+            return false;
+        }
+
+        entry = stored.ParameterUpdates;
+        return true;
+    }
+
+    public bool TryGetControlled(string intentRef, out ControlledWriteIntent? intent)
+    {
+        intent = null;
         if (intentRef is null)
         {
             return false;
@@ -97,7 +165,7 @@ internal sealed class EphemeralWriteIntentStore
                 return false;
             }
 
-            entry = stored.ToEntry();
+            intent = stored.Intent;
             return true;
         }
     }
@@ -110,7 +178,7 @@ internal sealed class EphemeralWriteIntentStore
             var removed = new List<string>();
             foreach (var pair in _entries)
             {
-                if (string.Equals(pair.Value.DocumentId, documentId, StringComparison.Ordinal))
+                if (string.Equals(pair.Value.Intent.Binding.DocumentId, documentId, StringComparison.Ordinal))
                 {
                     removed.Add(pair.Key);
                 }
@@ -217,57 +285,14 @@ internal sealed class EphemeralWriteIntentStore
 
     private sealed class StoredIntent
     {
-        public StoredIntent(
-            string intentRef,
-            string fingerprint,
-            int fingerprintSchemaVersion,
-            DateTimeOffset createdAt,
-            DateTimeOffset expiresAt,
-            long monotonicOrigin,
-            string instanceId,
-            string documentId,
-            IReadOnlyList<IntentItemEntry> items)
+        public StoredIntent(ControlledWriteIntent intent, long monotonicOrigin)
         {
-            IntentRef = intentRef;
-            Fingerprint = fingerprint;
-            FingerprintSchemaVersion = fingerprintSchemaVersion;
-            CreatedAt = createdAt;
-            ExpiresAt = expiresAt;
+            Intent = intent;
             MonotonicOrigin = monotonicOrigin;
-            InstanceId = instanceId;
-            DocumentId = documentId;
-            Items = items;
         }
 
-        public string IntentRef { get; }
-
-        public string Fingerprint { get; }
-
-        public int FingerprintSchemaVersion { get; }
-
-        public DateTimeOffset CreatedAt { get; }
-
-        public DateTimeOffset ExpiresAt { get; }
+        public ControlledWriteIntent Intent { get; }
 
         public long MonotonicOrigin { get; }
-
-        public string InstanceId { get; }
-
-        public string DocumentId { get; }
-
-        public IReadOnlyList<IntentItemEntry> Items { get; }
-
-        public IntentEntry ToEntry()
-        {
-            return new IntentEntry(
-                IntentRef,
-                Fingerprint,
-                FingerprintSchemaVersion,
-                CreatedAt,
-                ExpiresAt,
-                InstanceId,
-                DocumentId,
-                Items);
-        }
     }
 }

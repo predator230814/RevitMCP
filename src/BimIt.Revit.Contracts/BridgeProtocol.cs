@@ -28,7 +28,13 @@ public static class BridgeProtocol
 
     public const int GetSelectionVersion = 13;
 
-    public const int CurrentVersion = GetSelectionVersion;
+    public const int PreviewMepDevicePlacementsVersion = 14;
+
+    public const int RequestMepDevicePlacementReviewVersion = 15;
+
+    public const int ApplyMepDevicePlacementsVersion = 16;
+
+    public const int CurrentVersion = ApplyMepDevicePlacementsVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -119,7 +125,7 @@ public static class BridgeProtocol
             HandshakeVersion
         ];
 
-    public static IReadOnlyList<int> SupportedVersions { get; } =
+    public static IReadOnlyList<int> GetSelectionVersions { get; } =
         [
             GetSelectionVersion,
             ContextDocumentIdentityVersion,
@@ -136,6 +142,65 @@ public static class BridgeProtocol
             HandshakeVersion
         ];
 
+    public static IReadOnlyList<int> PreviewMepDevicePlacementsVersions { get; } =
+        [
+            PreviewMepDevicePlacementsVersion,
+            GetSelectionVersion,
+            ContextDocumentIdentityVersion,
+            GetWarningsVersion,
+            ApplyParameterUpdatesVersion,
+            RequestParameterUpdateReviewVersion,
+            PreviewParameterUpdatesVersion,
+            GetMepTopologyVersion,
+            GetParameterValuesVersion,
+            DescribeParametersVersion,
+            GetElementsVersion,
+            QueryElementsVersion,
+            GetContextVersion,
+            HandshakeVersion
+        ];
+
+    public static IReadOnlyList<int> RequestMepDevicePlacementReviewVersions { get; } =
+        [
+            RequestMepDevicePlacementReviewVersion,
+            PreviewMepDevicePlacementsVersion,
+            GetSelectionVersion,
+            ContextDocumentIdentityVersion,
+            GetWarningsVersion,
+            ApplyParameterUpdatesVersion,
+            RequestParameterUpdateReviewVersion,
+            PreviewParameterUpdatesVersion,
+            GetMepTopologyVersion,
+            GetParameterValuesVersion,
+            DescribeParametersVersion,
+            GetElementsVersion,
+            QueryElementsVersion,
+            GetContextVersion,
+            HandshakeVersion
+        ];
+
+    public static IReadOnlyList<int> ApplyMepDevicePlacementsVersions { get; } =
+        [
+            ApplyMepDevicePlacementsVersion,
+            RequestMepDevicePlacementReviewVersion,
+            PreviewMepDevicePlacementsVersion,
+            GetSelectionVersion,
+            ContextDocumentIdentityVersion,
+            GetWarningsVersion,
+            ApplyParameterUpdatesVersion,
+            RequestParameterUpdateReviewVersion,
+            PreviewParameterUpdatesVersion,
+            GetMepTopologyVersion,
+            GetParameterValuesVersion,
+            DescribeParametersVersion,
+            GetElementsVersion,
+            QueryElementsVersion,
+            GetContextVersion,
+            HandshakeVersion
+        ];
+
+    public static IReadOnlyList<int> SupportedVersions => ApplyMepDevicePlacementsVersions;
+
     public static bool SupportsGetContext(int version) =>
         version is GetContextVersion
             or QueryElementsVersion
@@ -148,7 +213,10 @@ public static class BridgeProtocol
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
             or ContextDocumentIdentityVersion
-            or GetSelectionVersion;
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsQueryElements(int version) =>
         version is QueryElementsVersion
@@ -161,7 +229,10 @@ public static class BridgeProtocol
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
             or ContextDocumentIdentityVersion
-            or GetSelectionVersion;
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsGetElements(int version) =>
         version is GetElementsVersion
@@ -173,7 +244,10 @@ public static class BridgeProtocol
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
             or ContextDocumentIdentityVersion
-            or GetSelectionVersion;
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsDescribeParameters(int version) =>
         version is DescribeParametersVersion
@@ -184,7 +258,10 @@ public static class BridgeProtocol
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
             or ContextDocumentIdentityVersion
-            or GetSelectionVersion;
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsGetParameterValues(int version) =>
         version is GetParameterValuesVersion
@@ -194,7 +271,10 @@ public static class BridgeProtocol
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
             or ContextDocumentIdentityVersion
-            or GetSelectionVersion;
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsGetMepTopology(int version) =>
         version is GetMepTopologyVersion
@@ -203,7 +283,10 @@ public static class BridgeProtocol
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
             or ContextDocumentIdentityVersion
-            or GetSelectionVersion;
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsPreviewParameterUpdates(int version) =>
         version is PreviewParameterUpdatesVersion
@@ -211,30 +294,67 @@ public static class BridgeProtocol
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
             or ContextDocumentIdentityVersion
-            or GetSelectionVersion;
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsRequestParameterUpdateReview(int version) =>
         version is RequestParameterUpdateReviewVersion
             or ApplyParameterUpdatesVersion
             or GetWarningsVersion
             or ContextDocumentIdentityVersion
-            or GetSelectionVersion;
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsApplyParameterUpdates(int version) =>
         version is ApplyParameterUpdatesVersion
             or GetWarningsVersion
             or ContextDocumentIdentityVersion
-            or GetSelectionVersion;
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsGetWarnings(int version) =>
-        version is GetWarningsVersion or ContextDocumentIdentityVersion or GetSelectionVersion;
+        version is GetWarningsVersion
+            or ContextDocumentIdentityVersion
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsContextDocumentId(int version) =>
-        version is ContextDocumentIdentityVersion or GetSelectionVersion;
+        version is ContextDocumentIdentityVersion
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsActiveViewUnfilteredQuery(int version) =>
-        version is ContextDocumentIdentityVersion or GetSelectionVersion;
+        version is ContextDocumentIdentityVersion
+            or GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
 
     public static bool SupportsGetSelection(int version) =>
-        version is GetSelectionVersion;
+        version is GetSelectionVersion
+            or PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
+
+    public static bool SupportsPreviewMepDevicePlacements(int version) =>
+        version is PreviewMepDevicePlacementsVersion
+            or RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
+
+    public static bool SupportsRequestMepDevicePlacementReview(int version) =>
+        version is RequestMepDevicePlacementReviewVersion
+            or ApplyMepDevicePlacementsVersion;
+
+    public static bool SupportsApplyMepDevicePlacements(int version) =>
+        version is ApplyMepDevicePlacementsVersion;
 }

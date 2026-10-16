@@ -114,7 +114,7 @@ public sealed class ApplyParameterUpdatesMcpBoundaryTests
         Assert.True(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 14)));
+        Assert.False(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 17)));
         Assert.True(InstanceTargetResolver.IsApplyParameterUpdatesEligible(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 10)));
     }
 

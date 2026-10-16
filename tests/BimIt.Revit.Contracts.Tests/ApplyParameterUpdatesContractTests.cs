@@ -65,8 +65,11 @@ public sealed class ApplyParameterUpdatesContractTests
         Assert.True(BridgeProtocol.SupportsApplyParameterUpdates(11));
         Assert.True(BridgeProtocol.SupportsApplyParameterUpdates(12));
         Assert.True(BridgeProtocol.SupportsApplyParameterUpdates(13));
-        Assert.False(BridgeProtocol.SupportsApplyParameterUpdates(14));
-        Assert.Equal(13, BridgeProtocol.CurrentVersion);
+        Assert.True(BridgeProtocol.SupportsApplyParameterUpdates(14));
+        Assert.True(BridgeProtocol.SupportsApplyParameterUpdates(15));
+        Assert.True(BridgeProtocol.SupportsApplyParameterUpdates(16));
+        Assert.False(BridgeProtocol.SupportsApplyParameterUpdates(17));
+        Assert.Equal(16, BridgeProtocol.CurrentVersion);
     }
 
     private static void AssertForbidden(string json)

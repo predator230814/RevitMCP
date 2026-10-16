@@ -1,6 +1,7 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BimIt.Revit.Assistant.Ipc;
+using BimIt.Revit.Assistant;
 using BimIt.Revit.Contracts;
 using Xunit;
 
@@ -170,6 +171,9 @@ public sealed class AssistantWorkflowTests
         Assert.True(AssistantTools.IsTrustedWriteTool("revit_apply_parameter_updates"));
         Assert.True(AssistantTools.IsTrustedWriteTool("revit_preview_parameter_updates"));
         Assert.True(AssistantTools.IsTrustedWriteTool("revit_request_parameter_update_review"));
+        Assert.True(AssistantTools.IsTrustedWriteTool("revit_preview_mep_device_placements"));
+        Assert.True(AssistantTools.IsTrustedWriteTool("revit_request_mep_device_placement_review"));
+        Assert.True(AssistantTools.IsTrustedWriteTool("revit_apply_mep_device_placements"));
         Assert.DoesNotContain(AssistantTools.WorkflowTools, AssistantTools.IsTrustedWriteTool);
         Assert.Equal(
             [AssistantTools.GetContext, AssistantTools.GetWarnings, AssistantTools.QueryElements],
@@ -187,6 +191,15 @@ public sealed class AssistantWorkflowTests
         Assert.DoesNotContain(AssistantTools.GetSelection, AssistantTools.WorkflowTools);
         Assert.DoesNotContain(AssistantTools.GetMepTopology, AssistantTools.WorkflowTools);
         Assert.DoesNotContain(AssistantTools.AllowedReadTools, AssistantTools.IsTrustedWriteTool);
+        Assert.DoesNotContain("revit_preview_mep_device_placements", BimItAgentReadTools.Names);
+        Assert.DoesNotContain("revit_request_mep_device_placement_review", BimItAgentReadTools.Names);
+        Assert.DoesNotContain("revit_apply_mep_device_placements", BimItAgentReadTools.Names);
+        Assert.DoesNotContain("revit_preview_mep_device_placements", AssistantTools.AllowedReadTools);
+        Assert.DoesNotContain("revit_apply_mep_device_placements", AssistantTools.WorkflowTools);
+        Assert.Equal(5, BimItAgentReadTools.Names.Length);
+        Assert.Equal(6, AssistantTools.AllowedReadTools.Length);
+        Assert.Equal(3, AssistantTools.WorkflowTools.Length);
+        Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_apply_mep_device_placements"]}""").Accepted);
         Assert.False(AssistantIpc.Parse("""{"type":"approveIntent"}""").Accepted);
         Assert.False(AssistantIpc.Parse("""{"type":"hello","instanceId":"a","extra":1}""").Accepted);
         Assert.False(AssistantIpc.Parse("""{"type":"runWorkflow","requestId":"r","workflow":"apply"}""").Accepted);

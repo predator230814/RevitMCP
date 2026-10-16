@@ -1,3 +1,5 @@
+using BimIt.Revit.Addin.Intents;
+
 namespace BimIt.Revit.Addin.Approval;
 
 internal interface IApprovalPaneSurface
@@ -70,13 +72,21 @@ internal sealed class ApprovalUiRuntime
 
     public Task<ApprovalPresentationResult> PresentReviewAsync(string? intentRef, CancellationToken cancellationToken)
     {
+        return PresentReviewAsync(intentRef, ControlledWriteIntentKind.ParameterUpdates, cancellationToken);
+    }
+
+    public Task<ApprovalPresentationResult> PresentReviewAsync(
+        string? intentRef,
+        ControlledWriteIntentKind expectedKind,
+        CancellationToken cancellationToken)
+    {
         var adapter = _adapter;
         if (_stopped || adapter is null)
         {
             return Task.FromResult(new ApprovalPresentationResult(ApprovalReviewStatus.Unavailable, null));
         }
 
-        return adapter.PresentReviewAsync(intentRef, cancellationToken);
+        return adapter.PresentReviewAsync(intentRef, expectedKind, cancellationToken);
     }
 
     public void ReceivePageMessage(string? json)

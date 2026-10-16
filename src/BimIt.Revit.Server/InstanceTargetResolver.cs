@@ -139,6 +139,56 @@ internal static class InstanceTargetResolver
         return IsEligible(instance, BridgeProtocol.SupportsApplyParameterUpdates);
     }
 
+    public static TargetResolution ResolveForPreviewMepDevicePlacements(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        return Resolve(discovered, instanceId, IsPreviewMepDevicePlacementsEligible);
+    }
+
+    public static bool IsPreviewMepDevicePlacementsEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsPreviewMepDevicePlacements);
+    }
+
+    public static TargetResolution ResolveForRequestMepDevicePlacementReview(
+        IReadOnlyList<DiscoveredInstance> discovered,
+        string? instanceId)
+    {
+        ArgumentNullException.ThrowIfNull(discovered);
+        if (instanceId is null)
+        {
+            return TargetResolution.Failure(
+                McpToolErrorCodes.InstanceNotFound,
+                ToolErrorMessages.InstanceNotFound);
+        }
+
+        return ResolveExplicit(discovered, instanceId, IsRequestMepDevicePlacementReviewEligible);
+    }
+
+    public static bool IsRequestMepDevicePlacementReviewEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsRequestMepDevicePlacementReview);
+    }
+
+    public static TargetResolution ResolveForApplyMepDevicePlacements(
+        IReadOnlyList<DiscoveredInstance> discovered,
+        string? instanceId)
+    {
+        ArgumentNullException.ThrowIfNull(discovered);
+        if (instanceId is null)
+        {
+            return TargetResolution.Failure(
+                McpToolErrorCodes.InstanceNotFound,
+                ToolErrorMessages.InstanceNotFound);
+        }
+
+        return ResolveExplicit(discovered, instanceId, IsApplyMepDevicePlacementsEligible);
+    }
+
+    public static bool IsApplyMepDevicePlacementsEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsApplyMepDevicePlacements);
+    }
+
     private static bool IsEligible(DiscoveredInstance instance, Func<int, bool> supportsCapability)
     {
         return instance.State == DiscoveryState.Ready

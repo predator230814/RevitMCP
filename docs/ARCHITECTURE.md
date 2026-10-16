@@ -68,7 +68,9 @@ The production approval presentation exists: a DockablePane, a WPF host, and a b
 
 [CAP-0008](capabilities/CAP-0008-revit-apply-parameter-updates.md) `revit_apply_parameter_updates` is **Accepted** and implemented on Bridge protocol 10. Official MCP-client live functional validation on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353` is **PASS**. `tools/list` was exactly 9. Induced Revit warning/error failure-dialog behavior was not executed and remains deferred validation debt. That debt is not authorization for another write path.
 
-Still unauthorized: MCP Apps, app-only tools, Streamable HTTP, MRTR, an SDK upgrade, orchestration implementation, temporary hide/isolate classification, and any write path other than the accepted CAP-0008 parameter-apply path.
+[CAP-0011](capabilities/CAP-0011-revit-preview-mep-device-placements.md) and [CAP-0012](capabilities/CAP-0012-revit-apply-mep-device-placements.md) add one second typed write: same-wall MEP device placement. It uses the accepted ADR-0008 sequence, the same intent store, the same approval pane, the same apply-attempt store, and the accepted ADR-0011 audit schema. Live Revit validation is pending in [BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md](BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md). The Assistant model still cannot call these tools.
+
+Still unauthorized: MCP Apps, app-only tools, Streamable HTTP, MRTR, an SDK upgrade, orchestration implementation, temporary hide/isolate classification, generic Revit API or C# execution, and any write path other than the accepted parameter-apply path and this typed MEP placement path.
 
 ## Decisions intentionally not made yet
 
