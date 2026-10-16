@@ -8,6 +8,8 @@
 
   <ItemGroup>
     <PackageReference Include="StreamJsonRpc" />
+    <!-- StreamJsonRpc 2.25.29 pulls MessagePack 2.5.302, which NU1902 rejects. Stay on the 2.x line. -->
+    <PackageReference Include="MessagePack" />
     <ProjectReference Include="..\BimIt.Revit.Contracts\BimIt.Revit.Contracts.csproj" />
   </ItemGroup>
 
