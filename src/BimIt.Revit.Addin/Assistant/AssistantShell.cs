@@ -15,6 +15,7 @@ internal sealed class AssistantShell
     private readonly AssistantProcessSupervisor _processes;
     private readonly IAssistantLink _link;
     private readonly AssistantConversation _conversation = new();
+    private readonly IAssistantDocumentPicker _documents;
     private readonly AssistantIpcTimeouts _timeouts;
     private readonly object _gate = new();
     private Task? _startup;
@@ -32,6 +33,7 @@ internal sealed class AssistantShell
     private string _providerState = "not_configured";
     private string _providerLabel = "Not configured";
     private string? _providerError;
+    private AssistantAttachmentChip? _attachment;
     private CancellationTokenSource? _providerPoll;
     private Task _sequence = Task.CompletedTask;
 
@@ -41,7 +43,8 @@ internal sealed class AssistantShell
         Func<(string? Version, string? Build)> revitIdentity,
         IAssistantProcessFactory processes,
         IAssistantLink link,
-        AssistantIpcTimeouts? timeouts = null)
+        AssistantIpcTimeouts? timeouts = null,
+        IAssistantDocumentPicker? documentPicker = null)
     {
         _instanceId = instanceId;
         _bridgeReady = bridgeReady;
@@ -49,6 +52,7 @@ internal sealed class AssistantShell
         _processes = new AssistantProcessSupervisor(processes);
         _link = link;
         _timeouts = timeouts ?? AssistantIpcTimeouts.Default;
+        _documents = documentPicker ?? new AssistantOpenFilePicker();
     }
 
     public AssistantConversation Conversation => _conversation;
@@ -108,8 +112,15 @@ internal sealed class AssistantShell
                 break;
             case AssistantPageIntent.NewConversation:
                 _conversation.Reset();
+                _attachment = null;
                 PostSnapshot();
                 Sequence(ResetProviderAsync);
+                break;
+            case AssistantPageIntent.AttachDocument:
+                AttachFromPicker();
+                break;
+            case AssistantPageIntent.RemoveDocument:
+                Sequence(RemoveDocumentAsync);
                 break;
             case AssistantPageIntent.OpenDiagnostics:
                 _diagnostics = !_diagnostics;
@@ -393,9 +404,140 @@ internal sealed class AssistantShell
         }
     }
 
+    private void AttachFromPicker()
+    {
+        string? selected;
+        try
+        {
+            selected = _documents.TryPickSupportedDocument();
+        }
+        catch (Exception)
+        {
+            _conversation.Add("error", "Assistant", "The document could not be chosen.");
+            PostSnapshot();
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(selected))
+        {
+            return;
+        }
+
+        Sequence(() => AttachDocumentAsync(selected));
+    }
+
+    private async Task AttachDocumentAsync(string path)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        PostSnapshot();
+        try
+        {
+            if (_mcpState != "ready")
+            {
+                await EnsureAssistantAsync().ConfigureAwait(false);
+            }
+
+            if (_mcpState != "ready")
+            {
+                _conversation.Add("error", "Assistant", _statusError ?? "The Assistant is not ready.");
+                return;
+            }
+
+            using var timeout = new CancellationTokenSource(_timeouts.Chat);
+            var result = await _link.AttachDocumentAsync(path, timeout.Token).ConfigureAwait(false);
+            ApplyDocumentResult(result);
+        }
+        catch (Exception exception)
+        {
+            var message = exception is OperationCanceledException
+                ? "The document could not be attached."
+                : "The document could not be attached.";
+            _conversation.Add("error", "Assistant", message);
+        }
+        finally
+        {
+            _busy = false;
+            PostSnapshot();
+        }
+    }
+
+    private async Task RemoveDocumentAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        PostSnapshot();
+        try
+        {
+            if (_mcpState != "ready")
+            {
+                _attachment = null;
+                return;
+            }
+
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await _link.RemoveDocumentAsync(timeout.Token).ConfigureAwait(false);
+            if (result?.Kind == AssistantIpcKind.DocumentResult && result.Attached != true)
+            {
+                _attachment = null;
+            }
+            else
+            {
+                _conversation.Add("error", "Assistant", SafeDocumentMessage(result?.DocumentMessage) ?? "The document could not be removed.");
+            }
+        }
+        catch (Exception)
+        {
+            _conversation.Add("error", "Assistant", "The document could not be removed.");
+        }
+        finally
+        {
+            _busy = false;
+            PostSnapshot();
+        }
+    }
+
+    private void ApplyDocumentResult(AssistantIpcMessage? result)
+    {
+        if (result?.Kind != AssistantIpcKind.DocumentResult)
+        {
+            _conversation.Add("error", "Assistant", "The document could not be attached.");
+            return;
+        }
+
+        if (result.Attached == true && !string.IsNullOrWhiteSpace(result.DisplayName) && result.DocumentKind is not null)
+        {
+            _attachment = new AssistantAttachmentChip(
+                result.DisplayName,
+                AssistantAttachmentSummary.Describe(result.DocumentKind, result.PageCount, result.VisualCount, result.Truncated == true));
+            return;
+        }
+
+        _conversation.Add("error", "Assistant", SafeDocumentMessage(result.DocumentMessage) ?? "The document could not be attached.");
+    }
+
+    private static string? SafeDocumentMessage(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message) || message.Contains(":\\", StringComparison.Ordinal) || message.Contains("\\\\", StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        return message;
+    }
+
     private async Task ResetProviderAsync()
     {
         _conversation.Reset();
+        _attachment = null;
         PostSnapshot();
         if (_mcpState != "ready")
         {
@@ -548,7 +690,7 @@ internal sealed class AssistantShell
 
             return message;
         }).ToArray();
-        return JsonSerializer.Serialize(new Dictionary<string, object?>
+        var snapshot = new Dictionary<string, object?>
         {
             ["type"] = "snapshot",
             ["status"] = new Dictionary<string, object?>
@@ -567,7 +709,17 @@ internal sealed class AssistantShell
             },
             ["messages"] = messages,
             ["empty"] = messages.Length == 0,
-        });
+        };
+        if (_attachment is not null)
+        {
+            snapshot["attachment"] = new Dictionary<string, string>
+            {
+                ["displayName"] = _attachment.DisplayName,
+                ["summary"] = _attachment.Summary,
+            };
+        }
+
+        return JsonSerializer.Serialize(snapshot);
     }
 
     private static string? UsedLabel(IReadOnlyList<string>? names)
@@ -695,6 +847,8 @@ internal sealed class AssistantShell
 
         await action().ConfigureAwait(false);
     }
+
+    private sealed record AssistantAttachmentChip(string DisplayName, string Summary);
 
     private static string DisplayCommand(string action)
     {

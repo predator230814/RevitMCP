@@ -43,6 +43,19 @@ function render(snapshot) {
   if (status.busy) {
     timeline.insertAdjacentHTML("beforeend", `<li class="msg"><h3>Working</h3><p>Waiting for the Assistant.</p></li>`);
   }
+  renderAttachment(snapshot.attachment);
+}
+
+function renderAttachment(attachment) {
+  const node = document.getElementById("attachment");
+  if (!attachment || !attachment.displayName) {
+    node.hidden = true;
+    node.innerHTML = "";
+    return;
+  }
+  node.hidden = false;
+  node.innerHTML = `<span class="clip" aria-hidden="true">📎</span><span class="attachment-copy"><strong>${escapeHtml(attachment.displayName)}</strong><span class="sub">${escapeHtml(attachment.summary || "")}</span></span><button id="remove-attachment" type="button" aria-label="Remove document">Remove</button>`;
+  document.getElementById("remove-attachment").addEventListener("click", () => post({ type: "removeDocument" }));
 }
 
 function escapeHtml(value) {
@@ -69,6 +82,7 @@ document.querySelectorAll("[data-action]").forEach((button) => {
 document.getElementById("new-chat").addEventListener("click", () => post({ type: "newConversation" }));
 retry.addEventListener("click", () => post({ type: "retryConnection" }));
 document.getElementById("diagnostics").addEventListener("click", () => post({ type: "openDiagnostics" }));
+document.getElementById("attach").addEventListener("click", () => post({ type: "attachDocument" }));
 document.getElementById("composer").addEventListener("submit", (event) => {
   event.preventDefault();
   const text = command.value.trim();

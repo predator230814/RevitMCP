@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BimIt.Revit.Addin.Approval;
 using BimIt.Revit.Addin.Assistant;
 using BimIt.Revit.Addin.Lifecycle;
@@ -99,6 +100,8 @@ public sealed class AssistantShellTests
     [InlineData("""{"type":"setParameter"}""")]
     [InlineData("""{"type":"executeShell"}""")]
     [InlineData("""{"type":"openFile"}""")]
+    [InlineData("""{"type":"attachDocument","path":"C:\\\\secret\\\\a.pdf"}""")]
+    [InlineData("""{"type":"removeDocument","path":"C:\\\\secret"}""")]
     [InlineData("""{"type":"httpRequest"}""")]
     [InlineData("""{"type":"pageReady","extra":true}""")]
     [InlineData("""{"type":"runQuickAction","action":"inspectSelection"}""")]
@@ -124,7 +127,114 @@ public sealed class AssistantShellTests
         Assert.Equal(AssistantPageIntent.NewConversation, AssistantPageMessages.Parse("""{"type":"newConversation"}""").Intent);
         Assert.Equal(AssistantPageIntent.OpenDiagnostics, AssistantPageMessages.Parse("""{"type":"openDiagnostics"}""").Intent);
         Assert.Equal(AssistantPageIntent.RetryConnection, AssistantPageMessages.Parse("""{"type":"retryConnection"}""").Intent);
+        Assert.Equal(AssistantPageIntent.AttachDocument, AssistantPageMessages.Parse("""{"type":"attachDocument"}""").Intent);
+        Assert.Equal(AssistantPageIntent.RemoveDocument, AssistantPageMessages.Parse("""{"type":"removeDocument"}""").Intent);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"attachDocument","path":"C:\\\\secret\\\\plan.pdf"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"removeDocument","path":"C:\\\\secret"}""").Accepted);
         Assert.False(AssistantPageMessages.Parse(new string('a', 8_001)).Accepted);
+    }
+
+    [Fact]
+    public async Task Attachment_chip_uses_safe_metadata_and_new_chat_clears_it()
+    {
+        var secret = Path.Combine("C:\\bimit-secret-intake", "Plumbing-Riser.pdf");
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus(),
+            DocumentResult = new AssistantIpcMessage(
+                AssistantIpcKind.DocumentResult,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                Attached: true,
+                DisplayName: "Plumbing-Riser.pdf",
+                DocumentKind: "pdf",
+                SourceSizeBytes: 4096,
+                PageCount: 12,
+                VisualCount: 4,
+                Truncated: true),
+        };
+        var shell = CreateShell("instance-doc", new RecordingProcessFactory(), link, picker: new FixedPicker(secret));
+        shell.ReceivePageMessage("""{"type":"attachDocument"}""");
+        await WaitFor(() => link.Attachments.Count == 1 && shell.SerializeSnapshot().Contains("Plumbing-Riser.pdf", StringComparison.Ordinal));
+        var attached = shell.SerializeSnapshot();
+        using var attachedJson = JsonDocument.Parse(attached);
+        var chip = attachedJson.RootElement.GetProperty("attachment");
+        Assert.Equal(secret, link.Attachments[0]);
+        Assert.Equal("Plumbing-Riser.pdf", chip.GetProperty("displayName").GetString());
+        Assert.Equal("PDF · 4 of 12 pages", chip.GetProperty("summary").GetString());
+        Assert.DoesNotContain("bimit-secret-intake", attached, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("C:\\\\", attached, StringComparison.Ordinal);
+
+        shell.ReceivePageMessage("""{"type":"newConversation"}""");
+        Assert.DoesNotContain("Plumbing-Riser.pdf", shell.SerializeSnapshot(), StringComparison.Ordinal);
+
+        link.DocumentResult = new AssistantIpcMessage(
+            AssistantIpcKind.DocumentResult,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Attached: true,
+            DisplayName: "equipment.xlsx",
+            DocumentKind: "spreadsheet",
+            SourceSizeBytes: 80,
+            Truncated: false);
+        shell.ReceivePageMessage("""{"type":"attachDocument"}""");
+        await WaitFor(() => shell.SerializeSnapshot().Contains("equipment.xlsx", StringComparison.Ordinal));
+        using var excelJson = JsonDocument.Parse(shell.SerializeSnapshot());
+        Assert.Equal("Excel · text extracted", excelJson.RootElement.GetProperty("attachment").GetProperty("summary").GetString());
+        link.DocumentResult = new AssistantIpcMessage(
+            AssistantIpcKind.DocumentResult,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Attached: false);
+        shell.ReceivePageMessage("""{"type":"removeDocument"}""");
+        await WaitFor(() => link.Removes == 1 && !shell.SerializeSnapshot().Contains("equipment.xlsx", StringComparison.Ordinal));
+
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
+        var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
+        Assert.Contains("post({ type: \"attachDocument\" })", page, StringComparison.Ordinal);
+        Assert.Contains("post({ type: \"removeDocument\" })", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("input", html, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(AssistantOpenFilePicker.Filter, File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "AssistantDocumentPicker.cs")), StringComparison.Ordinal);
+        Assert.DoesNotContain("*.doc;", AssistantOpenFilePicker.Filter, StringComparison.Ordinal);
+        Assert.DoesNotContain("*.xls;", AssistantOpenFilePicker.Filter, StringComparison.Ordinal);
+        Assert.DoesNotContain(".dwg", AssistantOpenFilePicker.Filter, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain(".pptx", AssistantOpenFilePicker.Filter, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -556,7 +666,8 @@ public sealed class AssistantShellTests
         string instanceId,
         RecordingProcessFactory factory,
         ScriptedLink link,
-        AssistantIpcTimeouts? timeouts = null)
+        AssistantIpcTimeouts? timeouts = null,
+        IAssistantDocumentPicker? picker = null)
     {
         return new AssistantShell(
             () => instanceId,
@@ -564,7 +675,13 @@ public sealed class AssistantShellTests
             () => ("2026", "26.5.0.55"),
             factory,
             link,
-            timeouts);
+            timeouts,
+            picker);
+    }
+
+    private sealed class FixedPicker(string? path) : IAssistantDocumentPicker
+    {
+        public string? TryPickSupportedDocument() => path;
     }
 
     private static AssistantIpcMessage ReadyStatus()
@@ -738,10 +855,28 @@ public sealed class AssistantShellTests
             return Task.FromResult(ChatResult);
         }
 
+        public List<string> Attachments { get; } = [];
+
+        public int Removes { get; private set; }
+
+        public AssistantIpcMessage? DocumentResult { get; set; }
+
         public Task<AssistantIpcMessage?> ResetConversationAsync(CancellationToken cancellationToken)
         {
             Resets++;
             return Task.FromResult(Status);
+        }
+
+        public Task<AssistantIpcMessage?> AttachDocumentAsync(string path, CancellationToken cancellationToken)
+        {
+            Attachments.Add(path);
+            return Task.FromResult(DocumentResult);
+        }
+
+        public Task<AssistantIpcMessage?> RemoveDocumentAsync(CancellationToken cancellationToken)
+        {
+            Removes++;
+            return Task.FromResult(DocumentResult);
         }
 
         public Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken)

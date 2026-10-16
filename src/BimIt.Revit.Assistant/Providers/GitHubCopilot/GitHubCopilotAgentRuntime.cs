@@ -8,6 +8,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _stop = new();
     private readonly string _directory;
+    private readonly CopilotAttachmentDelivery _delivery = new();
     private CopilotClient? _client;
     private CopilotSession? _session;
     private IDisposable? _modelEvents;
@@ -70,8 +71,10 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         }
     }
 
-    public async Task<AssistantAgentTurn> SendAsync(string userText, CancellationToken cancellationToken)
+    public async Task<AssistantAgentTurn> SendAsync(AssistantAgentRequest request, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(request);
+        var userText = request.Text ?? "";
         if (string.IsNullOrWhiteSpace(userText))
         {
             return new AssistantAgentTurn("BIM-IT Assistant", "Enter a question about this Revit session.", true);
@@ -97,10 +100,15 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                 return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, _tools.ConsumeUsedTools());
             }
 
+            var attachment = _delivery.ShouldDeliver(request.Attachment) ? request.Attachment : null;
             var message = await _session.SendAndWaitAsync(
-                new MessageOptions { Prompt = userText.Trim() },
+                CopilotTurnComposer.Compose(userText.Trim(), attachment),
                 AssistantProviderTimeouts.Default.Turn,
                 budget.Token).ConfigureAwait(false);
+            if (attachment is not null)
+            {
+                _delivery.MarkDelivered(attachment.ArtifactId);
+            }
             var data = message?.Data;
             RememberModel(data?.Model);
             var content = AssistantSafeText.Clean(data?.Content, 16_000);
@@ -125,7 +133,11 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             }
 
             var timedOut = exception is OperationCanceledException;
-            var safe = timedOut ? AssistantProviderTimeouts.TurnTimedOut : AssistantSafeText.Clean(exception.Message, 400);
+            var safe = timedOut
+                ? AssistantProviderTimeouts.TurnTimedOut
+                : request.Attachment?.VisualPages.Count > 0 && IsVisionRejection(exception.Message)
+                    ? "The AI provider could not read the attached pages."
+                    : AssistantSafeText.Clean(exception.Message, 400);
             Status = Unavailable(string.IsNullOrWhiteSpace(safe) ? AssistantProviderTimeouts.TurnTimedOut : safe);
             return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError!, true, _tools.ConsumeUsedTools());
         }
@@ -233,6 +245,18 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         return session;
     }
 
+    private static bool IsVisionRejection(string? message)
+    {
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            return false;
+        }
+
+        return message.Contains("vision", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("image input", StringComparison.OrdinalIgnoreCase)
+            || message.Contains("does not support image", StringComparison.OrdinalIgnoreCase);
+    }
+
     private void RememberModel(string? model)
     {
         if (!AssistantProviderStatus.IsConcreteModel(model) || Status.State != AssistantProviderState.Ready)
@@ -299,6 +323,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
 
         var session = _session;
         _session = null;
+        _delivery.Reset();
         try
         {
             await session.DisposeAsync().ConfigureAwait(false);

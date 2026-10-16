@@ -1259,8 +1259,12 @@ public sealed class AssistantAgentTests
                 : new AssistantProviderStatus("GitHub Copilot", AssistantProviderState.Ready, "auto", null);
         }
 
-        public Task<AssistantAgentTurn> SendAsync(string userText, CancellationToken cancellationToken)
+        public List<AssistantAgentRequest> Requests { get; } = [];
+
+        public Task<AssistantAgentTurn> SendAsync(AssistantAgentRequest request, CancellationToken cancellationToken)
         {
+            Requests.Add(request);
+            var userText = request.Text;
             Prompts.Add(userText);
             var tools = ToolScripts.Count > 0 ? ToolScripts.Dequeue() : null;
             if (SecretError is not null)

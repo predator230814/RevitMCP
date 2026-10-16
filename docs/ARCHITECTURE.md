@@ -100,6 +100,8 @@ Significant architecture changes require an ADR. If code and architecture docume
 
 [ADR-0014](adr/ADR-0014-provider-neutral-assistant-agent-runtime.md) is **Accepted**. The LLM provider sits inside `BimIt.Revit.Assistant`. The first adapter is GitHub Copilot SDK 1.0.21 in empty mode. ADR-0014 recorded the original three read tools. The current adapter exposes five BIM-IT read tools that call the existing MCP session: `bimit_get_model_context`, `bimit_get_warnings`, `bimit_get_active_view_elements`, `bimit_inspect_selection`, and `bimit_explore_selected_mep`. `bimit_inspect_selection` composes `revit_get_selection` and `revit_get_elements`, injects the native instance id, and inspects at most 10 selected elements. It does not call MEP topology. `bimit_explore_selected_mep` composes `revit_get_selection`, `revit_get_mep_topology`, and `revit_get_elements`. It seeds at most 3 selected elements, walks physical connectivity to depth 2 with at most 25 nodes and 40 edges, and describes at most 10 of those nodes. The topology call omits `domain`, so HVAC, piping, electrical, and cable tray/conduit physical connections all participate. Electrical circuits, loads, and panel membership stay out of scope. Neither tool adds a write. Revit, Bridge, MCP, and the AI provider are independent status lines. The add-in and the WebView do not reference the Copilot SDK.
 
+[ADR-0015](adr/ADR-0015-assistant-document-intake.md) is **Accepted**. One local document can be attached to the current Assistant conversation. The WebView sends `attachDocument` or `removeDocument` and never a filesystem path. The add-in opens a native file dialog and sends the selected path over the trusted current-user pipe. The Assistant process reads the file into an `AssistantDocumentArtifact` with a safe display name, bounded text, and in-memory visual pages. The path does not enter the provider prompt, attachment metadata, transcript, WebView, logs, or Used Tools. Visual pages are in-memory image blobs. v1 accepts `.pdf`, `.png`, `.jpg`, `.jpeg`, `.docx`, `.xlsx`, `.txt`, `.md`, `.csv`, and `.json`, with a 25 MB file limit, 60,000 characters of text, and at most the first 4 PDF pages. Document content is untrusted data and does not grant write, approval, shell, MCP, or Revit API authority. Intake is not an MCP tool. `DocumentFormat.OpenXml` 3.5.1 and `PDFtoImage` 5.4.0 are referenced only by `BimIt.Revit.Assistant`.
+
 External MCP clients launch `BimIt.Revit.Server` directly. They do not need the Assistant. The Approval DockablePane remains the trusted approval authority. The Assistant pane cannot approve, preview, or apply a controlled write.
 
 Implemented:
@@ -109,6 +111,7 @@ Implemented:
 - a provider-neutral agent runtime and a GitHub Copilot adapter;
 - natural-language turns that call the five read tools through the existing MCP client;
 - bounded physical MEP exploration around the current selection, with no MEP quick action;
+- one local document attachment per conversation, cleared by New Chat or Remove;
 - logged-in-user Copilot authentication, with no BIM-IT token store;
 - truthful Revit/Bridge, Assistant, MCP, and AI Provider status.
 
@@ -126,6 +129,8 @@ Not implemented:
 - arbitrary Revit API execution;
 - a selection quick action or slash command;
 - an MEP exploration quick action or slash command;
-- Assistant skills.
+- Assistant skills;
+- structured proposals from an attached document;
+- MEP device placement, routing, or diagram-to-model creation from an attachment.
 
 Bridge v12 returns `document_id` on an active CAP-0001 document and accepts `revit_query_elements` with `scope=active_view` and `filters: {}`. Document scope still requires a filter. A negotiated v11 connection keeps the older wire behavior. The Assistant does not invent a document id.

@@ -5,11 +5,15 @@
     <RootNamespace>BimIt.Revit.Assistant</RootNamespace>
     <AssemblyName>BimIt.Revit.Assistant</AssemblyName>
     <Description>Local BIM-IT Assistant process. MCP client of BimIt.Revit.Server. No Revit API and no approval authority.</Description>
+    <!-- PDFium and Skia are supported on Windows. The Assistant process runs beside Revit on Windows. -->
+    <NoWarn>$(NoWarn);CA1416</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="DocumentFormat.OpenXml" />
     <PackageReference Include="GitHub.Copilot.SDK" />
     <PackageReference Include="ModelContextProtocol" />
+    <PackageReference Include="PDFtoImage" />
     <ProjectReference Include="..\BimIt.Revit.Assistant.Ipc\BimIt.Revit.Assistant.Ipc.csproj" />
     <ProjectReference Include="..\BimIt.Revit.Contracts\BimIt.Revit.Contracts.csproj" />
   </ItemGroup>
