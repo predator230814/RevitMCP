@@ -27,7 +27,7 @@ V1 placement mode is one-level-based hosted on that same wall. Other placement m
 
 ## Placement
 
-The target is the template location plus the straight wall direction times the converted along-host offset plus global Z times the converted vertical offset. The point must project within the finite wall segment. Occupancy rejects the same symbol on the same host within 1 mm. A zero/zero offset is occupied by the template.
+The target is the template location plus the straight wall direction times the converted along-host offset plus global Z times the converted vertical offset. The point must project within the finite wall segment. Occupancy rejects the same symbol on the same host within 1 mm. A zero/zero offset is occupied by the template. If that occupancy scan cannot be completed, preview does not store an intent.
 
 ## Result
 

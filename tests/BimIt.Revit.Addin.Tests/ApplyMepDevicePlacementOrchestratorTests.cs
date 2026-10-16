@@ -41,6 +41,68 @@ public sealed class ApplyMepDevicePlacementOrchestratorTests
     }
 
     [Fact]
+    public void Parameter_terminal_is_unavailable_to_mep_apply_after_intent_expiry()
+    {
+        using var harness = new Harness();
+        var parameter = harness.Store.TryCreate(harness.ParameterDraft());
+        var parameterMutations = 0;
+        Assert.True(harness.Store.TryGet(parameter.IntentRef!, out var entry));
+        var first = ApplyParameterUpdateOrchestrator.Execute(new ApplyOperation
+        {
+            IntentRef = parameter.IntentRef!,
+            InstanceId = "instance-a",
+            RevitVersion = "2026",
+            RevitBuild = "26.5.0.55",
+            AddinVersion = "0.1.0",
+            Intents = harness.Store,
+            Attempts = harness.Attempts,
+            Audit = harness.Audit,
+            ResolveDocument = () => new ApplyDocumentGate(true, "doc-a"),
+            Consume = _ => new ApprovalConsumeResult(
+                ApprovalConsumeStatus.Consumed,
+                new ApprovalSnapshot(
+                    entry!.IntentRef,
+                    entry.IntentFingerprint,
+                    entry.InstanceId,
+                    entry.DocumentId,
+                    DateTimeOffset.UnixEpoch,
+                    "revit-local-in-process",
+                    DateTimeOffset.UnixEpoch.AddMinutes(5))),
+            Mutate = _ =>
+            {
+                parameterMutations++;
+                return new ApplyMutationResult(ApplyMutationKind.Applied, AuditTransactionStatus.Committed);
+            }
+        });
+        Assert.Equal(ApplyParameterUpdatesStatus.Applied, first.Status);
+        harness.Clock.Advance(TimeSpan.FromMinutes(10));
+        Assert.False(harness.Store.TryGetControlled(parameter.IntentRef!, out _));
+
+        var replay = harness.Run(parameter.IntentRef!, () => throw new InvalidOperationException("cross-kind replay must not mutate"));
+        Assert.Equal(ApplyMepDevicePlacementsStatus.Unavailable, replay.Status);
+        Assert.Null(replay.CreatedElementRefs);
+        Assert.Equal(1, parameterMutations);
+        Assert.Equal(0, harness.Mutations);
+    }
+
+    [Fact]
+    public void Mep_replay_survives_intent_expiry_with_the_same_refs()
+    {
+        using var harness = new Harness();
+        var created = harness.CreateMep();
+        harness.MutateResult = new ApplyMutationResult(ApplyMutationKind.Applied, AuditTransactionStatus.Committed, ["opaque-a", "opaque-b"]);
+        var first = harness.Run(created.IntentRef!);
+        Assert.Equal(ApplyMepDevicePlacementsStatus.Applied, first.Status);
+        harness.Clock.Advance(TimeSpan.FromMinutes(10));
+        Assert.False(harness.Store.TryGetControlled(created.IntentRef!, out _));
+
+        var replay = harness.Run(created.IntentRef!, () => throw new InvalidOperationException("expired replay must not mutate"));
+        Assert.Equal(ApplyMepDevicePlacementsStatus.Applied, replay.Status);
+        Assert.Equal(["opaque-a", "opaque-b"], replay.CreatedElementRefs);
+        Assert.Equal(1, harness.Mutations);
+    }
+
+    [Fact]
     public void Wrong_kind_expired_and_document_mismatch_are_unavailable()
     {
         using var harness = new Harness();

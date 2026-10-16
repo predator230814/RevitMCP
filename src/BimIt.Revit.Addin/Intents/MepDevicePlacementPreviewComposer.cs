@@ -26,6 +26,8 @@ internal sealed class MepTemplateFacts
 
     public MepDevicePlacementIntent? Snapshot { get; init; }
 
+    public bool OccupancyReadSucceeded { get; init; }
+
     public IReadOnlyList<MepPoint> OccupiedPoints { get; init; } = Array.Empty<MepPoint>();
 }
 
@@ -107,6 +109,23 @@ internal static class MepDevicePlacementPreviewComposer
             return true;
         }
 
+        if (!facts.OccupancyReadSucceeded)
+        {
+            template = new PreviewMepDeviceTemplate
+            {
+                ElementRef = snapshot.TemplateElementRef,
+                Status = PreviewMepDeviceTemplateStatus.Ok,
+                CategoryName = snapshot.CategoryName,
+                FamilyName = snapshot.FamilyName,
+                TypeName = snapshot.TypeName,
+                LevelName = snapshot.LevelName,
+                HostElementRef = snapshot.HostElementRef,
+                HostName = snapshot.HostName
+            };
+            items = Unevaluated(placements);
+            return true;
+        }
+
         template = new PreviewMepDeviceTemplate
         {
             ElementRef = snapshot.TemplateElementRef,
@@ -177,7 +196,9 @@ internal static class MepDevicePlacementPreviewComposer
 
     public static bool IsCurrent(MepDevicePlacementIntent approved, MepTemplateFacts live)
     {
-        if (Classify(live) != PreviewMepDeviceTemplateStatus.Ok || live.Snapshot is not { } snapshot)
+        if (!live.OccupancyReadSucceeded
+            || Classify(live) != PreviewMepDeviceTemplateStatus.Ok
+            || live.Snapshot is not { } snapshot)
         {
             return false;
         }

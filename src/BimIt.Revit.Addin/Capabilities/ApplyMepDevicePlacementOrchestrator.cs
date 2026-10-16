@@ -43,7 +43,7 @@ internal static class ApplyMepDevicePlacementOrchestrator
         operation.Intents.TryGetControlled(operation.IntentRef, out var controlled);
         if (controlled is null)
         {
-            return MapLookup(operation.Attempts.TryLookup(operation.IntentRef, null))
+            return MapLookup(operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.MepDevicePlacements, null))
                 ?? Result(ApplyMepDevicePlacementsStatus.Unavailable);
         }
 
@@ -57,7 +57,7 @@ internal static class ApplyMepDevicePlacementOrchestrator
             controlled.Binding.InstanceId,
             controlled.Binding.DocumentId,
             ControlledWriteIntentKind.MepDevicePlacements);
-        var replay = MapLookup(operation.Attempts.TryLookup(operation.IntentRef, binding));
+        var replay = MapLookup(operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.MepDevicePlacements, binding));
         if (replay is not null)
         {
             return replay;
@@ -76,7 +76,7 @@ internal static class ApplyMepDevicePlacementOrchestrator
 
         if (!TryOwn(operation, binding, out var lease))
         {
-            return MapLookup(operation.Attempts.TryLookup(operation.IntentRef, binding))
+            return MapLookup(operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.MepDevicePlacements, binding))
                 ?? Result(ApplyMepDevicePlacementsStatus.Unavailable);
         }
 
@@ -170,7 +170,7 @@ internal static class ApplyMepDevicePlacementOrchestrator
                 return true;
             }
 
-            var lookup = operation.Attempts.TryLookup(operation.IntentRef, binding);
+            var lookup = operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.MepDevicePlacements, binding);
             if (lookup.Status != ApplyLookupStatus.Absent)
             {
                 return false;

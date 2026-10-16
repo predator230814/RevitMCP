@@ -52,6 +52,7 @@ internal static class RevitMepDeviceTemplateReader
 
         MepDevicePlacementIntent? snapshot = null;
         var occupied = Array.Empty<MepPoint>();
+        var occupancyReadSucceeded = false;
         if (canSnapshot && names is not null && symbol is not null && host is Wall hostWall && line is not null && level is not null)
         {
             var point = ((LocationPoint)instance.Location).Point;
@@ -77,7 +78,7 @@ internal static class RevitMepDeviceTemplateReader
                 instance.CanFlipFacing,
                 instance.CanFlipHand,
                 Array.Empty<MepDevicePlacementItem>());
-            occupied = ReadOccupants(document, symbol, hostWall, snapshot.TemplateLocation);
+            occupancyReadSucceeded = TryReadOccupants(document, symbol, hostWall, snapshot.TemplateLocation, out occupied);
         }
 
         return new MepTemplateFacts
@@ -93,6 +94,7 @@ internal static class RevitMepDeviceTemplateReader
             HasLocationPoint = hasPoint,
             HasLevel = level is not null && !string.IsNullOrEmpty(level.UniqueId),
             Snapshot = snapshot,
+            OccupancyReadSucceeded = occupancyReadSucceeded,
             OccupiedPoints = occupied
         };
     }
@@ -218,9 +220,15 @@ internal static class RevitMepDeviceTemplateReader
             : value[..MepDevicePlacementCanonicalEncoder.MaxTextLength];
     }
 
-    private static MepPoint[] ReadOccupants(Document document, FamilySymbol symbol, Wall wall, MepPoint templateLocation)
+    private static bool TryReadOccupants(
+        Document document,
+        FamilySymbol symbol,
+        Wall wall,
+        MepPoint templateLocation,
+        out MepPoint[] points)
     {
-        var points = new List<MepPoint> { templateLocation };
+        points = [];
+        var collected = new List<MepPoint> { templateLocation };
         try
         {
             var filter = new FamilyInstanceFilter(document, symbol.Id);
@@ -238,15 +246,16 @@ internal static class RevitMepDeviceTemplateReader
 
                 if (occupant.Location is LocationPoint location && location.Point is XYZ point)
                 {
-                    points.Add(new MepPoint(point.X, point.Y, point.Z));
+                    collected.Add(new MepPoint(point.X, point.Y, point.Z));
                 }
             }
         }
         catch (Exception)
         {
-            return points.ToArray();
+            return false;
         }
 
-        return points.ToArray();
+        points = collected.ToArray();
+        return true;
     }
 }

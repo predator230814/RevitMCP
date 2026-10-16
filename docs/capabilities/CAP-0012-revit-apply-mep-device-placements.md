@@ -17,7 +17,7 @@ The apply follows accepted ADR-0008: intent lookup, document guard, exclusive ap
 
 Apply before approval returns `approval_required` and does not start a transaction.
 
-Stale revalidation fails closed when the template, symbol, category, host, level, location, straight host geometry, orientation, or target occupancy no longer matches the approved snapshot. A stale intent requires a new preview and a new approval.
+Stale revalidation fails closed when the template, symbol, category, host, level, location, straight host geometry, orientation, or target occupancy no longer matches the approved snapshot. It also fails closed when occupancy cannot be re-established. A stale intent requires a new preview and a new approval.
 
 ## Result
 

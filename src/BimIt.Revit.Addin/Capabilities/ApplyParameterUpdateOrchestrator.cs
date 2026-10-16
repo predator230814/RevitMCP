@@ -65,7 +65,7 @@ internal static class ApplyParameterUpdateOrchestrator
                 intent.InstanceId,
                 intent.DocumentId,
                 ControlledWriteIntentKind.ParameterUpdates);
-        var lookup = operation.Attempts.TryLookup(operation.IntentRef, binding);
+        var lookup = operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.ParameterUpdates, binding);
         var replay = MapLookup(lookup);
         if (replay is not null)
         {
@@ -87,7 +87,7 @@ internal static class ApplyParameterUpdateOrchestrator
 
         if (!TryOwn(operation, binding.Value, out var lease))
         {
-            return MapLookup(operation.Attempts.TryLookup(operation.IntentRef, binding))
+            return MapLookup(operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.ParameterUpdates, binding))
                 ?? Result(ApplyParameterUpdatesStatus.Unavailable);
         }
 
@@ -230,7 +230,7 @@ internal static class ApplyParameterUpdateOrchestrator
                 return true;
             }
 
-            var lookup = operation.Attempts.TryLookup(operation.IntentRef, binding);
+            var lookup = operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.ParameterUpdates, binding);
             if (lookup.Status != ApplyLookupStatus.Absent)
             {
                 return false;

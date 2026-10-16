@@ -542,7 +542,7 @@ public sealed class ControlledWriteAuditWriterTests
         Assert.NotEmpty(steps);
         Assert.All(steps, step => Assert.Equal("execution-after-clear", step));
         Assert.Equal(IntentStoreCreateStatus.Rejected, store.TryCreate(Intent("doc-b")).Status);
-        Assert.Equal(ApplyLookupStatus.Absent, lifetime.ApplyAttempts.TryLookup("intent-a", null).Status);
+        Assert.Equal(ApplyLookupStatus.Absent, lifetime.ApplyAttempts.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null).Status);
         Assert.True(lifetime.AuditWriter.IsDegraded);
     }
 

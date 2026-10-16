@@ -87,7 +87,12 @@ internal sealed class ControlledApplyAttemptStore
         _clock = clock ?? TimeProvider.System;
     }
 
-    public ApplyLookupResult TryLookup(string intentRef, ApplyBinding? liveBinding)
+    public ApplyLookupResult TryLookup(string intentRef, ApplyBinding liveBinding)
+    {
+        return TryLookup(intentRef, liveBinding.Kind, liveBinding);
+    }
+
+    public ApplyLookupResult TryLookup(string intentRef, ControlledWriteIntentKind expectedKind, ApplyBinding? liveBinding)
     {
         ArgumentNullException.ThrowIfNull(intentRef);
         lock (_gate)
@@ -97,7 +102,7 @@ internal sealed class ControlledApplyAttemptStore
                 return new ApplyLookupResult(ApplyLookupStatus.Absent, null);
             }
 
-            if (liveBinding is { } binding && !SameBinding(attempt, binding))
+            if (attempt.Kind != expectedKind || (liveBinding is { } binding && !SameBinding(attempt, binding)))
             {
                 return new ApplyLookupResult(ApplyLookupStatus.BindingMismatch, null);
             }

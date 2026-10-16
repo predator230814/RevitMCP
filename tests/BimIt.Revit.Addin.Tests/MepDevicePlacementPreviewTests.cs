@@ -123,6 +123,18 @@ public sealed class MepDevicePlacementPreviewTests
     }
 
     [Fact]
+    public void Unknown_occupancy_cannot_create_an_intent_or_pass_revalidation()
+    {
+        var unknown = Facts(occupancyReadSucceeded: false, occupiedTargets: false);
+        MepDevicePlacementPreviewComposer.TryEvaluate("template-a", unknown, [Placement(3, 0)], out _, out var items, out var intent);
+        Assert.Null(intent);
+        Assert.NotEqual(PreviewMepDevicePlacementItemStatus.Ok, items[0].Status);
+
+        var approved = Facts().Snapshot!;
+        Assert.False(MepDevicePlacementPreviewComposer.IsCurrent(approved, unknown));
+    }
+
+    [Fact]
     public void Stale_checks_cover_host_geometry_and_new_occupancy()
     {
         var approved = Facts().Snapshot!;
@@ -169,7 +181,8 @@ public sealed class MepDevicePlacementPreviewTests
         bool level = true,
         MepPoint? hostEnd = null,
         IReadOnlyList<MepPoint>? extraOccupants = null,
-        bool occupiedTargets = true)
+        bool occupiedTargets = true,
+        bool occupancyReadSucceeded = true)
     {
         var template = new MepPoint(2, 0, 4);
         var end = hostEnd ?? new MepPoint(10, 0, 0);
@@ -219,6 +232,7 @@ public sealed class MepDevicePlacementPreviewTests
             HasLocationPoint = location,
             HasLevel = level,
             Snapshot = snapshot,
+            OccupancyReadSucceeded = occupancyReadSucceeded,
             OccupiedPoints = occupants
         };
     }
