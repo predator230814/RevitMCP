@@ -58,7 +58,7 @@ The Assistant owns document intake. The Revit process owns native file selection
 
 v1 formats are `.pdf`, `.png`, `.jpg`, `.jpeg`, `.docx`, `.xlsx`, `.txt`, `.md`, `.csv`, and `.json`. Legacy `.doc` and `.xls`, `.dwg`, `.dxf`, `.pptx`, email, web URLs, folders, and multiple simultaneous attachments are out of scope.
 
-The input file is rejected above 25 MB before a full read. Text is bounded at 60,000 characters. PDF rendering keeps the page count, renders at most the first 4 pages sequentially, and marks visual truncation when more pages exist. Each encoded page targets a long edge of about 2200 pixels and at most about 2 MB. Images use the same visual bounds and are re-encoded so filesystem identity is not forwarded.
+The input file is rejected above 25 MB before a full read. Text is bounded at 60,000 characters. PDF rendering keeps the page count, renders at most the first 4 pages sequentially, and marks visual truncation when more pages exist. Each encoded page targets a long edge of about 2200 pixels and at most about 2 MB. Images use the same visual bounds and are re-encoded so filesystem identity is not forwarded. The decode bitmap itself is capped at 32 MB and a 4096-pixel edge. There is no full-resolution decode when that cap cannot hold the source.
 
 `DocumentFormat.OpenXml` 3.5.1 and `PDFtoImage` 5.4.0 are referenced only by `BimIt.Revit.Assistant`.
 

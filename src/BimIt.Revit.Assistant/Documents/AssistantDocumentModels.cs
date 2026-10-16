@@ -98,7 +98,13 @@ internal static class AssistantDocumentLimits
 
     public const int MaxVisualBytes = 2 * 1024 * 1024;
 
-    public const int MaxDecodedEdge = 40_000;
+    public const int MaxSourceEdge = 40_000;
+
+    public const int MaxDecodeEdge = 4_096;
+
+    public const long MaxDecodedBytes = 32L * 1024 * 1024;
+
+    public const int DecodedBytesPerPixel = 4;
 }
 
 internal static class AssistantDocumentErrors

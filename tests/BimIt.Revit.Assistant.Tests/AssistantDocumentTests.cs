@@ -54,6 +54,8 @@ public sealed class AssistantDocumentTests
         Assert.Contains("for (var index = 0;", pdf, StringComparison.Ordinal);
         Assert.DoesNotContain("ToImages", pdf, StringComparison.Ordinal);
         Assert.DoesNotContain("Parallel", pdf, StringComparison.Ordinal);
+        Assert.DoesNotContain("SKBitmap.Decode(stream)", pdf, StringComparison.Ordinal);
+        Assert.DoesNotContain("DecodeNative", pdf, StringComparison.Ordinal);
         var workbook = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Assistant", "Documents", "AssistantOpenXmlReader.cs"));
         Assert.DoesNotContain("Calculate", workbook, StringComparison.Ordinal);
         Assert.DoesNotContain("VbaProject", workbook, StringComparison.Ordinal);
@@ -460,6 +462,79 @@ public sealed class AssistantDocumentTests
         Assert.NotNull(scaled);
         Assert.True(Math.Max(scaled.Width, scaled.Height) <= AssistantDocumentLimits.VisualLongEdge);
         Assert.DoesNotContain(directory, normalized.DisplayName, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void Image_decode_target_is_bounded_before_allocation()
+    {
+        Assert.False(AssistantVisualBounds.TrySelectDecode(20_000, 20_000, _ => new SKSizeI(20_000, 20_000), out _));
+        Assert.False(AssistantVisualBounds.TrySelectDecode(AssistantDocumentLimits.MaxSourceEdge + 1, 16, _ => new SKSizeI(16, 16), out _));
+        Assert.False(AssistantVisualBounds.Fits(20_000, 20_000));
+        Assert.True((long)20_000 * 20_000 * AssistantDocumentLimits.DecodedBytesPerPixel > AssistantDocumentLimits.MaxDecodedBytes);
+
+        Assert.True(AssistantVisualBounds.TrySelectDecode(
+            20_000,
+            20_000,
+            scale =>
+            {
+                var edge = Math.Max(1, (int)Math.Round(20_000 * scale));
+                return new SKSizeI(edge, edge);
+            },
+            out var scaled));
+        Assert.True(AssistantVisualBounds.Fits(scaled.Width, scaled.Height));
+        Assert.True(scaled.Width <= AssistantDocumentLimits.VisualLongEdge);
+        Assert.True(scaled.Height <= AssistantDocumentLimits.VisualLongEdge);
+        Assert.True((long)scaled.Width * scaled.Height * AssistantDocumentLimits.DecodedBytesPerPixel <= AssistantDocumentLimits.MaxDecodedBytes);
+
+        var directory = Directory.CreateTempSubdirectory("bimit-secret-bomb-").FullName;
+        var bomb = Path.Combine(directory, "bomb.png");
+        File.WriteAllBytes(bomb, PngHeader(20_000, 20_000));
+        using (var stream = File.OpenRead(bomb))
+        using (var codec = SKCodec.Create(stream))
+        {
+            Assert.NotNull(codec);
+            Assert.Equal(20_000, codec!.Info.Width);
+            var selected = AssistantVisualBounds.TrySelectDecode(codec, out var info);
+            Assert.True(!selected || AssistantVisualBounds.Fits(info.Width, info.Height));
+            Assert.True(!selected || info.Width < 20_000);
+        }
+
+        var read = AssistantDocumentReader.Read(bomb);
+        Assert.Null(read.Artifact);
+        Assert.Equal(AssistantDocumentErrors.Invalid, read.Code);
+        Assert.DoesNotContain(directory, read.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static byte[] PngHeader(int width, int height)
+    {
+        var png = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==");
+        WriteBigEndian(png.AsSpan(16, 4), width);
+        WriteBigEndian(png.AsSpan(20, 4), height);
+        WriteBigEndian(png.AsSpan(29, 4), unchecked((int)Crc32(png.AsSpan(12, 17))));
+        return png;
+    }
+
+    private static void WriteBigEndian(Span<byte> target, int value)
+    {
+        target[0] = (byte)(value >> 24);
+        target[1] = (byte)(value >> 16);
+        target[2] = (byte)(value >> 8);
+        target[3] = (byte)value;
+    }
+
+    private static uint Crc32(ReadOnlySpan<byte> data)
+    {
+        var crc = 0xFFFFFFFFu;
+        foreach (var value in data)
+        {
+            crc ^= value;
+            for (var bit = 0; bit < 8; bit++)
+            {
+                crc = (crc & 1) == 0 ? crc >> 1 : (crc >> 1) ^ 0xEDB88320u;
+            }
+        }
+
+        return ~crc;
     }
 
     [Fact]

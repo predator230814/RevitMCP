@@ -75,20 +75,17 @@ internal static class AssistantVisualReader
         {
             using var stream = AssistantDocumentReader.OpenRead(path);
             using var codec = SKCodec.Create(stream);
-            if (codec is null)
+            if (codec is null || !AssistantVisualBounds.TrySelectDecode(codec, out var target))
             {
                 return Invalid();
             }
 
-            var info = codec.Info;
-            if (info.Width <= 0 || info.Height <= 0 || info.Width > AssistantDocumentLimits.MaxDecodedEdge || info.Height > AssistantDocumentLimits.MaxDecodedEdge)
-            {
-                return Invalid();
-            }
-
-            var target = new SKImageInfo(info.Width, info.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
-            using var bitmap = SKBitmap.Decode(codec, target) ?? DecodeNative(stream);
-            if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0 || !AssistantVisualEncoder.TryEncode(bitmap, out var bytes, out var mimeType))
+            using var bitmap = SKBitmap.Decode(codec, target);
+            if (bitmap is null
+                || bitmap.Width != target.Width
+                || bitmap.Height != target.Height
+                || !AssistantVisualBounds.Fits(bitmap.Width, bitmap.Height)
+                || !AssistantVisualEncoder.TryEncode(bitmap, out var bytes, out var mimeType))
             {
                 return Invalid();
             }
@@ -111,16 +108,6 @@ internal static class AssistantVisualReader
         {
             return Invalid();
         }
-    }
-
-    private static SKBitmap? DecodeNative(Stream stream)
-    {
-        if (stream.CanSeek)
-        {
-            stream.Position = 0;
-        }
-
-        return SKBitmap.Decode(stream);
     }
 
     private static RenderOptions RenderOptionsFor(double width, double height)
@@ -158,6 +145,60 @@ internal static class AssistantVisualReader
     private static AssistantDocumentReadResult PdfFailed()
     {
         return AssistantDocumentReadResult.Failure(AssistantDocumentErrors.PdfRenderFailed, AssistantDocumentErrors.PdfRenderFailedMessage);
+    }
+}
+
+internal static class AssistantVisualBounds
+{
+    public static bool TrySelectDecode(SKCodec codec, out SKImageInfo info)
+    {
+        return TrySelectDecode(codec.Info.Width, codec.Info.Height, codec.GetScaledDimensions, out info);
+    }
+
+    public static bool TrySelectDecode(int sourceWidth, int sourceHeight, Func<float, SKSizeI> scaledDimensions, out SKImageInfo info)
+    {
+        info = default;
+        if (sourceWidth <= 0
+            || sourceHeight <= 0
+            || sourceWidth > AssistantDocumentLimits.MaxSourceEdge
+            || sourceHeight > AssistantDocumentLimits.MaxSourceEdge)
+        {
+            return false;
+        }
+
+        var longEdge = Math.Max(sourceWidth, sourceHeight);
+        var scale = longEdge <= AssistantDocumentLimits.VisualLongEdge
+            ? 1f
+            : AssistantDocumentLimits.VisualLongEdge / (float)longEdge;
+        for (var attempt = 0; attempt < 8; attempt++)
+        {
+            var scaled = scaledDimensions(scale);
+            if (Fits(scaled.Width, scaled.Height))
+            {
+                info = new SKImageInfo(scaled.Width, scaled.Height, SKColorType.Rgba8888, SKAlphaType.Premul);
+                return true;
+            }
+
+            var next = scale * 0.5f;
+            if (next >= scale || next < 1f / AssistantDocumentLimits.MaxSourceEdge)
+            {
+                break;
+            }
+
+            scale = next;
+        }
+
+        return false;
+    }
+
+    public static bool Fits(int width, int height)
+    {
+        if (width <= 0 || height <= 0 || width > AssistantDocumentLimits.MaxDecodeEdge || height > AssistantDocumentLimits.MaxDecodeEdge)
+        {
+            return false;
+        }
+
+        return (long)width * height * AssistantDocumentLimits.DecodedBytesPerPixel <= AssistantDocumentLimits.MaxDecodedBytes;
     }
 }
 
