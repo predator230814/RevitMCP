@@ -27,4 +27,18 @@ internal static class MepCreationPlan
                 return false;
         }
     }
+
+    /// <summary>
+    /// Level-point creation receives Z as an offset from <c>Level.ProjectElevation</c>.
+    /// The stored target stays in absolute project coordinates. Wall and level-plane creation keep that absolute point.
+    /// </summary>
+    public static MepPoint CreationPoint(MepCreationOverload overload, MepPoint absoluteTarget, double levelProjectElevation)
+    {
+        if (overload != MepCreationOverload.LevelPoint)
+        {
+            return absoluteTarget;
+        }
+
+        return new MepPoint(absoluteTarget.X, absoluteTarget.Y, absoluteTarget.Z - levelProjectElevation);
+    }
 }

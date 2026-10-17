@@ -236,6 +236,32 @@ public sealed class MepDevicePlacementPreviewTests
         Assert.True(MepDevicePlacementGeometry.OrientationMatches(MepPlacementStrategyKind.WallHosted, 1.2, false, false, orientation));
     }
 
+    [Fact]
+    public void Level_point_creation_z_subtracts_only_the_level_project_elevation()
+    {
+        const double x = 12;
+        const double y = -4;
+
+        var atZero = MepCreationPlan.CreationPoint(MepCreationOverload.LevelPoint, new MepPoint(x, y, 15), 0);
+        Assert.Equal(new MepPoint(x, y, 15), atZero);
+
+        var positive = MepCreationPlan.CreationPoint(MepCreationOverload.LevelPoint, new MepPoint(x, y, 40), 32);
+        Assert.Equal(new MepPoint(x, y, 8), positive);
+
+        var negative = MepCreationPlan.CreationPoint(MepCreationOverload.LevelPoint, new MepPoint(x, y, 5), -3);
+        Assert.Equal(new MepPoint(x, y, 8), negative);
+
+        const double projectElevation = 10;
+        const double existingOffset = 4;
+        const double verticalOffset = 2;
+        var template = new MepPoint(x, y, projectElevation + existingOffset);
+        Assert.True(MepDevicePlacementGeometry.TryProjectTarget(template, 1, -1, verticalOffset, out var target));
+        var created = MepCreationPlan.CreationPoint(MepCreationOverload.LevelPoint, target, projectElevation);
+        Assert.Equal(new MepPoint(x + 1, y - 1, existingOffset + verticalOffset), created);
+        Assert.Equal(target, MepCreationPlan.CreationPoint(MepCreationOverload.WallHost, target, projectElevation));
+        Assert.Equal(target, MepCreationPlan.CreationPoint(MepCreationOverload.LevelPlaneReference, target, projectElevation));
+    }
+
     private static MepConvertedPlacement Placement(double offsetX, double offsetY = 0, double vertical = 0)
     {
         return new MepConvertedPlacement(offsetX, offsetY, vertical, offsetX, offsetY, vertical);

@@ -160,7 +160,8 @@ internal static class RevitMepDevicePlacementMutation
             return false;
         }
 
-        var point = new XYZ(item.Target.X, item.Target.Y, item.Target.Z);
+        var creation = MepCreationPlan.CreationPoint(overload, item.Target, prepared.Level.ProjectElevation);
+        var point = new XYZ(creation.X, creation.Y, creation.Z);
         FamilyInstance? instance = overload switch
         {
             MepCreationOverload.LevelPoint => prepared.Document.Create.NewFamilyInstance(

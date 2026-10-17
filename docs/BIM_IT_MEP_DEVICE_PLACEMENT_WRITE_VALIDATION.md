@@ -1,6 +1,6 @@
 # MEP device placement write — live validation
 
-- Status: Level-based creation is not accepted. The 2026-10-16 run committed two devices, then post-commit verification returned `committed_unverified`. This is not a merge pass.
+- Status: Level-based creation is not accepted. The 2026-10-16 run committed two devices, then post-commit verification returned `committed_unverified`. The level-point creation Z was amended afterward to `target.Z - level.ProjectElevation`. That amendment requires a focused Revit revalidation. This is not a merge pass.
 - Target: Revit 2026.5 build `26.5.0.55`
 - Build: Release add-in and server `1.0.0+afac5f03c9113e1729d172a9fd76b0a254d851f8`
 - Bridge protocol: 16
@@ -18,6 +18,8 @@ The template was a Mechanical Equipment instance, family HeatRecoveryUnit, type 
 Approved apply committed two instances of the same symbol, level, and orientation. Project-axis X was +1200 mm and +2400 mm, and Y was 0. Z was 9804.4 mm too high, equal to the L4 elevation. The level-based `NewFamilyInstance(XYZ, FamilySymbol, Level, StructuralType.NonStructural)` overload treated the supplied Z as an offset from the level, while the intent stored the absolute project Z. Verification rejected the result. Status was `committed_unverified`, not `applied`. No created refs were returned.
 
 Replay of that intent returned `committed_unverified` again. The mechanical-equipment count stayed at 39, and the audit did not gain a second pair. One Undo removed both instances and returned the count to 37. The document was unmodified after that Undo.
+
+The implementation now converts only the level-point creation Z with `target.Z - level.ProjectElevation`. Wall-hosted and level-work-plane creation are unchanged. Post-commit verification still compares the original absolute project target. The unchecked creation and replay items below still require Revit revalidation.
 
 ## Characterization
 
