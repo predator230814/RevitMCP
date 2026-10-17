@@ -1,8 +1,8 @@
 # MEP device placement write — live validation
 
-- Status: Level-based creation is not accepted. The 2026-10-16 run committed two devices, then post-commit verification returned `committed_unverified`. The level-point creation Z was amended afterward to `target.Z - level.ProjectElevation`. That amendment requires a focused Revit revalidation. This is not a merge pass.
+- Status: Level-based creation is not accepted. Head `d267b7c` was revalidated on Revit 2026.5. Absolute Z matched, and X/Y were the negation of the requested targets. Post-commit verification returned `committed_unverified`. This is not a merge pass.
 - Target: Revit 2026.5 build `26.5.0.55`
-- Build: Release add-in and server `1.0.0+afac5f03c9113e1729d172a9fd76b0a254d851f8`
+- Build: focused revalidation Release add-in and server `1.0.0+d267b7cbe7d65b0e250bb219e33180bab617c4bc`. The earlier level-based run used `1.0.0+afac5f03c9113e1729d172a9fd76b0a254d851f8`.
 - Bridge protocol: 16
 - `tools/list`: 14
 - Sample: Snowdon Towers Sample HVAC, project, not read-only, not workshared
@@ -19,7 +19,28 @@ Approved apply committed two instances of the same symbol, level, and orientatio
 
 Replay of that intent returned `committed_unverified` again. The mechanical-equipment count stayed at 39, and the audit did not gain a second pair. One Undo removed both instances and returned the count to 37. The document was unmodified after that Undo.
 
-The implementation now converts only the level-point creation Z with `target.Z - level.ProjectElevation`. Wall-hosted and level-work-plane creation are unchanged. Post-commit verification still compares the original absolute project target. The unchecked creation and replay items below still require Revit revalidation.
+The implementation now converts only the level-point creation Z with `target.Z - level.ProjectElevation`. Wall-hosted and level-work-plane creation are unchanged. Post-commit verification still compares the original absolute project target.
+
+## Focused revalidation, head d267b7c
+
+On 2026-10-17 the reloaded Release add-in and server were `1.0.0+d267b7cbe7d65b0e250bb219e33180bab617c4bc`. Revit was 2026.5 build `26.5.0.55`, the bridge protocol was 16, and `tools/list` contained 14 tools. Snowdon Towers Sample HVAC was opened again and was unmodified, so the earlier template move and Comments write were not in the file.
+
+The original HeatRecoveryUnit on L4 was characterized separately. It is level-based, with no host and no `HostFace`. Its Z was again 12899.6 mm, 3095.2 mm above the L4 project elevation of 9804.4 mm. Comments was empty. Five connectors were present and four were connected: Mechanical Exhaust Air 15, Mechanical Return Air 20, Mechanical Supply Air 38, and Mechanical Supply Air 39. Product preview of that connected device returned `level_based` and `ready=true`. It was not used as the creation template. All 37 original mechanical-equipment instances were that same connected type. Across 546 supported devices, none had zero active connections.
+
+A newly placed HeatRecoveryUnit on L2 was the creation template. It was level-based, with no host, no `HostFace`, five connectors, and zero active connections. Its rotation was π. Its absolute Z was 7133.8 mm. On L2, `Elevation` and `ProjectElevation` were both 2463.8 mm, so this run does not distinguish those two level properties. Preview of X +1200 mm and X +2400 mm, with Y 0 and vertical 0, returned `ready=true`. The approval review started and was approved. The model was already modified by that manual placement.
+
+Approved apply committed two instances and returned `committed_unverified`. No created refs were returned. Both copies used the same symbol, level L2, and rotation π. Their Z was 7133.8 mm, the absolute target. Their X/Y were the exact negation of the requested absolute targets: −24025.2 / +1010.8 mm and −25225.2 / +1010.8 mm, instead of +24025.2 / −1010.8 mm and +25225.2 / −1010.8 mm. That is a 180° rotation about the project origin, the same angle as the template. The mechanical-equipment count went from 38 to 40.
+
+Replay of that intent returned `committed_unverified` again. The count stayed at 40. The audit gained one pair only: `apply_status=committed_unverified`, `transaction_status=committed`, `verification_status=failed`. The replay did not add a pair. The record has hashes only. One Undo of these two copies was not performed; the count was still 40 afterward. Parameter regression, reject, and stale were not repeated.
+
+- [x] The reloaded build, protocol, and tool list match head `d267b7c`.
+- [x] The original connected HRU was characterized separately, and its earlier displacement was not in the reopened file.
+- [x] An isolated level-based template with no active MEP connection previewed `ready=true` for two placements.
+- [x] The placement review was approved locally.
+- [ ] Apply returns `applied`, exactly two refs, and the requested absolute X/Y/Z and orientation. Observed `committed_unverified`: Z matched, and X/Y were negated.
+- [ ] Replay returns the same refs and no second audit pair. Observed a repeated `committed_unverified`, no added device, and no second audit pair. No created refs were available to compare.
+- [ ] The audit pair is `applied` / `committed` / `passed`. Observed `committed_unverified` / `committed` / `failed`, with no raw BIM payload.
+- [ ] One Undo removes the two copies from this attempt. Not performed. The count remained 40.
 
 ## Characterization
 
