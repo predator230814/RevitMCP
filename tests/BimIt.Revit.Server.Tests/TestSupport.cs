@@ -47,7 +47,10 @@ internal static class TestSupport
             AddinVersion = registration.AddinVersion,
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
-                BridgeProtocol.GetSelectionVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.GetSelectionVersion => BridgeProtocol.GetSelectionVersions,
+                BridgeProtocol.ApplyMepDevicePlacementsVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.RequestMepDevicePlacementReviewVersion => BridgeProtocol.RequestMepDevicePlacementReviewVersions,
+                BridgeProtocol.PreviewMepDevicePlacementsVersion => BridgeProtocol.PreviewMepDevicePlacementsVersions,
                 BridgeProtocol.RequestParameterUpdateReviewVersion => BridgeProtocol.SupportedVersions,
                 BridgeProtocol.PreviewParameterUpdatesVersion => BridgeProtocol.PreviewParameterUpdatesVersions,
                 BridgeProtocol.GetMepTopologyVersion => BridgeProtocol.GetMepTopologyVersions,
@@ -824,6 +827,39 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return ApplyParameterUpdates is null
             ? throw new NotSupportedException("This recording client does not implement revit.apply_parameter_updates.")
             : ApplyParameterUpdates(request, timeout, cancellationToken);
+    }
+
+    public Task<PreviewMepDevicePlacementsResult> PreviewMepDevicePlacementsAsync(
+        PreviewMepDevicePlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.preview_mep_device_placements.");
+    }
+
+    public Task<RequestMepDevicePlacementReviewResult> RequestMepDevicePlacementReviewAsync(
+        RequestMepDevicePlacementReviewRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.request_mep_device_placement_review.");
+    }
+
+    public Task<ApplyMepDevicePlacementsResult> ApplyMepDevicePlacementsAsync(
+        ApplyMepDevicePlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.apply_mep_device_placements.");
     }
 
     public ValueTask DisposeAsync()

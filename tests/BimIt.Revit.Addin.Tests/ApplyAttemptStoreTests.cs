@@ -1,6 +1,7 @@
 using BimIt.Revit.Addin.Apply;
 using BimIt.Revit.Addin.Audit;
 using BimIt.Revit.Addin.Identity;
+using BimIt.Revit.Addin.Intents;
 using BimIt.Revit.Addin.Lifecycle;
 using Xunit;
 
@@ -56,7 +57,7 @@ public sealed class ApplyAttemptStoreTests
         Assert.Equal(ApplyCompleteStatus.Stored, store.Complete(owner, ApplyTerminalStatus.AuditFailed));
         Assert.Equal(ApplyReleaseStatus.Rejected, store.ReleasePreMutation(owner));
         Assert.Equal(ApplyCompleteStatus.Rejected, store.Complete(owner, ApplyTerminalStatus.Applied));
-        Assert.Equal(ApplyTerminalStatus.AuditFailed, store.TryLookup("intent-a", null).Terminal);
+        Assert.Equal(ApplyTerminalStatus.AuditFailed, store.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null).Terminal);
     }
 
     [Fact]
@@ -69,7 +70,7 @@ public sealed class ApplyAttemptStoreTests
             Complete(store, "intent-a", binding, status);
 
             Assert.Equal(status, store.TryLookup("intent-a", binding).Terminal);
-            Assert.Equal(status, store.TryLookup("intent-a", null).Terminal);
+            Assert.Equal(status, store.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null).Terminal);
             Assert.Equal(ApplyEstablishStatus.InProgress, store.TryEstablishExclusive("intent-a", binding, out _));
         }
 
@@ -101,6 +102,26 @@ public sealed class ApplyAttemptStoreTests
     }
 
     [Fact]
+    public void Lookup_without_a_live_binding_still_requires_the_expected_kind()
+    {
+        var store = new ControlledApplyAttemptStore();
+        var mep = new ApplyBinding(Hex('a'), "instance-a", "doc-a", ControlledWriteIntentKind.MepDevicePlacements);
+        Assert.Equal(ApplyEstablishStatus.Owner, store.TryEstablishExclusive("intent-a", mep, out var lease));
+        Assert.Equal(ApplyMarkStatus.Irrevocable, store.MarkIrrevocable(lease));
+        Assert.Equal(ApplyCompleteStatus.Stored, store.Complete(lease, ApplyTerminalStatus.Applied, ["opaque-a"]));
+
+        var wrongKind = store.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null);
+        Assert.Equal(ApplyLookupStatus.BindingMismatch, wrongKind.Status);
+        Assert.Null(wrongKind.Terminal);
+        Assert.Null(wrongKind.CreatedElementRefs);
+
+        var sameKind = store.TryLookup("intent-a", ControlledWriteIntentKind.MepDevicePlacements, null);
+        Assert.Equal(ApplyLookupStatus.Terminal, sameKind.Status);
+        Assert.Equal(ApplyTerminalStatus.Applied, sameKind.Terminal);
+        Assert.Equal(["opaque-a"], sameKind.CreatedElementRefs);
+    }
+
+    [Fact]
     public void Terminal_expires_at_thirty_monotonic_minutes()
     {
         var clock = new ManualTimeProvider();
@@ -108,10 +129,10 @@ public sealed class ApplyAttemptStoreTests
         Complete(store, "intent-a", Binding(), ApplyTerminalStatus.Stale);
 
         clock.Advance(ControlledApplyAttemptStore.TerminalLifetime - TimeSpan.FromTicks(1));
-        Assert.Equal(ApplyTerminalStatus.Stale, store.TryLookup("intent-a", null).Terminal);
+        Assert.Equal(ApplyTerminalStatus.Stale, store.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null).Terminal);
 
         clock.Advance(TimeSpan.FromTicks(1));
-        Assert.Equal(ApplyLookupStatus.Absent, store.TryLookup("intent-a", null).Status);
+        Assert.Equal(ApplyLookupStatus.Absent, store.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null).Status);
         Assert.False(store.TryInspect("intent-a", out _));
     }
 
@@ -126,7 +147,7 @@ public sealed class ApplyAttemptStoreTests
         Assert.Equal(ApplyTerminalStatus.Applied, store.TryLookup("intent-a", Binding()).Terminal);
 
         clock.Advance(ControlledApplyAttemptStore.TerminalLifetime);
-        Assert.Equal(ApplyLookupStatus.Absent, store.TryLookup("intent-a", null).Status);
+        Assert.Equal(ApplyLookupStatus.Absent, store.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null).Status);
     }
 
     [Fact]
@@ -236,7 +257,7 @@ public sealed class ApplyAttemptStoreTests
 
         Assert.Equal(1, store.Clear());
         Assert.False(store.TryInspect("intent-a", out _));
-        Assert.Equal(ApplyLookupStatus.Absent, store.TryLookup("intent-a", null).Status);
+        Assert.Equal(ApplyLookupStatus.Absent, store.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null).Status);
         Assert.Equal(ApplyEstablishStatus.Rejected, store.TryEstablishExclusive("intent-b", Binding(), out _));
         Assert.Equal(0, store.Clear());
     }
@@ -319,7 +340,7 @@ public sealed class ApplyAttemptStoreTests
 
             Assert.False(preflight.Succeeded);
             Assert.Equal(ApplyReleaseStatus.Released, store.ReleasePreMutation(owner));
-            Assert.Equal(ApplyLookupStatus.Absent, store.TryLookup("intent-a", null).Status);
+            Assert.Equal(ApplyLookupStatus.Absent, store.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null).Status);
             writer.Dispose();
         }
         finally
@@ -359,7 +380,7 @@ public sealed class ApplyAttemptStoreTests
                 ItemCount = 1
             }).Succeeded);
             Assert.All(Directory.GetFiles(root), path => Assert.Equal(0, new FileInfo(path).Length));
-            Assert.Equal(ApplyTerminalStatus.Applied, store.TryLookup("intent-a", null).Terminal);
+            Assert.Equal(ApplyTerminalStatus.Applied, store.TryLookup("intent-a", ControlledWriteIntentKind.ParameterUpdates, null).Terminal);
             Assert.Equal(ApplyEstablishStatus.InProgress, store.TryEstablishExclusive("intent-a", Binding(), out var outsider));
             Assert.False(outsider.IsAssigned);
             Assert.Equal(ApplyReleaseStatus.Rejected, store.ReleasePreMutation(new ApplyAttemptLease("intent-a", 1)));

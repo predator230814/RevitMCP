@@ -17,6 +17,9 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitApplyParameterUpdatesService? _applyParameterUpdates;
     private readonly IRevitGetWarningsService? _getWarnings;
     private readonly IRevitGetSelectionService? _getSelection;
+    private readonly IRevitPreviewMepDevicePlacementsService? _previewMepDevicePlacements;
+    private readonly IRevitRequestMepDevicePlacementReviewService? _requestMepDevicePlacementReview;
+    private readonly IRevitApplyMepDevicePlacementsService? _applyMepDevicePlacements;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -31,7 +34,10 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview = null,
         IRevitApplyParameterUpdatesService? applyParameterUpdates = null,
         IRevitGetWarningsService? getWarnings = null,
-        IRevitGetSelectionService? getSelection = null)
+        IRevitGetSelectionService? getSelection = null,
+        IRevitPreviewMepDevicePlacementsService? previewMepDevicePlacements = null,
+        IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview = null,
+        IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -45,6 +51,9 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _applyParameterUpdates = applyParameterUpdates;
         _getWarnings = getWarnings;
         _getSelection = getSelection;
+        _previewMepDevicePlacements = previewMepDevicePlacements;
+        _requestMepDevicePlacementReview = requestMepDevicePlacementReview;
+        _applyMepDevicePlacements = applyMepDevicePlacements;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -458,6 +467,119 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit selection request could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.preview_mep_device_placements")]
+    public async Task<PreviewMepDevicePlacementsResult> PreviewMepDevicePlacementsAsync(
+        PreviewMepDevicePlacementsRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsPreviewMepDevicePlacements,
+            "revit.preview_mep_device_placements is not available on this connection.");
+        if (_previewMepDevicePlacements is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.preview_mep_device_placements is not available on this endpoint."));
+        }
+
+        try
+        {
+            return await _previewMepDevicePlacements.PreviewMepDevicePlacementsAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The MEP device placement preview could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.request_mep_device_placement_review")]
+    public async Task<RequestMepDevicePlacementReviewResult> RequestMepDevicePlacementReviewAsync(
+        RequestMepDevicePlacementReviewRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsRequestMepDevicePlacementReview,
+            "revit.request_mep_device_placement_review is not available on this connection.");
+        if (_requestMepDevicePlacementReview is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.request_mep_device_placement_review is not available on this endpoint."));
+        }
+
+        try
+        {
+            RequestMepDevicePlacementReviewRequests.Validate(request);
+            return await _requestMepDevicePlacementReview.RequestMepDevicePlacementReviewAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The MEP device placement review request could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.apply_mep_device_placements")]
+    public async Task<ApplyMepDevicePlacementsResult> ApplyMepDevicePlacementsAsync(
+        ApplyMepDevicePlacementsRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsApplyMepDevicePlacements,
+            "revit.apply_mep_device_placements is not available on this connection.");
+        if (_applyMepDevicePlacements is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.apply_mep_device_placements is not available on this endpoint."));
+        }
+
+        try
+        {
+            ApplyMepDevicePlacementsRequests.Validate(request);
+            return await _applyMepDevicePlacements.ApplyMepDevicePlacementsAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The MEP device placement apply could not be executed."));
         }
     }
 

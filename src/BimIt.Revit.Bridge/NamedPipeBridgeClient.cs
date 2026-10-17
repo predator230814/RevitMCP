@@ -471,6 +471,105 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             .ConfigureAwait(false);
     }
 
+    public async Task<PreviewMepDevicePlacementsResult> PreviewMepDevicePlacementsAsync(
+        PreviewMepDevicePlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<PreviewMepDevicePlacementsResult>(
+                "revit.preview_mep_device_placements",
+                request,
+                timeout,
+                cancellationToken,
+                EnsurePreviewMepDevicePlacementsAllowed,
+                "The MEP device placement preview timed out.",
+                "The MEP device placement preview could not be executed.")
+            .ConfigureAwait(false);
+    }
+
+    public async Task<RequestMepDevicePlacementReviewResult> RequestMepDevicePlacementReviewAsync(
+        RequestMepDevicePlacementReviewRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<RequestMepDevicePlacementReviewResult>(
+                "revit.request_mep_device_placement_review",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureRequestMepDevicePlacementReviewAllowed,
+                "The MEP device placement review request timed out.",
+                "The MEP device placement review request could not be executed.")
+            .ConfigureAwait(false);
+    }
+
+    public async Task<ApplyMepDevicePlacementsResult> ApplyMepDevicePlacementsAsync(
+        ApplyMepDevicePlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<ApplyMepDevicePlacementsResult>(
+                "revit.apply_mep_device_placements",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureApplyMepDevicePlacementsAllowed,
+                "The MEP device placement apply timed out.",
+                "The MEP device placement apply could not be executed.")
+            .ConfigureAwait(false);
+    }
+
+    private void EnsurePreviewMepDevicePlacementsAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsPreviewMepDevicePlacements(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.preview_mep_device_placements requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsureRequestMepDevicePlacementReviewAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsRequestMepDevicePlacementReview(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.request_mep_device_placement_review requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsureApplyMepDevicePlacementsAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsApplyMepDevicePlacements(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.apply_mep_device_placements requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
     private void EnsureGetSelectionAllowed()
     {
         EnsureCapabilityReady();

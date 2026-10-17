@@ -58,7 +58,7 @@ public sealed class GetSelectionBridgeTests
             getWarnings: null,
             getSelection: selection);
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, v13.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.GetSelectionVersions, v13.SupportedProtocolVersions);
         Assert.Equal(13, v13.SupportedProtocolVersions[0]);
         Assert.Equal(BridgeProtocol.ContextDocumentIdentityVersions, v12.SupportedProtocolVersions);
         Assert.DoesNotContain(13, v12.SupportedProtocolVersions);
@@ -67,10 +67,37 @@ public sealed class GetSelectionBridgeTests
         Assert.DoesNotContain(13, selectionWithoutWarnings.SupportedProtocolVersions);
     }
 
+    [Fact]
+    public void Mep_placement_versions_advertise_only_a_complete_prefix()
+    {
+        var metadata = TestSupport.CreateMetadata();
+        var services = Full();
+        var warnings = new FakeGetWarningsService();
+        var selection = new FakeGetSelectionService();
+        var preview = new StubPreviewMepService();
+        var review = new StubReviewMepService();
+        var apply = new StubApplyMepService();
+
+        var v16 = NamedPipeBridgeHost.WithAdvertisedProtocol(metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, services.Review, services.Apply, warnings, selection, preview, review, apply);
+        var v15 = NamedPipeBridgeHost.WithAdvertisedProtocol(metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, services.Review, services.Apply, warnings, selection, preview, review);
+        var v14 = NamedPipeBridgeHost.WithAdvertisedProtocol(metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, services.Review, services.Apply, warnings, selection, preview);
+
+        Assert.Equal(BridgeProtocol.SupportedVersions, v16.SupportedProtocolVersions);
+        Assert.Equal(16, v16.SupportedProtocolVersions[0]);
+        Assert.Equal(BridgeProtocol.RequestMepDevicePlacementReviewVersions, v15.SupportedProtocolVersions);
+        Assert.Equal(15, v15.SupportedProtocolVersions[0]);
+        Assert.Equal(BridgeProtocol.PreviewMepDevicePlacementsVersions, v14.SupportedProtocolVersions);
+        Assert.Equal(14, v14.SupportedProtocolVersions[0]);
+        Assert.False(BridgeProtocol.SupportsPreviewMepDevicePlacements(17));
+        Assert.False(BridgeProtocol.SupportsRequestMepDevicePlacementReview(17));
+        Assert.False(BridgeProtocol.SupportsApplyMepDevicePlacements(17));
+        Assert.False(BridgeProtocol.SupportsGetSelection(17));
+    }
+
     [Theory]
     [InlineData(1)]
     [InlineData(12)]
-    [InlineData(14)]
+    [InlineData(17)]
     public async Task Get_selection_is_rejected_outside_v13(int version)
     {
         var service = new FakeGetSelectionService();
@@ -385,4 +412,22 @@ internal sealed class FakeGetSelectionService : IRevitGetSelectionService
 
         return Result;
     }
+}
+
+internal sealed class StubPreviewMepService : IRevitPreviewMepDevicePlacementsService
+{
+    public Task<PreviewMepDevicePlacementsResult> PreviewMepDevicePlacementsAsync(PreviewMepDevicePlacementsRequest request, CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+}
+
+internal sealed class StubReviewMepService : IRevitRequestMepDevicePlacementReviewService
+{
+    public Task<RequestMepDevicePlacementReviewResult> RequestMepDevicePlacementReviewAsync(RequestMepDevicePlacementReviewRequest request, CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+}
+
+internal sealed class StubApplyMepService : IRevitApplyMepDevicePlacementsService
+{
+    public Task<ApplyMepDevicePlacementsResult> ApplyMepDevicePlacementsAsync(ApplyMepDevicePlacementsRequest request, CancellationToken cancellationToken)
+        => throw new NotSupportedException();
 }

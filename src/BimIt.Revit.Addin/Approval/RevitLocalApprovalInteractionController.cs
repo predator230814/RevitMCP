@@ -30,7 +30,15 @@ internal sealed class RevitLocalApprovalInteractionController
 
     public ApprovalInteractionReviewResult BeginReview(string? intentRef, string? activeDocumentId)
     {
-        var review = _provider.BeginReview(intentRef, activeDocumentId);
+        return BeginReview(intentRef, activeDocumentId, ControlledWriteIntentKind.ParameterUpdates);
+    }
+
+    public ApprovalInteractionReviewResult BeginReview(
+        string? intentRef,
+        string? activeDocumentId,
+        ControlledWriteIntentKind expectedKind)
+    {
+        var review = _provider.BeginReview(intentRef, activeDocumentId, expectedKind);
         if (review.Status is not (ApprovalReviewStatus.Started or ApprovalReviewStatus.AlreadyActive))
         {
             return new ApprovalInteractionReviewResult(review.Status, null);
@@ -38,16 +46,33 @@ internal sealed class RevitLocalApprovalInteractionController
 
         if (review.SessionRef is null
             || intentRef is null
-            || !_intents.TryGet(intentRef, out var entry)
-            || entry is null
-            || !string.Equals(entry.IntentRef, intentRef, StringComparison.Ordinal)
-            || !ApprovalReviewRenderer.TryCreate(review.SessionRef, entry, out var model))
+            || !_intents.TryGetControlled(intentRef, out var stored)
+            || stored is null
+            || stored.Binding.Kind != expectedKind
+            || !string.Equals(stored.Binding.IntentRef, intentRef, StringComparison.Ordinal)
+            || !TryRender(review.SessionRef, stored, out var model))
         {
             FailClosed(review.SessionRef);
             return new ApprovalInteractionReviewResult(ApprovalReviewStatus.Unavailable, null);
         }
 
         return new ApprovalInteractionReviewResult(review.Status, model);
+    }
+
+    private static bool TryRender(string sessionRef, ControlledWriteIntent stored, out ApprovalReviewRenderModel model)
+    {
+        if (stored.Binding.Kind == ControlledWriteIntentKind.ParameterUpdates && stored.ParameterUpdates is not null)
+        {
+            return ApprovalReviewRenderer.TryCreate(sessionRef, stored.ParameterUpdates, out model);
+        }
+
+        if (stored.Binding.Kind == ControlledWriteIntentKind.MepDevicePlacements && stored.MepDevicePlacements is not null)
+        {
+            return ApprovalReviewRenderer.TryCreateMep(sessionRef, stored.Binding, stored.MepDevicePlacements, out model);
+        }
+
+        model = null!;
+        return false;
     }
 
     public ApprovalCommandResult ApproveCurrent(string? sessionRef, string? activeDocumentId)

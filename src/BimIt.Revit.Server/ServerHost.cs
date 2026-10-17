@@ -60,6 +60,12 @@ internal static class ServerHost
         services.AddSingleton<GetWarningsMcpTools>();
         services.AddSingleton<GetSelectionApplicationService>();
         services.AddSingleton<GetSelectionMcpTools>();
+        services.AddSingleton<PreviewMepDevicePlacementsApplicationService>();
+        services.AddSingleton<PreviewMepDevicePlacementsMcpTools>();
+        services.AddSingleton<RequestMepDevicePlacementReviewApplicationService>();
+        services.AddSingleton<RequestMepDevicePlacementReviewMcpTools>();
+        services.AddSingleton<ApplyMepDevicePlacementsApplicationService>();
+        services.AddSingleton<ApplyMepDevicePlacementsMcpTools>();
         services.AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
@@ -79,6 +85,9 @@ internal static class ServerHost
             .WithRequestParameterUpdateReviewTool()
             .WithApplyParameterUpdatesTool()
             .WithGetWarningsTool()
-            .WithGetSelectionTool();
+            .WithGetSelectionTool()
+            .WithPreviewMepDevicePlacementsTool()
+            .WithRequestMepDevicePlacementReviewTool()
+            .WithApplyMepDevicePlacementsTool();
     }
 }

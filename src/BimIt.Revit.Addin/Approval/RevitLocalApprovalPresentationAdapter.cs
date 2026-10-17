@@ -1,6 +1,7 @@
 using Autodesk.Revit.UI;
 using BimIt.Revit.Addin.Execution;
 using BimIt.Revit.Addin.Identity;
+using BimIt.Revit.Addin.Intents;
 
 namespace BimIt.Revit.Addin.Approval;
 
@@ -40,7 +41,15 @@ internal sealed class RevitLocalApprovalPresentationAdapter
 
     public Task<ApprovalPresentationResult> PresentReviewAsync(string? intentRef, CancellationToken cancellationToken)
     {
-        return _gate.InvokeAsync(cancellationToken, (documentId, showPane) => PresentResolved(intentRef, documentId, showPane));
+        return PresentReviewAsync(intentRef, ControlledWriteIntentKind.ParameterUpdates, cancellationToken);
+    }
+
+    public Task<ApprovalPresentationResult> PresentReviewAsync(
+        string? intentRef,
+        ControlledWriteIntentKind expectedKind,
+        CancellationToken cancellationToken)
+    {
+        return _gate.InvokeAsync(cancellationToken, (documentId, showPane) => PresentResolved(intentRef, expectedKind, documentId, showPane));
     }
 
     public Task<ApprovalUiDispatchResult> DispatchCurrentAsync(string? json, CancellationToken cancellationToken)
@@ -48,9 +57,13 @@ internal sealed class RevitLocalApprovalPresentationAdapter
         return _gate.DispatchAsync(cancellationToken, documentId => _ui.Dispatch(json, documentId));
     }
 
-    private ApprovalPresentationResult PresentResolved(string? intentRef, string? activeDocumentId, Func<bool> showPane)
+    private ApprovalPresentationResult PresentResolved(
+        string? intentRef,
+        ControlledWriteIntentKind expectedKind,
+        string? activeDocumentId,
+        Func<bool> showPane)
     {
-        var review = _controller.BeginReview(intentRef, activeDocumentId);
+        var review = _controller.BeginReview(intentRef, activeDocumentId, expectedKind);
         if (review.Status is not (ApprovalReviewStatus.Started or ApprovalReviewStatus.AlreadyActive)
             || review.RenderModel is not { } model)
         {

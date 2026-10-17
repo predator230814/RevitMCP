@@ -362,6 +362,31 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         return new RevitGetSelectionService(_dispatcher, metadata, _identity);
     }
 
+    public IRevitPreviewMepDevicePlacementsService CreatePreviewMepDevicePlacements(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitPreviewMepDevicePlacementsService(_dispatcher, metadata, _identity, _intentStore);
+    }
+
+    public IRevitRequestMepDevicePlacementReviewService? CreateRequestMepDevicePlacementReview(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return _approvalUi is null ? null : new RevitRequestMepDevicePlacementReviewService(_approvalUi);
+    }
+
+    public IRevitApplyMepDevicePlacementsService CreateApplyMepDevicePlacements(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitApplyMepDevicePlacementsService(
+            _dispatcher,
+            metadata,
+            _identity,
+            _intentStore,
+            _approval,
+            _applyAttempts,
+            _auditWriter);
+    }
+
     public IRevitApplyParameterUpdatesService CreateApplyParameterUpdates(BridgeInstanceMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -434,10 +459,13 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         IRevitApplyParameterUpdatesService? applyParameterUpdates,
         IRevitGetWarningsService? getWarnings,
         IRevitGetSelectionService? getSelection,
+        IRevitPreviewMepDevicePlacementsService? previewMepDevicePlacements,
+        IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview,
+        IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);

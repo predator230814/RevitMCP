@@ -1,3 +1,5 @@
+using BimIt.Revit.Addin.Intents;
+
 namespace BimIt.Revit.Addin.Apply;
 
 internal enum ApplyAttemptState
@@ -17,7 +19,11 @@ internal enum ApplyTerminalStatus
     AuditFailed
 }
 
-internal readonly record struct ApplyBinding(string IntentFingerprint, string InstanceId, string DocumentId);
+internal readonly record struct ApplyBinding(
+    string IntentFingerprint,
+    string InstanceId,
+    string DocumentId,
+    ControlledWriteIntentKind Kind = ControlledWriteIntentKind.ParameterUpdates);
 
 internal enum ApplyLookupStatus
 {
@@ -27,7 +33,10 @@ internal enum ApplyLookupStatus
     BindingMismatch
 }
 
-internal readonly record struct ApplyLookupResult(ApplyLookupStatus Status, ApplyTerminalStatus? Terminal);
+internal readonly record struct ApplyLookupResult(
+    ApplyLookupStatus Status,
+    ApplyTerminalStatus? Terminal,
+    IReadOnlyList<string>? CreatedElementRefs = null);
 
 internal enum ApplyEstablishStatus
 {
@@ -78,7 +87,12 @@ internal sealed class ControlledApplyAttemptStore
         _clock = clock ?? TimeProvider.System;
     }
 
-    public ApplyLookupResult TryLookup(string intentRef, ApplyBinding? liveBinding)
+    public ApplyLookupResult TryLookup(string intentRef, ApplyBinding liveBinding)
+    {
+        return TryLookup(intentRef, liveBinding.Kind, liveBinding);
+    }
+
+    public ApplyLookupResult TryLookup(string intentRef, ControlledWriteIntentKind expectedKind, ApplyBinding? liveBinding)
     {
         ArgumentNullException.ThrowIfNull(intentRef);
         lock (_gate)
@@ -88,14 +102,14 @@ internal sealed class ControlledApplyAttemptStore
                 return new ApplyLookupResult(ApplyLookupStatus.Absent, null);
             }
 
-            if (liveBinding is { } binding && !SameBinding(attempt, binding))
+            if (attempt.Kind != expectedKind || (liveBinding is { } binding && !SameBinding(attempt, binding)))
             {
                 return new ApplyLookupResult(ApplyLookupStatus.BindingMismatch, null);
             }
 
             if (attempt.State == ApplyAttemptState.Terminal)
             {
-                return new ApplyLookupResult(ApplyLookupStatus.Terminal, attempt.Terminal);
+                return new ApplyLookupResult(ApplyLookupStatus.Terminal, attempt.Terminal, attempt.CreatedElementRefs);
             }
 
             return new ApplyLookupResult(ApplyLookupStatus.InProgress, null);
@@ -170,6 +184,11 @@ internal sealed class ControlledApplyAttemptStore
 
     public ApplyCompleteStatus Complete(ApplyAttemptLease lease, ApplyTerminalStatus status)
     {
+        return Complete(lease, status, null);
+    }
+
+    public ApplyCompleteStatus Complete(ApplyAttemptLease lease, ApplyTerminalStatus status, IReadOnlyList<string>? createdElementRefs)
+    {
         lock (_gate)
         {
             if (!TryOwned(lease, out var attempt) || attempt.State != ApplyAttemptState.Irrevocable)
@@ -179,6 +198,7 @@ internal sealed class ControlledApplyAttemptStore
 
             attempt.State = ApplyAttemptState.Terminal;
             attempt.Terminal = status;
+            attempt.CreatedElementRefs = CopyRefs(createdElementRefs);
             attempt.MonotonicOrigin = _clock.GetTimestamp();
             return ApplyCompleteStatus.Stored;
         }
@@ -297,9 +317,26 @@ internal sealed class ControlledApplyAttemptStore
 
     private static bool SameBinding(Attempt attempt, ApplyBinding binding)
     {
-        return string.Equals(attempt.Fingerprint, binding.IntentFingerprint, StringComparison.Ordinal)
+        return attempt.Kind == binding.Kind
+            && string.Equals(attempt.Fingerprint, binding.IntentFingerprint, StringComparison.Ordinal)
             && string.Equals(attempt.InstanceId, binding.InstanceId, StringComparison.Ordinal)
             && string.Equals(attempt.DocumentId, binding.DocumentId, StringComparison.Ordinal);
+    }
+
+    private static string[]? CopyRefs(IReadOnlyList<string>? createdElementRefs)
+    {
+        if (createdElementRefs is null)
+        {
+            return null;
+        }
+
+        var copy = new string[createdElementRefs.Count];
+        for (var index = 0; index < createdElementRefs.Count; index++)
+        {
+            copy[index] = createdElementRefs[index];
+        }
+
+        return copy;
     }
 
     private bool IsExpired(long origin)
@@ -337,6 +374,7 @@ internal sealed class ControlledApplyAttemptStore
         public Attempt(string intentRef, ApplyBinding binding, long token)
         {
             IntentRef = intentRef;
+            Kind = binding.Kind;
             Fingerprint = binding.IntentFingerprint;
             InstanceId = binding.InstanceId;
             DocumentId = binding.DocumentId;
@@ -345,6 +383,8 @@ internal sealed class ControlledApplyAttemptStore
         }
 
         public string IntentRef { get; }
+
+        public ControlledWriteIntentKind Kind { get; }
 
         public string Fingerprint { get; }
 
@@ -357,6 +397,8 @@ internal sealed class ControlledApplyAttemptStore
         public ApplyAttemptState State { get; set; }
 
         public ApplyTerminalStatus? Terminal { get; set; }
+
+        public string[]? CreatedElementRefs { get; set; }
 
         public long MonotonicOrigin { get; set; }
     }

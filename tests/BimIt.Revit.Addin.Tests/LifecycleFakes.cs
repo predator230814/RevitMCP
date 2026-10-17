@@ -127,6 +127,27 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("selection.create");
         return new RecordingGetSelectionService();
     }
+
+    public IRevitPreviewMepDevicePlacementsService? CreatePreviewMepDevicePlacements(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("meppreview.create");
+        return null;
+    }
+
+    public IRevitRequestMepDevicePlacementReviewService? CreateRequestMepDevicePlacementReview(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("mepreview.create");
+        return null;
+    }
+
+    public IRevitApplyMepDevicePlacementsService? CreateApplyMepDevicePlacements(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("mepapply.create");
+        return null;
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -369,6 +390,9 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitApplyParameterUpdatesService? applyParameterUpdates,
         IRevitGetWarningsService? getWarnings,
         IRevitGetSelectionService? getSelection,
+        IRevitPreviewMepDevicePlacementsService? previewMepDevicePlacements,
+        IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview,
+        IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

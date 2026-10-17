@@ -47,7 +47,7 @@ public sealed class GetWarningsBridgeTests
 
     [Theory]
     [InlineData(10)]
-    [InlineData(14)]
+    [InlineData(17)]
     public async Task Get_warnings_is_rejected_outside_its_explicit_set(int version)
     {
         var service = new FakeGetWarningsService();
@@ -63,6 +63,9 @@ public sealed class GetWarningsBridgeTests
     [InlineData(11)]
     [InlineData(12)]
     [InlineData(13)]
+    [InlineData(14)]
+    [InlineData(15)]
+    [InlineData(16)]
     public async Task Get_warnings_is_allowed_on_its_explicit_set(int version)
     {
         var service = new FakeGetWarningsService();

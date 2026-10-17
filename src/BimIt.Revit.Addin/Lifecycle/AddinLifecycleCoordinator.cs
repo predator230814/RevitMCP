@@ -127,8 +127,17 @@ internal sealed class AddinLifecycleCoordinator
             var getSelection = dispatcher.CreateGetSelection(metadata);
             EnsureNotStopping();
 
+            var previewMepDevicePlacements = dispatcher.CreatePreviewMepDevicePlacements(metadata);
+            EnsureNotStopping();
+
+            var requestMepDevicePlacementReview = dispatcher.CreateRequestMepDevicePlacementReview(metadata);
+            EnsureNotStopping();
+
+            var applyMepDevicePlacements = dispatcher.CreateApplyMepDevicePlacements(metadata);
+            EnsureNotStopping();
+
             using var startup = new CancellationTokenSource(_startupTimeout);
-            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, startup.Token);
+            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, startup.Token);
 
             lock (_gate)
             {
