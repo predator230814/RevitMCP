@@ -1,8 +1,8 @@
 # MEP device placement write — live validation
 
-- Status: Level-based creation is not accepted. After the `d267b7c` revalidation, level-based placement keeps the project-elevation Z conversion and translates by the absolute target minus the location re-read after orientation. That amendment requires a focused Revit revalidation. This is not a merge pass.
+- Status: The focused level-based gate on head `7123b11` returned `applied` with the requested absolute X/Y/Z and orientation. Replay returned the same refs, and one Undo removed both copies. This is not a merge pass.
 - Target: Revit 2026.5 build `26.5.0.55`
-- Build: focused revalidation Release add-in and server `1.0.0+d267b7cbe7d65b0e250bb219e33180bab617c4bc`. The earlier level-based run used `1.0.0+afac5f03c9113e1729d172a9fd76b0a254d851f8`.
+- Build: focused passing run, Release add-in and server `1.0.0+7123b11c396cb6d5f95435848a3675ac5fcf9179`. Earlier runs used `1.0.0+d267b7cbe7d65b0e250bb219e33180bab617c4bc` and `1.0.0+afac5f03c9113e1729d172a9fd76b0a254d851f8`.
 - Bridge protocol: 16
 - `tools/list`: 14
 - Sample: Snowdon Towers Sample HVAC, project, not read-only, not workshared
@@ -33,7 +33,26 @@ Approved apply committed two instances and returned `committed_unverified`. No c
 
 Replay of that intent returned `committed_unverified` again. The count stayed at 40. The audit gained one pair only: `apply_status=committed_unverified`, `transaction_status=committed`, `verification_status=failed`. The replay did not add a pair. The record has hashes only. One Undo of these two copies was not performed; the count was still 40 afterward. Parameter regression, reject, and stale were not repeated.
 
-The level-based path now translates the created instance, inside the same transaction and after orientation, by the absolute target minus the re-read location. Wall-hosted and level-work-plane creation are unchanged. Final verification still compares the absolute target and orientation. The unchecked creation items below still require Revit revalidation.
+The level-based path now translates the created instance, inside the same transaction and after orientation, by the absolute target minus the re-read location. Wall-hosted and level-work-plane creation are unchanged. Final verification still compares the absolute target and orientation.
+
+## Focused revalidation, head 7123b11
+
+On 2026-10-18 Snowdon Towers Sample HVAC was reopened without saving, so the previous copies were gone. The loaded Release add-in was `1.0.0+7123b11c396cb6d5f95435848a3675ac5fcf9179`. The reopened file had 37 mechanical-equipment instances, all connected, and was unmodified.
+
+A new isolated HeatRecoveryUnit on L2 was the template. It had no host, no `HostFace`, five connectors, and zero active connections. Its rotation was π. On L2, `Elevation` and `ProjectElevation` were both 2463.8 mm. Preview of X +1200 mm and X +2400 mm, with Y 0 and vertical 0, returned `level_based` and `ready=true`. The review was approved.
+
+Apply returned `applied` with exactly two created refs. Both copies were the same family and type, level L2, with no host and rotation π. Their absolute positions matched the targets with zero measured X/Y/Z delta: X −16104.3 mm and −14904.3 mm, Y −15887.9 mm, Z 7133.8 mm. The mechanical-equipment count went from 38 to 40.
+
+Replay returned `applied` with the same two refs. The count stayed at 40. The audit gained one pair only: `apply_status=applied`, `transaction_status=committed`, `verification_status=passed`. The replay did not add a pair. The record has hashes only. One Undo removed both copies. The count returned to 38, the template remained, and both created refs were gone. Parameter regression, reject, stale, and work-plane creation were not repeated.
+
+- [x] The reloaded build, protocol, and tool list match head `7123b11`.
+- [x] The reopened sample had no leftover copies from the previous attempt.
+- [x] An isolated level-based template at rotation π, with no active MEP connection, previewed `ready=true` for two placements.
+- [x] The placement review was approved locally.
+- [x] Apply returns `applied`, exactly two refs, and the requested absolute X/Y/Z and orientation.
+- [x] Replay returns the same refs, no added device, and no second audit pair.
+- [x] The audit pair is `applied` / `committed` / `passed`, with no raw BIM payload.
+- [x] One Undo removes the two copies from this attempt.
 
 - [x] The reloaded build, protocol, and tool list match head `d267b7c`.
 - [x] The original connected HRU was characterized separately, and its earlier displacement was not in the reopened file.
@@ -63,8 +82,8 @@ If the characterized device is `work_plane_based_face` or `work_plane_based_othe
 - [x] Apply before approval returns `approval_required` and creates no elements.
 - [x] Request review. The existing approval pane shows Create MEP devices, Placement: Level based, the template category and family : type, the level, and the exact X/Y/vertical offsets.
 - [x] Approve locally.
-- [ ] Apply returns `applied` and exactly two devices of the same family, type, and level, at the requested positions, with matching orientation. Observed `committed_unverified`: X and orientation matched, Z was high by the level elevation.
-- [ ] Repeat the same apply. The result is `applied` with the same refs. No additional device and no second mutation. Observed a repeated `committed_unverified`, no added device, and no second audit pair. No created refs were available to compare.
+- [x] Apply returns `applied` and exactly two devices of the same family, type, and level, at the requested positions, with matching orientation. Head `7123b11` did. The earlier `d267b7c` attempt returned `committed_unverified`.
+- [x] Repeat the same apply. The result is `applied` with the same refs. No additional device and no second mutation. Observed on head `7123b11`.
 - [x] One Revit Undo removes both new instances.
 
 ## Stale and reject
