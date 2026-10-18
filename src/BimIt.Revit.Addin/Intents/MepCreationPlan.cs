@@ -41,4 +41,18 @@ internal static class MepCreationPlan
 
         return new MepPoint(absoluteTarget.X, absoluteTarget.Y, absoluteTarget.Z - levelProjectElevation);
     }
+
+    /// <summary>
+    /// Level-based correction after orientation. The vector is the absolute target minus the re-read location.
+    /// A zero vector means the instance is already at the target and must not be moved.
+    /// </summary>
+    public static MepPoint LocationCorrection(MepPoint absoluteTarget, MepPoint actual)
+    {
+        return new MepPoint(absoluteTarget.X - actual.X, absoluteTarget.Y - actual.Y, absoluteTarget.Z - actual.Z);
+    }
+
+    public static bool RequiresLocationCorrection(MepPoint correction)
+    {
+        return correction.X != 0 || correction.Y != 0 || correction.Z != 0;
+    }
 }

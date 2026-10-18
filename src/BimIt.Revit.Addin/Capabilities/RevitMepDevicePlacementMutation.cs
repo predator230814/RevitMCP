@@ -121,7 +121,8 @@ internal static class RevitMepDevicePlacementMutation
                 {
                     if (!TryCreate(prepared, item, out var created)
                         || string.IsNullOrEmpty(created.UniqueId)
-                        || !MatchOrientation(prepared.Document, created, prepared.Intent))
+                        || !MatchOrientation(prepared.Document, created, prepared.Intent)
+                        || !TryCorrectLevelLocation(prepared, item, created))
                     {
                         return Rollback(ref transaction);
                     }
@@ -253,6 +254,37 @@ internal static class RevitMepDevicePlacementMutation
                 created.FacingFlipped,
                 created.HandFlipped,
                 intent.Orientation);
+    }
+
+    private static bool TryCorrectLevelLocation(PreparedBatch prepared, MepDevicePlacementItem item, FamilyInstance created)
+    {
+        if (prepared.Intent.Strategy != MepPlacementStrategyKind.LevelBased)
+        {
+            return true;
+        }
+
+        if (created.Location is not LocationPoint location || location.Point is null)
+        {
+            return false;
+        }
+
+        var actual = new MepPoint(location.Point.X, location.Point.Y, location.Point.Z);
+        var correction = MepCreationPlan.LocationCorrection(item.Target, actual);
+        if (!MepCreationPlan.RequiresLocationCorrection(correction))
+        {
+            return true;
+        }
+
+        if (!double.IsFinite(correction.X) || !double.IsFinite(correction.Y) || !double.IsFinite(correction.Z))
+        {
+            return false;
+        }
+
+        ElementTransformUtils.MoveElement(
+            prepared.Document,
+            created.Id,
+            new XYZ(correction.X, correction.Y, correction.Z));
+        return true;
     }
 
     private static ApplyMutationResult Rollback(ref Transaction? transaction)

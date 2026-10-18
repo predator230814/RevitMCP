@@ -262,6 +262,23 @@ public sealed class MepDevicePlacementPreviewTests
         Assert.Equal(target, MepCreationPlan.CreationPoint(MepCreationOverload.LevelPlaneReference, target, projectElevation));
     }
 
+    [Fact]
+    public void Level_location_correction_is_target_minus_actual_and_is_absent_at_the_target()
+    {
+        var target = new MepPoint(10, -3, 7);
+        var alreadyThere = MepCreationPlan.LocationCorrection(target, target);
+        Assert.Equal(new MepPoint(0, 0, 0), alreadyThere);
+        Assert.False(MepCreationPlan.RequiresLocationCorrection(alreadyThere));
+
+        var negated = MepCreationPlan.LocationCorrection(target, new MepPoint(-10, 3, 7));
+        Assert.Equal(new MepPoint(20, -6, 0), negated);
+        Assert.True(MepCreationPlan.RequiresLocationCorrection(negated));
+
+        var vertical = MepCreationPlan.LocationCorrection(target, new MepPoint(10, -3, 4));
+        Assert.Equal(new MepPoint(0, 0, 3), vertical);
+        Assert.True(MepCreationPlan.RequiresLocationCorrection(vertical));
+    }
+
     private static MepConvertedPlacement Placement(double offsetX, double offsetY = 0, double vertical = 0)
     {
         return new MepConvertedPlacement(offsetX, offsetY, vertical, offsetX, offsetY, vertical);

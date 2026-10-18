@@ -1,6 +1,6 @@
 # MEP device placement write — live validation
 
-- Status: Level-based creation is not accepted. Head `d267b7c` was revalidated on Revit 2026.5. Absolute Z matched, and X/Y were the negation of the requested targets. Post-commit verification returned `committed_unverified`. This is not a merge pass.
+- Status: Level-based creation is not accepted. After the `d267b7c` revalidation, level-based placement keeps the project-elevation Z conversion and translates by the absolute target minus the location re-read after orientation. That amendment requires a focused Revit revalidation. This is not a merge pass.
 - Target: Revit 2026.5 build `26.5.0.55`
 - Build: focused revalidation Release add-in and server `1.0.0+d267b7cbe7d65b0e250bb219e33180bab617c4bc`. The earlier level-based run used `1.0.0+afac5f03c9113e1729d172a9fd76b0a254d851f8`.
 - Bridge protocol: 16
@@ -32,6 +32,8 @@ A newly placed HeatRecoveryUnit on L2 was the creation template. It was level-ba
 Approved apply committed two instances and returned `committed_unverified`. No created refs were returned. Both copies used the same symbol, level L2, and rotation π. Their Z was 7133.8 mm, the absolute target. Their X/Y were the exact negation of the requested absolute targets: −24025.2 / +1010.8 mm and −25225.2 / +1010.8 mm, instead of +24025.2 / −1010.8 mm and +25225.2 / −1010.8 mm. That is a 180° rotation about the project origin, the same angle as the template. The mechanical-equipment count went from 38 to 40.
 
 Replay of that intent returned `committed_unverified` again. The count stayed at 40. The audit gained one pair only: `apply_status=committed_unverified`, `transaction_status=committed`, `verification_status=failed`. The replay did not add a pair. The record has hashes only. One Undo of these two copies was not performed; the count was still 40 afterward. Parameter regression, reject, and stale were not repeated.
+
+The level-based path now translates the created instance, inside the same transaction and after orientation, by the absolute target minus the re-read location. Wall-hosted and level-work-plane creation are unchanged. Final verification still compares the absolute target and orientation. The unchecked creation items below still require Revit revalidation.
 
 - [x] The reloaded build, protocol, and tool list match head `d267b7c`.
 - [x] The original connected HRU was characterized separately, and its earlier displacement was not in the reopened file.
