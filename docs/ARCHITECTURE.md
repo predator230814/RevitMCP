@@ -68,9 +68,11 @@ The production approval presentation exists: a DockablePane, a WPF host, and a b
 
 [CAP-0008](capabilities/CAP-0008-revit-apply-parameter-updates.md) `revit_apply_parameter_updates` is **Accepted** and implemented on Bridge protocol 10. Official MCP-client live functional validation on Revit 2026.5 build `26.5.0.55` at SHA `517bca8ddb8ecf3bab11cb14738ef8e0c9937353` is **PASS**. `tools/list` was exactly 9. Induced Revit warning/error failure-dialog behavior was not executed and remains deferred validation debt. That debt is not authorization for another write path.
 
-[CAP-0011](capabilities/CAP-0011-revit-preview-mep-device-placements.md) and [CAP-0012](capabilities/CAP-0012-revit-apply-mep-device-placements.md) add one second typed write: MEP device placement. Internally it dispatches level-based, straight-wall-hosted, and proven level-work-plane strategies. Face-based and unknown work planes stay unsupported. It uses the accepted ADR-0008 sequence, the same intent store, the same approval pane, the same apply-attempt store, and the accepted ADR-0011 audit schema. Live Revit validation is pending in [BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md](BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md). The Assistant model still cannot call these tools.
+[CAP-0011](capabilities/CAP-0011-revit-preview-mep-device-placements.md) and [CAP-0012](capabilities/CAP-0012-revit-apply-mep-device-placements.md) add one second typed write: MEP device placement. Internally it dispatches level-based, straight-wall-hosted, and proven level-work-plane strategies. Face-based and unknown work planes stay unsupported. It uses the accepted ADR-0008 sequence, the same intent store, the same approval pane, the same apply-attempt store, and the accepted ADR-0011 audit schema. The focused level-based gate passed on Revit 2026.5 at head `7123b11`: apply returned `applied` with the requested absolute position and orientation, replay returned the same refs, and one Undo removed both copies. The record is [BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md](BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md). That record is not a merge verdict for wall-hosted or level-work-plane creation. The Assistant model still cannot call these tools.
 
-Still unauthorized: MCP Apps, app-only tools, Streamable HTTP, MRTR, an SDK upgrade, orchestration implementation, temporary hide/isolate classification, generic Revit API or C# execution, and any write path other than the accepted parameter-apply path and this typed MEP placement path.
+[ADR-0016](adr/ADR-0016-assistant-structured-proposals-and-controlled-write-orchestration.md) is **Proposed**. It names the Assistant as the future owner of one MEP placement proposal and of the sequence from that proposal through the existing preview, Revit-local review, apply, and verification. It does not implement that sequence. It adds no model write tool and no Server, Bridge, or Addin capability.
+
+Still unauthorized: MCP Apps, app-only tools, Streamable HTTP, MRTR, an SDK upgrade, orchestration implementation, temporary hide/isolate classification, generic Revit API or C# execution, and any write path other than the accepted parameter-apply path and this typed MEP placement path. ADR-0016 does not authorize its proposed orchestration.
 
 ## Decisions intentionally not made yet
 
@@ -132,7 +134,7 @@ Not implemented:
 - a selection quick action or slash command;
 - an MEP exploration quick action or slash command;
 - Assistant skills;
-- structured proposals from an attached document;
+- structured proposals from an attached document, including the `bimit_propose_mep_device_placements` capability proposed by ADR-0016;
 - MEP device placement, routing, or diagram-to-model creation from an attachment.
 
 Bridge v12 returns `document_id` on an active CAP-0001 document and accepts `revit_query_elements` with `scope=active_view` and `filters: {}`. Document scope still requires a filter. A negotiated v11 connection keeps the older wire behavior. The Assistant does not invent a document id.
