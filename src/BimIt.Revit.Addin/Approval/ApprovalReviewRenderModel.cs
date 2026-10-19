@@ -13,12 +13,14 @@ internal sealed class ApprovalReviewRenderModel
         string sessionRef,
         DateTimeOffset createdAt,
         DateTimeOffset expiresAt,
-        IReadOnlyList<ApprovalReviewItemModel> items)
+        IReadOnlyList<ApprovalReviewItemModel> items,
+        ApprovalMepDeviceReviewModel? mepDevices = null)
     {
         SessionRef = sessionRef;
         CreatedAt = createdAt;
         ExpiresAt = expiresAt;
         Items = items;
+        MepDevices = mepDevices;
     }
 
     public string SessionRef { get; }
@@ -28,6 +30,43 @@ internal sealed class ApprovalReviewRenderModel
     public DateTimeOffset ExpiresAt { get; }
 
     public IReadOnlyList<ApprovalReviewItemModel> Items { get; }
+
+    public ApprovalMepDeviceReviewModel? MepDevices { get; }
+}
+
+internal sealed class ApprovalMepDeviceReviewModel
+{
+    public ApprovalMepDeviceReviewModel(
+        string placementLabel,
+        string categoryName,
+        string familyName,
+        string typeName,
+        string hostName,
+        string levelName,
+        IReadOnlyList<string> placementLines)
+    {
+        PlacementLabel = placementLabel;
+        CategoryName = categoryName;
+        FamilyName = familyName;
+        TypeName = typeName;
+        HostName = hostName;
+        LevelName = levelName;
+        PlacementLines = placementLines;
+    }
+
+    public string PlacementLabel { get; }
+
+    public string CategoryName { get; }
+
+    public string FamilyName { get; }
+
+    public string TypeName { get; }
+
+    public string HostName { get; }
+
+    public string LevelName { get; }
+
+    public IReadOnlyList<string> PlacementLines { get; }
 }
 
 internal sealed class ApprovalReviewItemModel
@@ -146,6 +185,76 @@ internal static class ApprovalReviewRenderer
             entry.ExpiresAt,
             Array.AsReadOnly(rendered));
         return true;
+    }
+
+    internal static bool TryCreateMep(
+        string sessionRef,
+        ControlledWriteIntentBinding binding,
+        MepDevicePlacementIntent intent,
+        out ApprovalReviewRenderModel model)
+    {
+        model = null!;
+        if (string.IsNullOrWhiteSpace(sessionRef)
+            || binding.Kind != ControlledWriteIntentKind.MepDevicePlacements
+            || binding.FingerprintSchemaVersion != MepDevicePlacementCanonicalEncoder.SchemaVersion
+            || intent.Items is null
+            || intent.Items.Count == 0
+            || intent.Items.Count != binding.ItemCount)
+        {
+            return false;
+        }
+
+        var lines = new string[intent.Items.Count];
+        var unit = MepLengthUnitLabel.Describe(intent.LengthUnitId);
+        for (var index = 0; index < intent.Items.Count; index++)
+        {
+            var item = intent.Items[index];
+            if (item is null || item.RequestPosition != index + 1)
+            {
+                return false;
+            }
+
+            lines[index] = string.Concat(
+                item.RequestPosition.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                ". X ",
+                MepLengthUnitLabel.Signed(item.OffsetX),
+                " ",
+                unit,
+                ", Y ",
+                MepLengthUnitLabel.Signed(item.OffsetY),
+                " ",
+                unit,
+                ", vertical ",
+                MepLengthUnitLabel.Signed(item.VerticalOffset),
+                " ",
+                unit);
+        }
+
+        model = new ApprovalReviewRenderModel(
+            sessionRef,
+            binding.CreatedAt,
+            binding.ExpiresAt,
+            Array.Empty<ApprovalReviewItemModel>(),
+            new ApprovalMepDeviceReviewModel(
+                PlacementLabel(intent.Strategy),
+                intent.CategoryName,
+                intent.FamilyName,
+                intent.TypeName,
+                intent.Wall?.HostName ?? string.Empty,
+                intent.LevelName,
+                Array.AsReadOnly(lines)));
+        return true;
+    }
+
+    private static string PlacementLabel(MepPlacementStrategyKind strategy)
+    {
+        return strategy switch
+        {
+            MepPlacementStrategyKind.LevelBased => "Level based",
+            MepPlacementStrategyKind.WallHosted => "Wall hosted",
+            MepPlacementStrategyKind.WorkPlaneBasedLevel => "Level work plane",
+            _ => string.Empty
+        };
     }
 
     private static bool TryRenderItem(IntentItemEntry? item, int expectedPosition, out ApprovalReviewItemModel rendered)

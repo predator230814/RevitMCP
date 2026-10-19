@@ -4,6 +4,8 @@
 - Date: 2026-10-07
 - Product Owner acceptance: Dave, 2026-10-07
 
+The closed persisted event schema in this record is unchanged. MEP device placement reuses the same writer. `item_count` is the requested batch size. The record still excludes names, element refs, created refs, coordinates, offsets, prompts, and paths. This note does not change the schema version or the decision.
+
 ## Context
 
 ADR-0008 requires an audit of controlled write attempts. It requires enough metadata to correlate the intent and fingerprint, Revit context, approval method, transaction outcome, verification outcome, and timestamps. It does not require raw before or after parameter values. It leaves the audit sink undecided.

@@ -235,7 +235,7 @@ The only lookup is the exact `intent_ref` used by the apply flow above.
 Names are conceptual. The implementation chooses the final type names. These operations are not MCP tools and not Bridge RPC methods.
 
 ```text
-TryLookup(intent_ref, live_binding | absent)
+TryLookup(intent_ref, expected_kind, live_binding | absent)
   -> terminal(outcome) | in_progress | binding_mismatch | absent
 
 TryEstablishExclusive(intent_ref, fingerprint, instance_id, document_id)
@@ -260,7 +260,7 @@ Clear()
   -> removed
 ```
 
-`TryLookup` returns a stored terminal outcome when the source intent is absent, and when a live intent has the same fingerprint, instance, and document binding. `binding_mismatch` means a live intent has the same `intent_ref` and a different binding: the caller returns `unavailable`, does not read out the old outcome, and does not mutate. `absent` covers no stored attempt. It does not reveal whether an unknown ref expired.
+`TryLookup` always receives the expected controlled-write kind. It returns a stored terminal outcome when that kind matches and the source intent is absent, and when a live intent has the same kind, fingerprint, instance, and document binding. A different kind is `binding_mismatch` even after the live intent is gone. `binding_mismatch` also means a live intent has the same `intent_ref` and a different fingerprint, instance, or document: the caller returns `unavailable`, does not read out the old outcome, and does not mutate. `absent` covers no stored attempt. It does not reveal whether an unknown ref expired.
 
 `ReleasePreMutation` succeeds only for the owner, and only before `TryConsumeApproved` has succeeded. Preflight failure is one such release. `rejected` means the record is already irrevocable or terminal, including terminal `audit_failed`. No normal path may release it then.
 
@@ -275,7 +275,7 @@ A future implementation must cover these cases without launching Revit:
 1. A second caller for one `intent_ref` does not create a second record and observes `in_progress` until a terminal outcome exists.
 2. `not_approved` releases only the pre-mutation record, leaves no terminal outcome, and returns `approval_required`.
 3. After `TryConsumeApproved` succeeds, `ReleasePreMutation` is rejected and the record accepts only a terminal completion.
-4. Stored `stale`, `transaction_failed`, `committed_unverified`, `indeterminate`, `applied`, and `audit_failed` are returned on retry without a new owner when the binding matches or the source intent is absent.
+4. Stored `stale`, `transaction_failed`, `committed_unverified`, `indeterminate`, `applied`, and `audit_failed` are returned on retry without a new owner when the expected kind matches and either the binding matches or the source intent is absent. A different kind is `binding_mismatch`.
 5. A live intent with the same `intent_ref` and a different fingerprint, instance, or document binding does not return the old terminal outcome and does not start a mutation.
 6. A terminal outcome is valid before 30 monotonic minutes and absent at 30 monotonic minutes.
 7. Moving the UTC clock does not extend that monotonic expiry.

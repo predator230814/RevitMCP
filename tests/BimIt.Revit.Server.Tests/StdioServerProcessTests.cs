@@ -28,10 +28,11 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(11, tools.Count);
+        Assert.Equal(14, tools.Count);
         Assert.Equal(
             new[]
             {
+                ApplyMepDevicePlacementsToolMetadata.Name,
                 ApplyParameterUpdatesToolMetadata.Name,
                 DescribeParametersToolMetadata.Name,
                 GetContextToolMetadata.Name,
@@ -40,14 +41,17 @@ public sealed class StdioServerProcessTests
                 GetParameterValuesToolMetadata.Name,
                 GetSelectionToolMetadata.Name,
                 GetWarningsToolMetadata.Name,
+                PreviewMepDevicePlacementsToolMetadata.Name,
                 PreviewParameterUpdatesToolMetadata.Name,
                 QueryElementsToolMetadata.Name,
+                RequestMepDevicePlacementReviewToolMetadata.Name,
                 RequestParameterUpdateReviewToolMetadata.Name
             },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
         Assert.Equal(
             new[]
             {
+                "revit_apply_mep_device_placements",
                 "revit_apply_parameter_updates",
                 "revit_describe_parameters",
                 "revit_get_context",
@@ -56,8 +60,10 @@ public sealed class StdioServerProcessTests
                 "revit_get_parameter_values",
                 "revit_get_selection",
                 "revit_get_warnings",
+                "revit_preview_mep_device_placements",
                 "revit_preview_parameter_updates",
                 "revit_query_elements",
+                "revit_request_mep_device_placement_review",
                 "revit_request_parameter_update_review"
             },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
@@ -125,6 +131,25 @@ public sealed class StdioServerProcessTests
         Assert.False(review.ProtocolTool.Annotations?.DestructiveHint);
         Assert.False(review.ProtocolTool.Annotations?.IdempotentHint);
         Assert.False(review.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var mepPreview = Assert.Single(tools, tool => tool.Name == PreviewMepDevicePlacementsToolMetadata.Name);
+        Assert.False(mepPreview.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(mepPreview.ProtocolTool.Annotations?.DestructiveHint);
+        Assert.False(mepPreview.ProtocolTool.Annotations?.IdempotentHint);
+        Assert.False(mepPreview.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var mepReview = Assert.Single(tools, tool => tool.Name == RequestMepDevicePlacementReviewToolMetadata.Name);
+        Assert.False(mepReview.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(mepReview.ProtocolTool.Annotations?.DestructiveHint);
+        Assert.False(mepReview.ProtocolTool.Annotations?.IdempotentHint);
+        Assert.False(mepReview.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var mepApply = Assert.Single(tools, tool => tool.Name == ApplyMepDevicePlacementsToolMetadata.Name);
+        Assert.False(mepApply.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.True(mepApply.ProtocolTool.Annotations?.DestructiveHint);
+        Assert.False(mepApply.ProtocolTool.Annotations?.IdempotentHint);
+        Assert.False(mepApply.ProtocolTool.Annotations?.OpenWorldHint);
+        Assert.DoesNotContain(tools, tool => tool.Name is "create_family_instance" or "run_revit_api" or "run_csharp");
 
         var rejected = await client.CallToolAsync(
             GetElementsToolMetadata.Name,

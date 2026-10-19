@@ -25,13 +25,13 @@ public sealed class AssistantProcessTests
         var status = AssistantIpc.Parse(await AssistantPipeFrames.ReadAsync(client, timeout.Token));
         Assert.True(status.Accepted);
         Assert.Equal("ready", status.Message!.McpState);
-        Assert.Equal(11, status.Message.ToolCount);
+        Assert.Equal(14, status.Message.ToolCount);
         Assert.Contains("revit_get_context", status.Message.ToolNames!);
         Assert.Contains("revit_get_warnings", status.Message.ToolNames!);
         Assert.Contains("revit_query_elements", status.Message.ToolNames!);
         Assert.Contains("revit_get_mep_topology", status.Message.ToolNames!);
         Assert.DoesNotContain("bimit_explore_selected_mep", status.Message.ToolNames!);
-        Assert.Equal(11, status.Message.ToolNames!.Count);
+        Assert.Equal(14, status.Message.ToolNames!.Count);
         Assert.DoesNotContain(status.Message.ToolNames!, name => name.Contains("approve", StringComparison.OrdinalIgnoreCase));
         Assert.Equal("ready", status.Message.AssistantState);
         Assert.Contains(status.Message.ProviderState, new[] { "starting", "ready", "unavailable" });
@@ -80,7 +80,7 @@ public sealed class AssistantProcessTests
         await using var session = new McpAssistantToolSession(server);
         var readiness = await session.InitializeAsync(CancellationToken.None);
         Assert.True(readiness.Ready);
-        Assert.Equal(11, readiness.ToolCount);
+        Assert.Equal(14, readiness.ToolCount);
 
         var refused = await session.CallAsync(
             "revit_apply_parameter_updates",

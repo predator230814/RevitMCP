@@ -27,6 +27,42 @@ public sealed class ApplyParameterUpdatesOrchestratorTests
     }
 
     [Fact]
+    public void Mep_terminal_is_unavailable_to_parameter_apply()
+    {
+        using var harness = new Harness();
+        var created = harness.Store.TryCreateMep("instance-a", "doc-a", MepIntent());
+        Assert.True(harness.Store.TryGetControlled(created.IntentRef!, out var controlled));
+        var binding = new ApplyBinding(
+            controlled!.Binding.IntentFingerprint,
+            controlled.Binding.InstanceId,
+            controlled.Binding.DocumentId,
+            ControlledWriteIntentKind.MepDevicePlacements);
+        Assert.Equal(ApplyEstablishStatus.Owner, harness.Attempts.TryEstablishExclusive(created.IntentRef!, binding, out var lease));
+        Assert.Equal(ApplyMarkStatus.Irrevocable, harness.Attempts.MarkIrrevocable(lease));
+        Assert.Equal(ApplyCompleteStatus.Stored, harness.Attempts.Complete(lease, ApplyTerminalStatus.Applied, ["opaque-a", "opaque-b"]));
+        Assert.False(harness.Store.TryGet(created.IntentRef!, out _));
+
+        var result = harness.RunExpired(created.IntentRef!, () => throw new InvalidOperationException("cross-kind replay must not mutate"));
+        Assert.Equal(ApplyParameterUpdatesStatus.Unavailable, result.Status);
+        Assert.Equal(0, harness.Mutations);
+    }
+
+    [Fact]
+    public void Parameter_replay_survives_intent_expiry()
+    {
+        using var harness = new Harness();
+        var created = harness.CreateIntent();
+        harness.MutateResult = new ApplyMutationResult(ApplyMutationKind.Applied, AuditTransactionStatus.Committed);
+        Assert.Equal(ApplyParameterUpdatesStatus.Applied, harness.Run(created.IntentRef!).Status);
+        harness.Clock.Advance(TimeSpan.FromMinutes(10));
+        Assert.False(harness.Store.TryGet(created.IntentRef!, out _));
+
+        var replay = harness.RunExpired(created.IntentRef!, () => throw new InvalidOperationException("expired replay must not mutate"));
+        Assert.Equal(ApplyParameterUpdatesStatus.Applied, replay.Status);
+        Assert.Equal(1, harness.Mutations);
+    }
+
+    [Fact]
     public void Establish_loss_to_a_terminal_replays_that_terminal()
     {
         using var harness = new Harness();
@@ -65,7 +101,7 @@ public sealed class ApplyParameterUpdatesOrchestratorTests
         var result = harness.Run(created.IntentRef!);
         Assert.Equal(ApplyParameterUpdatesStatus.Unavailable, result.Status);
         Assert.Equal(0, harness.ConsumeCalls);
-        Assert.Equal(ApplyLookupStatus.Absent, harness.Attempts.TryLookup(created.IntentRef!, null).Status);
+        Assert.Equal(ApplyLookupStatus.Absent, harness.Attempts.TryLookup(created.IntentRef!, ControlledWriteIntentKind.ParameterUpdates, null).Status);
     }
 
     [Fact]
@@ -153,6 +189,26 @@ public sealed class ApplyParameterUpdatesOrchestratorTests
         Assert.Equal(ApplyParameterUpdatesStatus.Applied, new ApplyParameterUpdatesResult { Status = ApplyParameterUpdatesStatus.Applied }.Status);
     }
 
+    private static MepDevicePlacementIntent MepIntent()
+    {
+        return new MepDevicePlacementIntent(
+            MepPlacementStrategyKind.LevelBased,
+            "autodesk.unit.unit:millimeters-1.0.1",
+            "template-a",
+            "symbol-a",
+            "OST_ElectricalFixtures",
+            "Electrical Fixtures",
+            "Duplex Receptacle",
+            "Standard",
+            "level-a",
+            "L4",
+            new MepPoint(2, 0, 4),
+            new MepOrientation(0.4, false, false, true, true),
+            null,
+            null,
+            [new MepDevicePlacementItem(1, 1200, 0, 0, new MepPoint(5, 0, 4))]);
+    }
+
     private static IntentItemEntry Item(IntentTypedValue before, IntentTypedValue proposed)
         => new(
             1,
@@ -200,7 +256,8 @@ public sealed class ApplyParameterUpdatesOrchestratorTests
             System.IO.Directory.CreateDirectory(Directory);
             AuditOptions = new AuditWriterOptions { Directory = Directory };
             Audit = new ControlledWriteAuditWriter(options: AuditOptions);
-            Store = new EphemeralWriteIntentStore();
+            Clock = new ManualTimeProvider();
+            Store = new EphemeralWriteIntentStore(Clock);
             Attempts = new ControlledApplyAttemptStore();
         }
 
@@ -209,6 +266,8 @@ public sealed class ApplyParameterUpdatesOrchestratorTests
         public AuditWriterOptions AuditOptions { get; }
 
         public ControlledWriteAuditWriter Audit { get; }
+
+        public ManualTimeProvider Clock { get; }
 
         public EphemeralWriteIntentStore Store { get; }
 
@@ -263,7 +322,13 @@ public sealed class ApplyParameterUpdatesOrchestratorTests
 
         public ApplyParameterUpdatesResult Run(string intentRef, Func<ApplyMutationResult>? mutate = null)
         {
-            Assert.True(Store.TryGet(intentRef, out var entry));
+            Assert.True(Store.TryGet(intentRef, out _));
+            return RunExpired(intentRef, mutate);
+        }
+
+        public ApplyParameterUpdatesResult RunExpired(string intentRef, Func<ApplyMutationResult>? mutate = null)
+        {
+            Store.TryGet(intentRef, out var entry);
             return ApplyParameterUpdateOrchestrator.Execute(new ApplyOperation
             {
                 IntentRef = intentRef,

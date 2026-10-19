@@ -39,7 +39,7 @@ public sealed class AddinLifecycleCoordinatorTests
 
         Assert.Equal(AddinLifecycleState.Ready, coordinator.State);
         Assert.Equal(1, dispatchers.CreateCount);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "bridge.start", "registration.publish" }, events);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "meppreview.create", "mepreview.create", "mepapply.create", "bridge.start", "registration.publish" }, events);
     }
 
     [Fact]
@@ -65,8 +65,11 @@ public sealed class AddinLifecycleCoordinatorTests
         Assert.Equal("apply.create", events[9]);
         Assert.Equal("warnings.create", events[10]);
         Assert.Equal("selection.create", events[11]);
-        Assert.Equal("bridge.start", events[12]);
-        Assert.Equal("registration.publish", events[13]);
+        Assert.Equal("meppreview.create", events[12]);
+        Assert.Equal("mepreview.create", events[13]);
+        Assert.Equal("mepapply.create", events[14]);
+        Assert.Equal("bridge.start", events[15]);
+        Assert.Equal("registration.publish", events[16]);
         Assert.True(bridges.Published);
         Assert.True(bridges.LastBridge?.HasRegistration);
         Assert.NotNull(bridges.LastCapability);
@@ -158,6 +161,9 @@ public sealed class AddinLifecycleCoordinatorTests
                 "apply.create",
                 "warnings.create",
                 "selection.create",
+                "meppreview.create",
+                "mepreview.create",
+                "mepapply.create",
                 "bridge.start",
                 "registration.publish",
                 "dispatcher.stop",

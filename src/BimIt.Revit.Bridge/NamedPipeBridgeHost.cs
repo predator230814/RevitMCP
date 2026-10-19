@@ -20,6 +20,9 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
     private readonly IRevitApplyParameterUpdatesService? _applyParameterUpdates;
     private readonly IRevitGetWarningsService? _getWarnings;
     private readonly IRevitGetSelectionService? _getSelection;
+    private readonly IRevitPreviewMepDevicePlacementsService? _previewMepDevicePlacements;
+    private readonly IRevitRequestMepDevicePlacementReviewService? _requestMepDevicePlacementReview;
+    private readonly IRevitApplyMepDevicePlacementsService? _applyMepDevicePlacements;
     private readonly TaskCompletionSource _listenerReady = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly Task _acceptLoop;
     private IRegistrationLease? _lease;
@@ -38,7 +41,10 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview,
         IRevitApplyParameterUpdatesService? applyParameterUpdates,
         IRevitGetWarningsService? getWarnings,
-        IRevitGetSelectionService? getSelection)
+        IRevitGetSelectionService? getSelection,
+        IRevitPreviewMepDevicePlacementsService? previewMepDevicePlacements = null,
+        IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview = null,
+        IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements = null)
     {
         Metadata = metadata;
         PipeName = pipeName;
@@ -54,6 +60,9 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         _applyParameterUpdates = applyParameterUpdates;
         _getWarnings = getWarnings;
         _getSelection = getSelection;
+        _previewMepDevicePlacements = previewMepDevicePlacements;
+        _requestMepDevicePlacementReview = requestMepDevicePlacementReview;
+        _applyMepDevicePlacements = applyMepDevicePlacements;
         _acceptLoop = Task.Run(() => AcceptLoopAsync(_lifetime.Token));
     }
 
@@ -206,7 +215,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         return StartAsync(metadata, store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection: null, cancellationToken);
     }
 
-    public static async Task<NamedPipeBridgeHost> StartAsync(
+    public static Task<NamedPipeBridgeHost> StartAsync(
         BridgeInstanceMetadata metadata,
         IRegistrationStore store,
         IRevitCapabilityService? capability,
@@ -222,12 +231,34 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitGetSelectionService? getSelection,
         CancellationToken cancellationToken)
     {
+        return StartAsync(metadata, store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements: null, requestMepDevicePlacementReview: null, applyMepDevicePlacements: null, cancellationToken);
+    }
+
+    public static async Task<NamedPipeBridgeHost> StartAsync(
+        BridgeInstanceMetadata metadata,
+        IRegistrationStore store,
+        IRevitCapabilityService? capability,
+        IRevitQueryElementsService? query,
+        IRevitGetElementsService? getElements,
+        IRevitDescribeParametersService? describeParameters,
+        IRevitGetParameterValuesService? getParameterValues,
+        IRevitGetMepTopologyService? getMepTopology,
+        IRevitPreviewParameterUpdatesService? previewParameterUpdates,
+        IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview,
+        IRevitApplyParameterUpdatesService? applyParameterUpdates,
+        IRevitGetWarningsService? getWarnings,
+        IRevitGetSelectionService? getSelection,
+        IRevitPreviewMepDevicePlacementsService? previewMepDevicePlacements,
+        IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview,
+        IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements,
+        CancellationToken cancellationToken)
+    {
         ArgumentNullException.ThrowIfNull(metadata);
         ArgumentNullException.ThrowIfNull(store);
 
-        var advertised = WithAdvertisedProtocol(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection);
+        var advertised = WithAdvertisedProtocol(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements);
         var pipeName = BridgePipeNames.Create(advertised.WindowsSessionId, advertised.InstanceId);
-        var host = new NamedPipeBridgeHost(advertised, pipeName, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection);
+        var host = new NamedPipeBridgeHost(advertised, pipeName, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements);
         try
         {
             await host._listenerReady.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -328,7 +359,10 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         IRevitRequestParameterUpdateReviewService? requestParameterUpdateReview = null,
         IRevitApplyParameterUpdatesService? applyParameterUpdates = null,
         IRevitGetWarningsService? getWarnings = null,
-        IRevitGetSelectionService? getSelection = null)
+        IRevitGetSelectionService? getSelection = null,
+        IRevitPreviewMepDevicePlacementsService? previewMepDevicePlacements = null,
+        IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview = null,
+        IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements = null)
     {
         IReadOnlyList<int> versions;
         if (capability is not null
@@ -341,9 +375,57 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
             && requestParameterUpdateReview is not null
             && applyParameterUpdates is not null
             && getWarnings is not null
-            && getSelection is not null)
+            && getSelection is not null
+            && previewMepDevicePlacements is not null
+            && requestMepDevicePlacementReview is not null
+            && applyMepDevicePlacements is not null)
         {
             versions = BridgeProtocol.SupportedVersions;
+        }
+        else if (capability is not null
+            && query is not null
+            && getElements is not null
+            && describeParameters is not null
+            && getParameterValues is not null
+            && getMepTopology is not null
+            && previewParameterUpdates is not null
+            && requestParameterUpdateReview is not null
+            && applyParameterUpdates is not null
+            && getWarnings is not null
+            && getSelection is not null
+            && previewMepDevicePlacements is not null
+            && requestMepDevicePlacementReview is not null)
+        {
+            versions = BridgeProtocol.RequestMepDevicePlacementReviewVersions;
+        }
+        else if (capability is not null
+            && query is not null
+            && getElements is not null
+            && describeParameters is not null
+            && getParameterValues is not null
+            && getMepTopology is not null
+            && previewParameterUpdates is not null
+            && requestParameterUpdateReview is not null
+            && applyParameterUpdates is not null
+            && getWarnings is not null
+            && getSelection is not null
+            && previewMepDevicePlacements is not null)
+        {
+            versions = BridgeProtocol.PreviewMepDevicePlacementsVersions;
+        }
+        else if (capability is not null
+            && query is not null
+            && getElements is not null
+            && describeParameters is not null
+            && getParameterValues is not null
+            && getMepTopology is not null
+            && previewParameterUpdates is not null
+            && requestParameterUpdateReview is not null
+            && applyParameterUpdates is not null
+            && getWarnings is not null
+            && getSelection is not null)
+        {
+            versions = BridgeProtocol.GetSelectionVersions;
         }
         else if (capability is not null
             && query is not null
@@ -480,7 +562,7 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
         JsonRpc? rpc = null;
         try
         {
-            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcBridgeAdapter(_handshake, _capability, _query, _getElements, _describeParameters, _getParameterValues, _getMepTopology, _previewParameterUpdates, _requestParameterUpdateReview, _applyParameterUpdates, _getWarnings, _getSelection));
+            rpc = JsonRpcFactory.Create(server, new StreamJsonRpcBridgeAdapter(_handshake, _capability, _query, _getElements, _describeParameters, _getParameterValues, _getMepTopology, _previewParameterUpdates, _requestParameterUpdateReview, _applyParameterUpdates, _getWarnings, _getSelection, _previewMepDevicePlacements, _requestMepDevicePlacementReview, _applyMepDevicePlacements));
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
             await rpc.Completion.WaitAsync(linked.Token).ConfigureAwait(false);
         }

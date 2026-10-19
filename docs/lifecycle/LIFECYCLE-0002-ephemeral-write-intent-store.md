@@ -9,6 +9,8 @@ Define the Addin-owned ephemeral store required by accepted ADR-0008 and accepte
 
 The store holds one immutable preview intent until it expires, the document closes successfully, or the Revit process ends. It performs no Revit model mutation. It does not start a transaction, call `Parameter.Set`, save, or synchronize.
 
+The same process-owned store, 64-entry capacity, and 10-minute lifetime now hold two typed kinds: `parameter_updates` and `mep_device_placements`. Parameter fingerprint bytes stay on the original encoder. Document close and process shutdown clear both kinds. This reuse does not add a second store.
+
 This specification does not implement the store. Acceptance records the contract only. It does not authorize a Revit model write, a Bridge or Server specification, or CAP-0008.
 
 ## Ownership

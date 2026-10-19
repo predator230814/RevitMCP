@@ -3,6 +3,8 @@
 - Status: Accepted
 - Date: 2026-09-24
 
+The accepted sequence in this record is preview, an ephemeral immutable intent, Revit-local human review, approval, stale revalidation, one transaction, verification, and audit. Parameter updates were the first capability to use it. MEP device placement reuses that same sequence as a second typed intent kind. This note does not change the decision and does not authorize a generic mutation tool.
+
 ## Context
 
 RevitMCP's accepted read path is complete through CAP-0001..CAP-0006. `tools/list` exposes exactly six read-only MCP tools. Live compatibility on Revit 2025, Revit 2026.5, and Revit 2027 is recorded in `docs/CURRENT_STATE.md`. No write capability exists.

@@ -61,6 +61,12 @@
     expiresAt.textContent = "Expires " + String(message.expiresAt);
     metadata.hidden = false;
     idle.hidden = true;
+    if (message.reviewKind === "mep_device_placements") {
+      renderMep(message);
+      setEnabled(sessionRef.length > 0);
+      return;
+    }
+
     var list = message.items || [];
     for (var index = 0; index < list.length; index++) {
       var item = list[index];
@@ -82,6 +88,26 @@
     }
 
     setEnabled(sessionRef.length > 0);
+  }
+
+  function renderMep(message) {
+    var article = document.createElement("article");
+    var heading = document.createElement("h2");
+    heading.textContent = typeof message.title === "string" ? message.title : "Create MEP devices";
+    article.appendChild(heading);
+    article.appendChild(textLine("Placement", String(message.placementLabel || "")));
+    article.appendChild(textLine("Template", String(message.categoryName || "")));
+    article.appendChild(textLine("Family", String(message.familyName || "") + " : " + String(message.typeName || "")));
+    if (message.hostName) {
+      article.appendChild(textLine("Host", String(message.hostName)));
+    }
+    article.appendChild(textLine("Level", String(message.levelName || "")));
+    var lines = message.placementLines || [];
+    for (var index = 0; index < lines.length; index++) {
+      article.appendChild(textLine("Placement", String(lines[index])));
+    }
+
+    items.appendChild(article);
   }
 
   function send(type) {

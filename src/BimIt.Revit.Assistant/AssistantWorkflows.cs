@@ -50,7 +50,10 @@ public static class AssistantTools
     {
         return toolName is "revit_apply_parameter_updates"
             or "revit_preview_parameter_updates"
-            or "revit_request_parameter_update_review";
+            or "revit_request_parameter_update_review"
+            or "revit_preview_mep_device_placements"
+            or "revit_request_mep_device_placement_review"
+            or "revit_apply_mep_device_placements";
     }
 }
 

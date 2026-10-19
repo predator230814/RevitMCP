@@ -51,4 +51,19 @@ public interface IRevitBridgeClient : IAsyncDisposable
         GetSelectionRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken);
+
+    Task<PreviewMepDevicePlacementsResult> PreviewMepDevicePlacementsAsync(
+        PreviewMepDevicePlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<RequestMepDevicePlacementReviewResult> RequestMepDevicePlacementReviewAsync(
+        RequestMepDevicePlacementReviewRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<ApplyMepDevicePlacementsResult> ApplyMepDevicePlacementsAsync(
+        ApplyMepDevicePlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
 }

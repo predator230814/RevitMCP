@@ -16,7 +16,10 @@ internal enum ApplyMutationKind
     Pending
 }
 
-internal readonly record struct ApplyMutationResult(ApplyMutationKind Kind, AuditTransactionStatus TransactionStatus);
+internal readonly record struct ApplyMutationResult(
+    ApplyMutationKind Kind,
+    AuditTransactionStatus TransactionStatus,
+    IReadOnlyList<string>? CreatedElementRefs = null);
 
 internal readonly record struct ApplyDocumentGate(bool Available, string? DocumentId);
 
@@ -57,8 +60,12 @@ internal static class ApplyParameterUpdateOrchestrator
         operation.Intents.TryGet(operation.IntentRef, out var intent);
         var binding = intent is null
             ? (ApplyBinding?)null
-            : new ApplyBinding(intent.IntentFingerprint, intent.InstanceId, intent.DocumentId);
-        var lookup = operation.Attempts.TryLookup(operation.IntentRef, binding);
+            : new ApplyBinding(
+                intent.IntentFingerprint,
+                intent.InstanceId,
+                intent.DocumentId,
+                ControlledWriteIntentKind.ParameterUpdates);
+        var lookup = operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.ParameterUpdates, binding);
         var replay = MapLookup(lookup);
         if (replay is not null)
         {
@@ -80,7 +87,7 @@ internal static class ApplyParameterUpdateOrchestrator
 
         if (!TryOwn(operation, binding.Value, out var lease))
         {
-            return MapLookup(operation.Attempts.TryLookup(operation.IntentRef, binding))
+            return MapLookup(operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.ParameterUpdates, binding))
                 ?? Result(ApplyParameterUpdatesStatus.Unavailable);
         }
 
@@ -223,7 +230,7 @@ internal static class ApplyParameterUpdateOrchestrator
                 return true;
             }
 
-            var lookup = operation.Attempts.TryLookup(operation.IntentRef, binding);
+            var lookup = operation.Attempts.TryLookup(operation.IntentRef, ControlledWriteIntentKind.ParameterUpdates, binding);
             if (lookup.Status != ApplyLookupStatus.Absent)
             {
                 return false;
@@ -276,7 +283,8 @@ internal static class ApplyParameterUpdateOrchestrator
 
     private static bool SnapshotMatches(ApprovalSnapshot snapshot, IntentEntry intent)
     {
-        return string.Equals(snapshot.IntentRef, intent.IntentRef, StringComparison.Ordinal)
+        return snapshot.IntentKind == ControlledWriteIntentKind.ParameterUpdates
+            && string.Equals(snapshot.IntentRef, intent.IntentRef, StringComparison.Ordinal)
             && string.Equals(snapshot.IntentFingerprint, intent.IntentFingerprint, StringComparison.Ordinal)
             && string.Equals(snapshot.InstanceId, intent.InstanceId, StringComparison.Ordinal)
             && string.Equals(snapshot.DocumentId, intent.DocumentId, StringComparison.Ordinal);

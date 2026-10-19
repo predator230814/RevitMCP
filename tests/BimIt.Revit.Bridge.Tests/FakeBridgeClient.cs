@@ -128,5 +128,38 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         throw new NotSupportedException("This fake client does not implement revit.get_mep_topology.");
     }
 
+    public Task<PreviewMepDevicePlacementsResult> PreviewMepDevicePlacementsAsync(
+        PreviewMepDevicePlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.preview_mep_device_placements.");
+    }
+
+    public Task<RequestMepDevicePlacementReviewResult> RequestMepDevicePlacementReviewAsync(
+        RequestMepDevicePlacementReviewRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.request_mep_device_placement_review.");
+    }
+
+    public Task<ApplyMepDevicePlacementsResult> ApplyMepDevicePlacementsAsync(
+        ApplyMepDevicePlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.apply_mep_device_placements.");
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

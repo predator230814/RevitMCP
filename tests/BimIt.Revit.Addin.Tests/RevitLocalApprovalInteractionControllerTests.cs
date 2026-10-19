@@ -409,21 +409,24 @@ public sealed class RevitLocalApprovalInteractionControllerTests
             .GetField("_entries", BindingFlags.Instance | BindingFlags.NonPublic)!
             .GetValue(harness.Store)!;
         var storedType = typeof(EphemeralWriteIntentStore).GetNestedType("StoredIntent", BindingFlags.NonPublic)!;
+        var binding = new ControlledWriteIntentBinding(
+            replacement.IntentRef,
+            replacement.IntentFingerprint,
+            ControlledWriteIntentKind.ParameterUpdates,
+            replacement.FingerprintSchemaVersion,
+            replacement.CreatedAt,
+            replacement.ExpiresAt,
+            replacement.InstanceId,
+            replacement.DocumentId,
+            replacement.Items.Count);
         var stored = Activator.CreateInstance(
             storedType,
             BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic,
             binder: null,
             args: new object?[]
             {
-                replacement.IntentRef,
-                replacement.IntentFingerprint,
-                replacement.FingerprintSchemaVersion,
-                replacement.CreatedAt,
-                replacement.ExpiresAt,
-                0L,
-                replacement.InstanceId,
-                replacement.DocumentId,
-                replacement.Items
+                new ControlledWriteIntent(binding, replacement, null),
+                0L
             },
             culture: null);
         entries[replacement.IntentRef] = stored;
