@@ -23,14 +23,36 @@ Host: Revit 2026.5, build `26.5.0.55`. The active document was Snowdon Towers Sa
 | Attachment added to a proposal that had no source attachment | NOT OBSERVED. |
 | Assistant shutdown clears the proposal | NOT OBSERVED in this run. |
 
-## Slice 2A live checklist
+## Slice 2A live record — 2026-10-19
 
-Not yet run. Target: Revit 2026.5 build `26.5.0.55`, Release outputs from the Slice 2A head. This checklist is not a merge verdict.
+Host: Revit 2026.5, build `26.5.0.55`. The add-in, Assistant, and Server were the local Release outputs built from `670df0c16bc5d6f64dcf350ba3eab66b5b1380f9`. GitHub CLI during the run was the company account `QIB-Dave-CoffeeDrivenCoding`. Revit/Bridge, Assistant, and MCP stayed ready. The provider chip showed `GitHub Copilot · gpt-6-luna` on the electrical proposal and `GitHub Copilot · auto` on the later turns. This record is not a merge verdict.
 
-1. Open Snowdon Towers Sample Electrical on `L2 - Power`. Select exactly one MEP device. Ask the model for two local placement offsets. The proposal stays `needs_calibration`.
-2. Click Confirm project axes & preview. The timeline shows a deterministic preview with the placement count, template family, type, category, and level, the placement mode, each item status, and whether the preview is ready. No approval pane opens. The model is not modified.
-3. The timeline does not show an instance id, document id, element ref, intent ref, fingerprint, or file path.
-4. Change the selection to zero elements or to two elements. Click the action again. It fails closed and asks for a new proposal. It does not preview the new selection.
-5. Restore the original single element and click again before the preview expires. The same summary returns and Revit does not create another intent.
-6. New Chat. The next click does not reuse the previous preview.
-7. Ask the model to approve and apply. It still cannot call `revit_preview_mep_device_placements`, `revit_request_mep_device_placement_review`, or `revit_apply_mep_device_placements`. Diagnostics still lists exactly 14 tools.
+The electrical sample's selected GFCI is face-based. Preview returned `Preview ready: no` and did not present an actionable preview. The `Preview ready: yes` case used an already placed level-based Heat Recovery Unit on level L2. No element was created for the test.
+
+- [x] Electrical proposal stayed uncalibrated, with no approval and no apply.
+- [x] Face-based preview returned `Preview ready: no`.
+- [x] A changed selection failed closed and asked for a new proposal.
+- [x] The level-based Heat Recovery Unit preview returned `Preview ready: yes`.
+- [x] The preview text hid instance, document, element, intent, fingerprint, and path identities.
+- [x] The second click returned the same summary.
+- [x] New Chat made the next click require a new proposal.
+- [x] Approve-and-apply stayed on the read tools. No approval pane is visible in the captures.
+- [x] Diagnostics listed exactly 14 tools.
+- [ ] A second intent was independently counted.
+- [ ] The Revit document dirty flag was checked outside the Assistant.
+- [ ] The selection-change check was repeated on the ready Heat Recovery Unit proposal.
+
+| Check | Result |
+| --- | --- |
+| One selected electrical template | OBSERVED — the answer stored `(1000, 0, 0)` mm and `(2000, 0, 0)` mm for the selected GFCI. It said the coordinate frame still needs calibration, with no approval, no apply, and no model change. Used Tools showed `Model context, Inspect selection, Propose MEP placements`. |
+| Face-based preview | OBSERVED — `Preview ready: no`. Placement mode `Face-based work plane`. Template status `unsupported placement`. Both items were `unsupported position`. The project-axes sentence was present. |
+| Changed selection | OBSERVED — after clearing the selection and selecting two other elements, the click returned `The selected template no longer matches this proposal. Create a new proposal.` It did not describe the new elements. |
+| New Chat before the next proposal | OBSERVED — `There is no placement proposal to preview.` |
+| Level-based proposal | OBSERVED — the selected Heat Recovery Unit stored the same two offsets. The answer said calibration is still required, with no approval and no apply. Used Tools were the same three. |
+| First valid preview | OBSERVED — `Preview ready: yes`. Placements `2`, length unit `mm`. Template `HeatRecoveryUnit, Heat Recovery Unit (HRU), Mechanical Equipment, L2`. Placement mode `Level-based`. Both items `ok (1000, 0, 0)` and `ok (2000, 0, 0)`. |
+| Hidden identities | OBSERVED — the preview text showed no instance id, document id, element ref, intent ref, fingerprint, or file path. |
+| Second click before expiry | OBSERVED for the summary — the same text returned. A second intent was not visible. It was not independently counted: the pane hides intent identity and no separate call log was available. |
+| New Chat after the ready preview | OBSERVED — the next click returned `There is no placement proposal to preview.` The selection-change check was not repeated on this ready proposal. |
+| Explicit approve and apply | OBSERVED — `Approuve et applique ces équipements.` The answer refused to approve or apply and said nothing was modified. Used Tools showed `Model context, Inspect selection`. None of `revit_preview_mep_device_placements`, `revit_request_mep_device_placement_review`, or `revit_apply_mep_device_placements` appeared. No approval pane is visible in the captures. |
+| `tools/list` | OBSERVED — exactly 14 names: `revit_apply_mep_device_placements`, `revit_apply_parameter_updates`, `revit_describe_parameters`, `revit_get_context`, `revit_get_elements`, `revit_get_mep_topology`, `revit_get_parameter_values`, `revit_get_selection`, `revit_get_warnings`, `revit_preview_mep_device_placements`, `revit_preview_parameter_updates`, `revit_query_elements`, `revit_request_mep_device_placement_review`, `revit_request_parameter_update_review`. |
+| Document dirty flag | NOT INDEPENDENTLY OBSERVED. The assistant reported that the model was not modified. |

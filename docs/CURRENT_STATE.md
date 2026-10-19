@@ -48,15 +48,7 @@ Still not observed:
 - Adding an attachment does not clear a proposal that had no source attachment.
 - Assistant shutdown clears the proposal.
 
-Slice 2A is implemented and not live-validated. The local Assistant action Confirm project axes & preview rechecks the hidden document and template, promotes a matching proposal to `ready`, and calls `revit_preview_mep_device_placements` through a separate internal client. `IAssistantToolSession.CallAsync` still rejects that tool. Review and apply are not called. Intent identity stays off the model and the pane. A repeated click reuses an unexpired preview. A new proposal, source-attachment invalidation, New Chat, or Assistant shutdown clears it.
-
-Pending live validation for Slice 2A on Revit 2026.5 build `26.5.0.55`:
-
-- With one selected template and a stored proposal, Confirm project axes & preview shows a deterministic preview, `Preview ready: yes` when Revit accepts the template, and does not open the approval pane.
-- Changing the selection, then clicking again, does not create a preview and does not move the proposal onto the new element.
-- Clicking again before the preview expires does not create a second intent.
-- New Chat clears the preview summary's authority: a later click needs a new proposal.
-- The model still cannot call preview, review, or apply. `tools/list` stays 14.
+Slice 2A was exercised on Revit 2026.5 build `26.5.0.55` against local Release outputs from `670df0c16bc5d6f64dcf350ba3eab66b5b1380f9`. The record is [BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md](BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md). That record is not a merge verdict. A level-based Heat Recovery Unit previewed `Preview ready: yes`. The selected electrical GFCI is face-based and previewed `Preview ready: no`. A changed selection failed closed. New Chat cleared the proposal. Approve-and-apply stayed on the read tools, and `tools/list` stayed 14. The second click returned the same summary. A second intent was not independently counted.
 
 Typed Bridge live validation of `revit.get_selection` was run on Revit 2026.5 build `26.5.0.55` against code SHA `3f6f57024be0600486f717b71162e08da285d45d`. The record is [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](CAP_0010_SELECTION_BRIDGE_VALIDATION.md). Official MCP-client live validation of `revit_get_selection` was run on the same Revit build against SHA `07091fd3e5a59ff82c6cee4ecfbd9183f4fa8cdb`. That record is not a merge verdict.
 
