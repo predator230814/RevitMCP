@@ -1,6 +1,6 @@
 # SERVER-0013: Apply MEP device placements
 
-- Status: Implemented. Live Revit validation is pending.
+- Status: Implemented. Focused level-based live validation passed on Revit 2026.5 at 7123b11; wall-hosted and level-work-plane creation were not live-proven. See [BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md](../BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md).
 - Date: 2026-10-16
 
 ## Tool
@@ -9,6 +9,6 @@
 
 Hints match parameter apply: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 
-Input is the exact `instance_id` and opaque `intent_ref`. Protocol support is `{16}` only. Production `tools/list` contains exactly 14 tools. Live validation is pending and is not a merge pass.
+Input is the exact `instance_id` and opaque `intent_ref`. Protocol support is `{16}` only. Production `tools/list` contains exactly 14 tools.
 
 No generic `create_family_instance`, `run_revit_api`, or `run_csharp` tool is exposed.
