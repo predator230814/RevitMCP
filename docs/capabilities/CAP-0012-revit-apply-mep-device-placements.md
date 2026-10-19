@@ -1,6 +1,6 @@
 # CAP-0012: Apply MEP device placements
 
-- Status: Implemented. Live Revit validation is pending.
+- Status: Implemented. Focused level-based live validation passed on Revit 2026.5 at 7123b11; wall-hosted and level-work-plane creation were not live-proven. See [BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md](../BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md).
 - Date: 2026-10-16
 
 ## Purpose
