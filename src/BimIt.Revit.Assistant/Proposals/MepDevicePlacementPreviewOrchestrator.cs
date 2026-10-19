@@ -108,22 +108,71 @@ internal sealed class MepDevicePlacementPreviewOrchestrator
             result = null;
         }
 
-        if (result is null)
+        if (result is null || !Correlates(proposal, result))
         {
+            _store.ForgetPreview();
+            return Fail("The placement preview could not be created.");
+        }
+
+        if (!result.Ready)
+        {
+            _store.ForgetPreview();
+            return Ok(Describe(proposal, result));
+        }
+
+        if (!IsActionableReady(result, _utcNow()))
+        {
+            _store.ForgetPreview();
             return Fail("The placement preview could not be created.");
         }
 
         var summary = Describe(proposal, result);
-        if (!string.IsNullOrWhiteSpace(result.IntentRef) && result.ExpiresAt is DateTimeOffset expiresAt)
+        _store.RememberPreview(result.IntentRef!, result.IntentFingerprint, result.ExpiresAt!.Value, summary);
+        return Ok(summary);
+    }
+
+    private static bool Correlates(MepDevicePlacementProposal proposal, PreviewMepDevicePlacementsResult result)
+    {
+        if (result.Context is null
+            || result.Template is null
+            || result.Items is null
+            || !string.Equals(result.Context.InstanceId, proposal.InstanceId, StringComparison.Ordinal)
+            || !string.Equals(result.Context.DocumentId, proposal.DocumentId, StringComparison.Ordinal)
+            || !string.Equals(result.Template.ElementRef, proposal.TemplateElementRef, StringComparison.Ordinal)
+            || result.Items.Count != proposal.Placements.Count)
         {
-            _store.RememberPreview(result.IntentRef, result.IntentFingerprint, expiresAt, summary);
-        }
-        else
-        {
-            _store.ForgetPreview();
+            return false;
         }
 
-        return Ok(summary);
+        for (var index = 0; index < proposal.Placements.Count; index++)
+        {
+            var requested = proposal.Placements[index];
+            var returned = result.Items[index];
+            if (returned is null
+                || returned.OffsetX != requested.OffsetX
+                || returned.OffsetY != requested.OffsetY
+                || returned.VerticalOffset != requested.VerticalOffset)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsActionableReady(PreviewMepDevicePlacementsResult result, DateTimeOffset utcNow)
+    {
+        if (result.Template.Status != PreviewMepDeviceTemplateStatus.Ok
+            || result.Items.Any(item => item.Status != PreviewMepDevicePlacementItemStatus.Ok)
+            || string.IsNullOrWhiteSpace(result.IntentRef)
+            || string.IsNullOrWhiteSpace(result.IntentFingerprint)
+            || result.ExpiresAt is not DateTimeOffset expiresAt
+            || expiresAt <= utcNow)
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private async Task<bool> BindingStillMatchesAsync(MepDevicePlacementProposal proposal, CancellationToken cancellationToken)

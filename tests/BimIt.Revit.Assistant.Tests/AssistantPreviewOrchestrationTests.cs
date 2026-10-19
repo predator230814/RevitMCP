@@ -113,21 +113,106 @@ public sealed class AssistantPreviewOrchestrationTests
     }
 
     [Fact]
-    public async Task Not_ready_preview_keeps_calibration_and_stores_an_intent_only_when_one_exists()
+    public async Task Not_ready_preview_keeps_calibration_without_a_receipt()
     {
         var now = new DateTimeOffset(2026, 10, 19, 18, 0, 0, TimeSpan.Zero);
         var (orchestrator, store, _, preview) = Create("mm", now);
+        preview.Result = NotReadyResult();
+
+        var outcome = await orchestrator.ConfirmAsync(CancellationToken.None);
+
+        Assert.False(outcome.IsError);
+        Assert.Equal(MepDevicePlacementProposalStates.Ready, store.Current!.State);
+        Assert.Null(store.Preview);
+        Assert.Contains("Preview ready: no", outcome.Body, StringComparison.Ordinal);
+        Assert.Contains("unsupported category", outcome.Body, StringComparison.Ordinal);
+        Assert.Contains("unsupported position", outcome.Body, StringComparison.Ordinal);
+        AssertHidden(outcome.Body);
+    }
+
+    [Theory]
+    [InlineData("instance")]
+    [InlineData("document")]
+    [InlineData("template")]
+    [InlineData("count")]
+    [InlineData("offsets")]
+    public async Task Mismatched_preview_result_fails_closed_without_a_receipt(string mismatch)
+    {
+        var now = new DateTimeOffset(2026, 10, 19, 18, 0, 0, TimeSpan.Zero);
+        var (orchestrator, store, _, preview) = Create("mm", now);
+        store.RememberPreview("intent-secret-old", Fingerprint, now, "Placements: 2");
+        preview.Result = Mismatch(mismatch, now.AddMinutes(5));
+
+        var outcome = await orchestrator.ConfirmAsync(CancellationToken.None);
+
+        Assert.True(outcome.IsError);
+        Assert.Equal("The placement preview could not be created.", outcome.Body);
+        Assert.Equal(MepDevicePlacementProposalStates.Ready, store.Current!.State);
+        Assert.Equal(DocumentId, store.Current.DocumentId);
+        Assert.Equal(TemplateRef, store.Current.TemplateElementRef);
+        Assert.Null(store.Preview);
+        Assert.Single(preview.Requests);
+        AssertHidden(outcome.Body);
+    }
+
+    [Theory]
+    [InlineData("template")]
+    [InlineData("item")]
+    [InlineData("intent")]
+    [InlineData("fingerprint")]
+    [InlineData("expiry")]
+    public async Task Malformed_ready_preview_is_not_stored(string defect)
+    {
+        var now = new DateTimeOffset(2026, 10, 19, 18, 0, 0, TimeSpan.Zero);
+        var (orchestrator, store, _, preview) = Create("mm", now);
+        store.RememberPreview("intent-secret-old", Fingerprint, now, "Placements: 2");
+        preview.Result = MalformedReady(defect, now.AddMinutes(5));
+
+        var outcome = await orchestrator.ConfirmAsync(CancellationToken.None);
+
+        Assert.True(outcome.IsError);
+        Assert.Equal("The placement preview could not be created.", outcome.Body);
+        Assert.Equal(MepDevicePlacementProposalStates.Ready, store.Current!.State);
+        Assert.Null(store.Preview);
+        Assert.DoesNotContain("Preview ready:", outcome.Body, StringComparison.Ordinal);
+        AssertHidden(outcome.Body);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public async Task Expired_ready_intent_is_not_stored(int minutesFromNow)
+    {
+        var now = new DateTimeOffset(2026, 10, 19, 18, 0, 0, TimeSpan.Zero);
+        var (orchestrator, store, _, preview) = Create("mm", now);
+        store.RememberPreview("intent-secret-old", Fingerprint, now, "Placements: 2");
+        preview.Result = ReadyResult(now.AddMinutes(minutesFromNow));
+
+        var outcome = await orchestrator.ConfirmAsync(CancellationToken.None);
+
+        Assert.True(outcome.IsError);
+        Assert.Equal("The placement preview could not be created.", outcome.Body);
+        Assert.Equal(MepDevicePlacementProposalStates.Ready, store.Current!.State);
+        Assert.Null(store.Preview);
+        AssertHidden(outcome.Body);
+    }
+
+    [Fact]
+    public async Task Not_ready_preview_with_stray_intent_fields_is_not_actionable()
+    {
+        var now = new DateTimeOffset(2026, 10, 19, 18, 0, 0, TimeSpan.Zero);
+        var (orchestrator, store, _, preview) = Create("mm", now);
+        store.RememberPreview("intent-secret-old", Fingerprint, now, "Placements: 2");
+        var notReady = NotReadyResult();
         preview.Result = new PreviewMepDevicePlacementsResult
         {
-            Context = new PreviewMepDevicePlacementsContext { InstanceId = InstanceId, DocumentId = DocumentId },
+            Context = notReady.Context,
             Ready = false,
-            Template = new PreviewMepDeviceTemplate
-            {
-                ElementRef = TemplateRef,
-                Status = PreviewMepDeviceTemplateStatus.UnsupportedCategory,
-                CategoryName = "Electrical Fixtures",
-            },
-            Items = [Item(PreviewMepDevicePlacementItemStatus.UnsupportedPosition)],
+            Template = notReady.Template,
+            Items = notReady.Items,
+            IntentRef = IntentRef,
+            IntentFingerprint = Fingerprint,
+            ExpiresAt = now.AddMinutes(5),
         };
 
         var outcome = await orchestrator.ConfirmAsync(CancellationToken.None);
@@ -139,20 +224,7 @@ public sealed class AssistantPreviewOrchestrationTests
         Assert.Contains("unsupported category", outcome.Body, StringComparison.Ordinal);
         Assert.Contains("unsupported position", outcome.Body, StringComparison.Ordinal);
         AssertHidden(outcome.Body);
-
-        preview.Result = ReadyResult(now.AddMinutes(5));
-        preview.Result = new PreviewMepDevicePlacementsResult
-        {
-            Context = preview.Result.Context,
-            Ready = false,
-            Template = preview.Result.Template,
-            Items = preview.Result.Items,
-            IntentRef = IntentRef,
-            IntentFingerprint = Fingerprint,
-            ExpiresAt = now.AddMinutes(5),
-        };
-        await orchestrator.ConfirmAsync(CancellationToken.None);
-        Assert.Equal(IntentRef, store.Preview!.IntentRef);
+        Assert.DoesNotContain("intent-secret-old", outcome.Body, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -271,6 +343,165 @@ public sealed class AssistantPreviewOrchestrationTests
         return "{\"context\":{\"document_id\":\"" + DocumentId + "\",\"instance_id\":\"wire-instance\"},\"selected_count\":"
             + count.ToString(System.Globalization.CultureInfo.InvariantCulture)
             + ",\"truncated\":" + (truncated ? "true" : "false") + ",\"element_refs\":" + refs + "}";
+    }
+
+    private static PreviewMepDevicePlacementsResult NotReadyResult()
+    {
+        return new PreviewMepDevicePlacementsResult
+        {
+            Context = new PreviewMepDevicePlacementsContext { InstanceId = InstanceId, DocumentId = DocumentId },
+            Ready = false,
+            Template = new PreviewMepDeviceTemplate
+            {
+                ElementRef = TemplateRef,
+                Status = PreviewMepDeviceTemplateStatus.UnsupportedCategory,
+                CategoryName = "Electrical Fixtures",
+            },
+            Items =
+            [
+                Item(PreviewMepDevicePlacementItemStatus.UnsupportedPosition, 1000),
+                Item(PreviewMepDevicePlacementItemStatus.Ok, 2000),
+            ],
+        };
+    }
+
+    private static PreviewMepDevicePlacementsResult Mismatch(string mismatch, DateTimeOffset expiresAt)
+    {
+        var ready = ReadyResult(expiresAt);
+        return mismatch switch
+        {
+            "instance" => new PreviewMepDevicePlacementsResult
+            {
+                Context = new PreviewMepDevicePlacementsContext { InstanceId = "inst-other", DocumentId = DocumentId },
+                Ready = ready.Ready,
+                Template = ready.Template,
+                Items = ready.Items,
+                IntentRef = ready.IntentRef,
+                IntentFingerprint = ready.IntentFingerprint,
+                ExpiresAt = ready.ExpiresAt,
+            },
+            "document" => new PreviewMepDevicePlacementsResult
+            {
+                Context = new PreviewMepDevicePlacementsContext { InstanceId = InstanceId, DocumentId = "doc-other" },
+                Ready = ready.Ready,
+                Template = ready.Template,
+                Items = ready.Items,
+                IntentRef = ready.IntentRef,
+                IntentFingerprint = ready.IntentFingerprint,
+                ExpiresAt = ready.ExpiresAt,
+            },
+            "template" => new PreviewMepDevicePlacementsResult
+            {
+                Context = ready.Context,
+                Ready = ready.Ready,
+                Template = new PreviewMepDeviceTemplate
+                {
+                    ElementRef = "ref-other",
+                    Status = ready.Template.Status,
+                    PlacementMode = ready.Template.PlacementMode,
+                    FamilyName = ready.Template.FamilyName,
+                    TypeName = ready.Template.TypeName,
+                    CategoryName = ready.Template.CategoryName,
+                    LevelName = ready.Template.LevelName,
+                },
+                Items = ready.Items,
+                IntentRef = ready.IntentRef,
+                IntentFingerprint = ready.IntentFingerprint,
+                ExpiresAt = ready.ExpiresAt,
+            },
+            "count" => new PreviewMepDevicePlacementsResult
+            {
+                Context = ready.Context,
+                Ready = ready.Ready,
+                Template = ready.Template,
+                Items = [Item(PreviewMepDevicePlacementItemStatus.Ok, 1000)],
+                IntentRef = ready.IntentRef,
+                IntentFingerprint = ready.IntentFingerprint,
+                ExpiresAt = ready.ExpiresAt,
+            },
+            _ => new PreviewMepDevicePlacementsResult
+            {
+                Context = ready.Context,
+                Ready = ready.Ready,
+                Template = ready.Template,
+                Items =
+                [
+                    Item(PreviewMepDevicePlacementItemStatus.Ok, 2000),
+                    Item(PreviewMepDevicePlacementItemStatus.Ok, 1000),
+                ],
+                IntentRef = ready.IntentRef,
+                IntentFingerprint = ready.IntentFingerprint,
+                ExpiresAt = ready.ExpiresAt,
+            },
+        };
+    }
+
+    private static PreviewMepDevicePlacementsResult MalformedReady(string defect, DateTimeOffset expiresAt)
+    {
+        var ready = ReadyResult(expiresAt);
+        return defect switch
+        {
+            "template" => new PreviewMepDevicePlacementsResult
+            {
+                Context = ready.Context,
+                Ready = true,
+                Template = new PreviewMepDeviceTemplate
+                {
+                    ElementRef = TemplateRef,
+                    Status = PreviewMepDeviceTemplateStatus.UnsupportedHost,
+                    PlacementMode = ready.Template.PlacementMode,
+                    FamilyName = ready.Template.FamilyName,
+                },
+                Items = ready.Items,
+                IntentRef = ready.IntentRef,
+                IntentFingerprint = ready.IntentFingerprint,
+                ExpiresAt = ready.ExpiresAt,
+            },
+            "item" => new PreviewMepDevicePlacementsResult
+            {
+                Context = ready.Context,
+                Ready = true,
+                Template = ready.Template,
+                Items =
+                [
+                    Item(PreviewMepDevicePlacementItemStatus.OutOfHostBounds, 1000),
+                    Item(PreviewMepDevicePlacementItemStatus.Ok, 2000),
+                ],
+                IntentRef = ready.IntentRef,
+                IntentFingerprint = ready.IntentFingerprint,
+                ExpiresAt = ready.ExpiresAt,
+            },
+            "intent" => new PreviewMepDevicePlacementsResult
+            {
+                Context = ready.Context,
+                Ready = true,
+                Template = ready.Template,
+                Items = ready.Items,
+                IntentRef = " ",
+                IntentFingerprint = ready.IntentFingerprint,
+                ExpiresAt = ready.ExpiresAt,
+            },
+            "fingerprint" => new PreviewMepDevicePlacementsResult
+            {
+                Context = ready.Context,
+                Ready = true,
+                Template = ready.Template,
+                Items = ready.Items,
+                IntentRef = ready.IntentRef,
+                IntentFingerprint = "",
+                ExpiresAt = ready.ExpiresAt,
+            },
+            _ => new PreviewMepDevicePlacementsResult
+            {
+                Context = ready.Context,
+                Ready = true,
+                Template = ready.Template,
+                Items = ready.Items,
+                IntentRef = ready.IntentRef,
+                IntentFingerprint = ready.IntentFingerprint,
+                ExpiresAt = null,
+            },
+        };
     }
 
     private static PreviewMepDevicePlacementsResult ReadyResult(DateTimeOffset expiresAt, string intentRef = IntentRef)
