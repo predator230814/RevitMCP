@@ -235,7 +235,8 @@ public static class AssistantIpc
             or "bimit_get_warnings"
             or "bimit_get_active_view_elements"
             or "bimit_inspect_selection"
-            or "bimit_explore_selected_mep";
+            or "bimit_explore_selected_mep"
+            or "bimit_propose_mep_device_placements";
     }
 
     private static AssistantIpcParse ParseHello(Envelope body)

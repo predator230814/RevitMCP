@@ -1,6 +1,6 @@
 # BIM-IT Revit MCP Current State
 
-_Last updated: 2026-10-16_
+_Last updated: 2026-10-19_
 
 RevitMCP was renamed to BIM-IT Revit MCP. Current projects are `BimIt.Revit.Contracts`, `BimIt.Revit.Bridge`, `BimIt.Revit.Addin`, `BimIt.Revit.Server`, and `BimIt.Revit.Assistant`. MCP tool names, Bridge method names, protocol versions, the Approval pane GUID, audit domain strings, and the `LocalAppData\RevitMCP` storage root are unchanged. The historical validation narrative below keeps the RevitMCP names and SHAs it recorded.
 
@@ -38,7 +38,15 @@ The MCP Server tool `revit_get_selection` is implemented. At that selection slic
 
 [ADR-0015](adr/ADR-0015-assistant-document-intake.md) is accepted. The Assistant can hold one local attachment for the current conversation. Supported v1 files are `.pdf`, `.png`, `.jpg`, `.jpeg`, `.docx`, `.xlsx`, `.txt`, `.md`, `.csv`, and `.json`. The file must be at most 25 MB. Text is bounded at 60,000 characters. A PDF reports its page count and renders at most the first 4 pages. Image decode allocates at most 32 MB, with a long edge of at most 4096 pixels, before the result is reduced to about 2200 pixels. The WebView never sends a path. The provider receives a display name, bounded text, and in-memory image blobs. The five model-facing tools are unchanged. The requested live cases were observed on Revit 2026.5 build `26.5.0.55` on 2026-10-16 against Release outputs built from `312ded3ca9584d1309f76e6857d5eaf30323613a`. The provider-unavailable quick-action case was not re-run. The record is [BIM_IT_ASSISTANT_DOCUMENT_INTAKE_VALIDATION.md](BIM_IT_ASSISTANT_DOCUMENT_INTAKE_VALIDATION.md). That record is not a merge verdict.
 
-[ADR-0016](adr/ADR-0016-assistant-structured-proposals-and-controlled-write-orchestration.md) is accepted, not implemented. It does not add a model tool, a Server tool, or a Bridge method.
+[ADR-0016](adr/ADR-0016-assistant-structured-proposals-and-controlled-write-orchestration.md) Slice 1 is implemented. The Assistant model has six tools: the existing five read tools and `bimit_propose_mep_device_placements`. That tool stores one untrusted session-local proposal. Assistant code resolves the native instance and, when it can, the active document and exactly one selected template. Those identities stay hidden. There is no trusted coordinate-calibration provider in this slice, so every accepted proposal stays `needs_calibration`. Replacing or removing the source attachment clears a proposal that used it. A failed attachment replacement does not. New Chat and Assistant shutdown clear the proposal. Preview, review, and apply orchestration are not implemented. Server `tools/list` stays 14. No Bridge or Addin capability was added.
+
+Pending live validation for this Assistant slice:
+
+- With Revit open and exactly one selected MEP device template, a chat turn that calls the proposal tool returns `needs_calibration` and `coordinate_basis_unestablished`, and does not preview or change the model.
+- Zero selected elements, and more than one selected element, stay `needs_calibration` with `template_selection_required`.
+- No active document stays `needs_calibration` with `no_active_document`.
+- Replacing or removing the source attachment clears that proposal. A failed replacement keeps it. Adding an attachment does not clear a proposal that had no source attachment. New Chat clears the proposal.
+- Used Tools can show the proposal tool. `revit_preview_mep_device_placements`, `revit_request_mep_device_placement_review`, and `revit_apply_mep_device_placements` stay unavailable to the model.
 
 Typed Bridge live validation of `revit.get_selection` was run on Revit 2026.5 build `26.5.0.55` against code SHA `3f6f57024be0600486f717b71162e08da285d45d`. The record is [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](CAP_0010_SELECTION_BRIDGE_VALIDATION.md). Official MCP-client live validation of `revit_get_selection` was run on the same Revit build against SHA `07091fd3e5a59ff82c6cee4ecfbd9183f4fa8cdb`. That record is not a merge verdict.
 

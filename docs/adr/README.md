@@ -19,7 +19,7 @@ Accepted ADRs:
 - [ADR-0013](ADR-0013-bim-it-assistant-local-architecture.md) — BIM-IT Assistant local architecture and trusted-boundary separation
 - [ADR-0014](ADR-0014-provider-neutral-assistant-agent-runtime.md) — provider-neutral Assistant agent runtime and initial GitHub Copilot adapter
 - [ADR-0015](ADR-0015-assistant-document-intake.md) — Assistant document intake as conversation context
-- [ADR-0016](ADR-0016-assistant-structured-proposals-and-controlled-write-orchestration.md) — Assistant structured proposals and controlled-write orchestration. Accepted, not implemented.
+- [ADR-0016](ADR-0016-assistant-structured-proposals-and-controlled-write-orchestration.md) — Assistant structured proposals and controlled-write orchestration. Accepted. Slice 1 stores an untrusted proposal; preview, review, and apply orchestration remain unimplemented.
 
 RevitMCP was renamed to BIM-IT Revit MCP. ADR-0001 through ADR-0011 keep the name used when they were accepted. See ADR-0012.
 

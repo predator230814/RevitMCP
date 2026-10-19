@@ -33,11 +33,14 @@ internal sealed class BimItAgentReadTools
 
     public static readonly string[] Names = [ModelContext, Warnings, ActiveViewElements, InspectSelection, ExploreSelectedMep];
 
-    private static readonly string[] DeniedTools =
+    internal static readonly string[] DeniedTools =
     [
         "revit_preview_parameter_updates",
         "revit_request_parameter_update_review",
         "revit_apply_parameter_updates",
+        "revit_preview_mep_device_placements",
+        "revit_request_mep_device_placement_review",
+        "revit_apply_mep_device_placements",
         "runCSharp",
         "runPython",
         "executeRevitApi",

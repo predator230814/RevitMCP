@@ -6,6 +6,6 @@ internal static class GitHubCopilotPermissions
 {
     public static bool IsAllowed(PermissionRequest request)
     {
-        return request is PermissionRequestCustomTool tool && BimItAgentReadTools.IsExposed(tool.ToolName);
+        return request is PermissionRequestCustomTool tool && AssistantModelTools.IsExposed(tool.ToolName);
     }
 }

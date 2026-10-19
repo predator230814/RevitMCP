@@ -128,7 +128,8 @@ internal static class AssistantHost
         IAssistantToolSession? session,
         IAssistantAgentRuntime? runtime,
         CancellationToken cancellationToken = default,
-        AssistantProviderTimeouts? providerTimeouts = null)
+        AssistantProviderTimeouts? providerTimeouts = null,
+        MepDevicePlacementProposalStore? proposals = null)
     {
         McpAssistantToolSession? ownedSession = null;
         if (session is null)
@@ -161,15 +162,16 @@ internal static class AssistantHost
         var readiness = session is null
             ? new AssistantMcpReadiness(false, 0, [], "BimIt.Revit.Server executable was not found.")
             : await session.InitializeAsync(cancellationToken).ConfigureAwait(false);
+        var timeouts = providerTimeouts ?? AssistantProviderTimeouts.Default;
+        var documents = new AssistantDocumentStore();
+        proposals ??= new MepDevicePlacementProposalStore();
         if (runtime is null)
         {
             runtime = readiness.Ready && session is not null
-                ? new GitHubCopilotAgentRuntime(session, options.InstanceId)
+                ? new GitHubCopilotAgentRuntime(session, options.InstanceId, proposals, () => CurrentAttachmentId(documents))
                 : new UnavailableAssistantAgentRuntime(readiness.Error);
         }
 
-        var timeouts = providerTimeouts ?? AssistantProviderTimeouts.Default;
-        var documents = new AssistantDocumentStore();
         var providerStart = StartProviderAsync(runtime, timeouts, cancellationToken);
         try
         {
@@ -203,9 +205,15 @@ internal static class AssistantHost
                 if (parsed.Message.Kind == AssistantIpcKind.AttachDocument)
                 {
                     AssistantIpcMessage documentResult;
+                    var previousArtifactId = CurrentAttachmentId(documents);
                     try
                     {
-                        documentResult = DocumentResult(documents.Attach(parsed.Message.DocumentPath));
+                        var read = documents.Attach(parsed.Message.DocumentPath);
+                        documentResult = DocumentResult(read);
+                        if (read.Artifact is not null)
+                        {
+                            proposals.NoteAttachmentIdentityChanged(previousArtifactId, CurrentAttachmentId(documents));
+                        }
                     }
                     catch (Exception)
                     {
@@ -218,7 +226,9 @@ internal static class AssistantHost
 
                 if (parsed.Message.Kind == AssistantIpcKind.RemoveDocument)
                 {
+                    var previousArtifactId = CurrentAttachmentId(documents);
                     documents.Clear();
+                    proposals.NoteAttachmentIdentityChanged(previousArtifactId, null);
                     await WriteAsync(server, DocumentCleared(), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -226,6 +236,7 @@ internal static class AssistantHost
                 if (parsed.Message.Kind == AssistantIpcKind.ResetConversation)
                 {
                     documents.Clear();
+                    proposals.Clear();
                     var resetFinished = false;
                     try
                     {
@@ -280,6 +291,7 @@ internal static class AssistantHost
         finally
         {
             documents.Clear();
+            proposals.Clear();
             try
             {
                 await runtime.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(4)).ConfigureAwait(false);
@@ -307,6 +319,11 @@ internal static class AssistantHost
                 }
             }
         }
+    }
+
+    private static string? CurrentAttachmentId(AssistantDocumentStore documents)
+    {
+        return documents.Current is { IsDisposed: false } artifact ? artifact.ArtifactId : null;
     }
 
     private static async Task StartProviderAsync(
