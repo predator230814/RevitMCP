@@ -1,6 +1,6 @@
 # BIM-IT Assistant MEP placement proposal validation
 
-Status: the focused Slice 1 live cases below were observed on 2026-10-19. Two cases were not observed. This record is not a merge verdict.
+Status: the focused Slice 1 live cases below were observed on 2026-10-19. Three cases were not observed. This record is not a merge verdict.
 
 Scope: one untrusted session-local proposal stored by `bimit_propose_mep_device_placements`. The tool does not preview, approve, or modify Revit.
 
