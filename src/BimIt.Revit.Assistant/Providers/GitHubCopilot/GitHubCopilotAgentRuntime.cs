@@ -1,3 +1,4 @@
+using BimIt.Revit.Assistant.Ipc;
 using GitHub.Copilot;
 
 namespace BimIt.Revit.Assistant.Providers.GitHubCopilot;
@@ -5,6 +6,8 @@ namespace BimIt.Revit.Assistant.Providers.GitHubCopilot;
 internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
 {
     private readonly BimItAgentReadTools _tools;
+    private readonly MepDevicePlacementProposalTool _proposals;
+    private readonly MepDevicePlacementProposalStore _proposalStore;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _stop = new();
     private readonly string _directory;
@@ -13,9 +16,17 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
     private CopilotSession? _session;
     private IDisposable? _modelEvents;
 
-    public GitHubCopilotAgentRuntime(IAssistantToolSession session, string instanceId, string? runtimeDirectory = null)
+    public GitHubCopilotAgentRuntime(
+        IAssistantToolSession session,
+        string instanceId,
+        MepDevicePlacementProposalStore proposalStore,
+        Func<string?> currentAttachmentId,
+        string? runtimeDirectory = null)
     {
+        _proposalStore = proposalStore ?? throw new ArgumentNullException(nameof(proposalStore));
+        ArgumentNullException.ThrowIfNull(currentAttachmentId);
         _tools = new BimItAgentReadTools(session, instanceId);
+        _proposals = new MepDevicePlacementProposalTool(session, instanceId, proposalStore, currentAttachmentId);
         _directory = string.IsNullOrWhiteSpace(runtimeDirectory) ? CopilotRuntimeDirectory.Create() : runtimeDirectory;
         Directory.CreateDirectory(_directory);
         Status = AssistantProviderStatus.NotConfigured;
@@ -95,9 +106,10 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             await _gate.WaitAsync(budget.Token).ConfigureAwait(false);
             acquired = true;
             _tools.ConsumeUsedTools();
+            _proposals.ConsumeUsedTools();
             if (_session is null)
             {
-                return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, _tools.ConsumeUsedTools());
+                return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, ConsumeTurnTools());
             }
 
             var attachment = _delivery.ShouldDeliver(request.Attachment) ? request.Attachment : null;
@@ -117,7 +129,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                 content = "The assistant did not return an answer.";
             }
 
-            return new AssistantAgentTurn("BIM-IT Assistant", content, false, _tools.ConsumeUsedTools());
+            return new AssistantAgentTurn("BIM-IT Assistant", content, false, ConsumeTurnTools());
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !_stop.IsCancellationRequested)
         {
@@ -139,7 +151,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                     ? "The AI provider could not read the attached pages."
                     : AssistantSafeText.Clean(exception.Message, 400);
             Status = Unavailable(string.IsNullOrWhiteSpace(safe) ? AssistantProviderTimeouts.TurnTimedOut : safe);
-            return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError!, true, _tools.ConsumeUsedTools());
+            return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError!, true, ConsumeTurnTools());
         }
         finally
         {
@@ -147,6 +159,22 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             {
                 _gate.Release();
             }
+        }
+
+        IReadOnlyList<string> ConsumeTurnTools()
+        {
+            var names = new List<string>();
+            foreach (var name in _tools.ConsumeUsedTools())
+            {
+                AddUsed(names, name);
+            }
+
+            foreach (var name in _proposals.ConsumeUsedTools())
+            {
+                AddUsed(names, name);
+            }
+
+            return names;
         }
     }
 
@@ -158,6 +186,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         {
             await _gate.WaitAsync(budget.Token).ConfigureAwait(false);
             acquired = true;
+            _proposalStore.Clear();
             await DisposeSessionAsync().ConfigureAwait(false);
             if (_client is null || Status.State == AssistantProviderState.Unavailable)
             {
@@ -189,6 +218,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
 
     public async ValueTask DisposeAsync()
     {
+        _proposalStore.Clear();
         _stop.Cancel();
         if (!await _gate.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false))
         {
@@ -238,7 +268,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
     private async Task<CopilotSession> CreateSessionAsync(CancellationToken cancellationToken)
     {
         var session = await _client!.CreateSessionAsync(
-            GitHubCopilotSessionBlueprint.CreateSessionConfig(_directory, GitHubCopilotSessionBlueprint.CreateTools(_tools)),
+            GitHubCopilotSessionBlueprint.CreateSessionConfig(_directory, GitHubCopilotSessionBlueprint.CreateTools(_tools, _proposals)),
             cancellationToken).ConfigureAwait(false);
         _modelEvents?.Dispose();
         _modelEvents = session.On<SessionModelChangeEvent>(change => RememberModel(change.Data.NewModel));
@@ -255,6 +285,16 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         return message.Contains("vision", StringComparison.OrdinalIgnoreCase)
             || message.Contains("image input", StringComparison.OrdinalIgnoreCase)
             || message.Contains("does not support image", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static void AddUsed(List<string> names, string name)
+    {
+        if (names.Count >= AssistantIpc.MaxUsedToolCount || !AssistantIpc.IsModelToolName(name))
+        {
+            return;
+        }
+
+        names.Add(name);
     }
 
     private void RememberModel(string? model)

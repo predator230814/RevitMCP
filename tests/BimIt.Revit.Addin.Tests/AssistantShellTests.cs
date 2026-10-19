@@ -350,6 +350,9 @@ public sealed class AssistantShellTests
         link.ChatResult = link.ChatResult! with { UsedTools = ["bimit_explore_selected_mep"] };
         shell.ReceivePageMessage("""{"type":"sendCommand","text":"Explore ce qui est connecté à cet élément."}""");
         await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Used == "Used: Explore selected MEP"));
+        link.ChatResult = link.ChatResult! with { UsedTools = ["bimit_propose_mep_device_placements"] };
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Propose three devices from this sheet."}""");
+        await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Used == "Used: Propose MEP placements"));
         link.ChatResult = link.ChatResult! with { UsedTools = ["revit_get_mep_topology"], Body = "Internal topology name." };
         shell.ReceivePageMessage("""{"type":"sendCommand","text":"nom interne"}""");
         await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("Internal topology name.", StringComparison.Ordinal)));

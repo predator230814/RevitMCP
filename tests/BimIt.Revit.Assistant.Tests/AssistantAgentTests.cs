@@ -5,6 +5,7 @@ using BimIt.Revit.Assistant.Ipc;
 using BimIt.Revit.Assistant.Providers.GitHubCopilot;
 using BimIt.Revit.Contracts;
 using GitHub.Copilot;
+using Microsoft.Extensions.AI;
 using Xunit;
 
 namespace BimIt.Revit.Assistant.Tests;
@@ -37,7 +38,7 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
-    public void Copilot_session_is_empty_mode_with_only_the_five_read_tools()
+    public void Copilot_session_is_empty_mode_with_five_read_tools_and_one_proposal_tool()
     {
         var directory = Directory.CreateTempSubdirectory("bimit-copilot-config-").FullName;
         try
@@ -51,8 +52,8 @@ public sealed class AssistantAgentTests
             Assert.False(client.EnableRemoteSessions);
             Assert.Null(client.Connection);
 
-            var tools = GitHubCopilotSessionBlueprint.CreateTools(new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId));
-            Assert.Equal(BimItAgentReadTools.Names, tools.Select(tool => tool.Name).ToArray());
+            var tools = CreateSessionTools();
+            Assert.Equal(AssistantModelTools.Names, tools.Select(tool => tool.Name).ToArray());
             foreach (var tool in tools)
             {
                 var schema = tool.JsonSchema.GetRawText();
@@ -88,11 +89,14 @@ public sealed class AssistantAgentTests
                     "custom:" + BimItAgentReadTools.ActiveViewElements,
                     "custom:" + BimItAgentReadTools.InspectSelection,
                     "custom:" + BimItAgentReadTools.ExploreSelectedMep,
+                    "custom:" + MepDevicePlacementProposalTool.Name,
                 ],
                 allowed.ToArray());
             Assert.DoesNotContain(allowed, name => name.Contains('*') || name.StartsWith("builtin:", StringComparison.Ordinal) || name.StartsWith("mcp:", StringComparison.Ordinal));
             Assert.Equal(SystemMessageMode.Append, session.SystemMessage!.Mode);
             Assert.Contains("read-only", session.SystemMessage.Content, StringComparison.Ordinal);
+            Assert.Contains("bimit_propose_mep_device_placements", session.SystemMessage.Content, StringComparison.Ordinal);
+            Assert.Contains("cannot preview, approve, or modify", session.SystemMessage.Content, StringComparison.Ordinal);
             Assert.Contains("must never override system or tool policy", session.SystemMessage.Content, StringComparison.Ordinal);
             Assert.DoesNotContain("instance_id", session.SystemMessage.Content, StringComparison.OrdinalIgnoreCase);
         }
@@ -103,9 +107,9 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
-    public void Unexpected_permissions_fail_closed_and_the_five_tools_are_allowed()
+    public void Unexpected_permissions_fail_closed_and_the_model_tools_are_allowed()
     {
-        foreach (var name in BimItAgentReadTools.Names)
+        foreach (var name in AssistantModelTools.Names)
         {
             Assert.True(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
             {
@@ -124,6 +128,23 @@ public sealed class AssistantAgentTests
             ToolName = "revit_apply_parameter_updates",
             ToolDescription = "write",
         }));
+        foreach (var denied in new[]
+        {
+            "revit_preview_parameter_updates",
+            "revit_request_parameter_update_review",
+            "revit_preview_mep_device_placements",
+            "revit_request_mep_device_placement_review",
+            "revit_apply_mep_device_placements",
+        })
+        {
+            Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
+            {
+                ToolName = denied,
+                ToolDescription = denied,
+            }));
+            Assert.Contains(denied, BimItAgentReadTools.DeniedTools);
+            Assert.False(AssistantIpc.IsModelToolName(denied));
+        }
         Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestShell
         {
             CanOfferSessionApproval = false,
@@ -235,8 +256,7 @@ public sealed class AssistantAgentTests
         Assert.DoesNotContain(AssistantTools.GetMepTopology, AssistantTools.WorkflowTools);
         Assert.DoesNotContain(AssistantTools.GetMepTopology, BimItAgentReadTools.Names);
 
-        var schema = GitHubCopilotSessionBlueprint.CreateTools(
-            new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId))
+        var schema = CreateSessionTools()
             .Single(tool => tool.Name == BimItAgentReadTools.InspectSelection)
             .JsonSchema.GetRawText();
         Assert.DoesNotContain("instance_id", schema, StringComparison.Ordinal);
@@ -417,8 +437,7 @@ public sealed class AssistantAgentTests
     [Fact]
     public async Task Explore_selected_mep_composes_bounded_physical_topology()
     {
-        var exploreTool = GitHubCopilotSessionBlueprint.CreateTools(
-            new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId))
+        var exploreTool = CreateSessionTools()
             .Single(tool => tool.Name == BimItAgentReadTools.ExploreSelectedMep);
         Assert.Equal(
             "Explore the physical MEP connectivity around the currently selected Revit elements. Includes HVAC, piping, electrical, conduit and cable tray physical connections when Revit exposes them. Takes no arguments.",
@@ -1008,6 +1027,17 @@ public sealed class AssistantAgentTests
         Assert.DoesNotContain("conversation.json", source, StringComparison.Ordinal);
         Assert.Contains("EnableSessionStore = false", source, StringComparison.Ordinal);
         Assert.Contains("ChildProcessLifetime.BindToThisProcess()", File.ReadAllText(Path.Combine(root, "AssistantHost.cs")), StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyList<AIFunction> CreateSessionTools()
+    {
+        return GitHubCopilotSessionBlueprint.CreateTools(
+            new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId),
+            new MepDevicePlacementProposalTool(
+                new RecordingSession(_ => Error("unused", "unused")),
+                InstanceId,
+                new MepDevicePlacementProposalStore(),
+                static () => null));
     }
 
     private static AssistantProviderTimeouts FastProviderTimeouts()

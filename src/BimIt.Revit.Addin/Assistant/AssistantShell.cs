@@ -739,6 +739,7 @@ internal sealed class AssistantShell
                 "bimit_get_active_view_elements" => "Active view",
                 "bimit_inspect_selection" => "Inspect selection",
                 "bimit_explore_selected_mep" => "Explore selected MEP",
+                "bimit_propose_mep_device_placements" => "Propose MEP placements",
                 _ => null,
             };
             if (label is not null && !labels.Contains(label, StringComparer.Ordinal))
