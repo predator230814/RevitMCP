@@ -1,10 +1,11 @@
 using System.Text.Json;
+using BimIt.Revit.Contracts;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
 namespace BimIt.Revit.Assistant;
 
-internal sealed class McpAssistantToolSession : IAssistantToolSession, IAsyncDisposable
+internal sealed class McpAssistantToolSession : IAssistantToolSession, IMepDevicePlacementPreviewClient, IAsyncDisposable
 {
     private readonly string _serverExecutable;
     private McpClient? _client;
@@ -55,6 +56,42 @@ internal sealed class McpAssistantToolSession : IAssistantToolSession, IAsyncDis
         if (AssistantTools.IsTrustedWriteTool(toolName) || !AssistantTools.AllowedReadTools.Contains(toolName, StringComparer.Ordinal))
         {
             return new AssistantToolCall(true, "tool_not_allowed", "This Assistant workflow cannot call that tool.", null);
+        }
+
+        return await InvokeAsync(toolName, arguments, cancellationToken).ConfigureAwait(false);
+    }
+
+    public Task<AssistantToolCall> PreviewAsync(
+        PreviewMepDevicePlacementsRequest request,
+        string instanceId,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+        var arguments = new Dictionary<string, object?>
+        {
+            ["instance_id"] = instanceId,
+            ["document_id"] = request.DocumentId,
+            ["template_element_ref"] = request.TemplateElementRef,
+            ["length_unit_id"] = request.LengthUnitId,
+            ["placements"] = request.Placements.Select(item => new Dictionary<string, object?>
+            {
+                ["offset_x"] = item.OffsetX,
+                ["offset_y"] = item.OffsetY,
+                ["vertical_offset"] = item.VerticalOffset,
+            }).ToArray(),
+        };
+        return InvokeAsync(IMepDevicePlacementPreviewClient.ToolName, arguments, cancellationToken);
+    }
+
+    private async Task<AssistantToolCall> InvokeAsync(
+        string toolName,
+        IReadOnlyDictionary<string, object?> arguments,
+        CancellationToken cancellationToken)
+    {
+        if (_client is null)
+        {
+            return new AssistantToolCall(true, "mcp_unavailable", "The MCP client is not initialized.", null);
         }
 
         var result = await _client.CallToolAsync(

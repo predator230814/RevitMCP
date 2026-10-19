@@ -207,6 +207,19 @@ main {
   color: var(--ink);
 }
 
+.confirm-row {
+  margin-bottom: 8px;
+}
+
+.confirm-row button {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: transparent;
+}
+
 textarea {
   resize: vertical;
   min-height: 44px;

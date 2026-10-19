@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using BimIt.Revit.Assistant.Ipc;
+using BimIt.Revit.Contracts;
 using Xunit;
 
 namespace BimIt.Revit.Assistant.Tests;
@@ -81,6 +82,30 @@ public sealed class AssistantProcessTests
         var readiness = await session.InitializeAsync(CancellationToken.None);
         Assert.True(readiness.Ready);
         Assert.Equal(14, readiness.ToolCount);
+
+        foreach (var denied in new[]
+        {
+            "revit_preview_mep_device_placements",
+            "revit_request_mep_device_placement_review",
+            "revit_apply_mep_device_placements",
+        })
+        {
+            var blocked = await session.CallAsync(denied, new Dictionary<string, object?> { ["instance_id"] = "x" }, CancellationToken.None);
+            Assert.True(blocked.IsError);
+            Assert.Equal("tool_not_allowed", blocked.ErrorCode);
+        }
+
+        var preview = await session.PreviewAsync(
+            new PreviewMepDevicePlacementsRequest
+            {
+                DocumentId = "doc",
+                TemplateElementRef = "template",
+                LengthUnitId = "autodesk.unit.unit:millimeters-1.0.1",
+                Placements = [new PreviewMepDevicePlacement { OffsetX = 1, OffsetY = 0, VerticalOffset = 0 }],
+            },
+            "instance",
+            CancellationToken.None);
+        Assert.NotEqual("tool_not_allowed", preview.ErrorCode);
 
         var refused = await session.CallAsync(
             "revit_apply_parameter_updates",

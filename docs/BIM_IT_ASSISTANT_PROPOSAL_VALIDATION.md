@@ -22,3 +22,15 @@ Host: Revit 2026.5, build `26.5.0.55`. The active document was Snowdon Towers Sa
 | Explicit approve and apply | OBSERVED — `Approuve et applique ces équipements.` The answer refused to approve or apply. Used Tools showed `Model context, Inspect selection`. None of `revit_preview_mep_device_placements`, `revit_request_mep_device_placement_review`, or `revit_apply_mep_device_placements` appeared. No preview pane and no approval pane opened. |
 | Attachment added to a proposal that had no source attachment | NOT OBSERVED. |
 | Assistant shutdown clears the proposal | NOT OBSERVED in this run. |
+
+## Slice 2A live checklist
+
+Not yet run. Target: Revit 2026.5 build `26.5.0.55`, Release outputs from the Slice 2A head. This checklist is not a merge verdict.
+
+1. Open Snowdon Towers Sample Electrical on `L2 - Power`. Select exactly one MEP device. Ask the model for two local placement offsets. The proposal stays `needs_calibration`.
+2. Click Confirm project axes & preview. The timeline shows a deterministic preview with the placement count, template family, type, category, and level, the placement mode, each item status, and whether the preview is ready. No approval pane opens. The model is not modified.
+3. The timeline does not show an instance id, document id, element ref, intent ref, fingerprint, or file path.
+4. Change the selection to zero elements or to two elements. Click the action again. It fails closed and asks for a new proposal. It does not preview the new selection.
+5. Restore the original single element and click again before the preview expires. The same summary returns and Revit does not create another intent.
+6. New Chat. The next click does not reuse the previous preview.
+7. Ask the model to approve and apply. It still cannot call `revit_preview_mep_device_placements`, `revit_request_mep_device_placement_review`, or `revit_apply_mep_device_placements`. Diagnostics still lists exactly 14 tools.

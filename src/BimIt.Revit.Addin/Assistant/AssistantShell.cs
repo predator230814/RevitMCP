@@ -122,6 +122,9 @@ internal sealed class AssistantShell
             case AssistantPageIntent.RemoveDocument:
                 Sequence(RemoveDocumentAsync);
                 break;
+            case AssistantPageIntent.ConfirmProjectAxesPreview:
+                Sequence(ConfirmProjectAxesPreviewAsync);
+                break;
             case AssistantPageIntent.OpenDiagnostics:
                 _diagnostics = !_diagnostics;
                 PostSnapshot();
@@ -458,6 +461,50 @@ internal sealed class AssistantShell
                 ? "The document could not be attached."
                 : "The document could not be attached.";
             _conversation.Add("error", "Assistant", message);
+        }
+        finally
+        {
+            _busy = false;
+            PostSnapshot();
+        }
+    }
+
+    private async Task ConfirmProjectAxesPreviewAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _conversation.Add("user", "You", "Confirm project axes & preview");
+        PostSnapshot();
+        try
+        {
+            if (_mcpState != "ready")
+            {
+                await EnsureAssistantAsync().ConfigureAwait(false);
+            }
+
+            if (_mcpState != "ready")
+            {
+                _conversation.Add("error", "Assistant", _statusError ?? "The Assistant is not ready.");
+                return;
+            }
+
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await _link.ConfirmProjectAxesPreviewAsync(timeout.Token).ConfigureAwait(false);
+            if (result?.Kind != AssistantIpcKind.PreviewResult)
+            {
+                _conversation.Add("error", "Assistant", "The Assistant did not return a preview.");
+                return;
+            }
+
+            _conversation.Add(result.IsError ? "error" : "assistant", result.Title ?? "Placement preview", result.Body ?? "");
+        }
+        catch (Exception)
+        {
+            _conversation.Add("error", "Assistant", "The placement preview could not be created.");
         }
         finally
         {

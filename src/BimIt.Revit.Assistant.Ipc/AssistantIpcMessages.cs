@@ -24,6 +24,8 @@ public enum AssistantIpcKind
     AttachDocument,
     RemoveDocument,
     DocumentResult,
+    ConfirmProjectAxesPreview,
+    PreviewResult,
 }
 
 public sealed record AssistantIpcMessage(
@@ -130,6 +132,8 @@ public static class AssistantIpc
                 "attachDocument" => ParseAttach(body),
                 "removeDocument" => ParseSignal(body, AssistantIpcKind.RemoveDocument),
                 "documentResult" => ParseDocumentResult(body),
+                "confirmProjectAxesPreview" => ParseSignal(body, AssistantIpcKind.ConfirmProjectAxesPreview),
+                "previewResult" => ParsePreviewResult(body),
                 _ => AssistantIpcParse.Reject("unknown"),
             };
         }
@@ -209,6 +213,14 @@ public static class AssistantIpc
                 Path = message.DocumentPath,
             },
             AssistantIpcKind.RemoveDocument => new Envelope { Type = "removeDocument" },
+            AssistantIpcKind.ConfirmProjectAxesPreview => new Envelope { Type = "confirmProjectAxesPreview" },
+            AssistantIpcKind.PreviewResult => new Envelope
+            {
+                Type = "previewResult",
+                Title = message.Title,
+                Body = message.Body,
+                IsError = message.IsError,
+            },
             AssistantIpcKind.DocumentResult => new Envelope
             {
                 Type = "documentResult",
@@ -430,6 +442,36 @@ public static class AssistantIpc
 
         return AssistantIpcParse.Accept(new AssistantIpcMessage(
             kind, null, null, null, false, null, null, null, null, null, null, null, null, null, false));
+    }
+
+    private static AssistantIpcParse ParsePreviewResult(Envelope body)
+    {
+        if (string.IsNullOrWhiteSpace(body.Title) || body.Body is null || body.RequestId is not null || body.UsedTools is not null || HasDocument(body))
+        {
+            return AssistantIpcParse.Reject("preview");
+        }
+
+        if (body.Title.Length > 200 || body.Body.Length > MaxTextLength)
+        {
+            return AssistantIpcParse.Reject("preview");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.PreviewResult,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            body.Title,
+            body.Body,
+            body.IsError == true));
     }
 
     private static AssistantIpcParse ParseResult(Envelope body)
