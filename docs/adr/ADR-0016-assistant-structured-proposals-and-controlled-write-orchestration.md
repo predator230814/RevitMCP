@@ -1,6 +1,6 @@
 # ADR-0016: BIM-IT Assistant structured proposals and controlled-write orchestration
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-18
 - Product Owner: Dave
 
@@ -10,7 +10,7 @@ BIM-IT Revit MCP can preview, review, and apply a controlled MEP device placemen
 
 ADR-0015 accepts one untrusted document attachment and leaves structured proposals as future work. A drawing, a PDF, or a model reply is not a Revit coordinate and is not an approval.
 
-This ADR proposes how the Assistant may later carry a placement from conversation context to the existing write tools. It does not implement that path.
+This ADR decides how the Assistant may later carry a placement from conversation context to the existing write tools. It does not implement that path.
 
 ## Decision drivers
 
@@ -64,7 +64,7 @@ Disadvantages:
 
 ## Decision
 
-Option B is proposed. It is not implemented.
+Option B is accepted. It is not implemented.
 
 BIM-IT Assistant remains the orchestration owner outside the Revit capability core. The three raw MEP placement tools may be called by the Assistant process during a future orchestrated sequence. They are not model-facing tools. They are not added to the five model tools, the six allowed read tools, or the three workflow tools.
 
