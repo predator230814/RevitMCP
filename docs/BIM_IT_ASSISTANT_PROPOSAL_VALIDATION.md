@@ -56,3 +56,19 @@ The electrical sample's selected GFCI is face-based. Preview returned `Preview r
 | Explicit approve and apply | OBSERVED — `Approuve et applique ces équipements.` The answer refused to approve or apply and said nothing was modified. Used Tools showed `Model context, Inspect selection`. None of `revit_preview_mep_device_placements`, `revit_request_mep_device_placement_review`, or `revit_apply_mep_device_placements` appeared. No approval pane is visible in the captures. |
 | `tools/list` | OBSERVED — exactly 14 names: `revit_apply_mep_device_placements`, `revit_apply_parameter_updates`, `revit_describe_parameters`, `revit_get_context`, `revit_get_elements`, `revit_get_mep_topology`, `revit_get_parameter_values`, `revit_get_selection`, `revit_get_warnings`, `revit_preview_mep_device_placements`, `revit_preview_parameter_updates`, `revit_query_elements`, `revit_request_mep_device_placement_review`, `revit_request_parameter_update_review`. |
 | Document dirty flag | NOT INDEPENDENTLY OBSERVED. The assistant reported that the model was not modified. |
+
+## Slice 2B live checklist
+
+Not yet run. Target: Revit 2026.5 build `26.5.0.55`, Release outputs from the Slice 2B head. Use an already placed level-based Heat Recovery Unit in Snowdon Towers Sample HVAC. Do not use the face-based Electrical GFCI. Do not create an element before the apply step. This checklist is not a merge verdict.
+
+- [ ] A stored proposal previews `Preview ready: yes` for the level-based Heat Recovery Unit.
+- [ ] Review in Revit opens the existing MEP approval pane.
+- [ ] Chat text cannot approve or apply.
+- [ ] Apply approved placements before approval returns approval-required and creates nothing.
+- [ ] The human clicks Approve in the Revit approval pane.
+- [ ] The local Apply action returns applied.
+- [ ] Exactly the requested number of elements appears.
+- [ ] The Assistant text contains no instance id, document id, element ref, intent ref, fingerprint, or path.
+- [ ] A repeated Apply does not create a second batch.
+- [ ] One Revit Undo removes the created batch.
+- [ ] Diagnostics lists exactly 14 tools, and the model still has six tools.

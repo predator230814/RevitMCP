@@ -50,6 +50,8 @@ Still not observed:
 
 Slice 2A was exercised on Revit 2026.5 build `26.5.0.55` against local Release outputs from `670df0c16bc5d6f64dcf350ba3eab66b5b1380f9`. The record is [BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md](BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md). That record is not a merge verdict. A level-based Heat Recovery Unit previewed `Preview ready: yes`. The selected electrical GFCI is face-based and previewed `Preview ready: no`. A changed selection failed closed. New Chat cleared the proposal. Approve-and-apply stayed on the read tools, and `tools/list` stayed 14. The second click returned the same summary. A second intent was not independently counted.
 
+Slice 2B is implemented and not live-validated. Review in Revit and Apply approved placements are local Assistant actions. They use the cached preview intent, leave `IAssistantToolSession.CallAsync` read-only, and do not apply automatically after approval. The model still has six tools. Server `tools/list` stays 14.
+
 Typed Bridge live validation of `revit.get_selection` was run on Revit 2026.5 build `26.5.0.55` against code SHA `3f6f57024be0600486f717b71162e08da285d45d`. The record is [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](CAP_0010_SELECTION_BRIDGE_VALIDATION.md). Official MCP-client live validation of `revit_get_selection` was run on the same Revit build against SHA `07091fd3e5a59ff82c6cee4ecfbd9183f4fa8cdb`. That record is not a merge verdict.
 
 ## Validated head

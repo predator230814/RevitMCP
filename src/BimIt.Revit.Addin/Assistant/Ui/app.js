@@ -84,6 +84,8 @@ retry.addEventListener("click", () => post({ type: "retryConnection" }));
 document.getElementById("diagnostics").addEventListener("click", () => post({ type: "openDiagnostics" }));
 document.getElementById("attach").addEventListener("click", () => post({ type: "attachDocument" }));
 document.getElementById("confirm-axes").addEventListener("click", () => post({ type: "confirmProjectAxesPreview" }));
+document.getElementById("review-placements").addEventListener("click", () => post({ type: "reviewInRevit" }));
+document.getElementById("apply-placements").addEventListener("click", () => post({ type: "applyApprovedPlacements" }));
 document.getElementById("composer").addEventListener("submit", (event) => {
   event.preventDefault();
   const text = command.value.trim();

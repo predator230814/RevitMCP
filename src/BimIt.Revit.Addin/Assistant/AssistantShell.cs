@@ -125,6 +125,18 @@ internal sealed class AssistantShell
             case AssistantPageIntent.ConfirmProjectAxesPreview:
                 Sequence(ConfirmProjectAxesPreviewAsync);
                 break;
+            case AssistantPageIntent.ReviewInRevit:
+                Sequence(() => LocalPlacementActionAsync(
+                    "Review in Revit",
+                    "The Revit review could not be opened.",
+                    token => _link.ReviewInRevitAsync(token)));
+                break;
+            case AssistantPageIntent.ApplyApprovedPlacements:
+                Sequence(() => LocalPlacementActionAsync(
+                    "Apply approved placements",
+                    "The placement apply could not be completed.",
+                    token => _link.ApplyApprovedPlacementsAsync(token)));
+                break;
             case AssistantPageIntent.OpenDiagnostics:
                 _diagnostics = !_diagnostics;
                 PostSnapshot();
@@ -461,6 +473,61 @@ internal sealed class AssistantShell
                 ? "The document could not be attached."
                 : "The document could not be attached.";
             _conversation.Add("error", "Assistant", message);
+        }
+        finally
+        {
+            _busy = false;
+            PostSnapshot();
+        }
+    }
+
+    private Task LocalPlacementActionAsync(
+        string userLine,
+        string failure,
+        Func<CancellationToken, Task<AssistantIpcMessage?>> call)
+    {
+        return RunLocalPlacementActionAsync(userLine, failure, call);
+    }
+
+    private async Task RunLocalPlacementActionAsync(
+        string userLine,
+        string failure,
+        Func<CancellationToken, Task<AssistantIpcMessage?>> call)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _conversation.Add("user", "You", userLine);
+        PostSnapshot();
+        try
+        {
+            if (_mcpState != "ready")
+            {
+                await EnsureAssistantAsync().ConfigureAwait(false);
+            }
+
+            if (_mcpState != "ready")
+            {
+                _conversation.Add("error", "Assistant", _statusError ?? "The Assistant is not ready.");
+                return;
+            }
+
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await call(timeout.Token).ConfigureAwait(false);
+            if (result?.Kind != AssistantIpcKind.PreviewResult)
+            {
+                _conversation.Add("error", "Assistant", failure);
+                return;
+            }
+
+            _conversation.Add(result.IsError ? "error" : "assistant", result.Title ?? "BIM-IT Assistant", result.Body ?? "");
+        }
+        catch (Exception)
+        {
+            _conversation.Add("error", "Assistant", failure);
         }
         finally
         {

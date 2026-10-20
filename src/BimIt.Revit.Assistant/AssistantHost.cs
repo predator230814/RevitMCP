@@ -130,7 +130,9 @@ internal static class AssistantHost
         CancellationToken cancellationToken = default,
         AssistantProviderTimeouts? providerTimeouts = null,
         MepDevicePlacementProposalStore? proposals = null,
-        IMepDevicePlacementPreviewClient? previewClient = null)
+        IMepDevicePlacementPreviewClient? previewClient = null,
+        IMepDevicePlacementReviewClient? reviewClient = null,
+        IMepDevicePlacementApplyClient? applyClient = null)
     {
         McpAssistantToolSession? ownedSession = null;
         if (session is null)
@@ -167,6 +169,8 @@ internal static class AssistantHost
         var documents = new AssistantDocumentStore();
         proposals ??= new MepDevicePlacementProposalStore();
         previewClient ??= session as IMepDevicePlacementPreviewClient;
+        reviewClient ??= session as IMepDevicePlacementReviewClient;
+        applyClient ??= session as IMepDevicePlacementApplyClient;
         if (runtime is null)
         {
             runtime = readiness.Ready && session is not null
@@ -235,6 +239,20 @@ internal static class AssistantHost
                         options.InstanceId,
                         readiness.Ready,
                         cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.ReviewInRevit)
+                {
+                    var outcome = await ReviewInRevitAsync(reviewClient, applyClient, proposals, options.InstanceId, readiness.Ready, cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.ApplyApprovedPlacements)
+                {
+                    var outcome = await ApplyApprovedPlacementsAsync(reviewClient, applyClient, proposals, options.InstanceId, readiness.Ready, cancellationToken).ConfigureAwait(false);
                     await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -660,6 +678,62 @@ internal static class AssistantHost
         catch (Exception)
         {
             return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The placement preview could not be created.");
+        }
+    }
+
+    private static async Task<MepDevicePlacementPreviewOutcome> ReviewInRevitAsync(
+        IMepDevicePlacementReviewClient? reviewClient,
+        IMepDevicePlacementApplyClient? applyClient,
+        MepDevicePlacementProposalStore proposals,
+        string instanceId,
+        bool mcpReady,
+        CancellationToken cancellationToken)
+    {
+        if (reviewClient is null || applyClient is null || !mcpReady)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementReviewApplyOrchestrator.ReviewTitle, "The Assistant MCP client is not ready.");
+        }
+
+        try
+        {
+            var orchestrator = new MepDevicePlacementReviewApplyOrchestrator(reviewClient, applyClient, proposals, instanceId);
+            return await orchestrator.ReviewAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementReviewApplyOrchestrator.ReviewTitle, "The Revit review could not be opened.");
+        }
+    }
+
+    private static async Task<MepDevicePlacementPreviewOutcome> ApplyApprovedPlacementsAsync(
+        IMepDevicePlacementReviewClient? reviewClient,
+        IMepDevicePlacementApplyClient? applyClient,
+        MepDevicePlacementProposalStore proposals,
+        string instanceId,
+        bool mcpReady,
+        CancellationToken cancellationToken)
+    {
+        if (reviewClient is null || applyClient is null || !mcpReady)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementReviewApplyOrchestrator.ApplyTitle, "The Assistant MCP client is not ready.");
+        }
+
+        try
+        {
+            var orchestrator = new MepDevicePlacementReviewApplyOrchestrator(reviewClient, applyClient, proposals, instanceId);
+            return await orchestrator.ApplyAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementReviewApplyOrchestrator.ApplyTitle, "The placement apply could not be completed.");
         }
     }
 

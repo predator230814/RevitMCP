@@ -107,6 +107,11 @@ public sealed class AssistantProcessTests
             CancellationToken.None);
         Assert.NotEqual("tool_not_allowed", preview.ErrorCode);
 
+        var review = await session.ReviewAsync("instance", "intent", CancellationToken.None);
+        Assert.NotEqual("tool_not_allowed", review.ErrorCode);
+        var apply = await session.ApplyAsync("instance", "intent", CancellationToken.None);
+        Assert.NotEqual("tool_not_allowed", apply.ErrorCode);
+
         var refused = await session.CallAsync(
             "revit_apply_parameter_updates",
             new Dictionary<string, object?> { ["instance_id"] = "x", ["intent_ref"] = "y" },

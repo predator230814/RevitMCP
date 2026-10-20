@@ -26,6 +26,8 @@ public enum AssistantIpcKind
     DocumentResult,
     ConfirmProjectAxesPreview,
     PreviewResult,
+    ReviewInRevit,
+    ApplyApprovedPlacements,
 }
 
 public sealed record AssistantIpcMessage(
@@ -133,6 +135,8 @@ public static class AssistantIpc
                 "removeDocument" => ParseSignal(body, AssistantIpcKind.RemoveDocument),
                 "documentResult" => ParseDocumentResult(body),
                 "confirmProjectAxesPreview" => ParseSignal(body, AssistantIpcKind.ConfirmProjectAxesPreview),
+                "reviewInRevit" => ParseSignal(body, AssistantIpcKind.ReviewInRevit),
+                "applyApprovedPlacements" => ParseSignal(body, AssistantIpcKind.ApplyApprovedPlacements),
                 "previewResult" => ParsePreviewResult(body),
                 _ => AssistantIpcParse.Reject("unknown"),
             };
@@ -214,6 +218,8 @@ public static class AssistantIpc
             },
             AssistantIpcKind.RemoveDocument => new Envelope { Type = "removeDocument" },
             AssistantIpcKind.ConfirmProjectAxesPreview => new Envelope { Type = "confirmProjectAxesPreview" },
+            AssistantIpcKind.ReviewInRevit => new Envelope { Type = "reviewInRevit" },
+            AssistantIpcKind.ApplyApprovedPlacements => new Envelope { Type = "applyApprovedPlacements" },
             AssistantIpcKind.PreviewResult => new Envelope
             {
                 Type = "previewResult",

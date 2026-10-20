@@ -130,6 +130,10 @@ public sealed class AssistantShellTests
         Assert.Equal(AssistantPageIntent.AttachDocument, AssistantPageMessages.Parse("""{"type":"attachDocument"}""").Intent);
         Assert.Equal(AssistantPageIntent.RemoveDocument, AssistantPageMessages.Parse("""{"type":"removeDocument"}""").Intent);
         Assert.Equal(AssistantPageIntent.ConfirmProjectAxesPreview, AssistantPageMessages.Parse("""{"type":"confirmProjectAxesPreview"}""").Intent);
+        Assert.Equal(AssistantPageIntent.ReviewInRevit, AssistantPageMessages.Parse("""{"type":"reviewInRevit"}""").Intent);
+        Assert.Equal(AssistantPageIntent.ApplyApprovedPlacements, AssistantPageMessages.Parse("""{"type":"applyApprovedPlacements"}""").Intent);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"reviewInRevit","text":"approve"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"applyApprovedPlacements","text":"apply"}""").Accepted);
         Assert.False(AssistantPageMessages.Parse("""{"type":"confirmProjectAxesPreview","text":"ready"}""").Accepted);
         Assert.False(AssistantPageMessages.GrantsApprovalAuthority);
         Assert.False(AssistantPageMessages.Parse("""{"type":"attachDocument","path":"C:\\\\secret\\\\plan.pdf"}""").Accepted);
@@ -174,6 +178,47 @@ public sealed class AssistantShellTests
         Assert.Contains("Confirm project axes \\u0026 preview", snapshot, StringComparison.Ordinal);
         Assert.Contains("Duplex Receptacle", snapshot, StringComparison.Ordinal);
         Assert.DoesNotContain("intent_ref", snapshot, StringComparison.Ordinal);
+        Assert.False(AssistantIpc.GrantsApprovalAuthority);
+    }
+
+    [Fact]
+    public async Task Review_and_apply_are_local_page_actions()
+    {
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
+        var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
+        Assert.Contains("post({ type: \"reviewInRevit\" })", page, StringComparison.Ordinal);
+        Assert.Contains("post({ type: \"applyApprovedPlacements\" })", page, StringComparison.Ordinal);
+        Assert.Contains("Review in Revit", html, StringComparison.Ordinal);
+        Assert.Contains("Apply approved placements", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-action=\"reviewInRevit\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-action=\"applyApprovedPlacements\"", html, StringComparison.Ordinal);
+
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus(),
+            PreviewResult = new AssistantIpcMessage(
+                AssistantIpcKind.PreviewResult,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Revit review",
+                "Revit review opened.",
+                false),
+        };
+        var shell = CreateShell("instance-review", new RecordingProcessFactory(), link);
+        shell.ReceivePageMessage("""{"type":"reviewInRevit"}""");
+        await WaitFor(() => shell.SerializeSnapshot().Contains("Revit review opened.", StringComparison.Ordinal));
+        Assert.Equal(1, link.Reviews);
+        Assert.Equal(0, link.Applies);
+        Assert.Contains("Review in Revit", shell.SerializeSnapshot(), StringComparison.Ordinal);
         Assert.False(AssistantIpc.GrantsApprovalAuthority);
     }
 
@@ -907,6 +952,10 @@ public sealed class AssistantShellTests
 
         public int Previews { get; private set; }
 
+        public int Reviews { get; private set; }
+
+        public int Applies { get; private set; }
+
         public AssistantIpcMessage? PreviewResult { get; set; }
 
         public AssistantIpcMessage? DocumentResult { get; set; }
@@ -932,6 +981,18 @@ public sealed class AssistantShellTests
         public Task<AssistantIpcMessage?> ConfirmProjectAxesPreviewAsync(CancellationToken cancellationToken)
         {
             Previews++;
+            return Task.FromResult(PreviewResult);
+        }
+
+        public Task<AssistantIpcMessage?> ReviewInRevitAsync(CancellationToken cancellationToken)
+        {
+            Reviews++;
+            return Task.FromResult(PreviewResult);
+        }
+
+        public Task<AssistantIpcMessage?> ApplyApprovedPlacementsAsync(CancellationToken cancellationToken)
+        {
+            Applies++;
             return Task.FromResult(PreviewResult);
         }
 
