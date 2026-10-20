@@ -14,6 +14,8 @@ internal enum AssistantPageIntent
     AttachDocument,
     RemoveDocument,
     ConfirmProjectAxesPreview,
+    ReviewInRevit,
+    ApplyApprovedPlacements,
 }
 
 internal readonly record struct AssistantPageParse(bool Accepted, AssistantPageIntent Intent, string? Action, string? Text, string Reason)
@@ -72,6 +74,12 @@ internal static class AssistantPageMessages
                 "confirmProjectAxesPreview" => message.Text is null && message.Action is null
                     ? AssistantPageParse.Accept(AssistantPageIntent.ConfirmProjectAxesPreview)
                     : AssistantPageParse.Reject("confirm"),
+                "reviewInRevit" => message.Text is null && message.Action is null
+                    ? AssistantPageParse.Accept(AssistantPageIntent.ReviewInRevit)
+                    : AssistantPageParse.Reject("review"),
+                "applyApprovedPlacements" => message.Text is null && message.Action is null
+                    ? AssistantPageParse.Accept(AssistantPageIntent.ApplyApprovedPlacements)
+                    : AssistantPageParse.Reject("apply"),
                 _ => AssistantPageParse.Reject("unknown"),
             };
         }

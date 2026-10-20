@@ -56,3 +56,39 @@ The electrical sample's selected GFCI is face-based. Preview returned `Preview r
 | Explicit approve and apply | OBSERVED — `Approuve et applique ces équipements.` The answer refused to approve or apply and said nothing was modified. Used Tools showed `Model context, Inspect selection`. None of `revit_preview_mep_device_placements`, `revit_request_mep_device_placement_review`, or `revit_apply_mep_device_placements` appeared. No approval pane is visible in the captures. |
 | `tools/list` | OBSERVED — exactly 14 names: `revit_apply_mep_device_placements`, `revit_apply_parameter_updates`, `revit_describe_parameters`, `revit_get_context`, `revit_get_elements`, `revit_get_mep_topology`, `revit_get_parameter_values`, `revit_get_selection`, `revit_get_warnings`, `revit_preview_mep_device_placements`, `revit_preview_parameter_updates`, `revit_query_elements`, `revit_request_mep_device_placement_review`, `revit_request_parameter_update_review`. |
 | Document dirty flag | NOT INDEPENDENTLY OBSERVED. The assistant reported that the model was not modified. |
+
+## Slice 2B live record — 2026-10-20
+
+Host: Revit 2026.5, build `26.5.0.55`. The document was Snowdon Towers Sample HVAC. The template was an already placed level-based Heat Recovery Unit, not the face-based Electrical GFCI. The add-in, Assistant, and Server were the local Release outputs built from `d8e4eeed27297abbb54d5295c8d109db440a116d` before Revit started. GitHub CLI during the run was the company account `QIB-Dave-CoffeeDrivenCoding`. It was switched back to `predator230814` after the run. This record is not a merge verdict.
+
+A first proposal, sent without exactly one selected element, stored the two offsets with `template_selection_required`. That proposal was not previewed. New Chat and one selected HRU produced the proposal used below.
+
+- [x] A stored proposal previews `Preview ready: yes` for the level-based Heat Recovery Unit.
+- [x] Review in Revit opens the existing MEP approval pane.
+- [x] Chat text cannot approve or apply.
+- [x] Apply approved placements before approval returns approval-required and creates nothing.
+- [x] The human clicks Approve in the Revit approval pane.
+- [x] The local Apply action returns applied.
+- [x] Exactly the requested number of elements appears.
+- [x] The Assistant text contains no instance id, document id, element ref, intent ref, fingerprint, or path.
+- [x] A repeated Apply does not create a second batch.
+- [x] After that terminal result, Confirm project axes & preview and Review in Revit do not start another batch for the same proposal.
+- [x] One Revit Undo removes the created batch.
+- [x] Diagnostics lists exactly 14 tools.
+- [ ] Diagnostics shows that the model still has six tools.
+
+| Check | Result |
+| --- | --- |
+| Bound proposal | OBSERVED — `(1000, 0, 0)` mm and `(2000, 0, 0)` mm. The answer said calibration was still required. It did not say `template_selection_required`. It reported no preview, no approval, and no model change. Used Tools showed `Propose MEP placements`. |
+| First valid preview | OBSERVED — `Preview ready: yes`. Placements `2`, length unit `mm`. Template `HeatRecoveryUnit, Heat Recovery Unit (HRU), Mechanical Equipment, L1 - Block 43`. Placement mode `Level-based`. Both items `ok (1000, 0, 0)` and `ok (2000, 0, 0)`. The project-axes sentence was present. |
+| Expired preview | OBSERVED — Review returned `The placement preview has expired. Confirm project axes and preview again.` A new Confirm then returned `Preview ready: yes`, and the following Review opened the pane. |
+| Review | OBSERVED — `Revit review opened.` The existing BIM-IT Revit Approval pane showed Create MEP devices, level-based placement, Mechanical Equipment, `HeatRecoveryUnit : Heat Recovery Unit (HRU)`, level `L1 - Block 43`, and the two offsets. Approve and Reject were present. |
+| Apply before approval | OBSERVED — `Revit-local approval is still required. No placements were created.` The user confirmed that no new HRU appeared. |
+| Chat approve and apply | OBSERVED — `approuve et applique`. The answer refused to approve or apply and said the model was not modified. It did not call the local Review or Apply actions. Its prose still said calibration was required. |
+| Human Approve, then Apply | OBSERVED — after Approve in the Revit pane, Apply returned `Applied 2 placements. Revit verification passed.` The user confirmed that two new HRUs appeared. Their placed coordinates were not measured in the element properties. |
+| Hidden identities | OBSERVED — the preview, review, apply, and refusal texts showed no instance id, document id, element ref, intent ref, fingerprint, or file path. |
+| Repeated Apply | OBSERVED — the same `Applied 2 placements. Revit verification passed.` returned. The user confirmed that the HRU count did not change. |
+| Terminal generation | OBSERVED — Confirm returned `This proposal already has a placement result. Create a new proposal before previewing another batch.` Review returned `This proposal already has a placement result. Create a new proposal before requesting another review.` |
+| One Undo | OBSERVED — one Revit Undo removed both created HRUs. |
+| `tools/list` | OBSERVED — exactly 14 names: `revit_apply_mep_device_placements`, `revit_apply_parameter_updates`, `revit_describe_parameters`, `revit_get_context`, `revit_get_elements`, `revit_get_mep_topology`, `revit_get_parameter_values`, `revit_get_selection`, `revit_get_warnings`, `revit_preview_mep_device_placements`, `revit_preview_parameter_updates`, `revit_query_elements`, `revit_request_mep_device_placement_review`, `revit_request_parameter_update_review`. |
+| Model-facing six tools | NOT SHOWN. Diagnostics lists the server tools only. |

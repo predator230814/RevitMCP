@@ -188,12 +188,32 @@ internal sealed class MepDevicePlacementPreviewReceipt
     public string Summary { get; }
 }
 
+internal sealed class MepDevicePlacementApplyReceipt
+{
+    public MepDevicePlacementApplyReceipt(long generation, string intentRef, string summary, bool isError)
+    {
+        Generation = generation;
+        IntentRef = intentRef;
+        Summary = summary;
+        IsError = isError;
+    }
+
+    public long Generation { get; }
+
+    public string IntentRef { get; }
+
+    public string Summary { get; }
+
+    public bool IsError { get; }
+}
+
 internal sealed class MepDevicePlacementProposalStore
 {
     private readonly object _gate = new();
     private MepDevicePlacementProposal? _current;
     private long _generation;
     private MepDevicePlacementPreviewReceipt? _preview;
+    private MepDevicePlacementApplyReceipt? _apply;
 
     public MepDevicePlacementProposal? Current
     {
@@ -214,6 +234,7 @@ internal sealed class MepDevicePlacementProposalStore
             _current = proposal;
             _generation++;
             _preview = null;
+            _apply = null;
         }
     }
 
@@ -224,6 +245,7 @@ internal sealed class MepDevicePlacementProposalStore
             _current = null;
             _generation++;
             _preview = null;
+            _apply = null;
         }
     }
 
@@ -247,6 +269,7 @@ internal sealed class MepDevicePlacementProposalStore
                 _current = null;
                 _generation++;
                 _preview = null;
+                _apply = null;
             }
         }
     }
@@ -266,13 +289,19 @@ internal sealed class MepDevicePlacementProposalStore
         }
     }
 
-    public void RememberPreview(string intentRef, string? fingerprint, DateTimeOffset expiresAt, string summary)
+    public bool RememberPreview(string intentRef, string? fingerprint, DateTimeOffset expiresAt, string summary)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentRef);
         ArgumentException.ThrowIfNullOrWhiteSpace(summary);
         lock (_gate)
         {
+            if (_apply is not null && _apply.Generation == _generation)
+            {
+                return false;
+            }
+
             _preview = new MepDevicePlacementPreviewReceipt(_generation, intentRef, fingerprint, expiresAt, summary);
+            return true;
         }
     }
 
@@ -291,6 +320,69 @@ internal sealed class MepDevicePlacementProposalStore
             lock (_gate)
             {
                 return _preview;
+            }
+        }
+    }
+
+    public bool TryGetUnexpiredPreview(DateTimeOffset utcNow, out MepDevicePlacementPreviewReceipt receipt)
+    {
+        lock (_gate)
+        {
+            if (_preview is null
+                || _preview.Generation != _generation
+                || _preview.ExpiresAt <= utcNow
+                || string.IsNullOrWhiteSpace(_preview.IntentRef))
+            {
+                receipt = null!;
+                return false;
+            }
+
+            receipt = _preview;
+            return true;
+        }
+    }
+
+    public bool TryReuseTerminalApply(out string summary, out bool isError)
+    {
+        lock (_gate)
+        {
+            if (_apply is null || _apply.Generation != _generation)
+            {
+                summary = "";
+                isError = false;
+                return false;
+            }
+
+            summary = _apply.Summary;
+            isError = _apply.IsError;
+            return true;
+        }
+    }
+
+    public void RememberTerminalApply(string intentRef, string summary, bool isError)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentRef);
+        ArgumentException.ThrowIfNullOrWhiteSpace(summary);
+        lock (_gate)
+        {
+            if (_preview is null
+                || _preview.Generation != _generation
+                || !string.Equals(_preview.IntentRef, intentRef, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            _apply = new MepDevicePlacementApplyReceipt(_generation, intentRef, summary, isError);
+        }
+    }
+
+    internal MepDevicePlacementApplyReceipt? Apply
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _apply;
             }
         }
     }

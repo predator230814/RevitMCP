@@ -5,7 +5,12 @@ using ModelContextProtocol.Protocol;
 
 namespace BimIt.Revit.Assistant;
 
-internal sealed class McpAssistantToolSession : IAssistantToolSession, IMepDevicePlacementPreviewClient, IAsyncDisposable
+internal sealed class McpAssistantToolSession :
+    IAssistantToolSession,
+    IMepDevicePlacementPreviewClient,
+    IMepDevicePlacementReviewClient,
+    IMepDevicePlacementApplyClient,
+    IAsyncDisposable
 {
     private readonly string _serverExecutable;
     private McpClient? _client;
@@ -82,6 +87,34 @@ internal sealed class McpAssistantToolSession : IAssistantToolSession, IMepDevic
             }).ToArray(),
         };
         return InvokeAsync(IMepDevicePlacementPreviewClient.ToolName, arguments, cancellationToken);
+    }
+
+    public Task<AssistantToolCall> ReviewAsync(string instanceId, string intentRef, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentRef);
+        return InvokeAsync(
+            IMepDevicePlacementReviewClient.ToolName,
+            new Dictionary<string, object?>
+            {
+                ["instance_id"] = instanceId,
+                ["intent_ref"] = intentRef,
+            },
+            cancellationToken);
+    }
+
+    public Task<AssistantToolCall> ApplyAsync(string instanceId, string intentRef, CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentRef);
+        return InvokeAsync(
+            IMepDevicePlacementApplyClient.ToolName,
+            new Dictionary<string, object?>
+            {
+                ["instance_id"] = instanceId,
+                ["intent_ref"] = intentRef,
+            },
+            cancellationToken);
     }
 
     private async Task<AssistantToolCall> InvokeAsync(
