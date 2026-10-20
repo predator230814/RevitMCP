@@ -13,6 +13,8 @@ internal sealed class MepDevicePlacementReviewApplyOrchestrator
 
     public const string ApplyTitle = "Placement apply";
 
+    public const string TerminalGenerationMessage = "This proposal already has a placement result. Create a new proposal before requesting another review.";
+
     private readonly IMepDevicePlacementReviewClient _review;
     private readonly IMepDevicePlacementApplyClient _apply;
     private readonly MepDevicePlacementProposalStore _store;
@@ -35,6 +37,11 @@ internal sealed class MepDevicePlacementReviewApplyOrchestrator
 
     public async Task<MepDevicePlacementPreviewOutcome> ReviewAsync(CancellationToken cancellationToken)
     {
+        if (_store.TryReuseTerminalApply(out _, out _))
+        {
+            return Fail(ReviewTitle, TerminalGenerationMessage);
+        }
+
         if (!TryCurrentIntent("There is no placement preview to review.", out var intentRef, out var failure))
         {
             return Fail(ReviewTitle, failure);

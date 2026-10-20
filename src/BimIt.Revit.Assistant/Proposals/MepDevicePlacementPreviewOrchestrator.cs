@@ -13,6 +13,8 @@ internal sealed class MepDevicePlacementPreviewOrchestrator
 {
     public const string Title = "Placement preview";
 
+    public const string TerminalGenerationMessage = "This proposal already has a placement result. Create a new proposal before previewing another batch.";
+
     private readonly IAssistantToolSession _session;
     private readonly IMepDevicePlacementPreviewClient _preview;
     private readonly MepDevicePlacementProposalStore _store;
@@ -39,6 +41,11 @@ internal sealed class MepDevicePlacementPreviewOrchestrator
         if (proposal is null)
         {
             return Fail("There is no placement proposal to preview.");
+        }
+
+        if (_store.TryReuseTerminalApply(out _, out _))
+        {
+            return Fail(TerminalGenerationMessage);
         }
 
         if (!proposal.HasTemplateBinding || !string.Equals(proposal.InstanceId, _instanceId, StringComparison.Ordinal))
@@ -127,7 +134,11 @@ internal sealed class MepDevicePlacementPreviewOrchestrator
         }
 
         var summary = Describe(proposal, result);
-        _store.RememberPreview(result.IntentRef!, result.IntentFingerprint, result.ExpiresAt!.Value, summary);
+        if (!_store.RememberPreview(result.IntentRef!, result.IntentFingerprint, result.ExpiresAt!.Value, summary))
+        {
+            return Fail(TerminalGenerationMessage);
+        }
+
         return Ok(summary);
     }
 

@@ -289,14 +289,19 @@ internal sealed class MepDevicePlacementProposalStore
         }
     }
 
-    public void RememberPreview(string intentRef, string? fingerprint, DateTimeOffset expiresAt, string summary)
+    public bool RememberPreview(string intentRef, string? fingerprint, DateTimeOffset expiresAt, string summary)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(intentRef);
         ArgumentException.ThrowIfNullOrWhiteSpace(summary);
         lock (_gate)
         {
+            if (_apply is not null && _apply.Generation == _generation)
+            {
+                return false;
+            }
+
             _preview = new MepDevicePlacementPreviewReceipt(_generation, intentRef, fingerprint, expiresAt, summary);
-            _apply = null;
+            return true;
         }
     }
 
@@ -341,11 +346,7 @@ internal sealed class MepDevicePlacementProposalStore
     {
         lock (_gate)
         {
-            if (_apply is null
-                || _preview is null
-                || _apply.Generation != _generation
-                || _preview.Generation != _generation
-                || !string.Equals(_apply.IntentRef, _preview.IntentRef, StringComparison.Ordinal))
+            if (_apply is null || _apply.Generation != _generation)
             {
                 summary = "";
                 isError = false;

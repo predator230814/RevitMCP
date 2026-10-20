@@ -198,8 +198,65 @@ public sealed class AssistantReviewApplyOrchestrationTests
         store.Replace(Bound(null));
         store.RememberPreview(IntentRef, Fingerprint, DateTimeOffset.UtcNow.AddMinutes(5), "Placements: 2");
         store.RememberTerminalApply(IntentRef, "Applied 2 placements. Revit verification passed.", false);
-        store.RememberPreview("intent-next", Fingerprint, DateTimeOffset.UtcNow.AddMinutes(5), "Placements: 2");
+        Assert.False(store.RememberPreview("intent-next", Fingerprint, DateTimeOffset.UtcNow.AddMinutes(5), "Placements: 2"));
+        Assert.Equal(IntentRef, store.Preview!.IntentRef);
+        Assert.NotNull(store.Apply);
+    }
+
+    [Fact]
+    public async Task Applied_preview_expiry_does_not_create_another_preview()
+    {
+        var now = new DateTimeOffset(2026, 10, 19, 18, 0, 0, TimeSpan.Zero);
+        var (previewOrchestrator, store, preview, review, apply) = TerminalGeneration(now, "Applied 2 placements. Revit verification passed.", false);
+
+        var confirm = await previewOrchestrator.ConfirmAsync(CancellationToken.None);
+        var reviewOutcome = await new MepDevicePlacementReviewApplyOrchestrator(review, apply, store, InstanceId, () => now.AddMinutes(10)).ReviewAsync(CancellationToken.None);
+        var secondApply = await new MepDevicePlacementReviewApplyOrchestrator(review, apply, store, InstanceId, () => now.AddMinutes(10)).ApplyAsync(CancellationToken.None);
+
+        Assert.True(confirm.IsError);
+        Assert.Equal(MepDevicePlacementPreviewOrchestrator.TerminalGenerationMessage, confirm.Body);
+        Assert.Empty(preview.Calls);
+        Assert.Equal(MepDevicePlacementReviewApplyOrchestrator.TerminalGenerationMessage, reviewOutcome.Body);
+        Assert.Empty(review.Calls);
+        Assert.Equal("Applied 2 placements. Revit verification passed.", secondApply.Body);
+        Assert.Empty(apply.Calls);
+        Assert.Equal(IntentRef, store.Apply!.IntentRef);
+        Assert.Equal(IntentRef, store.Preview!.IntentRef);
+    }
+
+    [Fact]
+    public async Task Committed_unverified_preview_expiry_does_not_create_another_preview()
+    {
+        var now = new DateTimeOffset(2026, 10, 19, 18, 0, 0, TimeSpan.Zero);
+        var (previewOrchestrator, store, preview, _, _) = TerminalGeneration(
+            now,
+            "A transaction committed, but Revit verification failed. Do not retry this placement.",
+            true);
+
+        var confirm = await previewOrchestrator.ConfirmAsync(CancellationToken.None);
+
+        Assert.True(confirm.IsError);
+        Assert.Equal(MepDevicePlacementPreviewOrchestrator.TerminalGenerationMessage, confirm.Body);
+        Assert.Empty(preview.Calls);
+        Assert.True(store.Apply!.IsError);
+        Assert.Equal(IntentRef, store.Preview!.IntentRef);
+    }
+
+    [Fact]
+    public async Task Replacing_the_proposal_clears_the_terminal_apply_and_allows_a_new_preview()
+    {
+        var now = new DateTimeOffset(2026, 10, 19, 18, 0, 0, TimeSpan.Zero);
+        var (previewOrchestrator, store, preview, _, _) = TerminalGeneration(now, "Applied 2 placements. Revit verification passed.", false);
+        store.Replace(Bound("artifact-hidden"));
+        preview.Result = ReadyPreview(now.AddMinutes(30), "intent-next");
+
+        var confirm = await previewOrchestrator.ConfirmAsync(CancellationToken.None);
+
+        Assert.False(confirm.IsError);
+        Assert.Contains("Preview ready: yes", confirm.Body, StringComparison.Ordinal);
+        Assert.Single(preview.Calls);
         Assert.Null(store.Apply);
+        Assert.Equal("intent-next", store.Preview!.IntentRef);
     }
 
     [Theory]
@@ -293,6 +350,52 @@ public sealed class AssistantReviewApplyOrchestrationTests
         return (orchestrator, store, review, apply, session);
     }
 
+    private static (MepDevicePlacementPreviewOrchestrator Preview, MepDevicePlacementProposalStore Store, CountingPreview PreviewClient, RecordingReview Review, RecordingApply Apply) TerminalGeneration(
+        DateTimeOffset now,
+        string summary,
+        bool isError)
+    {
+        var store = ReadyStore(now);
+        store.RememberTerminalApply(IntentRef, summary, isError);
+        var preview = new CountingPreview();
+        var review = new RecordingReview();
+        var apply = new RecordingApply();
+        var orchestrator = new MepDevicePlacementPreviewOrchestrator(
+            new MatchingSelection(),
+            preview,
+            store,
+            InstanceId,
+            () => now.AddMinutes(10));
+        return (orchestrator, store, preview, review, apply);
+    }
+
+    private static PreviewMepDevicePlacementsResult ReadyPreview(DateTimeOffset expiresAt, string intentRef)
+    {
+        return new PreviewMepDevicePlacementsResult
+        {
+            Context = new PreviewMepDevicePlacementsContext { InstanceId = InstanceId, DocumentId = DocumentId },
+            Ready = true,
+            Template = new PreviewMepDeviceTemplate
+            {
+                ElementRef = TemplateRef,
+                Status = PreviewMepDeviceTemplateStatus.Ok,
+                PlacementMode = PreviewMepDevicePlacementMode.LevelBased,
+                FamilyName = "HeatRecoveryUnit",
+                TypeName = "Heat Recovery Unit (HRU)",
+                CategoryName = "Mechanical Equipment",
+                LevelName = "L2",
+            },
+            Items =
+            [
+                new PreviewMepDevicePlacementItem { OffsetX = 1000, OffsetY = 0, VerticalOffset = 0, Status = PreviewMepDevicePlacementItemStatus.Ok },
+                new PreviewMepDevicePlacementItem { OffsetX = 2000, OffsetY = 0, VerticalOffset = 0, Status = PreviewMepDevicePlacementItemStatus.Ok },
+            ],
+            IntentRef = intentRef,
+            IntentFingerprint = Fingerprint,
+            ExpiresAt = expiresAt,
+        };
+    }
+
     private static MepDevicePlacementProposalStore ReadyStore(DateTimeOffset? expiresAt)
     {
         var store = new MepDevicePlacementProposalStore();
@@ -353,6 +456,41 @@ public sealed class AssistantReviewApplyOrchestrationTests
     private static AssistantIpcMessage Signal(AssistantIpcKind kind)
     {
         return new AssistantIpcMessage(kind, null, null, null, false, null, null, null, null, null, null, null, null, null, false);
+    }
+
+    private sealed class MatchingSelection : IAssistantToolSession
+    {
+        public Task<AssistantMcpReadiness> InitializeAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(new AssistantMcpReadiness(true, 14, [], null));
+        }
+
+        public Task<AssistantToolCall> CallAsync(string toolName, IReadOnlyDictionary<string, object?> arguments, CancellationToken cancellationToken)
+        {
+            if (!string.Equals(toolName, AssistantTools.GetSelection, StringComparison.Ordinal))
+            {
+                return Task.FromResult(new AssistantToolCall(true, "tool_not_allowed", "This Assistant workflow cannot call that tool.", null));
+            }
+
+            var json = "{\"context\":{\"document_id\":\"" + DocumentId + "\"},\"selected_count\":1,\"truncated\":false,\"element_refs\":[\"" + TemplateRef + "\"]}";
+            using var document = JsonDocument.Parse(json);
+            return Task.FromResult(new AssistantToolCall(false, null, null, document.RootElement.Clone()));
+        }
+    }
+
+    private sealed class CountingPreview : IMepDevicePlacementPreviewClient
+    {
+        public List<string> Calls { get; } = [];
+
+        public PreviewMepDevicePlacementsResult Result { get; set; } = null!;
+
+        public Task<AssistantToolCall> PreviewAsync(PreviewMepDevicePlacementsRequest request, string instanceId, CancellationToken cancellationToken)
+        {
+            Calls.Add(instanceId);
+            var json = JsonSerializer.Serialize(Result, ContractJson.Options);
+            using var document = JsonDocument.Parse(json);
+            return Task.FromResult(new AssistantToolCall(false, null, null, document.RootElement.Clone()));
+        }
     }
 
     private sealed class SelectionSession : IAssistantToolSession

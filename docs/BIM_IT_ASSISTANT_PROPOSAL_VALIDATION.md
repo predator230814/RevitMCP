@@ -70,5 +70,6 @@ Not yet run. Target: Revit 2026.5 build `26.5.0.55`, Release outputs from the Sl
 - [ ] Exactly the requested number of elements appears.
 - [ ] The Assistant text contains no instance id, document id, element ref, intent ref, fingerprint, or path.
 - [ ] A repeated Apply does not create a second batch.
+- [ ] After that terminal result, Confirm project axes & preview and Review in Revit do not start another batch for the same proposal.
 - [ ] One Revit Undo removes the created batch.
 - [ ] Diagnostics lists exactly 14 tools, and the model still has six tools.
