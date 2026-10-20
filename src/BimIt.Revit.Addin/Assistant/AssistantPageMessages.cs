@@ -13,6 +13,7 @@ internal enum AssistantPageIntent
     RetryConnection,
     AttachDocument,
     RemoveDocument,
+    ConfirmProjectAxesPreview,
 }
 
 internal readonly record struct AssistantPageParse(bool Accepted, AssistantPageIntent Intent, string? Action, string? Text, string Reason)
@@ -68,6 +69,9 @@ internal static class AssistantPageMessages
                 "retryConnection" => AssistantPageParse.Accept(AssistantPageIntent.RetryConnection),
                 "attachDocument" => AssistantPageParse.Accept(AssistantPageIntent.AttachDocument),
                 "removeDocument" => AssistantPageParse.Accept(AssistantPageIntent.RemoveDocument),
+                "confirmProjectAxesPreview" => message.Text is null && message.Action is null
+                    ? AssistantPageParse.Accept(AssistantPageIntent.ConfirmProjectAxesPreview)
+                    : AssistantPageParse.Reject("confirm"),
                 _ => AssistantPageParse.Reject("unknown"),
             };
         }

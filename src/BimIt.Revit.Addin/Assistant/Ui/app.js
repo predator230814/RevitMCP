@@ -83,6 +83,7 @@ document.getElementById("new-chat").addEventListener("click", () => post({ type:
 retry.addEventListener("click", () => post({ type: "retryConnection" }));
 document.getElementById("diagnostics").addEventListener("click", () => post({ type: "openDiagnostics" }));
 document.getElementById("attach").addEventListener("click", () => post({ type: "attachDocument" }));
+document.getElementById("confirm-axes").addEventListener("click", () => post({ type: "confirmProjectAxesPreview" }));
 document.getElementById("composer").addEventListener("submit", (event) => {
   event.preventDefault();
   const text = command.value.trim();

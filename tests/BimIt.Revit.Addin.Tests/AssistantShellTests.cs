@@ -129,9 +129,52 @@ public sealed class AssistantShellTests
         Assert.Equal(AssistantPageIntent.RetryConnection, AssistantPageMessages.Parse("""{"type":"retryConnection"}""").Intent);
         Assert.Equal(AssistantPageIntent.AttachDocument, AssistantPageMessages.Parse("""{"type":"attachDocument"}""").Intent);
         Assert.Equal(AssistantPageIntent.RemoveDocument, AssistantPageMessages.Parse("""{"type":"removeDocument"}""").Intent);
+        Assert.Equal(AssistantPageIntent.ConfirmProjectAxesPreview, AssistantPageMessages.Parse("""{"type":"confirmProjectAxesPreview"}""").Intent);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"confirmProjectAxesPreview","text":"ready"}""").Accepted);
+        Assert.False(AssistantPageMessages.GrantsApprovalAuthority);
         Assert.False(AssistantPageMessages.Parse("""{"type":"attachDocument","path":"C:\\\\secret\\\\plan.pdf"}""").Accepted);
         Assert.False(AssistantPageMessages.Parse("""{"type":"removeDocument","path":"C:\\\\secret"}""").Accepted);
         Assert.False(AssistantPageMessages.Parse(new string('a', 8_001)).Accepted);
+    }
+
+    [Fact]
+    public async Task Confirm_project_axes_preview_is_a_local_page_action()
+    {
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
+        var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
+        Assert.Contains("post({ type: \"confirmProjectAxesPreview\" })", page, StringComparison.Ordinal);
+        Assert.Contains("Confirm project axes &amp; preview", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("data-action=\"confirmProjectAxesPreview\"", html, StringComparison.Ordinal);
+
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus(),
+            PreviewResult = new AssistantIpcMessage(
+                AssistantIpcKind.PreviewResult,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Placement preview",
+                "Placements: 2\nPreview ready: yes\nTemplate: Duplex Receptacle, GFCI, Electrical Fixtures, L2",
+                false),
+        };
+        var shell = CreateShell("instance-preview", new RecordingProcessFactory(), link);
+        shell.ReceivePageMessage("""{"type":"confirmProjectAxesPreview"}""");
+        await WaitFor(() => shell.SerializeSnapshot().Contains("Preview ready: yes", StringComparison.Ordinal));
+        var snapshot = shell.SerializeSnapshot();
+        Assert.Equal(1, link.Previews);
+        Assert.Contains("Confirm project axes \\u0026 preview", snapshot, StringComparison.Ordinal);
+        Assert.Contains("Duplex Receptacle", snapshot, StringComparison.Ordinal);
+        Assert.DoesNotContain("intent_ref", snapshot, StringComparison.Ordinal);
+        Assert.False(AssistantIpc.GrantsApprovalAuthority);
     }
 
     [Fact]
@@ -862,6 +905,10 @@ public sealed class AssistantShellTests
 
         public int Removes { get; private set; }
 
+        public int Previews { get; private set; }
+
+        public AssistantIpcMessage? PreviewResult { get; set; }
+
         public AssistantIpcMessage? DocumentResult { get; set; }
 
         public Task<AssistantIpcMessage?> ResetConversationAsync(CancellationToken cancellationToken)
@@ -880,6 +927,12 @@ public sealed class AssistantShellTests
         {
             Removes++;
             return Task.FromResult(DocumentResult);
+        }
+
+        public Task<AssistantIpcMessage?> ConfirmProjectAxesPreviewAsync(CancellationToken cancellationToken)
+        {
+            Previews++;
+            return Task.FromResult(PreviewResult);
         }
 
         public Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken)

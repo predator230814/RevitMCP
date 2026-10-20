@@ -161,10 +161,39 @@ internal sealed class TrustedProjectAxisCalibration
 /// <summary>
 /// One active proposal for the current conversation. A later trusted calibration step can promote it without changing the model input contract.
 /// </summary>
+internal sealed class MepDevicePlacementPreviewReceipt
+{
+    public MepDevicePlacementPreviewReceipt(
+        long generation,
+        string intentRef,
+        string? fingerprint,
+        DateTimeOffset expiresAt,
+        string summary)
+    {
+        Generation = generation;
+        IntentRef = intentRef;
+        Fingerprint = fingerprint;
+        ExpiresAt = expiresAt;
+        Summary = summary;
+    }
+
+    public long Generation { get; }
+
+    public string IntentRef { get; }
+
+    public string? Fingerprint { get; }
+
+    public DateTimeOffset ExpiresAt { get; }
+
+    public string Summary { get; }
+}
+
 internal sealed class MepDevicePlacementProposalStore
 {
     private readonly object _gate = new();
     private MepDevicePlacementProposal? _current;
+    private long _generation;
+    private MepDevicePlacementPreviewReceipt? _preview;
 
     public MepDevicePlacementProposal? Current
     {
@@ -183,6 +212,8 @@ internal sealed class MepDevicePlacementProposalStore
         lock (_gate)
         {
             _current = proposal;
+            _generation++;
+            _preview = null;
         }
     }
 
@@ -191,6 +222,8 @@ internal sealed class MepDevicePlacementProposalStore
         lock (_gate)
         {
             _current = null;
+            _generation++;
+            _preview = null;
         }
     }
 
@@ -212,6 +245,52 @@ internal sealed class MepDevicePlacementProposalStore
             if (string.Equals(source, previousArtifactId, StringComparison.Ordinal))
             {
                 _current = null;
+                _generation++;
+                _preview = null;
+            }
+        }
+    }
+
+    public bool TryReusePreview(DateTimeOffset utcNow, out string summary)
+    {
+        lock (_gate)
+        {
+            if (_preview is null || _preview.Generation != _generation || _preview.ExpiresAt <= utcNow)
+            {
+                summary = "";
+                return false;
+            }
+
+            summary = _preview.Summary;
+            return true;
+        }
+    }
+
+    public void RememberPreview(string intentRef, string? fingerprint, DateTimeOffset expiresAt, string summary)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(intentRef);
+        ArgumentException.ThrowIfNullOrWhiteSpace(summary);
+        lock (_gate)
+        {
+            _preview = new MepDevicePlacementPreviewReceipt(_generation, intentRef, fingerprint, expiresAt, summary);
+        }
+    }
+
+    public void ForgetPreview()
+    {
+        lock (_gate)
+        {
+            _preview = null;
+        }
+    }
+
+    internal MepDevicePlacementPreviewReceipt? Preview
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _preview;
             }
         }
     }

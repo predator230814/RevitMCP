@@ -129,7 +129,8 @@ internal static class AssistantHost
         IAssistantAgentRuntime? runtime,
         CancellationToken cancellationToken = default,
         AssistantProviderTimeouts? providerTimeouts = null,
-        MepDevicePlacementProposalStore? proposals = null)
+        MepDevicePlacementProposalStore? proposals = null,
+        IMepDevicePlacementPreviewClient? previewClient = null)
     {
         McpAssistantToolSession? ownedSession = null;
         if (session is null)
@@ -165,6 +166,7 @@ internal static class AssistantHost
         var timeouts = providerTimeouts ?? AssistantProviderTimeouts.Default;
         var documents = new AssistantDocumentStore();
         proposals ??= new MepDevicePlacementProposalStore();
+        previewClient ??= session as IMepDevicePlacementPreviewClient;
         if (runtime is null)
         {
             runtime = readiness.Ready && session is not null
@@ -221,6 +223,19 @@ internal static class AssistantHost
                     }
 
                     await WriteAsync(server, documentResult, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.ConfirmProjectAxesPreview)
+                {
+                    var outcome = await ConfirmProjectAxesAsync(
+                        session,
+                        previewClient,
+                        proposals,
+                        options.InstanceId,
+                        readiness.Ready,
+                        cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -618,6 +633,54 @@ internal static class AssistantHost
             AssistantProviderStatus.IsModelToken(provider.Model) ? provider.Model : null,
             string.IsNullOrWhiteSpace(provider.SafeError) ? null : AssistantSafeText.Clean(provider.SafeError, 500),
             provider.Label);
+    }
+
+    private static async Task<MepDevicePlacementPreviewOutcome> ConfirmProjectAxesAsync(
+        IAssistantToolSession? session,
+        IMepDevicePlacementPreviewClient? previewClient,
+        MepDevicePlacementProposalStore proposals,
+        string instanceId,
+        bool mcpReady,
+        CancellationToken cancellationToken)
+    {
+        if (session is null || previewClient is null || !mcpReady)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The Assistant MCP client is not ready.");
+        }
+
+        try
+        {
+            var orchestrator = new MepDevicePlacementPreviewOrchestrator(session, previewClient, proposals, instanceId);
+            return await orchestrator.ConfirmAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The placement preview could not be created.");
+        }
+    }
+
+    private static AssistantIpcMessage PreviewResult(MepDevicePlacementPreviewOutcome outcome)
+    {
+        return new AssistantIpcMessage(
+            AssistantIpcKind.PreviewResult,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            outcome.Title,
+            outcome.Body,
+            outcome.IsError);
     }
 
     private static AssistantIpcMessage Result(string requestId, AssistantWorkflowResult workflow)

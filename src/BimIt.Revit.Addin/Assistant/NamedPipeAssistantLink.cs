@@ -23,6 +23,8 @@ internal interface IAssistantLink
 
     Task<AssistantIpcMessage?> RemoveDocumentAsync(CancellationToken cancellationToken);
 
+    Task<AssistantIpcMessage?> ConfirmProjectAxesPreviewAsync(CancellationToken cancellationToken);
+
     Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken);
 
     Task ShutdownAsync();
@@ -167,6 +169,11 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
     public Task<AssistantIpcMessage?> RemoveDocumentAsync(CancellationToken cancellationToken)
     {
         return ExchangeAsync(Signal(AssistantIpcKind.RemoveDocument), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> ConfirmProjectAxesPreviewAsync(CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(Signal(AssistantIpcKind.ConfirmProjectAxesPreview), cancellationToken);
     }
 
     public Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken)

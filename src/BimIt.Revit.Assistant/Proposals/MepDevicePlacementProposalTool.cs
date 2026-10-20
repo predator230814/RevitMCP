@@ -529,41 +529,7 @@ internal sealed class MepDevicePlacementProposalTool
         out bool truncated,
         out List<string> refs)
     {
-        documentId = "";
-        selectedCount = 0;
-        truncated = false;
-        refs = [];
-        if (structured is not { ValueKind: JsonValueKind.Object } json
-            || !json.TryGetProperty("context", out var context)
-            || context.ValueKind != JsonValueKind.Object
-            || !json.TryGetProperty("selected_count", out var countProperty)
-            || !countProperty.TryGetInt32(out selectedCount)
-            || selectedCount < 0
-            || !json.TryGetProperty("truncated", out var truncatedProperty)
-            || truncatedProperty.ValueKind is not JsonValueKind.True and not JsonValueKind.False
-            || !json.TryGetProperty("element_refs", out var refsProperty)
-            || refsProperty.ValueKind != JsonValueKind.Array)
-        {
-            return false;
-        }
-
-        if (context.TryGetProperty("document_id", out var documentProperty) && documentProperty.ValueKind == JsonValueKind.String)
-        {
-            documentId = documentProperty.GetString() ?? "";
-        }
-
-        truncated = truncatedProperty.GetBoolean();
-        foreach (var item in refsProperty.EnumerateArray())
-        {
-            if (item.ValueKind != JsonValueKind.String || item.GetString() is not string elementRef)
-            {
-                return false;
-            }
-
-            refs.Add(elementRef);
-        }
-
-        return true;
+        return MepDevicePlacementSelectionProbe.TryRead(structured, out documentId, out selectedCount, out truncated, out refs);
     }
 
     private void RecordUse()
