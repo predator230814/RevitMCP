@@ -108,16 +108,17 @@ public sealed class DocumentPageCalibrationTests
         Assert.False(DocumentPageSimilarity.TryPagePixel(double.NaN, 0, 10, 10, out _));
         Assert.False(DocumentPageSimilarity.TryPagePixel(0, 0, 0, 10, out _));
 
+        const int raster = 100;
         var anchor = new PagePixel(0, 0);
-        var east = new PagePixel(1, 0);
-        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, 1, 0, out var identity));
+        var east = new PagePixel(8, 0);
+        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, raster, raster, 8, 0, out var identity));
         Assert.True(identity.TryApply(3, 4, out var ix, out var iy));
         Assert.Equal(3, ix, 9);
         Assert.Equal(4, iy, 9);
         Assert.True(identity.ScaleSquared > 0);
 
         var shifted = new PagePixel(10, 5);
-        Assert.True(DocumentPageSimilarity.TryCreate(shifted, new PagePixel(12, 5), 2, 0, out var translated));
+        Assert.True(DocumentPageSimilarity.TryCreate(shifted, new PagePixel(18, 5), raster, raster, 8, 0, out var translated));
         Assert.True(translated.TryApply(10, 5, out var zx, out var zy));
         Assert.Equal(0, zx, 9);
         Assert.Equal(0, zy, 9);
@@ -125,12 +126,12 @@ public sealed class DocumentPageCalibrationTests
         Assert.Equal(1, oneX, 9);
         Assert.Equal(0, oneY, 9);
 
-        Assert.True(DocumentPageSimilarity.TryCreate(anchor, new PagePixel(2, 0), 4, 0, out var scaled));
+        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, raster, raster, 16, 0, out var scaled));
         Assert.True(scaled.TryApply(1, 0, out var sx, out var sy));
         Assert.Equal(2, sx, 9);
         Assert.Equal(0, sy, 9);
 
-        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, 0, 1, out var plus));
+        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, raster, raster, 0, 8, out var plus));
         Assert.True(plus.TryApply(1, 0, out var px, out var py));
         Assert.Equal(0, px, 9);
         Assert.Equal(1, py, 9);
@@ -138,12 +139,12 @@ public sealed class DocumentPageCalibrationTests
         Assert.Equal(-1, leftX, 9);
         Assert.Equal(0, leftY, 9);
 
-        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, 0, -1, out var minus));
+        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, raster, raster, 0, -8, out var minus));
         Assert.True(minus.TryApply(1, 0, out var mx, out var my));
         Assert.Equal(0, mx, 9);
         Assert.Equal(-1, my, 9);
 
-        Assert.True(DocumentPageSimilarity.TryCreate(anchor, new PagePixel(2, 0), 0, 4, out var combined));
+        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, raster, raster, 0, 16, out var combined));
         Assert.True(combined.TryApply(2, 0, out var cx, out var cy));
         Assert.Equal(0, cx, 9);
         Assert.Equal(4, cy, 9);
@@ -151,28 +152,65 @@ public sealed class DocumentPageCalibrationTests
         Assert.Equal(-4, c2x, 9);
         Assert.Equal(0, c2y, 9);
 
-        Assert.False(DocumentPageSimilarity.TryCreate(anchor, anchor, 1, 0, out _));
-        Assert.False(DocumentPageSimilarity.TryCreate(anchor, new PagePixel(0.5, 0), 1, 0, out _));
-        Assert.False(DocumentPageSimilarity.TryCreate(anchor, east, 0, 0, out _));
-        Assert.False(DocumentPageSimilarity.TryCreate(anchor, east, double.PositiveInfinity, 0, out _));
-        Assert.False(DocumentPageSimilarity.TryCreate(new PagePixel(double.NaN, 0), east, 1, 0, out _));
+        Assert.False(DocumentPageSimilarity.TryCreate(anchor, anchor, raster, raster, 1, 0, out _));
+        Assert.False(DocumentPageSimilarity.TryCreate(anchor, new PagePixel(0.5, 0), raster, raster, 1, 0, out _));
+        Assert.False(DocumentPageSimilarity.TryCreate(anchor, east, raster, raster, 0, 0, out _));
+        Assert.False(DocumentPageSimilarity.TryCreate(anchor, east, raster, raster, double.PositiveInfinity, 0, out _));
+        Assert.False(DocumentPageSimilarity.TryCreate(new PagePixel(double.NaN, 0), east, raster, raster, 1, 0, out _));
 
-        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, 200, 0, out var wide));
+        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, raster, raster, 800, 0, out var wide));
         var outside = new List<MepDevicePlacementProposalItem>
         {
-            new(0, 0, 0, null, null, 1, 1),
+            new(0, 0, 0, null, null, 0.02, 1),
         };
-        Assert.False(DocumentPagePlacementTransform.TryTransform(wide, 2, 2, "m", outside, out _, out var range));
+        Assert.False(DocumentPagePlacementTransform.TryTransform(wide, raster, raster, "m", outside, out _, out var range));
         Assert.Equal(MepDevicePlacementProposalFailures.Range, range);
 
-        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, 1, 0, out var unit));
+        Assert.True(DocumentPageSimilarity.TryCreate(anchor, east, raster, raster, 8, 0, out var unit));
         var duplicate = new List<MepDevicePlacementProposalItem>
         {
             new(0, 0, 0, null, null, 0.5, 1),
             new(0, 0, 0, null, null, 0.5, 1),
         };
-        Assert.False(DocumentPagePlacementTransform.TryTransform(unit, 2, 2, "m", duplicate, out _, out var duplicateCode));
+        Assert.False(DocumentPagePlacementTransform.TryTransform(unit, raster, raster, "m", duplicate, out _, out var duplicateCode));
         Assert.Equal(MepDevicePlacementProposalFailures.Duplicate, duplicateCode);
+    }
+
+    [Fact]
+    public void Separation_rejects_under_eight_pixels_or_one_percent_of_the_long_edge()
+    {
+        Assert.Equal(8d, DocumentPageSimilarity.MinimumSeparation(100, 40));
+        Assert.False(DocumentPageSimilarity.TryCreate(new PagePixel(0, 0), new PagePixel(Math.BitDecrement(8d), 0), 100, 40, 1, 0, out _));
+        Assert.True(DocumentPageSimilarity.TryCreate(new PagePixel(0, 0), new PagePixel(8, 0), 100, 40, 1, 0, out _));
+
+        var largeMinimum = DocumentPageSimilarity.MinimumSeparation(2_000, 800);
+        Assert.True(largeMinimum > DocumentPageSimilarity.AbsoluteMinimumSeparationPixels);
+        Assert.Equal(2_000 * DocumentPageSimilarity.LongEdgeSeparationFraction, largeMinimum);
+        Assert.False(DocumentPageSimilarity.TryCreate(new PagePixel(0, 0), new PagePixel(Math.BitDecrement(largeMinimum), 0), 2_000, 800, 1, 0, out _));
+        Assert.True(DocumentPageSimilarity.TryCreate(new PagePixel(0, 0), new PagePixel(largeMinimum, 0), 2_000, 800, 1, 0, out var boundary));
+        Assert.True(boundary.TryApply(largeMinimum, 0, out var boundaryX, out var boundaryY));
+        Assert.Equal(1, boundaryX, 9);
+        Assert.Equal(0, boundaryY, 9);
+    }
+
+    [Fact]
+    public async Task Close_source_points_leave_the_proposal_uncalibrated_and_create_no_preview()
+    {
+        var documents = Drawing(100, 50);
+        var now = new DateTimeOffset(2026, 10, 21, 12, 0, 0, TimeSpan.Zero);
+        var (tool, store, session) = Tool(documents);
+        Assert.True((bool)(await tool.InvokeAsync(Json(DocumentProposal(0.5, 1, 0)), CancellationToken.None))["ok"]!);
+        var preview = new EchoPreview();
+        var orchestrator = new DocumentPageCalibrationOrchestrator(session, preview, store, documents, InstanceId, () => now);
+        var began = await orchestrator.BeginAsync(CancellationToken.None);
+        Assert.NotNull(began.Page);
+
+        var outcome = await orchestrator.CompleteAsync(began.Page.SessionRef, 0, 1, 0.001, 1, 10, 0, false, CancellationToken.None);
+        Assert.True(outcome.IsError);
+        Assert.Contains("too close", outcome.Body, StringComparison.Ordinal);
+        Assert.Empty(preview.Requests);
+        Assert.Equal(MepDevicePlacementProposalStates.NeedsCalibration, store.Current!.State);
+        Assert.Null(store.Calibration);
     }
 
     [Fact]

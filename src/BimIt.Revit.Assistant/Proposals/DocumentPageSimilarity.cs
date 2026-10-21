@@ -22,7 +22,15 @@ internal readonly record struct Similarity2D(double AnchorX, double AnchorY, dou
 /// </summary>
 internal static class DocumentPageSimilarity
 {
-    public const double MinimumSeparationPixels = 1d;
+    public const double AbsoluteMinimumSeparationPixels = 8d;
+
+    public const double LongEdgeSeparationFraction = 0.01d;
+
+    public static double MinimumSeparation(int rasterWidth, int rasterHeight)
+    {
+        var longEdge = Math.Max(rasterWidth, rasterHeight);
+        return Math.Max(AbsoluteMinimumSeparationPixels, longEdge * LongEdgeSeparationFraction);
+    }
 
     public static bool TryPagePixel(double pageX, double pageY, int rasterWidth, int rasterHeight, out PagePixel pixel)
     {
@@ -49,12 +57,16 @@ internal static class DocumentPageSimilarity
     public static bool TryCreate(
         PagePixel sourceA,
         PagePixel sourceB,
+        int rasterWidth,
+        int rasterHeight,
         double targetDeltaXMetres,
         double targetDeltaYMetres,
         out Similarity2D similarity)
     {
         similarity = default;
-        if (!double.IsFinite(sourceA.X)
+        if (rasterWidth <= 0
+            || rasterHeight <= 0
+            || !double.IsFinite(sourceA.X)
             || !double.IsFinite(sourceA.Y)
             || !double.IsFinite(sourceB.X)
             || !double.IsFinite(sourceB.Y)
@@ -67,7 +79,12 @@ internal static class DocumentPageSimilarity
         var vx = sourceB.X - sourceA.X;
         var vy = sourceB.Y - sourceA.Y;
         var v2 = (vx * vx) + (vy * vy);
-        if (!double.IsFinite(vx) || !double.IsFinite(vy) || !double.IsFinite(v2) || v2 < MinimumSeparationPixels * MinimumSeparationPixels)
+        var minimum = MinimumSeparation(rasterWidth, rasterHeight);
+        if (!double.IsFinite(vx)
+            || !double.IsFinite(vy)
+            || !double.IsFinite(v2)
+            || !double.IsFinite(minimum)
+            || v2 < minimum * minimum)
         {
             return false;
         }

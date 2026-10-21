@@ -143,7 +143,7 @@ internal sealed class DocumentPageCalibrationOrchestrator
 
         if (!DocumentPageSimilarity.TryPagePixel(sourceAX, sourceAY, session.RasterWidth, session.RasterHeight, out var sourceA)
             || !DocumentPageSimilarity.TryPagePixel(sourceBX, sourceBY, session.RasterWidth, session.RasterHeight, out var sourceB)
-            || !DocumentPageSimilarity.TryCreate(sourceA, sourceB, targetDeltaXMetres, targetDeltaYMetres, out var similarity))
+            || !DocumentPageSimilarity.TryCreate(sourceA, sourceB, session.RasterWidth, session.RasterHeight, targetDeltaXMetres, targetDeltaYMetres, out var similarity))
         {
             _store.ForgetCalibrationSession();
             return Fail("The calibration points are too close.");
