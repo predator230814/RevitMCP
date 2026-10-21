@@ -5,6 +5,7 @@ using BimIt.Revit.Addin.Apply;
 using BimIt.Revit.Addin.Approval;
 using BimIt.Revit.Addin.Audit;
 using BimIt.Revit.Addin.Capabilities;
+using BimIt.Revit.Addin.Assistant;
 using BimIt.Revit.Addin.Execution;
 using BimIt.Revit.Addin.Identity;
 using BimIt.Revit.Addin.Intents;
@@ -77,6 +78,16 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private IDisposable? _activeDocumentObservation;
     private ApprovalUiRuntime? _approvalUi;
     private int _disposed;
+
+    internal void AttachDocumentCalibration(MepDocumentCalibrationPickerSlot? slot)
+    {
+        if (slot is null || _dispatcher is null || _identity is null)
+        {
+            return;
+        }
+
+        slot.Attach(new RevitMepDocumentCalibrationPicker(_dispatcher, _identity));
+    }
 
     internal RevitLocalApprovalProviderStateMachine ApprovalProvider => _approval;
 
@@ -410,6 +421,8 @@ internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFact
 
     public ApprovalUiRuntime? ApprovalUi { get; set; }
 
+    public MepDocumentCalibrationPickerSlot? DocumentCalibration { get; set; }
+
     public ILifecycleDispatcher Create()
     {
         var lifetime = new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents);
@@ -418,6 +431,7 @@ internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFact
             lifetime.AttachApprovalUi(ApprovalUi);
         }
 
+        lifetime.AttachDocumentCalibration(DocumentCalibration);
         return lifetime;
     }
 }

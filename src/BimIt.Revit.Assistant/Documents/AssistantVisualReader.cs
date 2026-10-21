@@ -33,12 +33,12 @@ internal static class AssistantVisualReader
                 var options = RenderOptionsFor(pageSize.Width, pageSize.Height);
                 stream.Position = 0;
                 using var bitmap = Conversion.ToImage(stream, index, leaveOpen: true, password: null, options: options);
-                if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0 || !AssistantVisualEncoder.TryEncode(bitmap, out var bytes, out var mimeType))
+                if (bitmap is null || bitmap.Width <= 0 || bitmap.Height <= 0 || !AssistantVisualEncoder.TryEncode(bitmap, out var bytes, out var mimeType, out var width, out var height))
                 {
                     return PdfFailed();
                 }
 
-                pages.Add(new AssistantVisualPage(index + 1, mimeType, bytes));
+                pages.Add(new AssistantVisualPage(index + 1, mimeType, bytes, width, height));
             }
 
             return AssistantDocumentReadResult.Success(new AssistantDocumentArtifact(
@@ -85,7 +85,7 @@ internal static class AssistantVisualReader
                 || bitmap.Width != target.Width
                 || bitmap.Height != target.Height
                 || !AssistantVisualBounds.Fits(bitmap.Width, bitmap.Height)
-                || !AssistantVisualEncoder.TryEncode(bitmap, out var bytes, out var mimeType))
+                || !AssistantVisualEncoder.TryEncode(bitmap, out var bytes, out var mimeType, out var width, out var height))
             {
                 return Invalid();
             }
@@ -96,7 +96,7 @@ internal static class AssistantVisualReader
                 size,
                 null,
                 false,
-                [new AssistantVisualPage(1, mimeType, bytes)],
+                [new AssistantVisualPage(1, mimeType, bytes, width, height)],
                 false,
                 1));
         }
@@ -204,13 +204,17 @@ internal static class AssistantVisualBounds
 
 internal static class AssistantVisualEncoder
 {
-    public static bool TryEncode(SKBitmap source, out byte[] bytes, out string mimeType)
+    public static bool TryEncode(SKBitmap source, out byte[] bytes, out string mimeType, out int width, out int height)
     {
         bytes = [];
         mimeType = "image/png";
+        width = 0;
+        height = 0;
         using var prepared = Scale(source, AssistantDocumentLimits.VisualLongEdge);
         if (TryFit(prepared, out bytes, out mimeType))
         {
+            width = prepared.Width;
+            height = prepared.Height;
             return true;
         }
 
@@ -226,6 +230,8 @@ internal static class AssistantVisualEncoder
             using var smaller = Scale(prepared, next);
             if (TryFit(smaller, out bytes, out mimeType))
             {
+                width = smaller.Width;
+                height = smaller.Height;
                 return true;
             }
 

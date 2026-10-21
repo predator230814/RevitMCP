@@ -36,6 +36,9 @@ internal sealed class AssistantShell
     private AssistantAttachmentChip? _attachment;
     private CancellationTokenSource? _providerPoll;
     private Task _sequence = Task.CompletedTask;
+    private readonly IMepDocumentCalibrationPicker _calibration;
+    private CalibrationHandoff? _handoff;
+    private string? _lastCalibrationPost;
 
     public AssistantShell(
         Func<string> instanceId,
@@ -44,7 +47,8 @@ internal sealed class AssistantShell
         IAssistantProcessFactory processes,
         IAssistantLink link,
         AssistantIpcTimeouts? timeouts = null,
-        IAssistantDocumentPicker? documentPicker = null)
+        IAssistantDocumentPicker? documentPicker = null,
+        IMepDocumentCalibrationPicker? calibrationPicker = null)
     {
         _instanceId = instanceId;
         _bridgeReady = bridgeReady;
@@ -53,7 +57,10 @@ internal sealed class AssistantShell
         _link = link;
         _timeouts = timeouts ?? AssistantIpcTimeouts.Default;
         _documents = documentPicker ?? new AssistantOpenFilePicker();
+        _calibration = calibrationPicker ?? new MepDocumentCalibrationPickerSlot();
     }
+
+    internal string? LastCalibrationPost => _lastCalibrationPost;
 
     public AssistantConversation Conversation => _conversation;
 
@@ -113,6 +120,8 @@ internal sealed class AssistantShell
             case AssistantPageIntent.NewConversation:
                 _conversation.Reset();
                 _attachment = null;
+                _handoff = null;
+                PostCalibrationClosed();
                 PostSnapshot();
                 Sequence(ResetProviderAsync);
                 break;
@@ -124,6 +133,15 @@ internal sealed class AssistantShell
                 break;
             case AssistantPageIntent.ConfirmProjectAxesPreview:
                 Sequence(ConfirmProjectAxesPreviewAsync);
+                break;
+            case AssistantPageIntent.CalibratePlanPreview:
+                Sequence(CalibratePlanPreviewAsync);
+                break;
+            case AssistantPageIntent.SubmitCalibrationPoints:
+                Sequence(() => SubmitCalibrationAsync(parsed));
+                break;
+            case AssistantPageIntent.CancelCalibration:
+                Sequence(() => CancelCalibrationAsync(parsed.SessionRef));
                 break;
             case AssistantPageIntent.ReviewInRevit:
                 Sequence(() => LocalPlacementActionAsync(
@@ -155,6 +173,7 @@ internal sealed class AssistantShell
 
     internal void ShutdownForHost()
     {
+        _handoff = null;
         StopProviderPoll();
         StopProcessWatch();
         try
@@ -579,6 +598,227 @@ internal sealed class AssistantShell
             PostSnapshot();
         }
     }
+
+    private async Task CalibratePlanPreviewAsync()
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _conversation.Add("user", "You", "Calibrate plan & preview");
+        PostSnapshot();
+        try
+        {
+            if (_mcpState != "ready")
+            {
+                await EnsureAssistantAsync().ConfigureAwait(false);
+            }
+
+            if (_mcpState != "ready")
+            {
+                _conversation.Add("error", "Assistant", _statusError ?? "The Assistant is not ready.");
+                return;
+            }
+
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await _link.BeginDocumentCalibrationAsync(timeout.Token).ConfigureAwait(false);
+            if (result?.Kind == AssistantIpcKind.CalibrationPage)
+            {
+                if (!string.Equals(result.InstanceId, _instanceId(), StringComparison.Ordinal)
+                    || string.IsNullOrEmpty(result.BoundDocumentId)
+                    || string.IsNullOrEmpty(result.BoundTemplateRef)
+                    || string.IsNullOrEmpty(result.CalibrationSession))
+                {
+                    _handoff = null;
+                    PostCalibrationClosed();
+                    _conversation.Add("error", "Assistant", "The drawing page could not be shown.");
+                    return;
+                }
+
+                var web = AssistantCalibrationMessages.ForWebView(result);
+                if (web is null)
+                {
+                    _handoff = null;
+                    PostCalibrationClosed();
+                    _conversation.Add("error", "Assistant", "The drawing page could not be shown.");
+                    return;
+                }
+
+                _handoff = new CalibrationHandoff(result.CalibrationSession, result.BoundDocumentId, result.BoundTemplateRef);
+                PostCalibration(web);
+                return;
+            }
+
+            if (result?.Kind != AssistantIpcKind.PreviewResult)
+            {
+                _conversation.Add("error", "Assistant", "The drawing page could not be shown.");
+                return;
+            }
+
+            _conversation.Add(result.IsError ? "error" : "assistant", result.Title ?? "Placement preview", result.Body ?? "");
+        }
+        catch (Exception)
+        {
+            _handoff = null;
+            PostCalibrationClosed();
+            _conversation.Add("error", "Assistant", "The drawing page could not be shown.");
+        }
+        finally
+        {
+            _busy = false;
+            PostSnapshot();
+        }
+    }
+
+    private async Task SubmitCalibrationAsync(AssistantPageParse parsed)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        var handoff = _handoff;
+        if (handoff is null || !string.Equals(handoff.SessionRef, parsed.SessionRef, StringComparison.Ordinal))
+        {
+            _handoff = null;
+            PostCalibrationClosed();
+            _conversation.Add("error", "Assistant", "The calibration session is no longer valid.");
+            PostSnapshot();
+            return;
+        }
+
+        _busy = true;
+        _handoff = null;
+        PostSnapshot();
+        try
+        {
+            MepDocumentCalibrationPick pick;
+            try
+            {
+                pick = await _calibration.PickAsync(
+                    new MepDocumentCalibrationBinding(handoff.DocumentId, handoff.TemplateElementRef),
+                    CancellationToken.None).ConfigureAwait(false);
+            }
+            catch (Exception)
+            {
+                pick = MepDocumentCalibrationPick.Mismatch();
+            }
+
+            var vector = pick.Status == MepDocumentCalibrationPickStatus.Vector;
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await _link.CompleteDocumentCalibrationAsync(
+                new AssistantIpcMessage(
+                    AssistantIpcKind.CompleteDocumentCalibration,
+                    null,
+                    null,
+                    null,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    CalibrationSession: handoff.SessionRef,
+                    SourceAX: parsed.SourceAX,
+                    SourceAY: parsed.SourceAY,
+                    SourceBX: parsed.SourceBX,
+                    SourceBY: parsed.SourceBY,
+                    TargetDeltaXMetres: vector ? pick.DeltaXMetres : 0,
+                    TargetDeltaYMetres: vector ? pick.DeltaYMetres : 0,
+                    CalibrationCancelled: !vector),
+                timeout.Token).ConfigureAwait(false);
+            if (result?.Kind != AssistantIpcKind.PreviewResult)
+            {
+                _conversation.Add("error", "Assistant", "The plan calibration was not completed. No preview was created.");
+                return;
+            }
+
+            _conversation.Add(result.IsError ? "error" : "assistant", result.Title ?? "Placement preview", result.Body ?? "");
+        }
+        catch (Exception)
+        {
+            _conversation.Add("error", "Assistant", "The plan calibration was not completed. No preview was created.");
+        }
+        finally
+        {
+            _busy = false;
+            PostCalibrationClosed();
+            PostSnapshot();
+        }
+    }
+
+    private async Task CancelCalibrationAsync(string? sessionRef)
+    {
+        var handoff = _handoff;
+        _handoff = null;
+        PostCalibrationClosed();
+        if (handoff is null || !string.Equals(handoff.SessionRef, sessionRef, StringComparison.Ordinal) || _busy)
+        {
+            PostSnapshot();
+            return;
+        }
+
+        _busy = true;
+        PostSnapshot();
+        try
+        {
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await _link.CompleteDocumentCalibrationAsync(
+                new AssistantIpcMessage(
+                    AssistantIpcKind.CompleteDocumentCalibration,
+                    null,
+                    null,
+                    null,
+                    false,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    CalibrationSession: handoff.SessionRef,
+                    CalibrationCancelled: true),
+                timeout.Token).ConfigureAwait(false);
+            if (result?.Kind == AssistantIpcKind.PreviewResult)
+            {
+                _conversation.Add(result.IsError ? "error" : "assistant", result.Title ?? "Placement preview", result.Body ?? "");
+            }
+        }
+        catch (Exception)
+        {
+            _conversation.Add("error", "Assistant", "The plan calibration was not completed. No preview was created.");
+        }
+        finally
+        {
+            _busy = false;
+            PostSnapshot();
+        }
+    }
+
+    private void PostCalibration(string json)
+    {
+        _lastCalibrationPost = json;
+        _pane?.Post(json);
+    }
+
+    private void PostCalibrationClosed()
+    {
+        _lastCalibrationPost = null;
+        _pane?.Post(AssistantCalibrationMessages.Closed);
+    }
+
+    private sealed record CalibrationHandoff(string SessionRef, string DocumentId, string TemplateElementRef);
 
     private async Task RemoveDocumentAsync()
     {

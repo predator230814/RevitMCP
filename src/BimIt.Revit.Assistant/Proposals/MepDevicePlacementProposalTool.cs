@@ -25,13 +25,27 @@ internal static class MepDevicePlacementProposalFailures
     public const string Confidence = "invalid_confidence";
 
     public const string Evidence = "evidence_length";
+
+    public const string CoordinateSpace = "coordinate_space";
+
+    public const string Mixed = "mixed_coordinates";
+
+    public const string Page = "page_unavailable";
 }
 
 internal sealed class MepDevicePlacementProposalRequest
 {
+    [JsonPropertyName("coordinate_space")]
+    [Description("project_offsets or document_page.")]
+    public string? CoordinateSpace { get; init; }
+
     [JsonPropertyName("length_unit")]
     [Description("Length unit for every offset. Use mm, cm, m, in, or ft.")]
     public string? LengthUnit { get; init; }
+
+    [JsonPropertyName("page_number")]
+    [Description("1-based drawing page. Required for document_page.")]
+    public int? PageNumber { get; init; }
 
     [JsonPropertyName("placements")]
     [Description("One to twenty placements.")]
@@ -44,12 +58,20 @@ internal sealed class MepDevicePlacementProposalRequest
 internal sealed class MepDevicePlacementProposalItemRequest
 {
     [JsonPropertyName("offset_x")]
-    [Description("Signed project-axis X offset in the proposal length unit.")]
+    [Description("Signed project-axis X offset in the proposal length unit. Use only with project_offsets.")]
     public double? OffsetX { get; init; }
 
     [JsonPropertyName("offset_y")]
-    [Description("Signed project-axis Y offset in the proposal length unit.")]
+    [Description("Signed project-axis Y offset in the proposal length unit. Use only with project_offsets.")]
     public double? OffsetY { get; init; }
+
+    [JsonPropertyName("page_x")]
+    [Description("Normalized drawing position from 0 to 1, left to right. Use only with document_page.")]
+    public double? PageX { get; init; }
+
+    [JsonPropertyName("page_y")]
+    [Description("Normalized drawing position from 0 to 1, top to bottom. Use only with document_page.")]
+    public double? PageY { get; init; }
 
     [JsonPropertyName("vertical_offset")]
     [Description("Signed vertical offset in the proposal length unit.")]
@@ -92,16 +114,34 @@ internal sealed class MepDevicePlacementProposalTool
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     };
 
-    private static readonly HashSet<string> ProposalFields = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> ProjectFields = new(StringComparer.Ordinal)
     {
+        "coordinate_space",
         "length_unit",
         "placements",
     };
 
-    private static readonly HashSet<string> PlacementFields = new(StringComparer.Ordinal)
+    private static readonly HashSet<string> DocumentFields = new(StringComparer.Ordinal)
+    {
+        "coordinate_space",
+        "length_unit",
+        "page_number",
+        "placements",
+    };
+
+    private static readonly HashSet<string> ProjectPlacementFields = new(StringComparer.Ordinal)
     {
         "offset_x",
         "offset_y",
+        "vertical_offset",
+        "source_evidence",
+        "confidence",
+    };
+
+    private static readonly HashSet<string> DocumentPlacementFields = new(StringComparer.Ordinal)
+    {
+        "page_x",
+        "page_y",
         "vertical_offset",
         "source_evidence",
         "confidence",
@@ -112,13 +152,13 @@ internal sealed class MepDevicePlacementProposalTool
     private readonly IAssistantToolSession _session;
     private readonly string _instanceId;
     private readonly MepDevicePlacementProposalStore _store;
-    private readonly Func<string?> _currentAttachmentId;
+    private readonly Func<AssistantAttachmentView> _currentAttachment;
 
     public MepDevicePlacementProposalTool(
         IAssistantToolSession session,
         string instanceId,
         MepDevicePlacementProposalStore store,
-        Func<string?> currentAttachmentId)
+        Func<AssistantAttachmentView> currentAttachment)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         if (string.IsNullOrWhiteSpace(instanceId))
@@ -128,7 +168,7 @@ internal sealed class MepDevicePlacementProposalTool
 
         _instanceId = instanceId;
         _store = store ?? throw new ArgumentNullException(nameof(store));
-        _currentAttachmentId = currentAttachmentId ?? throw new ArgumentNullException(nameof(currentAttachmentId));
+        _currentAttachment = currentAttachment ?? throw new ArgumentNullException(nameof(currentAttachment));
     }
 
     public IReadOnlyList<string> ConsumeUsedTools()
@@ -174,20 +214,29 @@ internal sealed class MepDevicePlacementProposalTool
     public async Task<IReadOnlyDictionary<string, object?>> InvokeAsync(JsonElement arguments, CancellationToken cancellationToken)
     {
         RecordUse();
-        if (!TryValidate(arguments, out var lengthUnit, out var placements, out var failure))
+        var attachment = CurrentAttachment();
+        if (!TryValidate(arguments, attachment, out var coordinateSpace, out var lengthUnit, out var pageNumber, out var rasterWidth, out var rasterHeight, out var placements, out var failure))
         {
             return Fail(failure);
         }
 
         var binding = await ResolveBindingAsync(cancellationToken).ConfigureAwait(false);
+        var reason = coordinateSpace == MepDevicePlacementCoordinateSpaces.DocumentPage
+            && binding.Reason == MepDevicePlacementProposalReasons.CoordinateBasisUnestablished
+            ? MepDevicePlacementProposalReasons.DocumentCalibrationRequired
+            : binding.Reason;
         var proposal = MepDevicePlacementProposal.Create(
             lengthUnit,
             placements,
-            binding.Reason,
+            reason,
             _instanceId,
             binding.DocumentId,
             binding.TemplateElementRef,
-            CurrentAttachmentId());
+            attachment.ArtifactId,
+            coordinateSpace,
+            pageNumber,
+            rasterWidth,
+            rasterHeight);
         _store.Replace(proposal);
         return proposal.ToModelResult();
     }
@@ -208,6 +257,8 @@ internal sealed class MepDevicePlacementProposalTool
 
             if (IsPresentAndNonFinite(item.OffsetX)
                 || IsPresentAndNonFinite(item.OffsetY)
+                || IsPresentAndNonFinite(item.PageX)
+                || IsPresentAndNonFinite(item.PageY)
                 || IsPresentAndNonFinite(item.VerticalOffset)
                 || IsPresentAndNonFinite(item.Confidence))
             {
@@ -223,16 +274,15 @@ internal sealed class MepDevicePlacementProposalTool
         return value is double number && !double.IsFinite(number);
     }
 
-    private string? CurrentAttachmentId()
+    private AssistantAttachmentView CurrentAttachment()
     {
         try
         {
-            var id = _currentAttachmentId();
-            return string.IsNullOrEmpty(id) ? null : id;
+            return _currentAttachment() ?? AssistantAttachmentView.None;
         }
         catch (Exception)
         {
-            return null;
+            return AssistantAttachmentView.None;
         }
     }
 
@@ -287,15 +337,42 @@ internal sealed class MepDevicePlacementProposalTool
 
     private static bool TryValidate(
         JsonElement arguments,
+        AssistantAttachmentView attachment,
+        out string coordinateSpace,
         out string lengthUnit,
+        out int? pageNumber,
+        out int? rasterWidth,
+        out int? rasterHeight,
         out List<MepDevicePlacementProposalItem> placements,
         out string failure)
     {
+        coordinateSpace = "";
         lengthUnit = "";
+        pageNumber = null;
+        rasterWidth = null;
+        rasterHeight = null;
         placements = [];
         failure = MepDevicePlacementProposalFailures.Shape;
-        if (arguments.ValueKind != JsonValueKind.Object || HasUnknown(arguments, ProposalFields))
+        if (arguments.ValueKind != JsonValueKind.Object)
         {
+            return false;
+        }
+
+        if (!TryCoordinateSpace(arguments, out coordinateSpace, out failure))
+        {
+            return false;
+        }
+
+        var documentPage = coordinateSpace == MepDevicePlacementCoordinateSpaces.DocumentPage;
+        if (HasMixed(arguments, documentPage))
+        {
+            failure = MepDevicePlacementProposalFailures.Mixed;
+            return false;
+        }
+
+        if (HasUnknown(arguments, documentPage ? DocumentFields : ProjectFields))
+        {
+            failure = MepDevicePlacementProposalFailures.Shape;
             return false;
         }
 
@@ -306,6 +383,11 @@ internal sealed class MepDevicePlacementProposalTool
         }
 
         if (!TryUnit(unitProperty, out lengthUnit, out failure))
+        {
+            return false;
+        }
+
+        if (documentPage && !TryDocumentPage(arguments, attachment, out pageNumber, out rasterWidth, out rasterHeight, out failure))
         {
             return false;
         }
@@ -326,13 +408,16 @@ internal sealed class MepDevicePlacementProposalTool
         var seen = new HashSet<OffsetTriple>();
         foreach (var item in placementProperty.EnumerateArray())
         {
-            if (!TryPlacement(item, lengthUnit, out var placement, out failure))
+            if (!TryPlacement(item, lengthUnit, documentPage, out var placement, out failure))
             {
                 placements = [];
                 return false;
             }
 
-            if (!seen.Add(new OffsetTriple(placement.OffsetX, placement.OffsetY, placement.VerticalOffset)))
+            var key = documentPage
+                ? new OffsetTriple(placement.PageX!.Value, placement.PageY!.Value, placement.VerticalOffset)
+                : new OffsetTriple(placement.OffsetX, placement.OffsetY, placement.VerticalOffset);
+            if (!seen.Add(key))
             {
                 failure = MepDevicePlacementProposalFailures.Duplicate;
                 placements = [];
@@ -343,6 +428,97 @@ internal sealed class MepDevicePlacementProposalTool
         }
 
         return true;
+    }
+
+    private static bool TryCoordinateSpace(JsonElement arguments, out string coordinateSpace, out string failure)
+    {
+        coordinateSpace = "";
+        failure = MepDevicePlacementProposalFailures.CoordinateSpace;
+        if (!arguments.TryGetProperty("coordinate_space", out var property))
+        {
+            return false;
+        }
+
+        if (property.ValueKind != JsonValueKind.String || property.GetString() is not string text)
+        {
+            failure = MepDevicePlacementProposalFailures.Shape;
+            return false;
+        }
+
+        coordinateSpace = text;
+        return coordinateSpace is MepDevicePlacementCoordinateSpaces.ProjectOffsets or MepDevicePlacementCoordinateSpaces.DocumentPage;
+    }
+
+    private static bool HasMixed(JsonElement arguments, bool documentPage)
+    {
+        if (!documentPage && arguments.TryGetProperty("page_number", out _))
+        {
+            return true;
+        }
+
+        if (!arguments.TryGetProperty("placements", out var placements) || placements.ValueKind != JsonValueKind.Array)
+        {
+            return false;
+        }
+
+        foreach (var item in placements.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                continue;
+            }
+
+            var hasProject = item.TryGetProperty("offset_x", out _) || item.TryGetProperty("offset_y", out _);
+            var hasPage = item.TryGetProperty("page_x", out _) || item.TryGetProperty("page_y", out _);
+            if (documentPage ? hasProject : hasPage)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryDocumentPage(
+        JsonElement arguments,
+        AssistantAttachmentView attachment,
+        out int? pageNumber,
+        out int? rasterWidth,
+        out int? rasterHeight,
+        out string failure)
+    {
+        pageNumber = null;
+        rasterWidth = null;
+        rasterHeight = null;
+        failure = MepDevicePlacementProposalFailures.Shape;
+        if (!arguments.TryGetProperty("page_number", out var property))
+        {
+            return false;
+        }
+
+        if (property.ValueKind != JsonValueKind.Number || !property.TryGetInt32(out var number))
+        {
+            return false;
+        }
+
+        failure = MepDevicePlacementProposalFailures.Page;
+        if (number < 1 || string.IsNullOrEmpty(attachment.ArtifactId))
+        {
+            return false;
+        }
+
+        foreach (var page in attachment.Pages)
+        {
+            if (page.PageNumber == number && page.RasterWidth > 0 && page.RasterHeight > 0)
+            {
+                pageNumber = number;
+                rasterWidth = page.RasterWidth;
+                rasterHeight = page.RasterHeight;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool TryUnit(JsonElement unit, out string canonical, out string failure)
@@ -362,19 +538,37 @@ internal sealed class MepDevicePlacementProposalTool
     private static bool TryPlacement(
         JsonElement item,
         string lengthUnit,
+        bool documentPage,
         out MepDevicePlacementProposalItem placement,
         out string failure)
     {
         placement = new MepDevicePlacementProposalItem(0, 0, 0, null, null);
         failure = MepDevicePlacementProposalFailures.Shape;
-        if (item.ValueKind != JsonValueKind.Object || HasUnknown(item, PlacementFields))
+        if (item.ValueKind != JsonValueKind.Object || HasUnknown(item, documentPage ? DocumentPlacementFields : ProjectPlacementFields))
         {
             return false;
         }
 
-        if (!TryOffset(item, "offset_x", out var offsetX, out failure)
-            || !TryOffset(item, "offset_y", out var offsetY, out failure)
-            || !TryOffset(item, "vertical_offset", out var vertical, out failure))
+        if (!TryOffset(item, "vertical_offset", out var vertical, out failure))
+        {
+            return false;
+        }
+
+        double offsetX = 0;
+        double offsetY = 0;
+        double? pageX = null;
+        double? pageY = null;
+        if (documentPage)
+        {
+            if (!TryUnitCoordinate(item, "page_x", out var x, out failure) || !TryUnitCoordinate(item, "page_y", out var y, out failure))
+            {
+                return false;
+            }
+
+            pageX = x;
+            pageY = y;
+        }
+        else if (!TryOffset(item, "offset_x", out offsetX, out failure) || !TryOffset(item, "offset_y", out offsetY, out failure))
         {
             return false;
         }
@@ -384,17 +578,31 @@ internal sealed class MepDevicePlacementProposalTool
             return false;
         }
 
-        if (!WithinBounds(lengthUnit, offsetX, offsetY, vertical))
+        if (!WithinPlan(lengthUnit, documentPage, offsetX, offsetY, vertical))
         {
-            failure = double.IsFinite(ToMetres(lengthUnit, offsetX))
-                && double.IsFinite(ToMetres(lengthUnit, offsetY))
-                && double.IsFinite(ToMetres(lengthUnit, vertical))
+            failure = PlanIsFinite(lengthUnit, documentPage, offsetX, offsetY, vertical)
                 ? MepDevicePlacementProposalFailures.Range
                 : MepDevicePlacementProposalFailures.NonFinite;
             return false;
         }
 
-        placement = new MepDevicePlacementProposalItem(offsetX, offsetY, vertical, evidence, confidence);
+        placement = new MepDevicePlacementProposalItem(offsetX, offsetY, vertical, evidence, confidence, pageX, pageY);
+        return true;
+    }
+
+    private static bool TryUnitCoordinate(JsonElement item, string name, out double value, out string failure)
+    {
+        if (!TryOffset(item, name, out value, out failure))
+        {
+            return false;
+        }
+
+        if (!DocumentPageSimilarity.IsUnitInterval(value))
+        {
+            failure = MepDevicePlacementProposalFailures.Range;
+            return false;
+        }
+
         return true;
     }
 
@@ -482,31 +690,39 @@ internal sealed class MepDevicePlacementProposalTool
         return true;
     }
 
-    private static bool WithinBounds(string unit, double offsetX, double offsetY, double vertical)
+    private static bool WithinPlan(string unit, bool documentPage, double offsetX, double offsetY, double vertical)
     {
-        var x = ToMetres(unit, offsetX);
-        var y = ToMetres(unit, offsetY);
-        var z = ToMetres(unit, vertical);
-        return double.IsFinite(x)
-            && double.IsFinite(y)
-            && double.IsFinite(z)
+        if (!MepDevicePlacementLengthUnits.TryToMetres(unit, vertical, out var z))
+        {
+            return false;
+        }
+
+        if (Math.Abs(z) > MaxVerticalMetres + BoundToleranceMetres)
+        {
+            return false;
+        }
+
+        if (documentPage)
+        {
+            return true;
+        }
+
+        return MepDevicePlacementLengthUnits.TryToMetres(unit, offsetX, out var x)
+            && MepDevicePlacementLengthUnits.TryToMetres(unit, offsetY, out var y)
             && Math.Abs(x) <= MaxPlanMetres + BoundToleranceMetres
-            && Math.Abs(y) <= MaxPlanMetres + BoundToleranceMetres
-            && Math.Abs(z) <= MaxVerticalMetres + BoundToleranceMetres;
+            && Math.Abs(y) <= MaxPlanMetres + BoundToleranceMetres;
     }
 
-    private static double ToMetres(string unit, double value)
+    private static bool PlanIsFinite(string unit, bool documentPage, double offsetX, double offsetY, double vertical)
     {
-        var factor = unit switch
+        if (!MepDevicePlacementLengthUnits.TryToMetres(unit, vertical, out _))
         {
-            "mm" => 0.001,
-            "cm" => 0.01,
-            "m" => 1d,
-            "in" => 0.0254,
-            "ft" => 0.3048,
-            _ => double.NaN,
-        };
-        return value * factor;
+            return false;
+        }
+
+        return documentPage
+            || (MepDevicePlacementLengthUnits.TryToMetres(unit, offsetX, out _)
+                && MepDevicePlacementLengthUnits.TryToMetres(unit, offsetY, out _));
     }
 
     private static bool HasUnknown(JsonElement item, HashSet<string> allowed)

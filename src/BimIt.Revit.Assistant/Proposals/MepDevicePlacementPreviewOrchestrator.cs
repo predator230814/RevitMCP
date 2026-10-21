@@ -35,12 +35,32 @@ internal sealed class MepDevicePlacementPreviewOrchestrator
         _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
     }
 
-    public async Task<MepDevicePlacementPreviewOutcome> ConfirmAsync(CancellationToken cancellationToken)
+    public Task<MepDevicePlacementPreviewOutcome> ConfirmAsync(CancellationToken cancellationToken)
+    {
+        return PreviewCoreAsync(MepDevicePlacementCoordinateSpaces.ProjectOffsets, promoteProjectAxes: true, cancellationToken);
+    }
+
+    public Task<MepDevicePlacementPreviewOutcome> PreviewCalibratedDocumentAsync(CancellationToken cancellationToken)
+    {
+        return PreviewCoreAsync(MepDevicePlacementCoordinateSpaces.DocumentPage, promoteProjectAxes: false, cancellationToken);
+    }
+
+    private async Task<MepDevicePlacementPreviewOutcome> PreviewCoreAsync(
+        string expectedSpace,
+        bool promoteProjectAxes,
+        CancellationToken cancellationToken)
     {
         var proposal = _store.Current;
         if (proposal is null)
         {
             return Fail("There is no placement proposal to preview.");
+        }
+
+        if (!string.Equals(proposal.CoordinateSpace, expectedSpace, StringComparison.Ordinal))
+        {
+            return Fail(expectedSpace == MepDevicePlacementCoordinateSpaces.ProjectOffsets
+                ? "This proposal uses a drawing page. Use Calibrate plan & preview."
+                : "This proposal uses project-axis offsets. Use Confirm project axes & preview.");
         }
 
         if (_store.TryReuseTerminalApply(out _, out _))
@@ -63,10 +83,19 @@ internal sealed class MepDevicePlacementPreviewOrchestrator
             return Ok(existing);
         }
 
-        if (!_store.TryPromoteToReady(new TrustedProjectAxisCalibration()))
+        if (promoteProjectAxes)
         {
-            return Fail("The proposal has no selected template. Create a new proposal.");
+            if (!_store.TryPromoteToReady(new TrustedProjectAxisCalibration()))
+            {
+                return Fail("The proposal has no selected template. Create a new proposal.");
+            }
         }
+        else if (proposal.State != MepDevicePlacementProposalStates.Ready)
+        {
+            return Fail("The drawing page is not calibrated.");
+        }
+
+        proposal = _store.Current ?? proposal;
 
         if (!MepDevicePlacementLengthUnits.TryForgeTypeId(proposal.LengthUnit, out var lengthUnitId))
         {
@@ -222,7 +251,9 @@ internal sealed class MepDevicePlacementPreviewOrchestrator
     {
         var lines = new List<string>
         {
-            "Project axes confirmed. Offsets are relative to the selected template. X and Y are Revit project axes. Z is vertical. This does not calibrate PDF or sheet coordinates.",
+            proposal.CoordinateSpace == MepDevicePlacementCoordinateSpaces.DocumentPage
+                ? "Drawing page calibrated. Offsets are relative to the selected template. X and Y are Revit project axes. Z is vertical."
+                : "Project axes confirmed. Offsets are relative to the selected template. X and Y are Revit project axes. Z is vertical. This does not calibrate PDF or sheet coordinates.",
             "Placements: " + proposal.Placements.Count.ToString(CultureInfo.InvariantCulture),
             "Length unit: " + proposal.LengthUnit,
             "Preview ready: " + (result.Ready ? "yes" : "no"),

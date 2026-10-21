@@ -14,6 +14,15 @@ internal static class MepDevicePlacementProposalReasons
     public const string TemplateSelectionRequired = "template_selection_required";
 
     public const string NoActiveDocument = "no_active_document";
+
+    public const string DocumentCalibrationRequired = "document_calibration_required";
+}
+
+internal static class MepDevicePlacementCoordinateSpaces
+{
+    public const string ProjectOffsets = "project_offsets";
+
+    public const string DocumentPage = "document_page";
 }
 
 internal sealed record MepDevicePlacementProposalItem(
@@ -21,7 +30,9 @@ internal sealed record MepDevicePlacementProposalItem(
     double OffsetY,
     double VerticalOffset,
     string? SourceEvidence,
-    double? Confidence);
+    double? Confidence,
+    double? PageX = null,
+    double? PageY = null);
 
 /// <summary>
 /// One session-local proposal. Revit identities and the source attachment id stay on this object and are omitted from <see cref="ToModelResult"/>.
@@ -29,6 +40,7 @@ internal sealed record MepDevicePlacementProposalItem(
 internal sealed class MepDevicePlacementProposal
 {
     private MepDevicePlacementProposal(
+        string coordinateSpace,
         string lengthUnit,
         IReadOnlyList<MepDevicePlacementProposalItem> placements,
         string state,
@@ -36,8 +48,12 @@ internal sealed class MepDevicePlacementProposal
         string instanceId,
         string? documentId,
         string? templateElementRef,
-        string? sourceArtifactId)
+        string? sourceArtifactId,
+        int? pageNumber,
+        int? rasterWidth,
+        int? rasterHeight)
     {
+        CoordinateSpace = coordinateSpace;
         LengthUnit = lengthUnit;
         Placements = placements;
         State = state;
@@ -46,7 +62,12 @@ internal sealed class MepDevicePlacementProposal
         DocumentId = documentId;
         TemplateElementRef = templateElementRef;
         SourceArtifactId = sourceArtifactId;
+        PageNumber = pageNumber;
+        RasterWidth = rasterWidth;
+        RasterHeight = rasterHeight;
     }
+
+    public string CoordinateSpace { get; }
 
     public string LengthUnit { get; }
 
@@ -64,6 +85,12 @@ internal sealed class MepDevicePlacementProposal
 
     public string? SourceArtifactId { get; }
 
+    public int? PageNumber { get; }
+
+    public int? RasterWidth { get; }
+
+    public int? RasterHeight { get; }
+
     public bool HasTemplateBinding =>
         !string.IsNullOrEmpty(InstanceId)
         && !string.IsNullOrEmpty(DocumentId)
@@ -76,13 +103,30 @@ internal sealed class MepDevicePlacementProposal
         string instanceId,
         string? documentId,
         string? templateElementRef,
-        string? sourceArtifactId)
+        string? sourceArtifactId,
+        string coordinateSpace = MepDevicePlacementCoordinateSpaces.ProjectOffsets,
+        int? pageNumber = null,
+        int? rasterWidth = null,
+        int? rasterHeight = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(lengthUnit);
         ArgumentNullException.ThrowIfNull(placements);
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
         ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+        if (coordinateSpace == MepDevicePlacementCoordinateSpaces.DocumentPage)
+        {
+            if (pageNumber is not >= 1 || rasterWidth is not >= 1 || rasterHeight is not >= 1)
+            {
+                throw new ArgumentException("A document-page proposal needs a rendered page.", nameof(pageNumber));
+            }
+        }
+        else if (coordinateSpace != MepDevicePlacementCoordinateSpaces.ProjectOffsets)
+        {
+            throw new ArgumentException("The coordinate space is not supported.", nameof(coordinateSpace));
+        }
+
         return new MepDevicePlacementProposal(
+            coordinateSpace,
             lengthUnit,
             placements.ToArray(),
             MepDevicePlacementProposalStates.NeedsCalibration,
@@ -90,30 +134,37 @@ internal sealed class MepDevicePlacementProposal
             instanceId,
             string.IsNullOrEmpty(documentId) ? null : documentId,
             string.IsNullOrEmpty(templateElementRef) ? null : templateElementRef,
-            string.IsNullOrEmpty(sourceArtifactId) ? null : sourceArtifactId);
+            string.IsNullOrEmpty(sourceArtifactId) ? null : sourceArtifactId,
+            coordinateSpace == MepDevicePlacementCoordinateSpaces.DocumentPage ? pageNumber : null,
+            coordinateSpace == MepDevicePlacementCoordinateSpaces.DocumentPage ? rasterWidth : null,
+            coordinateSpace == MepDevicePlacementCoordinateSpaces.DocumentPage ? rasterHeight : null);
     }
 
     public MepDevicePlacementProposal AsReady()
     {
-        return new MepDevicePlacementProposal(
-            LengthUnit,
-            Placements,
-            MepDevicePlacementProposalStates.Ready,
-            null,
-            InstanceId,
-            DocumentId,
-            TemplateElementRef,
-            SourceArtifactId);
+        return Copy(MepDevicePlacementProposalStates.Ready, null, Placements);
+    }
+
+    public MepDevicePlacementProposal WithReadyOffsets(IReadOnlyList<MepDevicePlacementProposalItem> placements)
+    {
+        ArgumentNullException.ThrowIfNull(placements);
+        return Copy(MepDevicePlacementProposalStates.Ready, null, placements.ToArray());
     }
 
     public Dictionary<string, object?> ToModelResult()
     {
         var proposal = new Dictionary<string, object?>
         {
+            ["coordinate_space"] = CoordinateSpace,
             ["length_unit"] = LengthUnit,
-            ["placements"] = Placements.Select(ToItem).ToArray(),
+            ["placements"] = Placements.Select(item => ToItem(CoordinateSpace, item)).ToArray(),
             ["state"] = State,
         };
+        if (CoordinateSpace == MepDevicePlacementCoordinateSpaces.DocumentPage && PageNumber is int pageNumber)
+        {
+            proposal["page_number"] = pageNumber;
+        }
+
         if (Reason is not null)
         {
             proposal["reason"] = Reason;
@@ -126,14 +177,38 @@ internal sealed class MepDevicePlacementProposal
         };
     }
 
-    private static Dictionary<string, object?> ToItem(MepDevicePlacementProposalItem item)
+    private MepDevicePlacementProposal Copy(string state, string? reason, IReadOnlyList<MepDevicePlacementProposalItem> placements)
     {
-        var row = new Dictionary<string, object?>
+        return new MepDevicePlacementProposal(
+            CoordinateSpace,
+            LengthUnit,
+            placements,
+            state,
+            reason,
+            InstanceId,
+            DocumentId,
+            TemplateElementRef,
+            SourceArtifactId,
+            PageNumber,
+            RasterWidth,
+            RasterHeight);
+    }
+
+    private static Dictionary<string, object?> ToItem(string coordinateSpace, MepDevicePlacementProposalItem item)
+    {
+        var row = new Dictionary<string, object?>();
+        if (coordinateSpace == MepDevicePlacementCoordinateSpaces.DocumentPage)
         {
-            ["offset_x"] = item.OffsetX,
-            ["offset_y"] = item.OffsetY,
-            ["vertical_offset"] = item.VerticalOffset,
-        };
+            row["page_x"] = item.PageX;
+            row["page_y"] = item.PageY;
+        }
+        else
+        {
+            row["offset_x"] = item.OffsetX;
+            row["offset_y"] = item.OffsetY;
+        }
+
+        row["vertical_offset"] = item.VerticalOffset;
         if (item.SourceEvidence is not null)
         {
             row["source_evidence"] = item.SourceEvidence;
@@ -149,12 +224,74 @@ internal sealed class MepDevicePlacementProposal
 }
 
 /// <summary>
-/// Marker for a later Assistant-owned calibration step. This slice has no provider that constructs it outside tests.
+/// Marker for the local project-axis confirmation. It is not a document calibration and not an approval.
 /// </summary>
 internal sealed class TrustedProjectAxisCalibration
 {
     internal TrustedProjectAxisCalibration()
     {
+    }
+}
+
+internal sealed class DocumentCalibrationSession
+{
+    public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(5);
+
+    public DocumentCalibrationSession(
+        string sessionRef,
+        long generation,
+        string artifactId,
+        int pageNumber,
+        int rasterWidth,
+        int rasterHeight,
+        string instanceId,
+        string documentId,
+        string templateElementRef,
+        DateTimeOffset expiresAt)
+    {
+        SessionRef = sessionRef;
+        Generation = generation;
+        ArtifactId = artifactId;
+        PageNumber = pageNumber;
+        RasterWidth = rasterWidth;
+        RasterHeight = rasterHeight;
+        InstanceId = instanceId;
+        DocumentId = documentId;
+        TemplateElementRef = templateElementRef;
+        ExpiresAt = expiresAt;
+    }
+
+    public string SessionRef { get; }
+
+    public long Generation { get; }
+
+    public string ArtifactId { get; }
+
+    public int PageNumber { get; }
+
+    public int RasterWidth { get; }
+
+    public int RasterHeight { get; }
+
+    public string InstanceId { get; }
+
+    public string DocumentId { get; }
+
+    public string TemplateElementRef { get; }
+
+    public DateTimeOffset ExpiresAt { get; }
+
+    public bool Matches(MepDevicePlacementProposal proposal, long generation)
+    {
+        return generation == Generation
+            && string.Equals(proposal.CoordinateSpace, MepDevicePlacementCoordinateSpaces.DocumentPage, StringComparison.Ordinal)
+            && string.Equals(proposal.InstanceId, InstanceId, StringComparison.Ordinal)
+            && string.Equals(proposal.DocumentId, DocumentId, StringComparison.Ordinal)
+            && string.Equals(proposal.TemplateElementRef, TemplateElementRef, StringComparison.Ordinal)
+            && string.Equals(proposal.SourceArtifactId, ArtifactId, StringComparison.Ordinal)
+            && proposal.PageNumber == PageNumber
+            && proposal.RasterWidth == RasterWidth
+            && proposal.RasterHeight == RasterHeight;
     }
 }
 
@@ -214,6 +351,7 @@ internal sealed class MepDevicePlacementProposalStore
     private long _generation;
     private MepDevicePlacementPreviewReceipt? _preview;
     private MepDevicePlacementApplyReceipt? _apply;
+    private DocumentCalibrationSession? _calibration;
 
     public MepDevicePlacementProposal? Current
     {
@@ -235,6 +373,7 @@ internal sealed class MepDevicePlacementProposalStore
             _generation++;
             _preview = null;
             _apply = null;
+            _calibration = null;
         }
     }
 
@@ -246,6 +385,7 @@ internal sealed class MepDevicePlacementProposalStore
             _generation++;
             _preview = null;
             _apply = null;
+            _calibration = null;
         }
     }
 
@@ -270,6 +410,7 @@ internal sealed class MepDevicePlacementProposalStore
                 _generation++;
                 _preview = null;
                 _apply = null;
+                _calibration = null;
             }
         }
     }
@@ -392,13 +533,116 @@ internal sealed class MepDevicePlacementProposalStore
         ArgumentNullException.ThrowIfNull(calibration);
         lock (_gate)
         {
-            if (_current is not { HasTemplateBinding: true } proposal)
+            if (_current is not { HasTemplateBinding: true, CoordinateSpace: MepDevicePlacementCoordinateSpaces.ProjectOffsets } proposal)
+            {
+                return false;
+            }
+
+            if (_apply is not null && _apply.Generation == _generation)
             {
                 return false;
             }
 
             _current = proposal.AsReady();
             return true;
+        }
+    }
+
+    public DocumentCalibrationSession? OpenCalibrationSession(string sessionRef, DateTimeOffset expiresAt)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sessionRef);
+        lock (_gate)
+        {
+            if (_current is not { HasTemplateBinding: true, CoordinateSpace: MepDevicePlacementCoordinateSpaces.DocumentPage } proposal
+                || proposal.PageNumber is not int pageNumber
+                || proposal.RasterWidth is not int rasterWidth
+                || proposal.RasterHeight is not int rasterHeight
+                || string.IsNullOrEmpty(proposal.SourceArtifactId)
+                || string.IsNullOrEmpty(proposal.DocumentId)
+                || string.IsNullOrEmpty(proposal.TemplateElementRef)
+                || (_apply is not null && _apply.Generation == _generation))
+            {
+                _calibration = null;
+                return null;
+            }
+
+            _calibration = new DocumentCalibrationSession(
+                sessionRef,
+                _generation,
+                proposal.SourceArtifactId,
+                pageNumber,
+                rasterWidth,
+                rasterHeight,
+                proposal.InstanceId,
+                proposal.DocumentId,
+                proposal.TemplateElementRef,
+                expiresAt);
+            return _calibration;
+        }
+    }
+
+    public bool TryReadCalibrationSession(string? sessionRef, DateTimeOffset utcNow, out DocumentCalibrationSession session)
+    {
+        lock (_gate)
+        {
+            if (_calibration is null
+                || _current is null
+                || !string.Equals(_calibration.SessionRef, sessionRef, StringComparison.Ordinal)
+                || _calibration.ExpiresAt <= utcNow
+                || !_calibration.Matches(_current, _generation))
+            {
+                session = null!;
+                return false;
+            }
+
+            session = _calibration;
+            return true;
+        }
+    }
+
+    public void ForgetCalibrationSession()
+    {
+        lock (_gate)
+        {
+            _calibration = null;
+        }
+    }
+
+    public bool TryApplyDocumentCalibration(
+        DocumentCalibrationSession session,
+        IReadOnlyList<MepDevicePlacementProposalItem> placements,
+        DateTimeOffset utcNow)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        ArgumentNullException.ThrowIfNull(placements);
+        lock (_gate)
+        {
+            if (_calibration is null
+                || _current is null
+                || !ReferenceEquals(_calibration, session) && !string.Equals(_calibration.SessionRef, session.SessionRef, StringComparison.Ordinal)
+                || _calibration.ExpiresAt <= utcNow
+                || !_calibration.Matches(_current, _generation)
+                || !session.Matches(_current, _generation)
+                || (_apply is not null && _apply.Generation == _generation)
+                || placements.Count != _current.Placements.Count)
+            {
+                return false;
+            }
+
+            _current = _current.WithReadyOffsets(placements);
+            _calibration = null;
+            return true;
+        }
+    }
+
+    internal DocumentCalibrationSession? Calibration
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _calibration;
+            }
         }
     }
 }

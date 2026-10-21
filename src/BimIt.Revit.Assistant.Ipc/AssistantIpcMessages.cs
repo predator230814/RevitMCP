@@ -28,6 +28,9 @@ public enum AssistantIpcKind
     PreviewResult,
     ReviewInRevit,
     ApplyApprovedPlacements,
+    BeginDocumentCalibration,
+    CalibrationPage,
+    CompleteDocumentCalibration,
 }
 
 public sealed record AssistantIpcMessage(
@@ -62,7 +65,21 @@ public sealed record AssistantIpcMessage(
     int? VisualCount = null,
     bool? Truncated = null,
     string? DocumentCode = null,
-    string? DocumentMessage = null);
+    string? DocumentMessage = null,
+    string? CalibrationSession = null,
+    string? CalibrationMime = null,
+    string? CalibrationImage = null,
+    int? RasterWidth = null,
+    int? RasterHeight = null,
+    string? BoundDocumentId = null,
+    string? BoundTemplateRef = null,
+    double? SourceAX = null,
+    double? SourceAY = null,
+    double? SourceBX = null,
+    double? SourceBY = null,
+    double? TargetDeltaXMetres = null,
+    double? TargetDeltaYMetres = null,
+    bool? CalibrationCancelled = null);
 
 public readonly record struct AssistantIpcParse(bool Accepted, AssistantIpcMessage? Message, string Reason)
 {
@@ -90,6 +107,8 @@ public static class AssistantIpc
     public const int MaxDocumentNameLength = 180;
 
     public const int MaxDocumentMessageLength = 500;
+
+    public const int AssistantDocumentRasterLimit = 4_096;
 
     public static readonly JsonSerializerOptions Options = new()
     {
@@ -119,6 +138,11 @@ public static class AssistantIpc
                 return AssistantIpcParse.Reject("missing-type");
             }
 
+            if (body.Type is not ("calibrationPage" or "completeDocumentCalibration") && HasCalibration(body))
+            {
+                return AssistantIpcParse.Reject("calibration");
+            }
+
             return body.Type switch
             {
                 "hello" => ParseHello(body),
@@ -137,6 +161,9 @@ public static class AssistantIpc
                 "confirmProjectAxesPreview" => ParseSignal(body, AssistantIpcKind.ConfirmProjectAxesPreview),
                 "reviewInRevit" => ParseSignal(body, AssistantIpcKind.ReviewInRevit),
                 "applyApprovedPlacements" => ParseSignal(body, AssistantIpcKind.ApplyApprovedPlacements),
+                "beginDocumentCalibration" => ParseSignal(body, AssistantIpcKind.BeginDocumentCalibration),
+                "calibrationPage" => ParseCalibrationPage(body),
+                "completeDocumentCalibration" => ParseCalibrationComplete(body),
                 "previewResult" => ParsePreviewResult(body),
                 _ => AssistantIpcParse.Reject("unknown"),
             };
@@ -220,6 +247,31 @@ public static class AssistantIpc
             AssistantIpcKind.ConfirmProjectAxesPreview => new Envelope { Type = "confirmProjectAxesPreview" },
             AssistantIpcKind.ReviewInRevit => new Envelope { Type = "reviewInRevit" },
             AssistantIpcKind.ApplyApprovedPlacements => new Envelope { Type = "applyApprovedPlacements" },
+            AssistantIpcKind.BeginDocumentCalibration => new Envelope { Type = "beginDocumentCalibration" },
+            AssistantIpcKind.CalibrationPage => new Envelope
+            {
+                Type = "calibrationPage",
+                InstanceId = message.InstanceId,
+                CalibrationSession = message.CalibrationSession,
+                CalibrationMime = message.CalibrationMime,
+                CalibrationImage = message.CalibrationImage,
+                RasterWidth = message.RasterWidth,
+                RasterHeight = message.RasterHeight,
+                BoundDocumentId = message.BoundDocumentId,
+                BoundTemplateRef = message.BoundTemplateRef,
+            },
+            AssistantIpcKind.CompleteDocumentCalibration => new Envelope
+            {
+                Type = "completeDocumentCalibration",
+                CalibrationSession = message.CalibrationSession,
+                SourceAX = message.SourceAX,
+                SourceAY = message.SourceAY,
+                SourceBX = message.SourceBX,
+                SourceBY = message.SourceBY,
+                TargetDeltaXMetres = message.TargetDeltaXMetres,
+                TargetDeltaYMetres = message.TargetDeltaYMetres,
+                CalibrationCancelled = message.CalibrationCancelled,
+            },
             AssistantIpcKind.PreviewResult => new Envelope
             {
                 Type = "previewResult",
@@ -448,6 +500,168 @@ public static class AssistantIpc
 
         return AssistantIpcParse.Accept(new AssistantIpcMessage(
             kind, null, null, null, false, null, null, null, null, null, null, null, null, null, false));
+    }
+
+    private static AssistantIpcParse ParseCalibrationPage(Envelope body)
+    {
+        if (body.Path is not null
+            || HasDocumentMetadata(body)
+            || body.Text is not null
+            || body.Title is not null
+            || body.Body is not null
+            || body.RequestId is not null
+            || body.UsedTools is not null
+            || HasProvider(body)
+            || body.SourceAX is not null
+            || body.TargetDeltaXMetres is not null
+            || body.CalibrationCancelled is not null)
+        {
+            return AssistantIpcParse.Reject("calibration-page");
+        }
+
+        if (!IsSessionRef(body.CalibrationSession)
+            || body.CalibrationMime is not ("image/jpeg" or "image/png")
+            || !IsCalibrationImage(body.CalibrationImage)
+            || body.RasterWidth is not >= 1 and <= AssistantDocumentRasterLimit
+            || body.RasterHeight is not >= 1 and <= AssistantDocumentRasterLimit
+            || !IsBoundedId(body.InstanceId)
+            || !IsBoundedId(body.BoundDocumentId)
+            || !IsBoundedId(body.BoundTemplateRef))
+        {
+            return AssistantIpcParse.Reject("calibration-page");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.CalibrationPage,
+            body.InstanceId,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            CalibrationSession: body.CalibrationSession,
+            CalibrationMime: body.CalibrationMime,
+            CalibrationImage: body.CalibrationImage,
+            RasterWidth: body.RasterWidth,
+            RasterHeight: body.RasterHeight,
+            BoundDocumentId: body.BoundDocumentId,
+            BoundTemplateRef: body.BoundTemplateRef));
+    }
+
+    private static AssistantIpcParse ParseCalibrationComplete(Envelope body)
+    {
+        if (body.Path is not null
+            || HasDocumentMetadata(body)
+            || body.InstanceId is not null
+            || body.Text is not null
+            || body.Title is not null
+            || body.Body is not null
+            || body.CalibrationImage is not null
+            || body.BoundDocumentId is not null
+            || body.BoundTemplateRef is not null
+            || body.RequestId is not null
+            || body.UsedTools is not null
+            || HasProvider(body)
+            || !IsSessionRef(body.CalibrationSession))
+        {
+            return AssistantIpcParse.Reject("calibration-complete");
+        }
+
+        var cancelled = body.CalibrationCancelled == true;
+        if (!cancelled
+            && (!IsUnit(body.SourceAX)
+                || !IsUnit(body.SourceAY)
+                || !IsUnit(body.SourceBX)
+                || !IsUnit(body.SourceBY)
+                || !IsFinite(body.TargetDeltaXMetres)
+                || !IsFinite(body.TargetDeltaYMetres)))
+        {
+            return AssistantIpcParse.Reject("calibration-complete");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.CompleteDocumentCalibration,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            CalibrationSession: body.CalibrationSession,
+            SourceAX: body.SourceAX,
+            SourceAY: body.SourceAY,
+            SourceBX: body.SourceBX,
+            SourceBY: body.SourceBY,
+            TargetDeltaXMetres: body.TargetDeltaXMetres,
+            TargetDeltaYMetres: body.TargetDeltaYMetres,
+            CalibrationCancelled: cancelled));
+    }
+
+    private static bool HasCalibration(Envelope body)
+    {
+        return body.CalibrationSession is not null
+            || body.CalibrationMime is not null
+            || body.CalibrationImage is not null
+            || body.RasterWidth is not null
+            || body.RasterHeight is not null
+            || body.BoundDocumentId is not null
+            || body.BoundTemplateRef is not null
+            || body.SourceAX is not null
+            || body.SourceAY is not null
+            || body.SourceBX is not null
+            || body.SourceBY is not null
+            || body.TargetDeltaXMetres is not null
+            || body.TargetDeltaYMetres is not null
+            || body.CalibrationCancelled is not null;
+    }
+
+    private static bool IsSessionRef(string? value)
+    {
+        return value is { Length: 32 } && value.All(character => character is >= '0' and <= '9' or >= 'a' and <= 'f');
+    }
+
+    private static bool IsCalibrationImage(string? value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Contains('\\', StringComparison.Ordinal) || value.Contains("://", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        try
+        {
+            var bytes = Convert.FromBase64String(value);
+            return bytes.Length is > 0 and <= 128 * 1024;
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    private static bool IsUnit(double? value)
+    {
+        return value is double number && double.IsFinite(number) && number >= 0d && number <= 1d;
+    }
+
+    private static bool IsFinite(double? value)
+    {
+        return value is double number && double.IsFinite(number);
     }
 
     private static AssistantIpcParse ParsePreviewResult(Envelope body)
@@ -888,5 +1102,33 @@ public static class AssistantIpc
 
         [JsonPropertyName("message")]
         public string? DocumentMessage { get; set; }
+
+        public string? CalibrationSession { get; set; }
+
+        public string? CalibrationMime { get; set; }
+
+        public string? CalibrationImage { get; set; }
+
+        public int? RasterWidth { get; set; }
+
+        public int? RasterHeight { get; set; }
+
+        public string? BoundDocumentId { get; set; }
+
+        public string? BoundTemplateRef { get; set; }
+
+        public double? SourceAX { get; set; }
+
+        public double? SourceAY { get; set; }
+
+        public double? SourceBX { get; set; }
+
+        public double? SourceBY { get; set; }
+
+        public double? TargetDeltaXMetres { get; set; }
+
+        public double? TargetDeltaYMetres { get; set; }
+
+        public bool? CalibrationCancelled { get; set; }
     }
 }

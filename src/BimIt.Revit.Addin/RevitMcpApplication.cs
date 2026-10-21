@@ -16,9 +16,11 @@ public sealed class RevitMcpApplication : IExternalApplication
     public RevitMcpApplication()
     {
         _approvalUi = new ApprovalUiRuntime();
+        var calibration = new MepDocumentCalibrationPickerSlot();
         _productionDispatchers = new RevitExecutionDispatcherFactory
         {
             ApprovalUi = _approvalUi,
+            DocumentCalibration = calibration,
         };
         _lifecycle = new AddinLifecycleCoordinator(
             _productionDispatchers,
@@ -29,7 +31,8 @@ public sealed class RevitMcpApplication : IExternalApplication
             () => _lifecycle.State == AddinLifecycleState.Ready,
             () => (_lifecycle.Metadata?.RevitVersion, _lifecycle.Metadata?.RevitBuild),
             new ProcessAssistantFactory(),
-            new NamedPipeAssistantLink());
+            new NamedPipeAssistantLink(),
+            calibrationPicker: calibration);
         AssistantCommandBridge.Attach(_assistant);
         _assistant.OnRevitStartup();
     }

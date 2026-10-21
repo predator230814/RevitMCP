@@ -14,11 +14,18 @@ public enum AssistantDocumentKind
 
 public sealed class AssistantVisualPage
 {
-    public AssistantVisualPage(int pageNumber, string mimeType, byte[] bytes)
+    public AssistantVisualPage(int pageNumber, string mimeType, byte[] bytes, int rasterWidth, int rasterHeight)
     {
+        if (rasterWidth <= 0 || rasterHeight <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(rasterWidth), "A visual page needs a positive raster size.");
+        }
+
         PageNumber = pageNumber;
         MimeType = mimeType;
         Bytes = bytes;
+        RasterWidth = rasterWidth;
+        RasterHeight = rasterHeight;
     }
 
     public int PageNumber { get; }
@@ -26,6 +33,31 @@ public sealed class AssistantVisualPage
     public string MimeType { get; }
 
     public byte[] Bytes { get; }
+
+    public int RasterWidth { get; }
+
+    public int RasterHeight { get; }
+}
+
+internal readonly record struct AssistantVisualPageInfo(int PageNumber, int RasterWidth, int RasterHeight);
+
+internal sealed record AssistantAttachmentView(string? ArtifactId, IReadOnlyList<AssistantVisualPageInfo> Pages)
+{
+    public static AssistantAttachmentView None { get; } = new(null, []);
+
+    public static AssistantAttachmentView From(AssistantDocumentArtifact? artifact)
+    {
+        if (artifact is null || artifact.IsDisposed)
+        {
+            return None;
+        }
+
+        return new AssistantAttachmentView(
+            artifact.ArtifactId,
+            artifact.VisualPages
+                .Select(page => new AssistantVisualPageInfo(page.PageNumber, page.RasterWidth, page.RasterHeight))
+                .ToArray());
+    }
 }
 
 public sealed class AssistantDocumentArtifact : IDisposable

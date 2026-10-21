@@ -92,3 +92,21 @@ A first proposal, sent without exactly one selected element, stored the two offs
 | One Undo | OBSERVED — one Revit Undo removed both created HRUs. |
 | `tools/list` | OBSERVED — exactly 14 names: `revit_apply_mep_device_placements`, `revit_apply_parameter_updates`, `revit_describe_parameters`, `revit_get_context`, `revit_get_elements`, `revit_get_mep_topology`, `revit_get_parameter_values`, `revit_get_selection`, `revit_get_warnings`, `revit_preview_mep_device_placements`, `revit_preview_parameter_updates`, `revit_query_elements`, `revit_request_mep_device_placement_review`, `revit_request_parameter_update_review`. |
 | Model-facing six tools | NOT SHOWN. Diagnostics lists the server tools only. |
+
+## ADR-0017 document-page calibration — focused live gate
+
+Status: not observed. This checklist is the gate for a level-based isolated HVAC Heat Recovery Unit and one PDF or image of the same plan. Known normalized page coordinates may be given to the model. Visual placement quality is not the gate. Do not mark a line observed until that step is seen in Revit 2026.5.
+
+- [ ] A `document_page` proposal stays uncalibrated before the local calibration.
+- [ ] Calibrate plan & preview shows that page and does not show a filesystem path.
+- [ ] Point A is clicked at the drawing location of the selected template.
+- [ ] Point B is clicked on the drawing, and the matching point B is picked in Revit.
+- [ ] The calibration returns `Preview ready: yes`.
+- [ ] The preview offsets are the transformed project-axis offsets.
+- [ ] Review opens the existing Approval Pane.
+- [ ] Apply before approval creates nothing.
+- [ ] Human Approve, then local Apply, creates exactly the requested batch.
+- [ ] A repeated Apply does not mutate the model again.
+- [ ] One Undo removes that batch.
+- [ ] The terminal proposal cannot be recalibrated or previewed again.
+- [ ] The model still has six tools and Server `tools/list` is still 14.

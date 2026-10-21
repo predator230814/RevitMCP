@@ -131,8 +131,8 @@ public sealed class AssistantProposalTests
         await AssertRejected(tool, Placement("px", Item(1, 0, 0)), MepDevicePlacementProposalFailures.Unit);
         await AssertRejected(tool, Placement("FT", Item(1, 0, 0)), MepDevicePlacementProposalFailures.Unit);
         await AssertRejected(tool, Placement("", Item(1, 0, 0)), MepDevicePlacementProposalFailures.Unit);
-        await AssertRejected(tool, "{\"length_unit\":1,\"placements\":[" + Item(1, 0, 0) + "]}", MepDevicePlacementProposalFailures.Shape);
-        await AssertRejected(tool, "{\"length_unit\":\"m\"}", MepDevicePlacementProposalFailures.Shape);
+        await AssertRejected(tool, "{\"coordinate_space\":\"project_offsets\",\"length_unit\":1,\"placements\":[" + Item(1, 0, 0) + "]}", MepDevicePlacementProposalFailures.Shape);
+        await AssertRejected(tool, "{\"coordinate_space\":\"project_offsets\",\"length_unit\":\"m\"}", MepDevicePlacementProposalFailures.Shape);
         await AssertRejected(tool, Placement("m", ""), MepDevicePlacementProposalFailures.Count);
         await AssertRejected(tool, Placement("m", string.Join(",", Enumerable.Range(0, 21).Select(index => Item(index, 0, 0)))), MepDevicePlacementProposalFailures.Count);
         await AssertRejected(tool, Placement("mm", Item(100_001, 0, 0)), MepDevicePlacementProposalFailures.Range);
@@ -451,7 +451,7 @@ public sealed class AssistantProposalTests
     {
         var session = new RecordingSession(responder);
         var store = new MepDevicePlacementProposalStore();
-        var tool = new MepDevicePlacementProposalTool(session, InstanceId, store, () => attachmentId);
+        var tool = new MepDevicePlacementProposalTool(session, InstanceId, store, () => new AssistantAttachmentView(attachmentId, []));
         return (tool, store, session);
     }
 
@@ -462,7 +462,7 @@ public sealed class AssistantProposalTests
 
     private static MepDevicePlacementProposalTool ProposalTool(MepDevicePlacementProposalStore store)
     {
-        return new MepDevicePlacementProposalTool(new RecordingSession(_ => Error("unused", "unused")), InstanceId, store, static () => null);
+        return new MepDevicePlacementProposalTool(new RecordingSession(_ => Error("unused", "unused")), InstanceId, store, static () => AssistantAttachmentView.None);
     }
 
     private static Func<string, AssistantToolCall> Selection(int count, bool truncated, string refs)
@@ -496,7 +496,7 @@ public sealed class AssistantProposalTests
 
     private static string Placement(string unit, string items)
     {
-        return "{\"length_unit\":\"" + unit + "\",\"placements\":[" + items + "]}";
+        return "{\"coordinate_space\":\"project_offsets\",\"length_unit\":\"" + unit + "\",\"placements\":[" + items + "]}";
     }
 
     private static string Item(double x, double y, double z, string? evidence = null, double? confidence = null, string? extra = null)

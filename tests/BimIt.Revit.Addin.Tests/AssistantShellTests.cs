@@ -758,7 +758,8 @@ public sealed class AssistantShellTests
         RecordingProcessFactory factory,
         ScriptedLink link,
         AssistantIpcTimeouts? timeouts = null,
-        IAssistantDocumentPicker? picker = null)
+        IAssistantDocumentPicker? picker = null,
+        IMepDocumentCalibrationPicker? calibration = null)
     {
         return new AssistantShell(
             () => instanceId,
@@ -767,7 +768,8 @@ public sealed class AssistantShellTests
             factory,
             link,
             timeouts,
-            picker);
+            picker,
+            calibration);
     }
 
     private sealed class FixedPicker(string? path) : IAssistantDocumentPicker
@@ -793,6 +795,193 @@ public sealed class AssistantShellTests
             null,
             null,
             false);
+    }
+
+    [Fact]
+    public void Calibration_page_messages_reject_hidden_revit_identity()
+    {
+        const string session = "0123456789abcdef0123456789abcdef";
+        var points = AssistantPageMessages.Parse(
+            "{\"type\":\"submitCalibrationPoints\",\"sessionRef\":\"" + session + "\",\"sourceAX\":0.1,\"sourceAY\":0.2,\"sourceBX\":0.8,\"sourceBY\":0.4}");
+        Assert.True(points.Accepted);
+        Assert.Equal(AssistantPageIntent.SubmitCalibrationPoints, points.Intent);
+        Assert.Equal(0.1, points.SourceAX!.Value);
+        Assert.False(AssistantPageMessages.Parse(
+            "{\"type\":\"submitCalibrationPoints\",\"sessionRef\":\"" + session + "\",\"sourceAX\":0,\"sourceAY\":0,\"sourceBX\":1,\"sourceBY\":1,\"instanceId\":\"hidden\"}").Accepted);
+        Assert.False(AssistantPageMessages.Parse(
+            "{\"type\":\"submitCalibrationPoints\",\"sessionRef\":\"" + session + "\",\"sourceAX\":0,\"sourceAY\":0,\"sourceBX\":1,\"sourceBY\":1,\"documentId\":\"hidden\"}").Accepted);
+        Assert.False(AssistantPageMessages.Parse(
+            "{\"type\":\"submitCalibrationPoints\",\"sessionRef\":\"" + session + "\",\"sourceAX\":0,\"sourceAY\":0,\"sourceBX\":1,\"sourceBY\":1,\"templateElementRef\":\"hidden\"}").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"calibratePlanPreview","text":"ready"}""").Accepted);
+        Assert.Equal(AssistantPageIntent.CalibratePlanPreview, AssistantPageMessages.Parse("""{"type":"calibratePlanPreview"}""").Intent);
+        Assert.Equal(AssistantPageIntent.CancelCalibration, AssistantPageMessages.Parse("{\"type\":\"cancelCalibration\",\"sessionRef\":\"" + session + "\"}").Intent);
+
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
+        var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
+        Assert.Contains("post({ type: \"calibratePlanPreview\" })", page, StringComparison.Ordinal);
+        Assert.Contains("sourceAX", page, StringComparison.Ordinal);
+        Assert.Contains("Click point A", page, StringComparison.Ordinal);
+        Assert.Contains("Calibrate plan &amp; preview", html, StringComparison.Ordinal);
+        Assert.Contains("aspectRatio", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("file://", page, StringComparison.Ordinal);
+
+        var picker = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "RevitMepDocumentCalibrationPicker.cs"));
+        Assert.Contains("PickPoint", picker, StringComparison.Ordinal);
+        Assert.Contains("EnqueueAsync", picker, StringComparison.Ordinal);
+        Assert.Contains("ObjectSnapTypes.Endpoints", picker, StringComparison.Ordinal);
+        Assert.DoesNotContain("Transaction", picker, StringComparison.Ordinal);
+        Assert.DoesNotContain("ExternalEvent.Create", picker, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Calibration_math_rejects_a_document_mismatch_and_a_zero_vector()
+    {
+        Assert.True(MepDocumentCalibrationMath.SameDocument("doc-a", "doc-a"));
+        Assert.False(MepDocumentCalibrationMath.SameDocument("doc-b", "doc-a"));
+        Assert.False(MepDocumentCalibrationMath.SameDocument(null, "doc-a"));
+        Assert.True(MepDocumentCalibrationMath.IsPointLike(1, 2));
+        Assert.False(MepDocumentCalibrationMath.IsPointLike(double.NaN, 1));
+        Assert.True(MepDocumentCalibrationMath.TryDeltaMetres(10, 4, 20, 4, out var dx, out var dy));
+        Assert.Equal(10 * MepDocumentCalibrationMath.FeetToMetres, dx, 9);
+        Assert.Equal(0, dy);
+        Assert.False(MepDocumentCalibrationMath.TryDeltaMetres(1, 1, 1, 1, out _, out _));
+    }
+
+    [Fact]
+    public void WebView_calibration_page_omits_revit_identity()
+    {
+        var message = new AssistantIpcMessage(
+            AssistantIpcKind.CalibrationPage,
+            "instance-secret",
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            CalibrationSession: "0123456789abcdef0123456789abcdef",
+            CalibrationMime: "image/png",
+            CalibrationImage: "qqqq",
+            RasterWidth: 100,
+            RasterHeight: 50,
+            BoundDocumentId: "doc-secret",
+            BoundTemplateRef: "tmpl-secret");
+        var json = AssistantCalibrationMessages.ForWebView(message);
+        Assert.NotNull(json);
+        Assert.Contains("calibrationPage", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("instance-secret", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("doc-secret", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("tmpl-secret", json, StringComparison.Ordinal);
+        Assert.DoesNotContain("\\\\", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Revit_point_cancellation_and_mismatch_send_no_calibration_vector()
+    {
+        const string session = "0123456789abcdef0123456789abcdef";
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus(),
+            CalibrationPage = CalibrationPage(session, "instance-cal"),
+            PreviewResult = new AssistantIpcMessage(
+                AssistantIpcKind.PreviewResult,
+                null,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "Placement preview",
+                "The plan calibration was not completed. No preview was created.",
+                true),
+        };
+        var picker = new ScriptedCalibrationPicker { Result = MepDocumentCalibrationPick.Cancel() };
+        var shell = CreateShell("instance-cal", new RecordingProcessFactory(), link, calibration: picker);
+        shell.ReceivePageMessage("""{"type":"calibratePlanPreview"}""");
+        await WaitFor(() => shell.LastCalibrationPost is not null);
+        Assert.DoesNotContain("doc-secret", shell.LastCalibrationPost, StringComparison.Ordinal);
+        await SubmitUntil(shell, link, session);
+        Assert.True(link.Completions[0].CalibrationCancelled);
+        Assert.Equal(0, link.Completions[0].TargetDeltaXMetres);
+        Assert.Equal("doc-secret", picker.Seen?.DocumentId);
+        await WaitFor(() => shell.LastCalibrationPost is null);
+
+        link.Completions.Clear();
+        picker.Result = MepDocumentCalibrationPick.Mismatch();
+        shell.ReceivePageMessage("""{"type":"calibratePlanPreview"}""");
+        await WaitFor(() => shell.LastCalibrationPost is not null);
+        await SubmitUntil(shell, link, session);
+        Assert.True(link.Completions[0].CalibrationCancelled);
+        Assert.Contains("not completed", shell.SerializeSnapshot(), StringComparison.Ordinal);
+    }
+
+    private static async Task SubmitUntil(AssistantShell shell, ScriptedLink link, string session)
+    {
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        while (link.Completions.Count == 0 && DateTime.UtcNow < deadline)
+        {
+            shell.ReceivePageMessage(Points(session));
+            await Task.Delay(30);
+        }
+
+        Assert.Single(link.Completions);
+    }
+
+    private static AssistantIpcMessage CalibrationPage(string session, string instanceId)
+    {
+        return new AssistantIpcMessage(
+            AssistantIpcKind.CalibrationPage,
+            instanceId,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            CalibrationSession: session,
+            CalibrationMime: "image/png",
+            CalibrationImage: "qqqq",
+            RasterWidth: 80,
+            RasterHeight: 40,
+            BoundDocumentId: "doc-secret",
+            BoundTemplateRef: "tmpl-secret");
+    }
+
+    private static string Points(string session)
+    {
+        return "{\"type\":\"submitCalibrationPoints\",\"sessionRef\":\"" + session + "\",\"sourceAX\":0.1,\"sourceAY\":0.2,\"sourceBX\":0.8,\"sourceBY\":0.4}";
+    }
+
+    private sealed class ScriptedCalibrationPicker : IMepDocumentCalibrationPicker
+    {
+        public MepDocumentCalibrationPick Result { get; set; } = MepDocumentCalibrationPick.Cancel();
+
+        public MepDocumentCalibrationBinding? Seen { get; private set; }
+
+        public Task<MepDocumentCalibrationPick> PickAsync(MepDocumentCalibrationBinding binding, CancellationToken cancellationToken)
+        {
+            Seen = binding;
+            return Task.FromResult(Result);
+        }
     }
 
     private static async Task WaitFor(Func<bool> condition)
@@ -981,6 +1170,21 @@ public sealed class AssistantShellTests
         public Task<AssistantIpcMessage?> ConfirmProjectAxesPreviewAsync(CancellationToken cancellationToken)
         {
             Previews++;
+            return Task.FromResult(PreviewResult);
+        }
+
+        public AssistantIpcMessage? CalibrationPage { get; set; }
+
+        public List<AssistantIpcMessage> Completions { get; } = [];
+
+        public Task<AssistantIpcMessage?> BeginDocumentCalibrationAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(CalibrationPage ?? PreviewResult);
+        }
+
+        public Task<AssistantIpcMessage?> CompleteDocumentCalibrationAsync(AssistantIpcMessage completion, CancellationToken cancellationToken)
+        {
+            Completions.Add(completion);
             return Task.FromResult(PreviewResult);
         }
 

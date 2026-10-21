@@ -174,7 +174,7 @@ internal static class AssistantHost
         if (runtime is null)
         {
             runtime = readiness.Ready && session is not null
-                ? new GitHubCopilotAgentRuntime(session, options.InstanceId, proposals, () => CurrentAttachmentId(documents))
+                ? new GitHubCopilotAgentRuntime(session, options.InstanceId, proposals, () => AssistantAttachmentView.From(documents.Current))
                 : new UnavailableAssistantAgentRuntime(readiness.Error);
         }
 
@@ -238,6 +238,35 @@ internal static class AssistantHost
                         proposals,
                         options.InstanceId,
                         readiness.Ready,
+                        cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.BeginDocumentCalibration)
+                {
+                    var message = await BeginDocumentCalibrationAsync(
+                        session,
+                        previewClient,
+                        proposals,
+                        documents,
+                        options.InstanceId,
+                        readiness.Ready,
+                        cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, message, cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.CompleteDocumentCalibration)
+                {
+                    var outcome = await CompleteDocumentCalibrationAsync(
+                        session,
+                        previewClient,
+                        proposals,
+                        documents,
+                        options.InstanceId,
+                        readiness.Ready,
+                        parsed.Message,
                         cancellationToken).ConfigureAwait(false);
                     await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
                     continue;
@@ -678,6 +707,112 @@ internal static class AssistantHost
         catch (Exception)
         {
             return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The placement preview could not be created.");
+        }
+    }
+
+    private static async Task<AssistantIpcMessage> BeginDocumentCalibrationAsync(
+        IAssistantToolSession? session,
+        IMepDevicePlacementPreviewClient? previewClient,
+        MepDevicePlacementProposalStore proposals,
+        AssistantDocumentStore documents,
+        string instanceId,
+        bool mcpReady,
+        CancellationToken cancellationToken)
+    {
+        if (session is null || previewClient is null || !mcpReady)
+        {
+            return PreviewResult(new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The Assistant MCP client is not ready."));
+        }
+
+        try
+        {
+            var orchestrator = new DocumentPageCalibrationOrchestrator(session, previewClient, proposals, documents, instanceId);
+            var began = await orchestrator.BeginAsync(cancellationToken).ConfigureAwait(false);
+            if (began.Page is not CalibrationPagePayload page)
+            {
+                return PreviewResult(began.Outcome ?? new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The drawing page could not be shown."));
+            }
+
+            var message = new AssistantIpcMessage(
+                AssistantIpcKind.CalibrationPage,
+                page.InstanceId,
+                null,
+                null,
+                false,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                CalibrationSession: page.SessionRef,
+                CalibrationMime: page.MimeType,
+                CalibrationImage: page.ImageBase64,
+                RasterWidth: page.RasterWidth,
+                RasterHeight: page.RasterHeight,
+                BoundDocumentId: page.DocumentId,
+                BoundTemplateRef: page.TemplateElementRef);
+            var json = AssistantIpc.Serialize(message);
+            if (System.Text.Encoding.UTF8.GetByteCount(json) > AssistantIpc.MaxMessageBytes)
+            {
+                proposals.ForgetCalibrationSession();
+                return PreviewResult(new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The drawing page could not be shown."));
+            }
+
+            return message;
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            proposals.ForgetCalibrationSession();
+            return PreviewResult(new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The drawing page could not be shown."));
+        }
+    }
+
+    private static async Task<MepDevicePlacementPreviewOutcome> CompleteDocumentCalibrationAsync(
+        IAssistantToolSession? session,
+        IMepDevicePlacementPreviewClient? previewClient,
+        MepDevicePlacementProposalStore proposals,
+        AssistantDocumentStore documents,
+        string instanceId,
+        bool mcpReady,
+        AssistantIpcMessage message,
+        CancellationToken cancellationToken)
+    {
+        if (session is null || previewClient is null || !mcpReady)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The Assistant MCP client is not ready.");
+        }
+
+        try
+        {
+            var orchestrator = new DocumentPageCalibrationOrchestrator(session, previewClient, proposals, documents, instanceId);
+            return await orchestrator.CompleteAsync(
+                message.CalibrationSession,
+                message.SourceAX ?? double.NaN,
+                message.SourceAY ?? double.NaN,
+                message.SourceBX ?? double.NaN,
+                message.SourceBY ?? double.NaN,
+                message.TargetDeltaXMetres ?? double.NaN,
+                message.TargetDeltaYMetres ?? double.NaN,
+                message.CalibrationCancelled == true,
+                cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            proposals.ForgetCalibrationSession();
+            return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementPreviewOrchestrator.Title, "The plan calibration was not completed. No preview was created.");
         }
     }
 

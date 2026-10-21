@@ -20,13 +20,13 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         IAssistantToolSession session,
         string instanceId,
         MepDevicePlacementProposalStore proposalStore,
-        Func<string?> currentAttachmentId,
+        Func<AssistantAttachmentView> currentAttachment,
         string? runtimeDirectory = null)
     {
         _proposalStore = proposalStore ?? throw new ArgumentNullException(nameof(proposalStore));
-        ArgumentNullException.ThrowIfNull(currentAttachmentId);
+        ArgumentNullException.ThrowIfNull(currentAttachment);
         _tools = new BimItAgentReadTools(session, instanceId);
-        _proposals = new MepDevicePlacementProposalTool(session, instanceId, proposalStore, currentAttachmentId);
+        _proposals = new MepDevicePlacementProposalTool(session, instanceId, proposalStore, currentAttachment);
         _directory = string.IsNullOrWhiteSpace(runtimeDirectory) ? CopilotRuntimeDirectory.Create() : runtimeDirectory;
         Directory.CreateDirectory(_directory);
         Status = AssistantProviderStatus.NotConfigured;

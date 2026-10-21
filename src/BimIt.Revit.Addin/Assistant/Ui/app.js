@@ -68,10 +68,52 @@ function escapeHtml(value) {
   })[character]);
 }
 
+const calibration = document.getElementById("calibration");
+const calibrationFrame = document.getElementById("calibration-frame");
+const calibrationImage = document.getElementById("calibration-image");
+const calibrationStatus = document.getElementById("calibration-status");
+let calibrationSession = "";
+let calibrationPointA = null;
+
+function hideCalibration() {
+  calibration.hidden = true;
+  calibrationSession = "";
+  calibrationPointA = null;
+  calibrationImage.removeAttribute("src");
+  calibrationFrame.style.aspectRatio = "";
+}
+
+function showCalibration(data) {
+  if (!data || data.type !== "calibrationPage" || typeof data.sessionRef !== "string" || typeof data.image !== "string") {
+    return;
+  }
+  if (data.image.indexOf("\\") >= 0 || data.image.indexOf("://") >= 0 || data.mimeType !== "image/jpeg" && data.mimeType !== "image/png") {
+    return;
+  }
+  const width = Number(data.rasterWidth);
+  const height = Number(data.rasterHeight);
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+    return;
+  }
+  calibrationSession = data.sessionRef;
+  calibrationPointA = null;
+  calibrationFrame.style.aspectRatio = width + " / " + height;
+  calibrationImage.src = "data:" + data.mimeType + ";base64," + data.image;
+  calibrationStatus.textContent = "Click point A at the selected template, then point B.";
+  calibration.hidden = false;
+}
+
 window.chrome.webview.addEventListener("message", (event) => {
   const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-  if (data && data.type === "snapshot") {
+  if (!data) {
+    return;
+  }
+  if (data.type === "snapshot") {
     render(data);
+  } else if (data.type === "calibrationPage") {
+    showCalibration(data);
+  } else if (data.type === "calibrationClosed") {
+    hideCalibration();
   }
 });
 
@@ -84,6 +126,45 @@ retry.addEventListener("click", () => post({ type: "retryConnection" }));
 document.getElementById("diagnostics").addEventListener("click", () => post({ type: "openDiagnostics" }));
 document.getElementById("attach").addEventListener("click", () => post({ type: "attachDocument" }));
 document.getElementById("confirm-axes").addEventListener("click", () => post({ type: "confirmProjectAxesPreview" }));
+document.getElementById("calibrate-plan").addEventListener("click", () => post({ type: "calibratePlanPreview" }));
+document.getElementById("calibration-cancel").addEventListener("click", () => {
+  const sessionRef = calibrationSession;
+  hideCalibration();
+  if (sessionRef) {
+    post({ type: "cancelCalibration", sessionRef });
+  }
+});
+calibrationFrame.addEventListener("click", (event) => {
+  if (!calibrationSession) {
+    return;
+  }
+  const rect = calibrationFrame.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) {
+    return;
+  }
+  const x = (event.clientX - rect.left) / rect.width;
+  const y = (event.clientY - rect.top) / rect.height;
+  if (x < 0 || x > 1 || y < 0 || y > 1) {
+    return;
+  }
+  if (!calibrationPointA) {
+    calibrationPointA = { x, y };
+    calibrationStatus.textContent = "Click point B.";
+    return;
+  }
+  const sessionRef = calibrationSession;
+  const sourceAX = calibrationPointA.x;
+  const sourceAY = calibrationPointA.y;
+  hideCalibration();
+  post({
+    type: "submitCalibrationPoints",
+    sessionRef,
+    sourceAX,
+    sourceAY,
+    sourceBX: x,
+    sourceBY: y
+  });
+});
 document.getElementById("review-placements").addEventListener("click", () => post({ type: "reviewInRevit" }));
 document.getElementById("apply-placements").addEventListener("click", () => post({ type: "applyApprovedPlacements" }));
 document.getElementById("composer").addEventListener("submit", (event) => {

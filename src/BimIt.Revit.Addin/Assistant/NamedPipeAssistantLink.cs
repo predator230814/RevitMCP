@@ -25,6 +25,10 @@ internal interface IAssistantLink
 
     Task<AssistantIpcMessage?> ConfirmProjectAxesPreviewAsync(CancellationToken cancellationToken);
 
+    Task<AssistantIpcMessage?> BeginDocumentCalibrationAsync(CancellationToken cancellationToken);
+
+    Task<AssistantIpcMessage?> CompleteDocumentCalibrationAsync(AssistantIpcMessage completion, CancellationToken cancellationToken);
+
     Task<AssistantIpcMessage?> ReviewInRevitAsync(CancellationToken cancellationToken);
 
     Task<AssistantIpcMessage?> ApplyApprovedPlacementsAsync(CancellationToken cancellationToken);
@@ -178,6 +182,16 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
     public Task<AssistantIpcMessage?> ConfirmProjectAxesPreviewAsync(CancellationToken cancellationToken)
     {
         return ExchangeAsync(Signal(AssistantIpcKind.ConfirmProjectAxesPreview), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> BeginDocumentCalibrationAsync(CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(Signal(AssistantIpcKind.BeginDocumentCalibration), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> CompleteDocumentCalibrationAsync(AssistantIpcMessage completion, CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(completion, cancellationToken);
     }
 
     public Task<AssistantIpcMessage?> ReviewInRevitAsync(CancellationToken cancellationToken)

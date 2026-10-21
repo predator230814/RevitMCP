@@ -223,6 +223,29 @@ main {
   border-color: transparent;
 }
 
+.calibration {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.calibration-frame {
+  width: 100%;
+  max-height: 280px;
+  background: #fff;
+  border: 1px solid var(--line);
+  cursor: crosshair;
+  overflow: hidden;
+}
+
+.calibration-frame img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
 textarea {
   resize: vertical;
   min-height: 44px;

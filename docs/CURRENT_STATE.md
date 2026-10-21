@@ -1,6 +1,6 @@
 # BIM-IT Revit MCP Current State
 
-_Last updated: 2026-10-19_
+_Last updated: 2026-10-21_
 
 RevitMCP was renamed to BIM-IT Revit MCP. Current projects are `BimIt.Revit.Contracts`, `BimIt.Revit.Bridge`, `BimIt.Revit.Addin`, `BimIt.Revit.Server`, and `BimIt.Revit.Assistant`. MCP tool names, Bridge method names, protocol versions, the Approval pane GUID, audit domain strings, and the `LocalAppData\RevitMCP` storage root are unchanged. The historical validation narrative below keeps the RevitMCP names and SHAs it recorded.
 
@@ -51,6 +51,8 @@ Still not observed:
 Slice 2A was exercised on Revit 2026.5 build `26.5.0.55` against local Release outputs from `670df0c16bc5d6f64dcf350ba3eab66b5b1380f9`. The record is [BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md](BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md). That record is not a merge verdict. A level-based Heat Recovery Unit previewed `Preview ready: yes`. The selected electrical GFCI is face-based and previewed `Preview ready: no`. A changed selection failed closed. New Chat cleared the proposal. Approve-and-apply stayed on the read tools, and `tools/list` stayed 14. The second click returned the same summary. A second intent was not independently counted.
 
 Slice 2B was exercised on Revit 2026.5 build `26.5.0.55` against local Release outputs from `d8e4eeed27297abbb54d5295c8d109db440a116d`. The record is [BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md](BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md). That record is not a merge verdict. A level-based Heat Recovery Unit previewed `Preview ready: yes`. Review opened the existing MEP approval pane. Apply before approval created nothing. After the human approved in that pane, Apply returned `Applied 2 placements. Revit verification passed.` and two HRUs appeared. A repeated Apply did not add more. Confirm and Review then refused another batch. One Undo removed both HRUs. Diagnostics listed 14 tools. The Diagnostics panel did not show the six model tools.
+
+[ADR-0017](adr/ADR-0017-document-space-mep-placement-calibration.md) is accepted. `bimit_propose_mep_device_placements` now accepts `project_offsets` or `document_page`. A document-page proposal stays uncalibrated until the person clicks two points on the current drawing and picks the matching second point in Revit. The Assistant then computes the similarity and calls the existing preview. Review and Apply are unchanged. The model still has six tools, and Server `tools/list` stays 14. The focused live gate is listed in [BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md](BIM_IT_ASSISTANT_PROPOSAL_VALIDATION.md) and has not been observed.
 
 Typed Bridge live validation of `revit.get_selection` was run on Revit 2026.5 build `26.5.0.55` against code SHA `3f6f57024be0600486f717b71162e08da285d45d`. The record is [CAP_0010_SELECTION_BRIDGE_VALIDATION.md](CAP_0010_SELECTION_BRIDGE_VALIDATION.md). Official MCP-client live validation of `revit_get_selection` was run on the same Revit build against SHA `07091fd3e5a59ff82c6cee4ecfbd9183f4fa8cdb`. That record is not a merge verdict.
 

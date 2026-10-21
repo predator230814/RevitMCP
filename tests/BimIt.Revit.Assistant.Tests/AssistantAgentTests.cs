@@ -1037,7 +1037,7 @@ public sealed class AssistantAgentTests
                 new RecordingSession(_ => Error("unused", "unused")),
                 InstanceId,
                 new MepDevicePlacementProposalStore(),
-                static () => null));
+                static () => AssistantAttachmentView.None));
     }
 
     private static AssistantProviderTimeouts FastProviderTimeouts()

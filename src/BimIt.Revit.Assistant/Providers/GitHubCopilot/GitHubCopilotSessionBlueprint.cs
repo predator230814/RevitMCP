@@ -20,6 +20,11 @@ internal static class GitHubCopilotSessionBlueprint
         That tool stores an untrusted session-local MEP device placement proposal.
         A proposal cannot preview, approve, or modify the Revit model.
         You cannot supply Revit identities or a calibration flag.
+        Set coordinate_space to project_offsets or document_page.
+        project_offsets placements use offset_x, offset_y, and vertical_offset in the proposal length unit, measured from the selected template along Revit project axes.
+        document_page placements use page_number plus page_x and page_y. page_x and page_y are normalized from 0 to 1 on the current drawing page. page_x runs left to right. page_y runs top to bottom. vertical_offset stays in the proposal length unit.
+        Do not mix project offsets with page positions.
+        Document-page positions are not Revit coordinates. You cannot establish the drawing calibration. A person does that locally.
         Project-axis offsets are not PDF pixels, image pixels, sheet coordinates, or geographic coordinates.
         You cannot modify the Revit model.
         Never imply that a preview, approval, or write was performed.
@@ -154,7 +159,7 @@ internal static class GitHubCopilotSessionBlueprint
             new AIFunctionFactoryOptions
             {
                 Name = MepDevicePlacementProposalTool.Name,
-                Description = "Store one untrusted local MEP device placement proposal using project-axis offsets. This does not preview, approve, or modify Revit.",
+                Description = "Store one untrusted local MEP device placement proposal. coordinate_space is project_offsets or document_page. This does not preview, approve, or modify Revit.",
             });
     }
 

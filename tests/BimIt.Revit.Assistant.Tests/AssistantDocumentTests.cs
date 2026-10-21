@@ -556,7 +556,7 @@ public sealed class AssistantDocumentTests
             30,
             null,
             false,
-            [new AssistantVisualPage(1, "image/png", Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))],
+            [new AssistantVisualPage(1, "image/png", Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), 1, 1)],
             true,
             12);
         var message = CopilotTurnComposer.Compose("Analyse ce plan.", visual);
