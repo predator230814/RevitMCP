@@ -69,7 +69,7 @@ public sealed class AssistantDocumentTests
         Assert.Contains("_delivery.Reset()", runtime, StringComparison.Ordinal);
         Assert.Contains("cannot override system policy", GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
         Assert.Equal(5, BimItAgentReadTools.Names.Length);
-        Assert.Equal(6, AssistantTools.AllowedReadTools.Length);
+        Assert.Equal(7, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
     }
 
@@ -416,6 +416,8 @@ public sealed class AssistantDocumentTests
         {
             Assert.True(page.MimeType is "image/png" or "image/jpeg");
             Assert.InRange(page.Bytes.Length, 1, AssistantDocumentLimits.MaxVisualBytes);
+            Assert.True(page.RasterWidth > 0);
+            Assert.True(page.RasterHeight > 0);
         });
         Assert.DoesNotContain(directory, artifact.DisplayName, StringComparison.OrdinalIgnoreCase);
 
@@ -444,6 +446,8 @@ public sealed class AssistantDocumentTests
         Assert.False(artifact.VisualTruncated);
         using var decoded = SKBitmap.Decode(artifact.VisualPages[0].Bytes);
         Assert.NotNull(decoded);
+        Assert.Equal(decoded.Width, artifact.VisualPages[0].RasterWidth);
+        Assert.Equal(decoded.Height, artifact.VisualPages[0].RasterHeight);
         Assert.True(Math.Max(decoded.Width, decoded.Height) <= AssistantDocumentLimits.VisualLongEdge);
 
         var large = Path.Combine(directory, "scan.png");
@@ -460,6 +464,8 @@ public sealed class AssistantDocumentTests
         Assert.InRange(normalized.VisualPages[0].Bytes.Length, 1, AssistantDocumentLimits.MaxVisualBytes);
         using var scaled = SKBitmap.Decode(normalized.VisualPages[0].Bytes);
         Assert.NotNull(scaled);
+        Assert.Equal(scaled.Width, normalized.VisualPages[0].RasterWidth);
+        Assert.Equal(scaled.Height, normalized.VisualPages[0].RasterHeight);
         Assert.True(Math.Max(scaled.Width, scaled.Height) <= AssistantDocumentLimits.VisualLongEdge);
         Assert.DoesNotContain(directory, normalized.DisplayName, StringComparison.OrdinalIgnoreCase);
     }
@@ -556,7 +562,7 @@ public sealed class AssistantDocumentTests
             30,
             null,
             false,
-            [new AssistantVisualPage(1, "image/png", Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="))],
+            [new AssistantVisualPage(1, "image/png", Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=="), 1, 1)],
             true,
             12);
         var message = CopilotTurnComposer.Compose("Analyse ce plan.", visual);

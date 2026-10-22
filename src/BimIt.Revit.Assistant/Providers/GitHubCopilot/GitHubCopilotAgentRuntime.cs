@@ -1,4 +1,5 @@
 using BimIt.Revit.Assistant.Ipc;
+using BimIt.Revit.Assistant.Patterns;
 using GitHub.Copilot;
 
 namespace BimIt.Revit.Assistant.Providers.GitHubCopilot;
@@ -7,7 +8,9 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
 {
     private readonly BimItAgentReadTools _tools;
     private readonly MepDevicePlacementProposalTool _proposals;
+    private readonly RoomPatternProposalTool _roomPatterns;
     private readonly MepDevicePlacementProposalStore _proposalStore;
+    private readonly RoomPatternStore _patternStore;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private readonly CancellationTokenSource _stop = new();
     private readonly string _directory;
@@ -21,12 +24,17 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         string instanceId,
         MepDevicePlacementProposalStore proposalStore,
         Func<string?> currentAttachmentId,
+        RoomPatternStore patternStore,
+        Func<AssistantDocumentArtifact?> currentAttachment,
         string? runtimeDirectory = null)
     {
         _proposalStore = proposalStore ?? throw new ArgumentNullException(nameof(proposalStore));
+        _patternStore = patternStore ?? throw new ArgumentNullException(nameof(patternStore));
         ArgumentNullException.ThrowIfNull(currentAttachmentId);
+        ArgumentNullException.ThrowIfNull(currentAttachment);
         _tools = new BimItAgentReadTools(session, instanceId);
         _proposals = new MepDevicePlacementProposalTool(session, instanceId, proposalStore, currentAttachmentId);
+        _roomPatterns = new RoomPatternProposalTool(session, instanceId, patternStore, currentAttachment);
         _directory = string.IsNullOrWhiteSpace(runtimeDirectory) ? CopilotRuntimeDirectory.Create() : runtimeDirectory;
         Directory.CreateDirectory(_directory);
         Status = AssistantProviderStatus.NotConfigured;
@@ -107,6 +115,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             acquired = true;
             _tools.ConsumeUsedTools();
             _proposals.ConsumeUsedTools();
+            _roomPatterns.ConsumeUsedTools();
             if (_session is null)
             {
                 return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, ConsumeTurnTools());
@@ -129,7 +138,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                 content = "The assistant did not return an answer.";
             }
 
-            return new AssistantAgentTurn("BIM-IT Assistant", content, false, ConsumeTurnTools());
+            return new AssistantAgentTurn("BIM-IT Assistant", content, false, ConsumeTurnTools(), _patternStore.PeekReviewJson());
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !_stop.IsCancellationRequested)
         {
@@ -169,7 +178,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                 AddUsed(names, name);
             }
 
-            foreach (var name in _proposals.ConsumeUsedTools())
+            foreach (var name in _roomPatterns.ConsumeUsedTools())
             {
                 AddUsed(names, name);
             }
@@ -187,6 +196,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             await _gate.WaitAsync(budget.Token).ConfigureAwait(false);
             acquired = true;
             _proposalStore.Clear();
+            _patternStore.Clear();
             await DisposeSessionAsync().ConfigureAwait(false);
             if (_client is null || Status.State == AssistantProviderState.Unavailable)
             {
@@ -219,6 +229,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
     public async ValueTask DisposeAsync()
     {
         _proposalStore.Clear();
+        _patternStore.Clear();
         _stop.Cancel();
         if (!await _gate.WaitAsync(TimeSpan.FromSeconds(2)).ConfigureAwait(false))
         {
@@ -268,7 +279,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
     private async Task<CopilotSession> CreateSessionAsync(CancellationToken cancellationToken)
     {
         var session = await _client!.CreateSessionAsync(
-            GitHubCopilotSessionBlueprint.CreateSessionConfig(_directory, GitHubCopilotSessionBlueprint.CreateTools(_tools, _proposals)),
+            GitHubCopilotSessionBlueprint.CreateSessionConfig(_directory, GitHubCopilotSessionBlueprint.CreateTools(_tools, _proposals, _roomPatterns)),
             cancellationToken).ConfigureAwait(false);
         _modelEvents?.Dispose();
         _modelEvents = session.On<SessionModelChangeEvent>(change => RememberModel(change.Data.NewModel));

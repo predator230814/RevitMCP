@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'" />
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self' data:" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>BIM-IT Assistant</title>
   <link rel="stylesheet" href="app.css" />
@@ -31,6 +31,7 @@
       </div>
     </section>
     <ol class="timeline" id="timeline"></ol>
+    <section class="pattern" id="pattern" hidden></section>
     <pre class="diagnostics" id="diagnostics-panel" hidden></pre>
   </main>
   <div class="dock">

@@ -14,11 +14,18 @@ public enum AssistantDocumentKind
 
 public sealed class AssistantVisualPage
 {
-    public AssistantVisualPage(int pageNumber, string mimeType, byte[] bytes)
+    public AssistantVisualPage(int pageNumber, string mimeType, byte[] bytes, int rasterWidth, int rasterHeight)
     {
+        if (rasterWidth <= 0 || rasterHeight <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(rasterWidth), "A visual page needs a positive raster size.");
+        }
+
         PageNumber = pageNumber;
         MimeType = mimeType;
         Bytes = bytes;
+        RasterWidth = rasterWidth;
+        RasterHeight = rasterHeight;
     }
 
     public int PageNumber { get; }
@@ -26,6 +33,10 @@ public sealed class AssistantVisualPage
     public string MimeType { get; }
 
     public byte[] Bytes { get; }
+
+    public int RasterWidth { get; }
+
+    public int RasterHeight { get; }
 }
 
 public sealed class AssistantDocumentArtifact : IDisposable

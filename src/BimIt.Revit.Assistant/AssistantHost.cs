@@ -1,4 +1,5 @@
 using BimIt.Revit.Assistant.Ipc;
+using BimIt.Revit.Assistant.Patterns;
 using BimIt.Revit.Assistant.Providers.GitHubCopilot;
 
 namespace BimIt.Revit.Assistant;
@@ -132,7 +133,8 @@ internal static class AssistantHost
         MepDevicePlacementProposalStore? proposals = null,
         IMepDevicePlacementPreviewClient? previewClient = null,
         IMepDevicePlacementReviewClient? reviewClient = null,
-        IMepDevicePlacementApplyClient? applyClient = null)
+        IMepDevicePlacementApplyClient? applyClient = null,
+        RoomPatternStore? roomPatterns = null)
     {
         McpAssistantToolSession? ownedSession = null;
         if (session is null)
@@ -168,13 +170,14 @@ internal static class AssistantHost
         var timeouts = providerTimeouts ?? AssistantProviderTimeouts.Default;
         var documents = new AssistantDocumentStore();
         proposals ??= new MepDevicePlacementProposalStore();
+        roomPatterns ??= new RoomPatternStore();
         previewClient ??= session as IMepDevicePlacementPreviewClient;
         reviewClient ??= session as IMepDevicePlacementReviewClient;
         applyClient ??= session as IMepDevicePlacementApplyClient;
         if (runtime is null)
         {
             runtime = readiness.Ready && session is not null
-                ? new GitHubCopilotAgentRuntime(session, options.InstanceId, proposals, () => CurrentAttachmentId(documents))
+                ? new GitHubCopilotAgentRuntime(session, options.InstanceId, proposals, () => CurrentAttachmentId(documents), roomPatterns, () => documents.Current)
                 : new UnavailableAssistantAgentRuntime(readiness.Error);
         }
 
@@ -219,6 +222,7 @@ internal static class AssistantHost
                         if (read.Artifact is not null)
                         {
                             proposals.NoteAttachmentIdentityChanged(previousArtifactId, CurrentAttachmentId(documents));
+                            roomPatterns.NoteAttachmentIdentityChanged(previousArtifactId, CurrentAttachmentId(documents));
                         }
                     }
                     catch (Exception)
@@ -262,6 +266,7 @@ internal static class AssistantHost
                     var previousArtifactId = CurrentAttachmentId(documents);
                     documents.Clear();
                     proposals.NoteAttachmentIdentityChanged(previousArtifactId, null);
+                    roomPatterns.NoteAttachmentIdentityChanged(previousArtifactId, null);
                     await WriteAsync(server, DocumentCleared(), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -270,6 +275,7 @@ internal static class AssistantHost
                 {
                     documents.Clear();
                     proposals.Clear();
+                    roomPatterns.Clear();
                     var resetFinished = false;
                     try
                     {
@@ -325,6 +331,7 @@ internal static class AssistantHost
         {
             documents.Clear();
             proposals.Clear();
+            roomPatterns.Clear();
             try
             {
                 await runtime.DisposeAsync().AsTask().WaitAsync(TimeSpan.FromSeconds(4)).ConfigureAwait(false);
@@ -522,7 +529,8 @@ internal static class AssistantHost
             string.IsNullOrWhiteSpace(status.SafeError) ? null : AssistantSafeText.Clean(status.SafeError, 500),
             status.Label,
             null,
-            UsedToolNames(turn?.UsedTools));
+            UsedToolNames(turn?.UsedTools),
+            PatternReview: turn?.PatternReview);
     }
 
     private static IReadOnlyList<string> UsedToolNames(IReadOnlyList<string>? names)

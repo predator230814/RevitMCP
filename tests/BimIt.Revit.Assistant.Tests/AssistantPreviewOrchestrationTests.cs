@@ -16,14 +16,14 @@ public sealed class AssistantPreviewOrchestrationTests
     [Fact]
     public void Local_action_is_not_a_model_tool_and_approval_authority_stays_false()
     {
-        Assert.Equal(6, AssistantModelTools.Names.Length);
+        Assert.Equal(7, AssistantModelTools.Names.Length);
         Assert.False(AssistantModelTools.IsExposed("confirmProjectAxesPreview"));
         Assert.False(AssistantIpc.IsModelToolName("confirmProjectAxesPreview"));
         Assert.False(AssistantIpc.IsModelToolName(IMepDevicePlacementPreviewClient.ToolName));
         Assert.False(AssistantIpc.IsModelToolName("revit_request_mep_device_placement_review"));
         Assert.False(AssistantIpc.IsModelToolName("revit_apply_mep_device_placements"));
         Assert.False(AssistantIpc.GrantsApprovalAuthority);
-        Assert.Equal(6, AssistantTools.AllowedReadTools.Length);
+        Assert.Equal(7, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
         Assert.DoesNotContain(IMepDevicePlacementPreviewClient.ToolName, AssistantTools.AllowedReadTools);
         Assert.True(AssistantTools.IsTrustedWriteTool(IMepDevicePlacementPreviewClient.ToolName));

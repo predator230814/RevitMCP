@@ -78,26 +78,32 @@ public sealed class GetSelectionBridgeTests
         var review = new StubReviewMepService();
         var apply = new StubApplyMepService();
 
+        var layouts = new StubGetRoomLayoutsService();
+        var v17 = NamedPipeBridgeHost.WithAdvertisedProtocol(metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, services.Review, services.Apply, warnings, selection, preview, review, apply, layouts);
         var v16 = NamedPipeBridgeHost.WithAdvertisedProtocol(metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, services.Review, services.Apply, warnings, selection, preview, review, apply);
         var v15 = NamedPipeBridgeHost.WithAdvertisedProtocol(metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, services.Review, services.Apply, warnings, selection, preview, review);
         var v14 = NamedPipeBridgeHost.WithAdvertisedProtocol(metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, services.Review, services.Apply, warnings, selection, preview);
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, v16.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.SupportedVersions, v17.SupportedProtocolVersions);
+        Assert.Equal(17, v17.SupportedProtocolVersions[0]);
+        Assert.Equal(BridgeProtocol.ApplyMepDevicePlacementsVersions, v16.SupportedProtocolVersions);
         Assert.Equal(16, v16.SupportedProtocolVersions[0]);
         Assert.Equal(BridgeProtocol.RequestMepDevicePlacementReviewVersions, v15.SupportedProtocolVersions);
         Assert.Equal(15, v15.SupportedProtocolVersions[0]);
         Assert.Equal(BridgeProtocol.PreviewMepDevicePlacementsVersions, v14.SupportedProtocolVersions);
         Assert.Equal(14, v14.SupportedProtocolVersions[0]);
-        Assert.False(BridgeProtocol.SupportsPreviewMepDevicePlacements(17));
-        Assert.False(BridgeProtocol.SupportsRequestMepDevicePlacementReview(17));
-        Assert.False(BridgeProtocol.SupportsApplyMepDevicePlacements(17));
-        Assert.False(BridgeProtocol.SupportsGetSelection(17));
+        Assert.True(BridgeProtocol.SupportsPreviewMepDevicePlacements(17));
+        Assert.True(BridgeProtocol.SupportsRequestMepDevicePlacementReview(17));
+        Assert.True(BridgeProtocol.SupportsApplyMepDevicePlacements(17));
+        Assert.True(BridgeProtocol.SupportsGetSelection(17));
+        Assert.False(BridgeProtocol.SupportsGetRoomLayouts(16));
+        Assert.False(BridgeProtocol.SupportsGetSelection(18));
     }
 
     [Theory]
     [InlineData(1)]
     [InlineData(12)]
-    [InlineData(17)]
+    [InlineData(18)]
     public async Task Get_selection_is_rejected_outside_v13(int version)
     {
         var service = new FakeGetSelectionService();
@@ -429,5 +435,11 @@ internal sealed class StubReviewMepService : IRevitRequestMepDevicePlacementRevi
 internal sealed class StubApplyMepService : IRevitApplyMepDevicePlacementsService
 {
     public Task<ApplyMepDevicePlacementsResult> ApplyMepDevicePlacementsAsync(ApplyMepDevicePlacementsRequest request, CancellationToken cancellationToken)
+        => throw new NotSupportedException();
+}
+
+internal sealed class StubGetRoomLayoutsService : IRevitGetRoomLayoutsService
+{
+    public Task<GetRoomLayoutsResult> GetRoomLayoutsAsync(GetRoomLayoutsRequest request, CancellationToken cancellationToken)
         => throw new NotSupportedException();
 }

@@ -49,6 +49,11 @@ internal static class InstanceTargetResolver
         return Resolve(discovered, instanceId, IsGetSelectionEligible);
     }
 
+    public static TargetResolution ResolveForGetRoomLayouts(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        return Resolve(discovered, instanceId, IsGetRoomLayoutsEligible);
+    }
+
     public static TargetResolution ResolveForPreviewParameterUpdates(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
     {
         return Resolve(discovered, instanceId, IsPreviewParameterUpdatesEligible);
@@ -92,6 +97,11 @@ internal static class InstanceTargetResolver
     public static bool IsGetSelectionEligible(DiscoveredInstance instance)
     {
         return IsEligible(instance, BridgeProtocol.SupportsGetSelection);
+    }
+
+    public static bool IsGetRoomLayoutsEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsGetRoomLayouts);
     }
 
     public static bool IsPreviewParameterUpdatesEligible(DiscoveredInstance instance)

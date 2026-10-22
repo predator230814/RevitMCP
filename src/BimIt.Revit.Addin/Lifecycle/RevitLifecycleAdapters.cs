@@ -387,6 +387,12 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
             _auditWriter);
     }
 
+    public IRevitGetRoomLayoutsService CreateGetRoomLayouts(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitGetRoomLayoutsService(_dispatcher, metadata, _identity);
+    }
+
     public IRevitApplyParameterUpdatesService CreateApplyParameterUpdates(BridgeInstanceMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -462,10 +468,11 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         IRevitPreviewMepDevicePlacementsService? previewMepDevicePlacements,
         IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview,
         IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements,
+        IRevitGetRoomLayoutsService? getRoomLayouts,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);

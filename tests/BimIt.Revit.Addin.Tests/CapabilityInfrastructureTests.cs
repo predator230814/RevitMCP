@@ -75,7 +75,7 @@ public sealed class CapabilityInfrastructureTests
         Assert.Contains("new RevitGetParameterValuesService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetMepTopologyService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitPreviewParameterUpdatesService(_dispatcher, metadata, _identity, _parameterRefs, _intentStore)", adapters, StringComparison.Ordinal);
-        Assert.Contains("StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, cancellationToken)", adapters, StringComparison.Ordinal);
+        Assert.Contains("StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, cancellationToken)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetSelectionService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateCapability(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateQuery(metadata)", coordinator, StringComparison.Ordinal);
@@ -88,7 +88,7 @@ public sealed class CapabilityInfrastructureTests
         Assert.Contains("dispatcher.CreateApplyParameterUpdates(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateGetWarnings(metadata)", coordinator, StringComparison.Ordinal);
         Assert.Contains("dispatcher.CreateGetSelection(metadata)", coordinator, StringComparison.Ordinal);
-        Assert.Contains("_bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, startup.Token)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("_bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, startup.Token)", coordinator, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextRequest", adapters, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextResult", adapters, StringComparison.Ordinal);
         Assert.DoesNotContain("GetContextRequest", coordinator, StringComparison.Ordinal);
@@ -119,7 +119,7 @@ public sealed class CapabilityInfrastructureTests
         Assert.Null(bridges.LastGetParameterValues);
         Assert.Null(bridges.LastPreviewParameterUpdates);
         Assert.Null(bridges.LastRequestParameterUpdateReview);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "meppreview.create", "mepreview.create", "mepapply.create", "bridge.start", "registration.publish" }, events);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "meppreview.create", "mepreview.create", "mepapply.create", "roomlayouts.create", "bridge.start", "registration.publish" }, events);
     }
 
     private static string FindRepoRoot()
@@ -263,6 +263,13 @@ internal sealed class NullCapabilityDispatcher : ILifecycleDispatcher
     {
         _ = metadata;
         _events.Add("mepapply.create");
+        return null;
+    }
+
+    public IRevitGetRoomLayoutsService? CreateGetRoomLayouts(BridgeInstanceMetadata metadata)
+    {
+        _ = metadata;
+        _events.Add("roomlayouts.create");
         return null;
     }
 }

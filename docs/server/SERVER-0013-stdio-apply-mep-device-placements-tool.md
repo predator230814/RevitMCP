@@ -9,6 +9,6 @@
 
 Hints match parameter apply: `readOnlyHint=false`, `destructiveHint=true`, `idempotentHint=false`, `openWorldHint=false`.
 
-Input is the exact `instance_id` and opaque `intent_ref`. Protocol support is `{16}` only. Production `tools/list` contains exactly 14 tools.
+Input is the exact `instance_id` and opaque `intent_ref`. Protocol support at this specification was `{16}`. [SERVER-0014](SERVER-0014-stdio-get-room-layouts-tool.md) later preserves eligibility on protocol 17 and makes production `tools/list` 15.
 
 No generic `create_family_instance`, `run_revit_api`, or `run_csharp` tool is exposed.

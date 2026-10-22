@@ -1,6 +1,7 @@
 using System.IO.Pipes;
 using System.Text.Json;
 using BimIt.Revit.Assistant.Ipc;
+using BimIt.Revit.Assistant.Patterns;
 using BimIt.Revit.Assistant.Providers.GitHubCopilot;
 using BimIt.Revit.Contracts;
 using Xunit;
@@ -16,7 +17,7 @@ public sealed class AssistantProposalTests
     private const string HiddenTemplate = "tmpl-hidden";
 
     [Fact]
-    public void Model_surface_exposes_six_tools_and_hides_raw_writes()
+    public void Model_surface_exposes_seven_tools_and_hides_raw_writes()
     {
         Assert.Equal(
             [
@@ -26,10 +27,11 @@ public sealed class AssistantProposalTests
                 BimItAgentReadTools.InspectSelection,
                 BimItAgentReadTools.ExploreSelectedMep,
                 MepDevicePlacementProposalTool.Name,
+                RoomPatternProposalTool.Name,
             ],
             AssistantModelTools.Names);
         Assert.Equal(5, BimItAgentReadTools.Names.Length);
-        Assert.Equal(6, AssistantTools.AllowedReadTools.Length);
+        Assert.Equal(7, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
         Assert.DoesNotContain(MepDevicePlacementProposalTool.Name, BimItAgentReadTools.Names);
         Assert.DoesNotContain(MepDevicePlacementProposalTool.Name, AssistantTools.AllowedReadTools);
@@ -58,7 +60,7 @@ public sealed class AssistantProposalTests
         var directory = Directory.CreateTempSubdirectory("bimit-proposal-surface-").FullName;
         try
         {
-            var tools = GitHubCopilotSessionBlueprint.CreateTools(ReadTools(), ProposalTool(new MepDevicePlacementProposalStore()));
+            var tools = GitHubCopilotSessionBlueprint.CreateTools(ReadTools(), ProposalTool(new MepDevicePlacementProposalStore()), PatternTool());
             Assert.Equal(AssistantModelTools.Names, tools.Select(tool => tool.Name).ToArray());
             var session = GitHubCopilotSessionBlueprint.CreateSessionConfig(directory, tools);
             var allowed = Assert.IsAssignableFrom<IList<string>>(session.AvailableTools);
@@ -463,6 +465,11 @@ public sealed class AssistantProposalTests
     private static MepDevicePlacementProposalTool ProposalTool(MepDevicePlacementProposalStore store)
     {
         return new MepDevicePlacementProposalTool(new RecordingSession(_ => Error("unused", "unused")), InstanceId, store, static () => null);
+    }
+
+    private static RoomPatternProposalTool PatternTool()
+    {
+        return new RoomPatternProposalTool(new RecordingSession(_ => Error("unused", "unused")), InstanceId, new RoomPatternStore(), static () => null);
     }
 
     private static Func<string, AssistantToolCall> Selection(int count, bool truncated, string refs)

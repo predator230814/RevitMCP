@@ -28,7 +28,7 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(14, tools.Count);
+        Assert.Equal(15, tools.Count);
         Assert.Equal(
             new[]
             {
@@ -39,6 +39,7 @@ public sealed class StdioServerProcessTests
                 GetElementsToolMetadata.Name,
                 GetMepTopologyToolMetadata.Name,
                 GetParameterValuesToolMetadata.Name,
+                GetRoomLayoutsToolMetadata.Name,
                 GetSelectionToolMetadata.Name,
                 GetWarningsToolMetadata.Name,
                 PreviewMepDevicePlacementsToolMetadata.Name,
@@ -58,6 +59,7 @@ public sealed class StdioServerProcessTests
                 "revit_get_elements",
                 "revit_get_mep_topology",
                 "revit_get_parameter_values",
+                "revit_get_room_layouts",
                 "revit_get_selection",
                 "revit_get_warnings",
                 "revit_preview_mep_device_placements",
@@ -109,6 +111,10 @@ public sealed class StdioServerProcessTests
         Assert.Equal(GetSelectionToolMetadata.Description, getSelection.Description);
         Assert.True(getSelection.ProtocolTool.Annotations?.ReadOnlyHint);
         Assert.False(getSelection.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var getRoomLayouts = Assert.Single(tools, tool => tool.Name == GetRoomLayoutsToolMetadata.Name);
+        Assert.True(getRoomLayouts.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(getRoomLayouts.ProtocolTool.Annotations?.OpenWorldHint);
 
         var getMepTopology = Assert.Single(tools, tool => tool.Name == GetMepTopologyToolMetadata.Name);
         Assert.Equal(GetMepTopologyToolMetadata.Title, getMepTopology.Title);

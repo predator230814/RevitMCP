@@ -34,6 +34,7 @@ internal sealed class AssistantShell
     private string _providerLabel = "Not configured";
     private string? _providerError;
     private AssistantAttachmentChip? _attachment;
+    private JsonElement? _patternReview;
     private CancellationTokenSource? _providerPoll;
     private Task _sequence = Task.CompletedTask;
 
@@ -113,6 +114,7 @@ internal sealed class AssistantShell
             case AssistantPageIntent.NewConversation:
                 _conversation.Reset();
                 _attachment = null;
+                _patternReview = null;
                 PostSnapshot();
                 Sequence(ResetProviderAsync);
                 break;
@@ -392,6 +394,11 @@ internal sealed class AssistantShell
             }
 
             ApplyProvider(result);
+            if (result.PatternReview is not null && RoomPatternReview.TryParse(result.PatternReview, out var review))
+            {
+                _patternReview = review;
+            }
+
             _conversation.Add(
                 result.IsError ? "error" : "assistant",
                 result.Title ?? "BIM-IT Assistant",
@@ -594,6 +601,7 @@ internal sealed class AssistantShell
             if (_mcpState != "ready")
             {
                 _attachment = null;
+                _patternReview = null;
                 return;
             }
 
@@ -602,6 +610,7 @@ internal sealed class AssistantShell
             if (result?.Kind == AssistantIpcKind.DocumentResult && result.Attached != true)
             {
                 _attachment = null;
+                _patternReview = null;
             }
             else
             {
@@ -632,6 +641,7 @@ internal sealed class AssistantShell
             _attachment = new AssistantAttachmentChip(
                 result.DisplayName,
                 AssistantAttachmentSummary.Describe(result.DocumentKind, result.PageCount, result.VisualCount, result.Truncated == true));
+            _patternReview = null;
             return;
         }
 
@@ -652,6 +662,7 @@ internal sealed class AssistantShell
     {
         _conversation.Reset();
         _attachment = null;
+        _patternReview = null;
         PostSnapshot();
         if (_mcpState != "ready")
         {
@@ -833,6 +844,11 @@ internal sealed class AssistantShell
             };
         }
 
+        if (_patternReview is JsonElement review)
+        {
+            snapshot["patternReview"] = review;
+        }
+
         return JsonSerializer.Serialize(snapshot);
     }
 
@@ -854,6 +870,7 @@ internal sealed class AssistantShell
                 "bimit_inspect_selection" => "Inspect selection",
                 "bimit_explore_selected_mep" => "Explore selected MEP",
                 "bimit_propose_mep_device_placements" => "Propose MEP placements",
+                "bimit_propose_room_pattern" => "Propose room pattern",
                 _ => null,
             };
             if (label is not null && !labels.Contains(label, StringComparer.Ordinal))

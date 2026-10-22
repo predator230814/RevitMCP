@@ -148,6 +148,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("mepapply.create");
         return null;
     }
+
+    public IRevitGetRoomLayoutsService? CreateGetRoomLayouts(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("roomlayouts.create");
+        return new RecordingGetRoomLayoutsService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -235,6 +242,16 @@ internal sealed class RecordingGetSelectionService : IRevitGetSelectionService
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording selection does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingGetRoomLayoutsService : IRevitGetRoomLayoutsService
+{
+    public Task<GetRoomLayoutsResult> GetRoomLayoutsAsync(GetRoomLayoutsRequest request, CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording room layouts does not execute Revit work.");
     }
 }
 
@@ -377,6 +394,8 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitGetSelectionService? LastGetSelection { get; private set; }
 
+    public IRevitGetRoomLayoutsService? LastGetRoomLayouts { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
@@ -393,6 +412,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitPreviewMepDevicePlacementsService? previewMepDevicePlacements,
         IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview,
         IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements,
+        IRevitGetRoomLayoutsService? getRoomLayouts,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -407,6 +427,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         LastApplyParameterUpdates = applyParameterUpdates;
         LastGetWarnings = getWarnings;
         LastGetSelection = getSelection;
+        LastGetRoomLayouts = getRoomLayouts;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

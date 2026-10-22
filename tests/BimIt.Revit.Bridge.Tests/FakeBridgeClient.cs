@@ -161,5 +161,16 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         throw new NotSupportedException("This fake client does not implement revit.apply_mep_device_placements.");
     }
 
+    public Task<GetRoomLayoutsResult> GetRoomLayoutsAsync(
+        GetRoomLayoutsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.get_room_layouts.");
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

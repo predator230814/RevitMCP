@@ -244,3 +244,70 @@ textarea {
   .top, .composer { display: block; }
   .header-actions, .composer button { margin-top: 8px; }
 }
+
+.pattern {
+  margin: 12px 16px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.pattern h2 { margin: 0 0 4px; font-size: 16px; }
+
+.pattern-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.sheet, .room-preview {
+  position: relative;
+  background: var(--bg);
+  border-radius: 8px;
+  min-height: 180px;
+}
+
+.sheet img, .sheet svg, .room-preview svg {
+  width: 100%;
+  height: 220px;
+  object-fit: contain;
+  display: block;
+}
+
+.sheet svg {
+  position: absolute;
+  inset: 0;
+}
+
+.sheet svg polygon, .room-preview svg polygon {
+  fill: rgba(15, 110, 107, 0.18);
+  stroke: var(--accent);
+  stroke-width: 0.008;
+}
+
+.sheet svg circle, .room-preview svg circle, .sheet svg rect { fill: var(--warn); }
+
+.sheet svg text, .room-preview svg text {
+  fill: var(--ink);
+  font-size: 0.035px;
+}
+
+.room-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+
+.room-list button {
+  text-align: left;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 6px 8px;
+}
+
+.room-list button.selected { border-color: var(--accent); }
+
+.room-list span, .pattern .sub { color: var(--muted); font-size: 12px; }
+
+@media (max-width: 720px) {
+  .pattern-grid { grid-template-columns: 1fr; }
+}
