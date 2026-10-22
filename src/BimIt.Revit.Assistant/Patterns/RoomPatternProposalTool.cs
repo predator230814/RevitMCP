@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using BimIt.Revit.Assistant.Ipc;
@@ -36,9 +37,11 @@ internal sealed class RoomPatternProposalRequest
     public int? PageNumber { get; init; }
 
     [JsonPropertyName("boundary")]
+    [Description("One room boundary polygon in normalized page coordinates. x runs left to right. y runs top to bottom.")]
     public IReadOnlyList<RoomPatternPointRequest>? Boundary { get; init; }
 
     [JsonPropertyName("entrance")]
+    [Description("Optional entrance or door position. x runs left to right. y runs top to bottom.")]
     public RoomPatternPointRequest? Entrance { get; init; }
 
     [JsonPropertyName("devices")]
@@ -51,9 +54,11 @@ internal sealed class RoomPatternProposalRequest
 internal sealed class RoomPatternPointRequest
 {
     [JsonPropertyName("x")]
+    [Description("Normalized page X from 0 to 1, left to right.")]
     public double? X { get; init; }
 
     [JsonPropertyName("y")]
+    [Description("Normalized page Y from 0 to 1, top to bottom.")]
     public double? Y { get; init; }
 
     [JsonExtensionData]
@@ -66,9 +71,11 @@ internal sealed class RoomPatternDeviceRequest
     public string? Role { get; init; }
 
     [JsonPropertyName("page_x")]
+    [Description("Normalized page X from 0 to 1, left to right.")]
     public double? PageX { get; init; }
 
     [JsonPropertyName("page_y")]
+    [Description("Normalized page Y from 0 to 1, top to bottom.")]
     public double? PageY { get; init; }
 
     [JsonPropertyName("placement_kind")]
@@ -198,7 +205,8 @@ internal sealed class RoomPatternProposalTool
             return Fail(RoomPatternFailures.Attachment);
         }
 
-        var grounding = await RoomPatternGrounding.ReadAsync(_session, _instanceId, pattern, cancellationToken).ConfigureAwait(false);
+        var geometry = PageFrame.ForMatching(pattern, page.RasterWidth, page.RasterHeight);
+        var grounding = await RoomPatternGrounding.ReadAsync(_session, _instanceId, pattern, geometry, cancellationToken).ConfigureAwait(false);
         grounding.Review.PageNumber = pageNumber;
         if (RoomPatternReviewRaster.TryCreate(page.Bytes, out var mime, out var image))
         {

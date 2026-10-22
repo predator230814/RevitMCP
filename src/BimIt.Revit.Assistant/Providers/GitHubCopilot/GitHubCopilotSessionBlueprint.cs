@@ -22,6 +22,8 @@ internal static class GitHubCopilotSessionBlueprint
         You cannot supply Revit identities or a calibration flag.
         bimit_propose_room_pattern stores one untrusted interpretation of the current attached page.
         Describe only what you see on that page: one room boundary, an optional entrance, and detected devices, using normalized page coordinates from 0 to 1.
+        x and page_x run left to right. y and page_y run top to bottom.
+        Do not send page width, height, or aspect ratio.
         You cannot name Revit rooms, supply element references, or decide which rooms match.
         BIM-IT computes the match. Do not invent a match score.
         Project-axis offsets are not PDF pixels, image pixels, sheet coordinates, or geographic coordinates.
@@ -180,7 +182,7 @@ internal static class GitHubCopilotSessionBlueprint
             new AIFunctionFactoryOptions
             {
                 Name = RoomPatternProposalTool.Name,
-                Description = "Store one untrusted interpretation of the current attached page: a normalized room boundary, an optional entrance, and detected devices. This does not match rooms, approve, or modify Revit. Do not send Revit identities.",
+                Description = "Store one untrusted interpretation of the current attached page. Boundary x and device page_x run left to right. Boundary y and device page_y run top to bottom, both normalized from 0 to 1. This does not match rooms, approve, or modify Revit. Do not send Revit identities, page width, height, or aspect ratio.",
             });
     }
 

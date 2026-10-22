@@ -100,7 +100,7 @@ public sealed class RoomPatternTests
             4,
             null,
             false,
-            [new AssistantVisualPage(1, "image/png", [1, 2, 3, 4])],
+            [new AssistantVisualPage(1, "image/png", [1, 2, 3, 4], 100, 100)],
             false,
             1);
         var store = new RoomPatternStore();

@@ -27,7 +27,8 @@ internal static class RoomPatternGrounding
     public static async Task<Grounding> ReadAsync(
         IAssistantToolSession session,
         string instanceId,
-        SourceRoomPattern pattern,
+        SourceRoomPattern display,
+        SourceRoomPattern geometry,
         CancellationToken cancellationToken)
     {
         var context = await session.CallAsync(
@@ -36,7 +37,7 @@ internal static class RoomPatternGrounding
             cancellationToken).ConfigureAwait(false);
         if (!TryDocumentId(context, out var documentId))
         {
-            return Grounding.Failed(pattern, "read_failed");
+            return Grounding.Failed(display, "read_failed");
         }
 
         var query = await session.CallAsync(
@@ -55,7 +56,7 @@ internal static class RoomPatternGrounding
             cancellationToken).ConfigureAwait(false);
         if (query.IsError || !TryQuery(query.Structured, out var refs, out var truncated))
         {
-            return Grounding.Failed(pattern, "read_failed");
+            return Grounding.Failed(display, "read_failed");
         }
 
         var candidates = new List<CandidateRoom>();
@@ -74,7 +75,7 @@ internal static class RoomPatternGrounding
                 cancellationToken).ConfigureAwait(false);
             if (layouts.IsError || !TryLayouts(layouts.Structured, out var result))
             {
-                return Grounding.Failed(pattern, "read_failed");
+                return Grounding.Failed(display, "read_failed");
             }
 
             foreach (var item in result.Items)
@@ -99,10 +100,10 @@ internal static class RoomPatternGrounding
             }
         }
 
-        var matched = RoomShapeMatcher.Match(pattern, candidates);
+        var matched = RoomShapeMatcher.Match(geometry, candidates);
         var all = matched.Concat(rejected).ToArray();
         var state = refs.Count == 0 ? "no_candidates" : "matched";
-        return new Grounding(state, truncated, all, BuildReview(pattern, state, truncated, all), ModelResult(pattern, state, all));
+        return new Grounding(state, truncated, all, BuildReview(display, state, truncated, all), ModelResult(display, state, all));
     }
 
     private static RoomPatternReview.Review BuildReview(
