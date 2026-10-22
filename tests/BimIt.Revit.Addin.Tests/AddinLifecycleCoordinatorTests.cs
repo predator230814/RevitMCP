@@ -39,7 +39,7 @@ public sealed class AddinLifecycleCoordinatorTests
 
         Assert.Equal(AddinLifecycleState.Ready, coordinator.State);
         Assert.Equal(1, dispatchers.CreateCount);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "meppreview.create", "mepreview.create", "mepapply.create", "bridge.start", "registration.publish" }, events);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "meppreview.create", "mepreview.create", "mepapply.create", "roomlayouts.create", "bridge.start", "registration.publish" }, events);
     }
 
     [Fact]
@@ -68,8 +68,9 @@ public sealed class AddinLifecycleCoordinatorTests
         Assert.Equal("meppreview.create", events[12]);
         Assert.Equal("mepreview.create", events[13]);
         Assert.Equal("mepapply.create", events[14]);
-        Assert.Equal("bridge.start", events[15]);
-        Assert.Equal("registration.publish", events[16]);
+        Assert.Equal("roomlayouts.create", events[15]);
+        Assert.Equal("bridge.start", events[16]);
+        Assert.Equal("registration.publish", events[17]);
         Assert.True(bridges.Published);
         Assert.True(bridges.LastBridge?.HasRegistration);
         Assert.NotNull(bridges.LastCapability);
@@ -164,6 +165,7 @@ public sealed class AddinLifecycleCoordinatorTests
                 "meppreview.create",
                 "mepreview.create",
                 "mepapply.create",
+                "roomlayouts.create",
                 "bridge.start",
                 "registration.publish",
                 "dispatcher.stop",

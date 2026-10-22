@@ -62,7 +62,8 @@ public sealed record AssistantIpcMessage(
     int? VisualCount = null,
     bool? Truncated = null,
     string? DocumentCode = null,
-    string? DocumentMessage = null);
+    string? DocumentMessage = null,
+    string? PatternReview = null);
 
 public readonly record struct AssistantIpcParse(bool Accepted, AssistantIpcMessage? Message, string Reason)
 {
@@ -117,6 +118,11 @@ public static class AssistantIpc
             if (body is null || string.IsNullOrWhiteSpace(body.Type))
             {
                 return AssistantIpcParse.Reject("missing-type");
+            }
+
+            if (body.PatternReview is not null && body.Type != "chatResult")
+            {
+                return AssistantIpcParse.Reject("pattern");
             }
 
             return body.Type switch
@@ -208,6 +214,7 @@ public static class AssistantIpc
                 ProviderError = message.ProviderError,
                 ProviderLabel = message.ProviderLabel,
                 UsedTools = message.UsedTools ?? [],
+                PatternReview = message.PatternReview,
             },
             AssistantIpcKind.ResetConversation => new Envelope { Type = "resetConversation" },
             AssistantIpcKind.QueryStatus => new Envelope { Type = "queryStatus" },
@@ -254,7 +261,8 @@ public static class AssistantIpc
             or "bimit_get_active_view_elements"
             or "bimit_inspect_selection"
             or "bimit_explore_selected_mep"
-            or "bimit_propose_mep_device_placements";
+            or "bimit_propose_mep_device_placements"
+            or "bimit_propose_room_pattern";
     }
 
     private static AssistantIpcParse ParseHello(Envelope body)
@@ -406,6 +414,14 @@ public static class AssistantIpc
             return AssistantIpcParse.Reject("chat");
         }
 
+        string? patternReview = null;
+        if (body.PatternReview is not null && !RoomPatternReview.TryParse(body.PatternReview, out _))
+        {
+            return AssistantIpcParse.Reject("pattern");
+        }
+
+        patternReview = body.PatternReview;
+
         return AssistantIpcParse.Accept(new AssistantIpcMessage(
             AssistantIpcKind.ChatResult,
             null,
@@ -428,7 +444,8 @@ public static class AssistantIpc
             Bound(body.ProviderError, 500),
             Bound(body.ProviderLabel, 160),
             null,
-            usedTools));
+            usedTools,
+            PatternReview: patternReview));
     }
 
     private static AssistantIpcParse ParseSignal(Envelope body, AssistantIpcKind kind)
@@ -441,6 +458,7 @@ public static class AssistantIpc
             || HasProvider(body)
             || body.UsedTools is not null
             || body.InstanceId is not null
+            || body.PatternReview is not null
             || HasDocument(body))
         {
             return AssistantIpcParse.Reject("signal");
@@ -888,5 +906,7 @@ public static class AssistantIpc
 
         [JsonPropertyName("message")]
         public string? DocumentMessage { get; set; }
+
+        public string? PatternReview { get; set; }
     }
 }

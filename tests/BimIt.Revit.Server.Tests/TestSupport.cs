@@ -48,7 +48,8 @@ internal static class TestSupport
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
                 BridgeProtocol.GetSelectionVersion => BridgeProtocol.GetSelectionVersions,
-                BridgeProtocol.ApplyMepDevicePlacementsVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.GetRoomLayoutsVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.ApplyMepDevicePlacementsVersion => BridgeProtocol.ApplyMepDevicePlacementsVersions,
                 BridgeProtocol.RequestMepDevicePlacementReviewVersion => BridgeProtocol.RequestMepDevicePlacementReviewVersions,
                 BridgeProtocol.PreviewMepDevicePlacementsVersion => BridgeProtocol.PreviewMepDevicePlacementsVersions,
                 BridgeProtocol.RequestParameterUpdateReviewVersion => BridgeProtocol.SupportedVersions,
@@ -801,6 +802,24 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return GetSelection is null
             ? throw new NotSupportedException("This recording client does not implement revit.get_selection.")
             : GetSelection(request, timeout, cancellationToken);
+    }
+
+    public int GetRoomLayoutsCalls { get; private set; }
+
+    public GetRoomLayoutsRequest? LastGetRoomLayoutsRequest { get; private set; }
+
+    public Func<GetRoomLayoutsRequest, TimeSpan, CancellationToken, Task<GetRoomLayoutsResult>>? GetRoomLayouts { get; set; }
+
+    public Task<GetRoomLayoutsResult> GetRoomLayoutsAsync(
+        GetRoomLayoutsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        GetRoomLayoutsCalls++;
+        LastGetRoomLayoutsRequest = request;
+        return GetRoomLayouts is null
+            ? throw new NotSupportedException("This recording client does not implement revit.get_room_layouts.")
+            : GetRoomLayouts(request, timeout, cancellationToken);
     }
 
     public Task<GetWarningsResult> GetWarningsAsync(

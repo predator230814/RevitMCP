@@ -574,6 +574,7 @@ internal static class AssistantModelTools
         BimItAgentReadTools.InspectSelection,
         BimItAgentReadTools.ExploreSelectedMep,
         MepDevicePlacementProposalTool.Name,
+        RoomPatternProposalTool.Name,
     ];
 
     public static bool IsExposed(string? toolName)

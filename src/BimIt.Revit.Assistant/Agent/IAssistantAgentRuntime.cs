@@ -1,6 +1,11 @@
 namespace BimIt.Revit.Assistant;
 
-public sealed record AssistantAgentTurn(string Title, string Body, bool IsError, IReadOnlyList<string>? UsedTools = null);
+public sealed record AssistantAgentTurn(
+    string Title,
+    string Body,
+    bool IsError,
+    IReadOnlyList<string>? UsedTools = null,
+    string? PatternReview = null);
 
 public sealed record AssistantAgentRequest(string Text, AssistantDocumentArtifact? Attachment = null);
 

@@ -11,4 +11,4 @@ Support is the explicit set `{16}`.
 
 Current protocol version is 16. A full production host advertises `[16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1]` only when apply is present together with the complete v15 prefix.
 
-Unknown protocol 17 supports nothing. Numeric `version >= N` checks are not used.
+Unknown protocol 17 supported nothing when this specification was written. [BRIDGE-0017](BRIDGE-0017-get-room-layouts-capability-rpc.md) later preserves this RPC on protocol 17. Unknown protocol 18 supports nothing. Numeric `version >= N` checks are not used.

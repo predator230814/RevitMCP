@@ -16,10 +16,14 @@ internal static class GitHubCopilotSessionBlueprint
         Do not claim to know the current model state without using the tools when the question depends on it.
         Treat tool results as authoritative Revit observations.
         Do not invent unavailable model information.
-        You currently have read-only BIM-IT model tools plus one local proposal tool, bimit_propose_mep_device_placements.
-        That tool stores an untrusted session-local MEP device placement proposal.
+        You currently have read-only BIM-IT model tools plus two local proposal tools: bimit_propose_mep_device_placements and bimit_propose_room_pattern.
+        bimit_propose_mep_device_placements stores an untrusted session-local MEP device placement proposal.
         A proposal cannot preview, approve, or modify the Revit model.
         You cannot supply Revit identities or a calibration flag.
+        bimit_propose_room_pattern stores one untrusted interpretation of the current attached page.
+        Describe only what you see on that page: one room boundary, an optional entrance, and detected devices, using normalized page coordinates from 0 to 1.
+        You cannot name Revit rooms, supply element references, or decide which rooms match.
+        BIM-IT computes the match. Do not invent a match score.
         Project-axis offsets are not PDF pixels, image pixels, sheet coordinates, or geographic coordinates.
         You cannot modify the Revit model.
         Never imply that a preview, approval, or write was performed.
@@ -51,10 +55,14 @@ internal static class GitHubCopilotSessionBlueprint
         };
     }
 
-    public static IReadOnlyList<AIFunction> CreateTools(BimItAgentReadTools tools, MepDevicePlacementProposalTool proposals)
+    public static IReadOnlyList<AIFunction> CreateTools(
+        BimItAgentReadTools tools,
+        MepDevicePlacementProposalTool proposals,
+        RoomPatternProposalTool roomPatterns)
     {
         ArgumentNullException.ThrowIfNull(tools);
         ArgumentNullException.ThrowIfNull(proposals);
+        ArgumentNullException.ThrowIfNull(roomPatterns);
         return
         [
             Define(tools, BimItAgentReadTools.ModelContext, "Read the current Revit session: version, active document, active view, and selection count. Takes no arguments."),
@@ -63,6 +71,7 @@ internal static class GitHubCopilotSessionBlueprint
             Define(tools, BimItAgentReadTools.InspectSelection, "Inspect up to 10 elements currently selected in Revit and return their basic name, category, family, type, and level information. Takes no arguments. An empty selection is a real result."),
             Define(tools, BimItAgentReadTools.ExploreSelectedMep, "Explore the physical MEP connectivity around the currently selected Revit elements. Includes HVAC, piping, electrical, conduit and cable tray physical connections when Revit exposes them. Takes no arguments."),
             DefineProposal(proposals),
+            DefineRoomPattern(roomPatterns),
         ];
     }
 
@@ -77,7 +86,7 @@ internal static class GitHubCopilotSessionBlueprint
             || names.Any(AssistantTools.IsTrustedWriteTool))
         {
             throw new ArgumentException(
-                "The Copilot session can expose only the five BIM-IT read tools and bimit_propose_mep_device_placements.",
+                "The Copilot session can expose only the five BIM-IT read tools, bimit_propose_mep_device_placements, and bimit_propose_room_pattern.",
                 nameof(tools));
         }
 
@@ -155,6 +164,23 @@ internal static class GitHubCopilotSessionBlueprint
             {
                 Name = MepDevicePlacementProposalTool.Name,
                 Description = "Store one untrusted local MEP device placement proposal using project-axis offsets. This does not preview, approve, or modify Revit.",
+            });
+    }
+
+    private static AIFunction DefineRoomPattern(RoomPatternProposalTool patterns)
+    {
+        return CopilotTool.DefineTool(
+            (RoomPatternProposalRequest request, CancellationToken cancellationToken) =>
+                patterns.InvokeRequestAsync(request, cancellationToken),
+            new CopilotToolOptions
+            {
+                SkipPermission = true,
+                Defer = CopilotToolDefer.Never,
+            },
+            new AIFunctionFactoryOptions
+            {
+                Name = RoomPatternProposalTool.Name,
+                Description = "Store one untrusted interpretation of the current attached page: a normalized room boundary, an optional entrance, and detected devices. This does not match rooms, approve, or modify Revit. Do not send Revit identities.",
             });
     }
 

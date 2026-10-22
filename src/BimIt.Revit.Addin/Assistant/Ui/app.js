@@ -44,6 +44,7 @@ function render(snapshot) {
     timeline.insertAdjacentHTML("beforeend", `<li class="msg"><h3>Working</h3><p>Waiting for the Assistant.</p></li>`);
   }
   renderAttachment(snapshot.attachment);
+  renderPattern(snapshot.patternReview);
 }
 
 function renderAttachment(attachment) {
@@ -56,6 +57,70 @@ function renderAttachment(attachment) {
   node.hidden = false;
   node.innerHTML = `<span class="clip" aria-hidden="true">📎</span><span class="attachment-copy"><strong>${escapeHtml(attachment.displayName)}</strong><span class="sub">${escapeHtml(attachment.summary || "")}</span></span><button id="remove-attachment" type="button" aria-label="Remove document">Remove</button>`;
   document.getElementById("remove-attachment").addEventListener("click", () => post({ type: "removeDocument" }));
+}
+
+let selectedRoom = 0;
+
+function renderPattern(review) {
+  const node = document.getElementById("pattern");
+  if (!review || !Array.isArray(review.boundary) || !Array.isArray(review.devices)) {
+    node.hidden = true;
+    node.innerHTML = "";
+    selectedRoom = 0;
+    return;
+  }
+  const rooms = Array.isArray(review.rooms) ? review.rooms : [];
+  if (selectedRoom >= rooms.length) {
+    selectedRoom = 0;
+  }
+  const counts = `${review.candidateCount || 0} candidate rooms · ${review.highCount || 0} high · ${review.lowerCount || 0} lower · ${review.rejectedCount || 0} rejected`;
+  const image = patternImage(review);
+  node.hidden = false;
+  node.innerHTML = `<h2>Pattern review</h2><p class="sub">${escapeHtml(counts)}</p><div class="pattern-grid"><div class="sheet">${image}${patternSvg(review.boundary, review.entrance, review.devices, true, false)}</div><div class="rooms"><div class="room-list">${rooms.map((room, index) => `<button type="button" data-room="${index}" class="${index === selectedRoom ? "selected" : ""}"><strong>${escapeHtml(room.label || "Room")}</strong><span>${escapeHtml(roomBand(room))}</span></button>`).join("")}</div><div class="room-preview">${rooms.length ? roomPreview(rooms[selectedRoom]) : "<p>No Revit rooms were compared.</p>"}</div></div></div>`;
+  node.querySelectorAll("[data-room]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedRoom = Number(button.dataset.room);
+      renderPattern(review);
+    });
+  });
+}
+
+function patternImage(review) {
+  if ((review.imageMime !== "image/jpeg" && review.imageMime !== "image/png") || typeof review.imageBase64 !== "string" || !/^[A-Za-z0-9+/=]+$/.test(review.imageBase64)) {
+    return "";
+  }
+  return `<img alt="Attached drawing page" src="data:${review.imageMime};base64,${review.imageBase64}" />`;
+}
+
+function patternSvg(boundary, entrance, devices, showRoles, flipY) {
+  const yOf = (value) => {
+    const y = unit(value);
+    return flipY ? 1 - y : y;
+  };
+  const points = boundary.map((point) => `${unit(point.x)},${yOf(point.y)}`).join(" ");
+  const markers = (devices || []).map((device) => `<circle cx="${unit(device.x)}" cy="${yOf(device.y)}" r="0.012"></circle>${showRoles ? `<text x="${unit(device.x) + 0.015}" y="${yOf(device.y)}">${escapeHtml(device.role || "")}</text>` : ""}`).join("");
+  const door = entrance ? `<rect x="${unit(entrance.x) - 0.01}" y="${yOf(entrance.y) - 0.01}" width="0.02" height="0.02"></rect>` : "";
+  return `<svg viewBox="0 0 1 1" role="img" aria-label="Room pattern">${points ? `<polygon points="${points}"></polygon>` : ""}${door}${markers}</svg>`;
+}
+
+function roomPreview(room) {
+  const adaptation = `${room.rotationDegrees || 0}°${room.mirrored ? " · mirrored" : ""}`;
+  const outline = Array.isArray(room.outline) ? room.outline : [];
+  const devices = Array.isArray(room.devices) ? room.devices : [];
+  return `<p><strong>${escapeHtml(room.label || "Room")}</strong> ${escapeHtml(room.level || "")}</p><p class="sub">${escapeHtml(room.band || "rejected")} · ${escapeHtml(String(room.score ?? 0))} · ${escapeHtml(adaptation)}${room.reason ? " · " + escapeHtml(room.reason) : ""}</p>${patternSvg(outline, null, devices, true, true)}`;
+}
+
+function roomBand(room) {
+  const mirror = room.mirrored ? " · mirrored" : "";
+  return `${room.band || "rejected"} · ${room.rotationDegrees || 0}°${mirror}`;
+}
+
+function unit(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) {
+    return 0;
+  }
+  return Math.min(1, Math.max(0, number));
 }
 
 function escapeHtml(value) {

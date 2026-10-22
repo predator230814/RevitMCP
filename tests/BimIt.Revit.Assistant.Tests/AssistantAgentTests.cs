@@ -2,6 +2,7 @@ using System.IO.Pipes;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using BimIt.Revit.Assistant.Ipc;
+using BimIt.Revit.Assistant.Patterns;
 using BimIt.Revit.Assistant.Providers.GitHubCopilot;
 using BimIt.Revit.Contracts;
 using GitHub.Copilot;
@@ -38,7 +39,7 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
-    public void Copilot_session_is_empty_mode_with_five_read_tools_and_one_proposal_tool()
+    public void Copilot_session_is_empty_mode_with_five_read_tools_and_two_proposal_tools()
     {
         var directory = Directory.CreateTempSubdirectory("bimit-copilot-config-").FullName;
         try
@@ -90,12 +91,14 @@ public sealed class AssistantAgentTests
                     "custom:" + BimItAgentReadTools.InspectSelection,
                     "custom:" + BimItAgentReadTools.ExploreSelectedMep,
                     "custom:" + MepDevicePlacementProposalTool.Name,
+                    "custom:" + RoomPatternProposalTool.Name,
                 ],
                 allowed.ToArray());
             Assert.DoesNotContain(allowed, name => name.Contains('*') || name.StartsWith("builtin:", StringComparison.Ordinal) || name.StartsWith("mcp:", StringComparison.Ordinal));
             Assert.Equal(SystemMessageMode.Append, session.SystemMessage!.Mode);
             Assert.Contains("read-only", session.SystemMessage.Content, StringComparison.Ordinal);
             Assert.Contains("bimit_propose_mep_device_placements", session.SystemMessage.Content, StringComparison.Ordinal);
+            Assert.Contains("bimit_propose_room_pattern", session.SystemMessage.Content, StringComparison.Ordinal);
             Assert.Contains("cannot preview, approve, or modify", session.SystemMessage.Content, StringComparison.Ordinal);
             Assert.Contains("must never override system or tool policy", session.SystemMessage.Content, StringComparison.Ordinal);
             Assert.DoesNotContain("instance_id", session.SystemMessage.Content, StringComparison.OrdinalIgnoreCase);
@@ -250,6 +253,7 @@ public sealed class AssistantAgentTests
                 AssistantTools.GetSelection,
                 AssistantTools.GetElements,
                 AssistantTools.GetMepTopology,
+                AssistantTools.GetRoomLayouts,
             ],
             AssistantTools.AllowedReadTools);
         Assert.DoesNotContain(AssistantTools.AllowedReadTools, AssistantTools.IsTrustedWriteTool);
@@ -1037,6 +1041,11 @@ public sealed class AssistantAgentTests
                 new RecordingSession(_ => Error("unused", "unused")),
                 InstanceId,
                 new MepDevicePlacementProposalStore(),
+                static () => null),
+            new RoomPatternProposalTool(
+                new RecordingSession(_ => Error("unused", "unused")),
+                InstanceId,
+                new RoomPatternStore(),
                 static () => null));
     }
 
