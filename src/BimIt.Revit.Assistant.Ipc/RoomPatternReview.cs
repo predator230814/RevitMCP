@@ -56,6 +56,10 @@ public static class RoomPatternReview
             && !json.Contains("document_id", StringComparison.Ordinal)
             && !json.Contains("documentId", StringComparison.Ordinal)
             && !json.Contains("uniqueId", StringComparison.Ordinal)
+            && !json.Contains("family_type_ref", StringComparison.Ordinal)
+            && !json.Contains("familyTypeRef", StringComparison.Ordinal)
+            && !json.Contains("room_ref", StringComparison.Ordinal)
+            && !json.Contains("roomRef", StringComparison.Ordinal)
             && !json.Contains(":\\", StringComparison.Ordinal)
             && !json.Contains("://", StringComparison.Ordinal)
             && !json.Contains("\\\\", StringComparison.Ordinal);
@@ -98,7 +102,64 @@ public static class RoomPatternReview
             return false;
         }
 
-        return review.Rooms.All(IsRoom);
+        if (review.Generation is not null && !IsGeneration(review.Generation))
+        {
+            return false;
+        }
+
+        if (review.SuggestedRooms is not null && !IsSuggested(review.SuggestedRooms))
+        {
+            return false;
+        }
+
+        return review.Rooms.All(IsRoom) && (review.Roles is null || review.Roles.All(IsRoleCard));
+    }
+
+    private static bool IsGeneration(string value)
+    {
+        return value.Length == 32 && value.All(static character => char.IsAsciiHexDigit(character));
+    }
+
+    private static bool IsSuggested(List<int> rooms)
+    {
+        return rooms.Count <= 8 && rooms.Distinct().Count() == rooms.Count && rooms.All(index => index is >= 0 and <= 7);
+    }
+
+    private static bool IsRoleCard(RoleCard card)
+    {
+        if (!IsRole(card.Role) || !IsLabel(card.FamilyHint) || !IsClassification(card.PlacementClassification))
+        {
+            return false;
+        }
+
+        if (card.Options is null || card.Options.Count > 8 || card.Options.Any(option => !IsOption(option)))
+        {
+            return false;
+        }
+
+        return card.SuggestedOption is null || card.Options.Any(option => option.Key == card.SuggestedOption);
+    }
+
+    private static bool IsOption(TypeOption option)
+    {
+        return IsOptionKey(option.Key)
+            && IsLabel(option.FamilyName)
+            && IsLabel(option.TypeName)
+            && IsLabel(option.CategoryName)
+            && IsClassification(option.PlacementClassification);
+    }
+
+    private static bool IsOptionKey(string? key)
+    {
+        return key is not null
+            && key.Length is >= 2 and <= 4
+            && key[0] == 't'
+            && key.Skip(1).All(static character => char.IsDigit(character));
+    }
+
+    private static bool IsClassification(string? value)
+    {
+        return value is null or "" or "one_level_based" or "one_level_based_hosted" or "work_plane_based";
     }
 
     private static bool IsImage(Review review)
@@ -190,7 +251,41 @@ public static class RoomPatternReview
 
         public string? ReadState { get; set; }
 
+        public string? Generation { get; set; }
+
+        public List<int>? SuggestedRooms { get; set; }
+
+        public List<RoleCard>? Roles { get; set; }
+
         public List<RoomCard>? Rooms { get; set; }
+    }
+
+    public sealed class RoleCard
+    {
+        public string? Role { get; set; }
+
+        public string? FamilyHint { get; set; }
+
+        public string? SuggestedOption { get; set; }
+
+        public string? PlacementClassification { get; set; }
+
+        public bool Ambiguous { get; set; }
+
+        public List<TypeOption>? Options { get; set; }
+    }
+
+    public sealed class TypeOption
+    {
+        public string? Key { get; set; }
+
+        public string? FamilyName { get; set; }
+
+        public string? TypeName { get; set; }
+
+        public string? CategoryName { get; set; }
+
+        public string? PlacementClassification { get; set; }
     }
 
     public sealed class Point

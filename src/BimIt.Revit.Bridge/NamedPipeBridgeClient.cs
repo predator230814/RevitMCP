@@ -603,6 +603,50 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         }
     }
 
+    public async Task<GetMepDeviceTypesResult> GetMepDeviceTypesAsync(
+        GetMepDeviceTypesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<GetMepDeviceTypesResult>(
+                "revit.get_mep_device_types",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureGetMepDeviceTypesAllowed,
+                "The MEP device type catalog request timed out.",
+                "The MEP device type catalog could not be read.")
+            .ConfigureAwait(false);
+    }
+
+    public async Task<PreviewRoomPatternPlacementsResult> PreviewRoomPatternPlacementsAsync(
+        PreviewRoomPatternPlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<PreviewRoomPatternPlacementsResult>(
+                "revit.preview_room_pattern_placements",
+                request,
+                timeout,
+                cancellationToken,
+                EnsurePreviewRoomPatternPlacementsAllowed,
+                "The room pattern placement preview timed out.",
+                "The room pattern placement preview could not be created.")
+            .ConfigureAwait(false);
+    }
+
     private void EnsureGetRoomLayoutsAllowed()
     {
         EnsureCapabilityReady();
@@ -611,6 +655,28 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             throw new BridgeException(
                 BridgeErrorCodes.ProtocolIncompatible,
                 "revit.get_room_layouts requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsureGetMepDeviceTypesAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsGetMepDeviceTypes(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.get_mep_device_types requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsurePreviewRoomPatternPlacementsAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsPreviewRoomPatternPlacements(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.preview_room_pattern_placements requires a negotiated bridge protocol version that explicitly supports it.");
         }
     }
 

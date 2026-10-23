@@ -187,6 +187,7 @@ public sealed class AssistantWorkflowTests
                 AssistantTools.GetElements,
                 AssistantTools.GetMepTopology,
                 AssistantTools.GetRoomLayouts,
+                AssistantTools.GetMepDeviceTypes,
             ],
             AssistantTools.AllowedReadTools);
         Assert.DoesNotContain(AssistantTools.GetSelection, AssistantTools.WorkflowTools);
@@ -199,7 +200,7 @@ public sealed class AssistantWorkflowTests
         Assert.DoesNotContain("revit_preview_mep_device_placements", AssistantTools.AllowedReadTools);
         Assert.DoesNotContain("revit_apply_mep_device_placements", AssistantTools.WorkflowTools);
         Assert.Equal(5, BimItAgentReadTools.Names.Length);
-        Assert.Equal(7, AssistantTools.AllowedReadTools.Length);
+        Assert.Equal(8, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
         Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_apply_mep_device_placements"]}""").Accepted);
         Assert.False(AssistantIpc.Parse("""{"type":"approveIntent"}""").Accepted);

@@ -36,6 +36,8 @@ public static class AssistantTools
 
     public const string GetRoomLayouts = "revit_get_room_layouts";
 
+    public const string GetMepDeviceTypes = "revit_get_mep_device_types";
+
     public static readonly string[] WorkflowTools = [GetContext, GetWarnings, QueryElements];
 
     public static readonly string[] AllowedReadTools =
@@ -47,6 +49,7 @@ public static class AssistantTools
         GetElements,
         GetMepTopology,
         GetRoomLayouts,
+        GetMepDeviceTypes,
     ];
 
     public static bool IsTrustedWriteTool(string toolName)
@@ -56,7 +59,8 @@ public static class AssistantTools
             or "revit_request_parameter_update_review"
             or "revit_preview_mep_device_placements"
             or "revit_request_mep_device_placement_review"
-            or "revit_apply_mep_device_placements";
+            or "revit_apply_mep_device_placements"
+            or "revit_preview_room_pattern_placements";
     }
 }
 

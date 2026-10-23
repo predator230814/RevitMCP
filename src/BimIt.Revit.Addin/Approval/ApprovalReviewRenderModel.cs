@@ -14,13 +14,15 @@ internal sealed class ApprovalReviewRenderModel
         DateTimeOffset createdAt,
         DateTimeOffset expiresAt,
         IReadOnlyList<ApprovalReviewItemModel> items,
-        ApprovalMepDeviceReviewModel? mepDevices = null)
+        ApprovalMepDeviceReviewModel? mepDevices = null,
+        ApprovalPatternPlacementReviewModel? patternPlacements = null)
     {
         SessionRef = sessionRef;
         CreatedAt = createdAt;
         ExpiresAt = expiresAt;
         Items = items;
         MepDevices = mepDevices;
+        PatternPlacements = patternPlacements;
     }
 
     public string SessionRef { get; }
@@ -32,6 +34,27 @@ internal sealed class ApprovalReviewRenderModel
     public IReadOnlyList<ApprovalReviewItemModel> Items { get; }
 
     public ApprovalMepDeviceReviewModel? MepDevices { get; }
+
+    public ApprovalPatternPlacementReviewModel? PatternPlacements { get; }
+}
+
+internal sealed class ApprovalPatternPlacementReviewModel
+{
+    public ApprovalPatternPlacementReviewModel(int roomCount, int deviceCount, IReadOnlyList<string> lines, IReadOnlyList<string> roomLabels)
+    {
+        RoomCount = roomCount;
+        DeviceCount = deviceCount;
+        Lines = lines;
+        RoomLabels = roomLabels;
+    }
+
+    public int RoomCount { get; }
+
+    public int DeviceCount { get; }
+
+    public IReadOnlyList<string> Lines { get; }
+
+    public IReadOnlyList<string> RoomLabels { get; }
 }
 
 internal sealed class ApprovalMepDeviceReviewModel
@@ -244,6 +267,80 @@ internal static class ApprovalReviewRenderer
                 intent.LevelName,
                 Array.AsReadOnly(lines)));
         return true;
+    }
+
+    internal static bool TryCreatePattern(
+        string sessionRef,
+        ControlledWriteIntentBinding binding,
+        PatternMepPlacementIntent intent,
+        out ApprovalReviewRenderModel model)
+    {
+        model = null!;
+        if (string.IsNullOrWhiteSpace(sessionRef)
+            || binding.Kind != ControlledWriteIntentKind.MepDevicePlacements
+            || binding.FingerprintSchemaVersion != PatternMepPlacementCanonicalEncoder.SchemaVersion
+            || intent.Items is null
+            || intent.Rooms is null
+            || intent.Items.Count == 0
+            || intent.Items.Count != binding.ItemCount
+            || intent.Rooms.Count is < 1 or > 8)
+        {
+            return false;
+        }
+
+        var groups = intent.Items
+            .GroupBy(item => (item.Role, item.FamilyName, item.TypeName, Millimetres(item.MountingHeightFeet)))
+            .ToArray();
+        var lines = new string[groups.Length];
+        for (var index = 0; index < groups.Length; index++)
+        {
+            var group = groups[index];
+            var key = group.Key;
+            lines[index] = string.Concat(
+                DisplayRole(key.Role),
+                "\n",
+                key.FamilyName,
+                " / ",
+                key.TypeName,
+                "\n",
+                group.Count().ToString(System.Globalization.CultureInfo.InvariantCulture),
+                " placements · ",
+                key.Item4.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                " mm");
+        }
+
+        var labels = intent.Rooms
+            .Select(room => room.Label)
+            .Where(label => !string.IsNullOrWhiteSpace(label) && label.Length <= 120)
+            .Distinct(StringComparer.Ordinal)
+            .Take(8)
+            .ToArray();
+        model = new ApprovalReviewRenderModel(
+            sessionRef,
+            binding.CreatedAt,
+            binding.ExpiresAt,
+            Array.Empty<ApprovalReviewItemModel>(),
+            patternPlacements: new ApprovalPatternPlacementReviewModel(intent.Rooms.Count, intent.Items.Count, lines, labels));
+        return true;
+    }
+
+    private static int Millimetres(double feet)
+    {
+        return (int)Math.Round(feet * 304.8, MidpointRounding.AwayFromZero);
+    }
+
+    private static string DisplayRole(string role)
+    {
+        return role switch
+        {
+            "receptacle" => "Receptacle",
+            "switch" => "Switch",
+            "luminaire" => "Luminaire",
+            "smoke_detector" => "Smoke detector",
+            "thermostat" => "Thermostat",
+            "data" => "Data",
+            _ => "Other",
+        };
     }
 
     private static string PlacementLabel(MepPlacementStrategyKind strategy)

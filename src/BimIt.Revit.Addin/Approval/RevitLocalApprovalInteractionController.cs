@@ -66,7 +66,16 @@ internal sealed class RevitLocalApprovalInteractionController
             return ApprovalReviewRenderer.TryCreate(sessionRef, stored.ParameterUpdates, out model);
         }
 
-        if (stored.Binding.Kind == ControlledWriteIntentKind.MepDevicePlacements && stored.MepDevicePlacements is not null)
+        if (stored.Binding.Kind == ControlledWriteIntentKind.MepDevicePlacements
+            && stored.PatternMepPlacements is not null
+            && stored.MepDevicePlacements is null)
+        {
+            return ApprovalReviewRenderer.TryCreatePattern(sessionRef, stored.Binding, stored.PatternMepPlacements, out model);
+        }
+
+        if (stored.Binding.Kind == ControlledWriteIntentKind.MepDevicePlacements
+            && stored.MepDevicePlacements is not null
+            && stored.PatternMepPlacements is null)
         {
             return ApprovalReviewRenderer.TryCreateMep(sessionRef, stored.Binding, stored.MepDevicePlacements, out model);
         }

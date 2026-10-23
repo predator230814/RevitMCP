@@ -41,4 +41,8 @@ public static class CapabilityErrorCodes
     public const string InvalidMepDevicePlacement = "INVALID_MEP_DEVICE_PLACEMENT";
 
     public const string InvalidRoomLayout = "INVALID_ROOM_LAYOUT";
+
+    public const string InvalidMepDeviceTypeCatalog = "INVALID_MEP_DEVICE_TYPE_CATALOG";
+
+    public const string InvalidRoomPatternPlacement = "INVALID_ROOM_PATTERN_PLACEMENT";
 }

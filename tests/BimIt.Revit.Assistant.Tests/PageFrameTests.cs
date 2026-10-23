@@ -123,8 +123,8 @@ public sealed class PageFrameTests
         var result = await tool.InvokeAsync(Json("""
             {
               "page_number": 1,
-              "boundary": [{"x":0.125,"y":0.75},{"x":0.625,"y":0.75},{"x":0.625,"y":0.25},{"x":0.125,"y":0.25}],
-              "entrance": {"x":0.5,"y":1},
+              "boundary": [{"page_x":0.125,"page_y":0.75},{"page_x":0.625,"page_y":0.75},{"page_x":0.625,"page_y":0.25},{"page_x":0.125,"page_y":0.25}],
+              "entrance": {"page_x":0.5,"page_y":1},
               "devices": [{"role":"receptacle","page_x":0.25,"page_y":0.8,"placement_kind":"interior"}]
             }
             """), CancellationToken.None);
@@ -149,8 +149,8 @@ public sealed class PageFrameTests
         Assert.False(AssistantTools.IsTrustedWriteTool(RoomPatternProposalTool.Name));
         Assert.Contains("left to right", GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
         Assert.Contains("top to bottom", GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
-        Assert.Contains("top to bottom", Description(typeof(RoomPatternPointRequest), "Y"), StringComparison.Ordinal);
-        Assert.Contains("left to right", Description(typeof(RoomPatternPointRequest), "X"), StringComparison.Ordinal);
+        Assert.Contains("top to bottom", Description(typeof(RoomPatternPointRequest), "PageY"), StringComparison.Ordinal);
+        Assert.Contains("left to right", Description(typeof(RoomPatternPointRequest), "PageX"), StringComparison.Ordinal);
         Assert.Contains("top to bottom", Description(typeof(RoomPatternDeviceRequest), "PageY"), StringComparison.Ordinal);
         Assert.Contains("left to right", Description(typeof(RoomPatternDeviceRequest), "PageX"), StringComparison.Ordinal);
     }

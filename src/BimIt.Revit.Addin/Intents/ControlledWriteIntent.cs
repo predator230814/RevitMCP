@@ -13,11 +13,16 @@ internal sealed record ControlledWriteIntentBinding(
 
 internal sealed class ControlledWriteIntent
 {
-    public ControlledWriteIntent(ControlledWriteIntentBinding binding, IntentEntry? parameterUpdates, MepDevicePlacementIntent? mepDevicePlacements)
+    public ControlledWriteIntent(
+        ControlledWriteIntentBinding binding,
+        IntentEntry? parameterUpdates,
+        MepDevicePlacementIntent? mepDevicePlacements,
+        PatternMepPlacementIntent? patternMepPlacements = null)
     {
         Binding = binding;
         ParameterUpdates = parameterUpdates;
         MepDevicePlacements = mepDevicePlacements;
+        PatternMepPlacements = patternMepPlacements;
     }
 
     public ControlledWriteIntentBinding Binding { get; }
@@ -25,4 +30,6 @@ internal sealed class ControlledWriteIntent
     public IntentEntry? ParameterUpdates { get; }
 
     public MepDevicePlacementIntent? MepDevicePlacements { get; }
+
+    public PatternMepPlacementIntent? PatternMepPlacements { get; }
 }

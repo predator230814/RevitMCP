@@ -31,7 +31,7 @@ public sealed class AssistantProposalTests
             ],
             AssistantModelTools.Names);
         Assert.Equal(5, BimItAgentReadTools.Names.Length);
-        Assert.Equal(7, AssistantTools.AllowedReadTools.Length);
+        Assert.Equal(8, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
         Assert.DoesNotContain(MepDevicePlacementProposalTool.Name, BimItAgentReadTools.Names);
         Assert.DoesNotContain(MepDevicePlacementProposalTool.Name, AssistantTools.AllowedReadTools);
@@ -45,6 +45,7 @@ public sealed class AssistantProposalTests
             "revit_preview_mep_device_placements",
             "revit_request_mep_device_placement_review",
             "revit_apply_mep_device_placements",
+            "revit_preview_room_pattern_placements",
         ];
         foreach (var name in rawWrites)
         {

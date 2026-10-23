@@ -36,7 +36,11 @@ public static class BridgeProtocol
 
     public const int GetRoomLayoutsVersion = 17;
 
-    public const int CurrentVersion = GetRoomLayoutsVersion;
+    public const int GetMepDeviceTypesVersion = 18;
+
+    public const int PreviewRoomPatternPlacementsVersion = 19;
+
+    public const int CurrentVersion = PreviewRoomPatternPlacementsVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -222,7 +226,13 @@ public static class BridgeProtocol
             HandshakeVersion
         ];
 
-    public static IReadOnlyList<int> SupportedVersions => GetRoomLayoutsVersions;
+    public static IReadOnlyList<int> GetMepDeviceTypesVersions { get; } =
+        [GetMepDeviceTypesVersion, .. GetRoomLayoutsVersions];
+
+    public static IReadOnlyList<int> PreviewRoomPatternPlacementsVersions { get; } =
+        [PreviewRoomPatternPlacementsVersion, .. GetMepDeviceTypesVersions];
+
+    public static IReadOnlyList<int> SupportedVersions => PreviewRoomPatternPlacementsVersions;
 
     public static bool SupportsGetContext(int version) =>
         version is GetContextVersion
@@ -240,7 +250,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsQueryElements(int version) =>
         version is QueryElementsVersion
@@ -257,7 +269,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsGetElements(int version) =>
         version is GetElementsVersion
@@ -273,7 +287,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsDescribeParameters(int version) =>
         version is DescribeParametersVersion
@@ -288,7 +304,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsGetParameterValues(int version) =>
         version is GetParameterValuesVersion
@@ -302,7 +320,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsGetMepTopology(int version) =>
         version is GetMepTopologyVersion
@@ -315,7 +335,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsPreviewParameterUpdates(int version) =>
         version is PreviewParameterUpdatesVersion
@@ -327,7 +349,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsRequestParameterUpdateReview(int version) =>
         version is RequestParameterUpdateReviewVersion
@@ -338,7 +362,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsApplyParameterUpdates(int version) =>
         version is ApplyParameterUpdatesVersion
@@ -348,7 +374,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsGetWarnings(int version) =>
         version is GetWarningsVersion
@@ -357,7 +385,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsContextDocumentId(int version) =>
         version is ContextDocumentIdentityVersion
@@ -365,7 +395,9 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsActiveViewUnfilteredQuery(int version) =>
         version is ContextDocumentIdentityVersion
@@ -373,30 +405,49 @@ public static class BridgeProtocol
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsGetSelection(int version) =>
         version is GetSelectionVersion
             or PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsPreviewMepDevicePlacements(int version) =>
         version is PreviewMepDevicePlacementsVersion
             or RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsRequestMepDevicePlacementReview(int version) =>
         version is RequestMepDevicePlacementReviewVersion
             or ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsApplyMepDevicePlacements(int version) =>
         version is ApplyMepDevicePlacementsVersion
-            or GetRoomLayoutsVersion;
+            or GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
 
     public static bool SupportsGetRoomLayouts(int version) =>
-        version is GetRoomLayoutsVersion;
+        version is GetRoomLayoutsVersion
+            or GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
+
+    public static bool SupportsGetMepDeviceTypes(int version) =>
+        version is GetMepDeviceTypesVersion
+            or PreviewRoomPatternPlacementsVersion;
+
+    public static bool SupportsPreviewRoomPatternPlacements(int version) =>
+        version is PreviewRoomPatternPlacementsVersion;
 }

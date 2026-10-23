@@ -996,6 +996,21 @@ public sealed class AssistantShellTests
             return Task.FromResult(PreviewResult);
         }
 
+        public Task<AssistantIpcMessage?> PreparePatternPreviewAsync(string configuration, CancellationToken cancellationToken)
+        {
+            return Task.FromResult(PreviewResult);
+        }
+
+        public Task<AssistantIpcMessage?> ReviewPatternInRevitAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(PreviewResult);
+        }
+
+        public Task<AssistantIpcMessage?> ApplyApprovedPatternAsync(CancellationToken cancellationToken)
+        {
+            return Task.FromResult(PreviewResult);
+        }
+
         public Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult(Status);

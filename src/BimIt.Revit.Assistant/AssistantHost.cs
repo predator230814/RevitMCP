@@ -134,7 +134,8 @@ internal static class AssistantHost
         IMepDevicePlacementPreviewClient? previewClient = null,
         IMepDevicePlacementReviewClient? reviewClient = null,
         IMepDevicePlacementApplyClient? applyClient = null,
-        RoomPatternStore? roomPatterns = null)
+        RoomPatternStore? roomPatterns = null,
+        IRoomPatternPreviewClient? patternPreviewClient = null)
     {
         McpAssistantToolSession? ownedSession = null;
         if (session is null)
@@ -174,6 +175,7 @@ internal static class AssistantHost
         previewClient ??= session as IMepDevicePlacementPreviewClient;
         reviewClient ??= session as IMepDevicePlacementReviewClient;
         applyClient ??= session as IMepDevicePlacementApplyClient;
+        patternPreviewClient ??= session as IRoomPatternPreviewClient;
         if (runtime is null)
         {
             runtime = readiness.Ready && session is not null
@@ -257,6 +259,27 @@ internal static class AssistantHost
                 if (parsed.Message.Kind == AssistantIpcKind.ApplyApprovedPlacements)
                 {
                     var outcome = await ApplyApprovedPlacementsAsync(reviewClient, applyClient, proposals, options.InstanceId, readiness.Ready, cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.PreparePatternPreview)
+                {
+                    var outcome = await PreparePatternAsync(patternPreviewClient, reviewClient, applyClient, roomPatterns, parsed.Message.Text, options.InstanceId, readiness.Ready, cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.ReviewPatternInRevit)
+                {
+                    var outcome = await ReviewPatternAsync(patternPreviewClient, reviewClient, applyClient, roomPatterns, options.InstanceId, readiness.Ready, cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.ApplyApprovedPattern)
+                {
+                    var outcome = await ApplyPatternAsync(patternPreviewClient, reviewClient, applyClient, roomPatterns, options.InstanceId, readiness.Ready, cancellationToken).ConfigureAwait(false);
                     await WriteAsync(server, PreviewResult(outcome), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
@@ -742,6 +765,94 @@ internal static class AssistantHost
         catch (Exception)
         {
             return new MepDevicePlacementPreviewOutcome(true, MepDevicePlacementReviewApplyOrchestrator.ApplyTitle, "The placement apply could not be completed.");
+        }
+    }
+
+    private static async Task<MepDevicePlacementPreviewOutcome> PreparePatternAsync(
+        IRoomPatternPreviewClient? previewClient,
+        IMepDevicePlacementReviewClient? reviewClient,
+        IMepDevicePlacementApplyClient? applyClient,
+        RoomPatternStore patterns,
+        string? configuration,
+        string instanceId,
+        bool ready,
+        CancellationToken cancellationToken)
+    {
+        if (!ready || previewClient is null || reviewClient is null || applyClient is null)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, RoomPatternPlacementOrchestrator.PreviewTitle, "The Assistant MCP client is not ready.");
+        }
+
+        try
+        {
+            var orchestrator = new RoomPatternPlacementOrchestrator(previewClient, reviewClient, applyClient, patterns, instanceId);
+            return await orchestrator.PrepareAsync(configuration, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, RoomPatternPlacementOrchestrator.PreviewTitle, "The pattern preview could not be created.");
+        }
+    }
+
+    private static async Task<MepDevicePlacementPreviewOutcome> ReviewPatternAsync(
+        IRoomPatternPreviewClient? previewClient,
+        IMepDevicePlacementReviewClient? reviewClient,
+        IMepDevicePlacementApplyClient? applyClient,
+        RoomPatternStore patterns,
+        string instanceId,
+        bool ready,
+        CancellationToken cancellationToken)
+    {
+        if (!ready || previewClient is null || reviewClient is null || applyClient is null)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, RoomPatternPlacementOrchestrator.ReviewTitle, "The Assistant MCP client is not ready.");
+        }
+
+        try
+        {
+            var orchestrator = new RoomPatternPlacementOrchestrator(previewClient, reviewClient, applyClient, patterns, instanceId);
+            return await orchestrator.ReviewAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, RoomPatternPlacementOrchestrator.ReviewTitle, "The Revit review could not be opened.");
+        }
+    }
+
+    private static async Task<MepDevicePlacementPreviewOutcome> ApplyPatternAsync(
+        IRoomPatternPreviewClient? previewClient,
+        IMepDevicePlacementReviewClient? reviewClient,
+        IMepDevicePlacementApplyClient? applyClient,
+        RoomPatternStore patterns,
+        string instanceId,
+        bool ready,
+        CancellationToken cancellationToken)
+    {
+        if (!ready || previewClient is null || reviewClient is null || applyClient is null)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, RoomPatternPlacementOrchestrator.ApplyTitle, "The Assistant MCP client is not ready.");
+        }
+
+        try
+        {
+            var orchestrator = new RoomPatternPlacementOrchestrator(previewClient, reviewClient, applyClient, patterns, instanceId);
+            return await orchestrator.ApplyAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return new MepDevicePlacementPreviewOutcome(true, RoomPatternPlacementOrchestrator.ApplyTitle, "The pattern apply could not be completed.");
         }
     }
 
