@@ -29,6 +29,12 @@ internal interface IAssistantLink
 
     Task<AssistantIpcMessage?> ApplyApprovedPlacementsAsync(CancellationToken cancellationToken);
 
+    Task<AssistantIpcMessage?> PreparePatternPreviewAsync(string configuration, CancellationToken cancellationToken);
+
+    Task<AssistantIpcMessage?> ReviewPatternInRevitAsync(CancellationToken cancellationToken);
+
+    Task<AssistantIpcMessage?> ApplyApprovedPatternAsync(CancellationToken cancellationToken);
+
     Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken);
 
     Task ShutdownAsync();
@@ -188,6 +194,37 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
     public Task<AssistantIpcMessage?> ApplyApprovedPlacementsAsync(CancellationToken cancellationToken)
     {
         return ExchangeAsync(Signal(AssistantIpcKind.ApplyApprovedPlacements), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> PreparePatternPreviewAsync(string configuration, CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(new AssistantIpcMessage(
+            AssistantIpcKind.PreparePatternPreview,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Text: configuration), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> ReviewPatternInRevitAsync(CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(Signal(AssistantIpcKind.ReviewPatternInRevit), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> ApplyApprovedPatternAsync(CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(Signal(AssistantIpcKind.ApplyApprovedPattern), cancellationToken);
     }
 
     public Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken)

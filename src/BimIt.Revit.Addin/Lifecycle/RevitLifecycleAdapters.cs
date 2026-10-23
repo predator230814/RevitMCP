@@ -387,6 +387,18 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
             _auditWriter);
     }
 
+    public IRevitGetMepDeviceTypesService CreateGetMepDeviceTypes(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitGetMepDeviceTypesService(_dispatcher, metadata, _identity);
+    }
+
+    public IRevitPreviewRoomPatternPlacementsService CreatePreviewRoomPatternPlacements(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitPreviewRoomPatternPlacementsService(_dispatcher, metadata, _identity, _intentStore);
+    }
+
     public IRevitGetRoomLayoutsService CreateGetRoomLayouts(BridgeInstanceMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -469,10 +481,12 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview,
         IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements,
         IRevitGetRoomLayoutsService? getRoomLayouts,
+        IRevitGetMepDeviceTypesService? getMepDeviceTypes,
+        IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);

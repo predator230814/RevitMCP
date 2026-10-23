@@ -29,6 +29,8 @@ internal static class RoomPatternFailures
     public const string NonFinite = "non_finite";
 
     public const string Attachment = "visual_page_required";
+
+    public const string RoomName = "invalid_room_name";
 }
 
 internal sealed class RoomPatternProposalRequest
@@ -37,15 +39,19 @@ internal sealed class RoomPatternProposalRequest
     public int? PageNumber { get; init; }
 
     [JsonPropertyName("boundary")]
-    [Description("One room boundary polygon in normalized page coordinates. x runs left to right. y runs top to bottom.")]
+    [Description("One room outline as 3 to 32 points. Every point is {\"page_x\":0..1,\"page_y\":0..1}. page_x runs left to right. page_y runs top to bottom.")]
     public IReadOnlyList<RoomPatternPointRequest>? Boundary { get; init; }
 
     [JsonPropertyName("entrance")]
-    [Description("Optional entrance or door position. x runs left to right. y runs top to bottom.")]
+    [Description("Optional door or entrance as {\"page_x\":0..1,\"page_y\":0..1}. page_x runs left to right. page_y runs top to bottom.")]
     public RoomPatternPointRequest? Entrance { get; init; }
 
     [JsonPropertyName("devices")]
     public IReadOnlyList<RoomPatternDeviceRequest>? Devices { get; init; }
+
+    [JsonPropertyName("room_name")]
+    [Description("Optional room word from the user, such as studio. BIM-IT lists rooms whose names contain it. Omit this when the user asks for rooms of the same shape. Do not send a Revit identity.")]
+    public string? RoomName { get; init; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
@@ -53,13 +59,13 @@ internal sealed class RoomPatternProposalRequest
 
 internal sealed class RoomPatternPointRequest
 {
-    [JsonPropertyName("x")]
-    [Description("Normalized page X from 0 to 1, left to right.")]
-    public double? X { get; init; }
+    [JsonPropertyName("page_x")]
+    [Description("Normalized page X from 0 to 1, left to right. Do not send x.")]
+    public double? PageX { get; init; }
 
-    [JsonPropertyName("y")]
-    [Description("Normalized page Y from 0 to 1, top to bottom.")]
-    public double? Y { get; init; }
+    [JsonPropertyName("page_y")]
+    [Description("Normalized page Y from 0 to 1, top to bottom. Do not send y.")]
+    public double? PageY { get; init; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
@@ -68,6 +74,7 @@ internal sealed class RoomPatternPointRequest
 internal sealed class RoomPatternDeviceRequest
 {
     [JsonPropertyName("role")]
+    [Description("One of receptacle, switch, luminaire, smoke_detector, thermostat, data, other.")]
     public string? Role { get; init; }
 
     [JsonPropertyName("page_x")]
@@ -79,6 +86,7 @@ internal sealed class RoomPatternDeviceRequest
     public double? PageY { get; init; }
 
     [JsonPropertyName("placement_kind")]
+    [Description("boundary when the device sits on a wall, otherwise interior.")]
     public string? PlacementKind { get; init; }
 
     [JsonPropertyName("family_hint")]
@@ -193,7 +201,7 @@ internal sealed class RoomPatternProposalTool
     public async Task<IReadOnlyDictionary<string, object?>> InvokeAsync(JsonElement arguments, CancellationToken cancellationToken)
     {
         RecordUse();
-        if (!TryValidate(arguments, out var pattern, out var pageNumber, out var failure))
+        if (!TryValidate(arguments, out var pattern, out var pageNumber, out var roomName, out var failure))
         {
             return Fail(failure);
         }
@@ -206,7 +214,7 @@ internal sealed class RoomPatternProposalTool
         }
 
         var geometry = PageFrame.ForMatching(pattern, page.RasterWidth, page.RasterHeight);
-        var grounding = await RoomPatternGrounding.ReadAsync(_session, _instanceId, pattern, geometry, cancellationToken).ConfigureAwait(false);
+        var grounding = await RoomPatternGrounding.ReadAsync(_session, _instanceId, pattern, geometry, roomName, cancellationToken).ConfigureAwait(false);
         grounding.Review.PageNumber = pageNumber;
         if (RoomPatternReviewRaster.TryCreate(page.Bytes, out var mime, out var image))
         {
@@ -214,8 +222,13 @@ internal sealed class RoomPatternProposalTool
             grounding.Review.ImageBase64 = image;
         }
 
+        var catalog = await PatternTypeCatalog.LoadAsync(_session, _instanceId, grounding.DocumentId, cancellationToken).ConfigureAwait(false);
+        var generation = PatternGenerationBuilder.Apply(grounding, pattern, catalog, _instanceId, attachment.ArtifactId, pageNumber);
         var reviewJson = RoomPatternReview.Serialize(grounding.Review);
-        _store.Replace(new RoomPatternRecord(attachment.ArtifactId, pageNumber, pattern.Devices.Count), reviewJson);
+        _store.Replace(
+            new RoomPatternRecord(attachment.ArtifactId, pageNumber, pattern.Devices.Count),
+            reviewJson,
+            generation);
         var model = new Dictionary<string, object?>(grounding.Model)
         {
             ["page_number"] = pageNumber,
@@ -240,10 +253,12 @@ internal sealed class RoomPatternProposalTool
         JsonElement arguments,
         out SourceRoomPattern pattern,
         out int pageNumber,
+        out string? roomName,
         out string failure)
     {
         pattern = null!;
         pageNumber = 0;
+        roomName = null;
         failure = RoomPatternFailures.Shape;
         if (arguments.ValueKind != JsonValueKind.Object)
         {
@@ -252,10 +267,15 @@ internal sealed class RoomPatternProposalTool
 
         foreach (var property in arguments.EnumerateObject())
         {
-            if (property.Name is not ("page_number" or "boundary" or "entrance" or "devices"))
+            if (property.Name is not ("page_number" or "boundary" or "entrance" or "devices" or "room_name"))
             {
                 return false;
             }
+        }
+
+        if (!TryRoomName(arguments, out roomName, out failure))
+        {
+            return false;
         }
 
         if (!arguments.TryGetProperty("page_number", out var pageProperty)
@@ -316,6 +336,32 @@ internal sealed class RoomPatternProposalTool
         return true;
     }
 
+    private static bool TryRoomName(JsonElement arguments, out string? roomName, out string failure)
+    {
+        roomName = null;
+        failure = RoomPatternFailures.RoomName;
+        if (!arguments.TryGetProperty("room_name", out var property) || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            failure = "";
+            return true;
+        }
+
+        if (property.ValueKind != JsonValueKind.String)
+        {
+            return false;
+        }
+
+        var text = property.GetString()?.Trim();
+        if (string.IsNullOrEmpty(text) || text.Length > 40 || text.Any(static character => !char.IsLetterOrDigit(character) && character is not (' ' or '-' or '\'')))
+        {
+            return false;
+        }
+
+        roomName = text;
+        failure = "";
+        return true;
+    }
+
     private static bool TryPoints(JsonElement array, out IReadOnlyList<PlanPoint> points)
     {
         var parsed = new List<PlanPoint>();
@@ -344,14 +390,14 @@ internal sealed class RoomPatternProposalTool
 
         foreach (var property in item.EnumerateObject())
         {
-            if (property.Name is not ("x" or "y"))
+            if (property.Name is not ("page_x" or "page_y"))
             {
                 return false;
             }
         }
 
-        if (!item.TryGetProperty("x", out var xProperty)
-            || !item.TryGetProperty("y", out var yProperty)
+        if (!item.TryGetProperty("page_x", out var xProperty)
+            || !item.TryGetProperty("page_y", out var yProperty)
             || !TryUnit(xProperty, out var x)
             || !TryUnit(yProperty, out var y))
         {
@@ -461,7 +507,7 @@ internal sealed class RoomPatternProposalTool
 
     private static bool HasNonFinite(RoomPatternPointRequest? point)
     {
-        return point is not null && (HasNonFinite(point.X) || HasNonFinite(point.Y));
+        return point is not null && (HasNonFinite(point.PageX) || HasNonFinite(point.PageY));
     }
 
     private static bool HasNonFinite(double? value) => value is double number && !double.IsFinite(number);
@@ -491,6 +537,26 @@ internal sealed class RoomPatternProposalTool
         {
             ["stored"] = false,
             ["code"] = code,
+            ["reason"] = Reason(code),
+        };
+    }
+
+    private static string Reason(string code)
+    {
+        return code switch
+        {
+            RoomPatternFailures.Page => "page_number must be an integer of 1 or more for the attached page.",
+            RoomPatternFailures.Coordinate => "Every boundary and entrance point must be {\"page_x\":0..1,\"page_y\":0..1}. page_x runs left to right. page_y runs top to bottom. Do not send x or y.",
+            RoomPatternFailures.Count => "devices must contain 1 to 20 items.",
+            RoomPatternFailures.Role => "role must be receptacle, switch, luminaire, smoke_detector, thermostat, data, or other.",
+            RoomPatternFailures.Placement => "placement_kind must be boundary or interior.",
+            RoomPatternFailures.Hint => "family_hint must be 1 to 80 characters when present.",
+            RoomPatternFailures.Evidence => "evidence must be at most 240 characters when present.",
+            RoomPatternFailures.Confidence => "confidence must be a number from 0 to 1 when present.",
+            RoomPatternFailures.NonFinite => "Coordinates and confidence must be finite numbers.",
+            RoomPatternFailures.Attachment => "Attach one visual page before proposing a room pattern.",
+            RoomPatternFailures.RoomName => "room_name must be 1 to 40 letters, digits, spaces, hyphens, or apostrophes, such as studio. Do not send a Revit identity.",
+            _ => "Send page_number, boundary, optional entrance, devices, and optional room_name. Every point uses page_x and page_y from 0 to 1.",
         };
     }
 }

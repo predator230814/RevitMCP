@@ -144,6 +144,57 @@ internal static class MepDevicePlacementGeometry
         return left.DistanceTo(right) <= OccupancyToleranceFeet;
     }
 
+    public static bool SameWallPlacement(MepPoint actual, MepPoint target, double planToleranceFeet)
+    {
+        if (!double.IsFinite(planToleranceFeet) || planToleranceFeet < 0)
+        {
+            return false;
+        }
+
+        if (Math.Abs(actual.Z - target.Z) > OccupancyToleranceFeet)
+        {
+            return false;
+        }
+
+        var dx = actual.X - target.X;
+        var dy = actual.Y - target.Y;
+        var plan = Math.Sqrt((dx * dx) + (dy * dy));
+        return double.IsFinite(plan) && plan <= planToleranceFeet;
+    }
+
+    public static bool SameHostedWallPlacement(
+        MepPoint actual,
+        MepPoint target,
+        MepPoint wallStart,
+        MepPoint wallEnd,
+        double alongToleranceFeet)
+    {
+        if (!double.IsFinite(alongToleranceFeet) || alongToleranceFeet < 0)
+        {
+            return false;
+        }
+
+        if (Math.Abs(actual.Z - target.Z) > OccupancyToleranceFeet)
+        {
+            return false;
+        }
+
+        var dx = wallEnd.X - wallStart.X;
+        var dy = wallEnd.Y - wallStart.Y;
+        var length = Math.Sqrt((dx * dx) + (dy * dy));
+        if (!double.IsFinite(length) || length <= OccupancyToleranceFeet)
+        {
+            return false;
+        }
+
+        var dirX = dx / length;
+        var dirY = dy / length;
+        var targetAlong = ((target.X - wallStart.X) * dirX) + ((target.Y - wallStart.Y) * dirY);
+        var actualAlong = ((actual.X - wallStart.X) * dirX) + ((actual.Y - wallStart.Y) * dirY);
+        var along = Math.Abs(actualAlong - targetAlong);
+        return double.IsFinite(along) && along <= alongToleranceFeet;
+    }
+
     private static bool TryDirection(MepPoint start, MepPoint end, out MepPoint direction, out double length)
     {
         var dx = end.X - start.X;

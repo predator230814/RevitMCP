@@ -251,6 +251,9 @@ textarea {
   border: 1px solid var(--line);
   border-radius: 12px;
   background: var(--panel);
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 .pattern h2 { margin: 0 0 4px; font-size: 16px; }
@@ -307,6 +310,26 @@ textarea {
 .room-list button.selected { border-color: var(--accent); }
 
 .room-list span, .pattern .sub { color: var(--muted); font-size: 12px; }
+.room-row { display: flex; gap: 8px; align-items: center; }
+.roles { display: grid; gap: 8px; margin-top: 12px; min-width: 0; max-width: 100%; }
+.roles section {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  margin-top: 8px;
+}
+.pattern-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: end; margin-top: 8px; }
+.roles label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+  font: inherit;
+}
+.roles select, .roles input { font: inherit; box-sizing: border-box; max-width: 100%; min-width: 0; }
+.roles select { width: 100%; }
+.roles input { width: 8rem; }
 
 @media (max-width: 720px) {
   .pattern-grid { grid-template-columns: 1fr; }

@@ -86,7 +86,51 @@ public sealed class RoomPatternTests
 
         var missing = await tool.InvokeAsync(Json(ValidBody()), CancellationToken.None);
         Assert.Equal(RoomPatternFailures.Attachment, missing["code"]);
+        Assert.Contains("page", Assert.IsType<string>(missing["reason"]), StringComparison.OrdinalIgnoreCase);
         Assert.Equal(4, tool.ConsumeUsedTools().Count);
+    }
+
+    [Fact]
+    public async Task Legacy_x_y_points_return_an_actionable_coordinate_reason()
+    {
+        var tool = Tool(static () => null);
+        var result = await tool.InvokeAsync(Json("""
+            {"page_number":1,"boundary":[{"x":0.1,"y":0.1},{"x":0.7,"y":0.1},{"x":0.1,"y":0.4}],"devices":[{"role":"receptacle","page_x":0.2,"page_y":0.2,"placement_kind":"boundary"}]}
+            """), CancellationToken.None);
+        Assert.Equal(false, result["stored"]);
+        Assert.Equal(RoomPatternFailures.Coordinate, result["code"]);
+        var reason = Assert.IsType<string>(result["reason"]);
+        Assert.Contains("page_x", reason, StringComparison.Ordinal);
+        Assert.Contains("page_y", reason, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Room_name_accepts_a_word_and_rejects_an_identity()
+    {
+        var tool = Tool(static () => null);
+        var named = await tool.InvokeAsync(Json("""
+            {"page_number":1,"room_name":"studio","boundary":[{"page_x":0.1,"page_y":0.1},{"page_x":0.7,"page_y":0.1},{"page_x":0.7,"page_y":0.4},{"page_x":0.1,"page_y":0.4}],"devices":[{"role":"receptacle","page_x":0.2,"page_y":0.25,"placement_kind":"boundary"}]}
+            """), CancellationToken.None);
+        Assert.Equal(RoomPatternFailures.Attachment, named["code"]);
+
+        var identity = await tool.InvokeAsync(Json("""
+            {"page_number":1,"room_name":"../studio","boundary":[{"page_x":0.1,"page_y":0.1},{"page_x":0.7,"page_y":0.1},{"page_x":0.7,"page_y":0.4},{"page_x":0.1,"page_y":0.4}],"devices":[{"role":"receptacle","page_x":0.2,"page_y":0.25,"placement_kind":"boundary"}]}
+            """), CancellationToken.None);
+        Assert.Equal(RoomPatternFailures.RoomName, identity["code"]);
+    }
+
+    [Fact]
+    public void Named_rooms_stay_selectable_when_the_shape_only_differs()
+    {
+        var low = new RoomShapeMatch("Studio 1", "L1", "rejected", 0.2, 90, false, "low_shape_similarity", [], []);
+        var promoted = RoomPatternGrounding.PromoteNamedRooms([low], "studio");
+        Assert.Equal("lower", promoted[0].Band);
+        Assert.Equal("named_room", promoted[0].Reason);
+
+        var curved = new RoomShapeMatch("Studio 2", "L1", "rejected", 0, 0, false, "non_orthogonal_boundary", [], []);
+        var kept = RoomPatternGrounding.PromoteNamedRooms([curved], "studio");
+        Assert.Equal("rejected", kept[0].Band);
+        Assert.Equal("rejected", RoomPatternGrounding.PromoteNamedRooms([low], null)[0].Band);
     }
 
     [Fact]
@@ -118,7 +162,12 @@ public sealed class RoomPatternTests
         Assert.DoesNotContain(secretRef, review, StringComparison.Ordinal);
         Assert.DoesNotContain(secretDocument, review, StringComparison.Ordinal);
         Assert.DoesNotContain("element_ref", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-type-ref", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("family_type_ref", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-type-ref", model, StringComparison.Ordinal);
         Assert.Contains("\"readState\":\"matched\"", review, StringComparison.Ordinal);
+        Assert.Equal("secret-type-ref", store.CurrentGeneration!.Options["t0"].FamilyTypeRef);
+        Assert.Contains(secretRef, store.CurrentGeneration.Rooms.Select(room => room.RoomRef));
         Assert.True(RoomPatternReview.TryParse(review, out _));
     }
 
@@ -154,7 +203,12 @@ public sealed class RoomPatternTests
         Assert.Contains(RoomPatternProposalTool.Name, AssistantModelTools.Names);
         Assert.DoesNotContain(AssistantTools.GetRoomLayouts, AssistantModelTools.Names);
         Assert.Contains(AssistantTools.GetRoomLayouts, AssistantTools.AllowedReadTools);
+        Assert.Contains(AssistantTools.GetMepDeviceTypes, AssistantTools.AllowedReadTools);
+        Assert.DoesNotContain(AssistantTools.GetMepDeviceTypes, AssistantModelTools.Names);
         Assert.False(AssistantTools.IsTrustedWriteTool(AssistantTools.GetRoomLayouts));
+        Assert.False(AssistantTools.IsTrustedWriteTool(AssistantTools.GetMepDeviceTypes));
+        Assert.True(AssistantTools.IsTrustedWriteTool("revit_preview_room_pattern_placements"));
+        Assert.False(AssistantIpc.IsModelToolName("revit_preview_room_pattern_placements"));
         Assert.False(AssistantTools.IsTrustedWriteTool(RoomPatternProposalTool.Name));
         Assert.True(AssistantIpc.IsModelToolName(RoomPatternProposalTool.Name));
         Assert.False(AssistantIpc.IsModelToolName(AssistantTools.GetRoomLayouts));
@@ -263,8 +317,8 @@ public sealed class RoomPatternTests
         return """
             {
               "page_number": 1,
-              "boundary": [{"x":0.1,"y":0.1},{"x":0.7,"y":0.1},{"x":0.7,"y":0.4},{"x":0.1,"y":0.4}],
-              "entrance": {"x":0.4,"y":0.1},
+              "boundary": [{"page_x":0.1,"page_y":0.1},{"page_x":0.7,"page_y":0.1},{"page_x":0.7,"page_y":0.4},{"page_x":0.1,"page_y":0.4}],
+              "entrance": {"page_x":0.4,"page_y":0.1},
               "devices": [{"role":"receptacle","page_x":0.2,"page_y":0.25,"placement_kind":"boundary","family_hint":"duplex","evidence":"symbol","confidence":0.8}]
             }
             """;
@@ -351,6 +405,24 @@ public sealed class RoomPatternTests
                     MatchedCount = 1,
                     Truncated = false,
                     ElementRefs = [roomRef!],
+                }, ContractJson.Options),
+                AssistantTools.GetMepDeviceTypes => JsonSerializer.SerializeToElement(new GetMepDeviceTypesResult
+                {
+                    Context = new GetMepDeviceTypesContext { InstanceId = "wire-instance", DocumentId = documentId },
+                    Truncated = false,
+                    Items =
+                    [
+                        new MepDeviceTypeItem
+                        {
+                            FamilyTypeRef = "secret-type-ref",
+                            CategoryToken = "OST_ElectricalFixtures",
+                            CategoryName = "Electrical Fixtures",
+                            FamilyName = "Duplex",
+                            TypeName = "Standard",
+                            PlacementClassification = "one_level_based_hosted",
+                            Active = true,
+                        },
+                    ],
                 }, ContractJson.Options),
                 AssistantTools.GetRoomLayouts => JsonSerializer.SerializeToElement(new GetRoomLayoutsResult
                 {

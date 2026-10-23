@@ -171,6 +171,23 @@ internal static class ApprovalReviewJson
             };
         }
 
+        if (model.PatternPlacements is { } pattern)
+        {
+            return JsonSerializer.Serialize(new Dictionary<string, object?>
+            {
+                ["type"] = "renderReview",
+                ["reviewKind"] = "pattern_mep_placements",
+                ["sessionRef"] = model.SessionRef,
+                ["createdAt"] = model.CreatedAt,
+                ["expiresAt"] = model.ExpiresAt,
+                ["title"] = "Pattern placement",
+                ["roomCount"] = pattern.RoomCount,
+                ["deviceCount"] = pattern.DeviceCount,
+                ["roomLabels"] = pattern.RoomLabels,
+                ["lines"] = pattern.Lines,
+            }, Options);
+        }
+
         if (model.MepDevices is { } mep)
         {
             return JsonSerializer.Serialize(new Dictionary<string, object?>

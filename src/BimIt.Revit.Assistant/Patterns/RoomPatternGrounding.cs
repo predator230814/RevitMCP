@@ -29,6 +29,7 @@ internal static class RoomPatternGrounding
         string instanceId,
         SourceRoomPattern display,
         SourceRoomPattern geometry,
+        string? roomName,
         CancellationToken cancellationToken)
     {
         var context = await session.CallAsync(
@@ -48,10 +49,7 @@ internal static class RoomPatternGrounding
                 ["document_id"] = documentId,
                 ["scope"] = "document",
                 ["limit"] = QueryLimit,
-                ["filters"] = new Dictionary<string, object?>
-                {
-                    ["category_names"] = RoomCategoryNames,
-                },
+                ["filters"] = RoomFilters(roomName),
             },
             cancellationToken).ConfigureAwait(false);
         if (query.IsError || !TryQuery(query.Structured, out var refs, out var truncated))
@@ -100,27 +98,20 @@ internal static class RoomPatternGrounding
             }
         }
 
-        var matched = RoomShapeMatcher.Match(geometry, candidates);
+        var matched = PromoteNamedRooms(RoomShapeMatcher.Match(geometry, candidates), roomName);
         var all = matched.Concat(rejected).ToArray();
         var state = refs.Count == 0 ? "no_candidates" : "matched";
-        return new Grounding(state, truncated, all, BuildReview(display, state, truncated, all), ModelResult(display, state, all));
+        var shown = ShownMatches(all, roomName is not null);
+        return new Grounding(state, truncated, all, BuildReview(display, state, truncated, all, shown), ModelResult(display, state, all, roomName), shown, documentId, roomName);
     }
 
     private static RoomPatternReview.Review BuildReview(
         SourceRoomPattern pattern,
         string state,
         bool truncated,
-        IReadOnlyList<RoomShapeMatch> matches)
+        IReadOnlyList<RoomShapeMatch> matches,
+        IReadOnlyList<RoomShapeMatch> shown)
     {
-        var ordered = matches
-            .OrderBy(match => BandRank(match.Band))
-            .ThenByDescending(match => match.Score)
-            .ThenBy(match => match.Label, StringComparer.Ordinal)
-            .ToArray();
-        var shown = ordered.Where(match => match.Band == "high").Take(4)
-            .Concat(ordered.Where(match => match.Band == "lower").Take(2))
-            .Concat(ordered.Where(match => match.Band == "rejected").Take(2))
-            .ToArray();
         return new RoomPatternReview.Review
         {
             PageNumber = 0,
@@ -143,10 +134,57 @@ internal static class RoomPatternGrounding
         };
     }
 
+    internal static IReadOnlyList<RoomShapeMatch> PromoteNamedRooms(IReadOnlyList<RoomShapeMatch> matches, string? roomName)
+    {
+        if (string.IsNullOrWhiteSpace(roomName))
+        {
+            return matches;
+        }
+
+        return matches.Select(match => match.Band == "rejected" && match.Reason is "low_shape_similarity" or "aspect_mismatch"
+            ? match with { Band = "lower", Reason = "named_room" }
+            : match).ToArray();
+    }
+
+    internal static IReadOnlyList<RoomShapeMatch> ShownMatches(IReadOnlyList<RoomShapeMatch> matches, bool namedRooms = false)
+    {
+        var ordered = matches
+            .OrderBy(match => BandRank(match.Band))
+            .ThenByDescending(match => match.Score)
+            .ThenBy(match => match.Label, StringComparer.Ordinal)
+            .ToArray();
+        if (namedRooms)
+        {
+            return ordered.Where(match => match.Band != "rejected").Take(8)
+                .Concat(ordered.Where(match => match.Band == "rejected").Take(2))
+                .ToArray();
+        }
+
+        return ordered.Where(match => match.Band == "high").Take(4)
+            .Concat(ordered.Where(match => match.Band == "lower").Take(2))
+            .Concat(ordered.Where(match => match.Band == "rejected").Take(2))
+            .ToArray();
+    }
+
+    private static Dictionary<string, object?> RoomFilters(string? roomName)
+    {
+        var filters = new Dictionary<string, object?>
+        {
+            ["category_names"] = RoomCategoryNames,
+        };
+        if (!string.IsNullOrWhiteSpace(roomName))
+        {
+            filters["text_contains"] = roomName;
+        }
+
+        return filters;
+    }
+
     private static IReadOnlyDictionary<string, object?> ModelResult(
         SourceRoomPattern pattern,
         string state,
-        IReadOnlyList<RoomShapeMatch> matches)
+        IReadOnlyList<RoomShapeMatch> matches,
+        string? roomName)
     {
         return new Dictionary<string, object?>
         {
@@ -160,6 +198,7 @@ internal static class RoomPatternGrounding
             ["mirrored_count"] = matches.Count(match => match.Band != "rejected" && match.Mirrored),
             ["rotated_count"] = matches.Count(match => match.Band != "rejected" && match.RotationDegrees != 0),
             ["match_state"] = state,
+            ["room_name"] = roomName,
             ["matches"] = matches
                 .OrderBy(match => BandRank(match.Band))
                 .ThenByDescending(match => match.Score)
@@ -299,7 +338,8 @@ internal static class RoomPatternGrounding
             loop,
             item.Loops.Count > 1 || item.LoopsTruncated == true,
             item.Loops[0].VerticesTruncated,
-            openings);
+            openings,
+            item.ElementRef);
         return true;
     }
 }
@@ -309,7 +349,10 @@ internal sealed record Grounding(
     bool CandidatesTruncated,
     IReadOnlyList<RoomShapeMatch> Matches,
     RoomPatternReview.Review Review,
-    IReadOnlyDictionary<string, object?> Model)
+    IReadOnlyDictionary<string, object?> Model,
+    IReadOnlyList<RoomShapeMatch> Shown,
+    string? DocumentId = null,
+    string? RoomName = null)
 {
     public static Grounding Failed(SourceRoomPattern pattern, string state)
     {
@@ -340,6 +383,6 @@ internal sealed record Grounding(
             ["match_state"] = state,
             ["matches"] = Array.Empty<object>(),
         };
-        return new Grounding(state, false, [], review, model);
+        return new Grounding(state, false, [], review, model, []);
     }
 }

@@ -48,11 +48,13 @@ internal static class TestSupport
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
                 BridgeProtocol.GetSelectionVersion => BridgeProtocol.GetSelectionVersions,
-                BridgeProtocol.GetRoomLayoutsVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.PreviewRoomPatternPlacementsVersion => BridgeProtocol.PreviewRoomPatternPlacementsVersions,
+                BridgeProtocol.GetMepDeviceTypesVersion => BridgeProtocol.GetMepDeviceTypesVersions,
+                BridgeProtocol.GetRoomLayoutsVersion => BridgeProtocol.GetRoomLayoutsVersions,
                 BridgeProtocol.ApplyMepDevicePlacementsVersion => BridgeProtocol.ApplyMepDevicePlacementsVersions,
                 BridgeProtocol.RequestMepDevicePlacementReviewVersion => BridgeProtocol.RequestMepDevicePlacementReviewVersions,
                 BridgeProtocol.PreviewMepDevicePlacementsVersion => BridgeProtocol.PreviewMepDevicePlacementsVersions,
-                BridgeProtocol.RequestParameterUpdateReviewVersion => BridgeProtocol.SupportedVersions,
+                BridgeProtocol.RequestParameterUpdateReviewVersion => BridgeProtocol.RequestParameterUpdateReviewVersions,
                 BridgeProtocol.PreviewParameterUpdatesVersion => BridgeProtocol.PreviewParameterUpdatesVersions,
                 BridgeProtocol.GetMepTopologyVersion => BridgeProtocol.GetMepTopologyVersions,
                 BridgeProtocol.GetParameterValuesVersion => BridgeProtocol.GetParameterValuesVersions,
@@ -820,6 +822,28 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return GetRoomLayouts is null
             ? throw new NotSupportedException("This recording client does not implement revit.get_room_layouts.")
             : GetRoomLayouts(request, timeout, cancellationToken);
+    }
+
+    public Task<GetMepDeviceTypesResult> GetMepDeviceTypesAsync(
+        GetMepDeviceTypesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.get_mep_device_types.");
+    }
+
+    public Task<PreviewRoomPatternPlacementsResult> PreviewRoomPatternPlacementsAsync(
+        PreviewRoomPatternPlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.preview_room_pattern_placements.");
     }
 
     public Task<GetWarningsResult> GetWarningsAsync(

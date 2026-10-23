@@ -30,6 +30,8 @@ internal sealed class MepApplyOperation
 
     public required Func<MepDevicePlacementIntent, ApplyMutationResult> Mutate { get; init; }
 
+    public Func<PatternMepPlacementIntent, ApplyMutationResult>? MutatePattern { get; init; }
+
     public Func<string>? MintAttemptRef { get; init; }
 
     public Action? BeforeEstablish { get; init; }
@@ -48,7 +50,7 @@ internal static class ApplyMepDevicePlacementOrchestrator
         }
 
         if (controlled.Binding.Kind != ControlledWriteIntentKind.MepDevicePlacements
-            || controlled.MepDevicePlacements is not { } intent)
+            || !TrySelectMutation(operation, controlled, out var itemCount, out var mutate))
         {
             return Result(ApplyMepDevicePlacementsStatus.Unavailable);
         }
@@ -92,7 +94,7 @@ internal static class ApplyMepDevicePlacementOrchestrator
             RevitVersion = operation.RevitVersion,
             RevitBuild = operation.RevitBuild,
             AddinVersion = operation.AddinVersion,
-            ItemCount = intent.Items.Count
+            ItemCount = itemCount
         };
         if (!operation.Audit.Preflight(metadata).Succeeded)
         {
@@ -142,7 +144,7 @@ internal static class ApplyMepDevicePlacementOrchestrator
                 createdRefs: null);
         }
 
-        var mutation = operation.Mutate(intent);
+        var mutation = mutate();
         return mutation.Kind switch
         {
             ApplyMutationKind.Stale => Finish(operation, lease, metadata, snapshot, ApplyTerminalStatus.Stale, AuditApplyStatus.Stale, AuditTransactionStatus.None, AuditVerificationStatus.NotRun, true, null),
@@ -152,6 +154,34 @@ internal static class ApplyMepDevicePlacementOrchestrator
             ApplyMutationKind.Pending => Finish(operation, lease, metadata, snapshot, ApplyTerminalStatus.Indeterminate, AuditApplyStatus.Indeterminate, AuditTransactionStatus.Pending, AuditVerificationStatus.NotRun, false, null),
             _ => Finish(operation, lease, metadata, snapshot, ApplyTerminalStatus.Indeterminate, AuditApplyStatus.Indeterminate, AuditTransactionStatus.Unknown, AuditVerificationStatus.NotRun, true, null)
         };
+    }
+
+    private static bool TrySelectMutation(
+        MepApplyOperation operation,
+        ControlledWriteIntent controlled,
+        out int itemCount,
+        out Func<ApplyMutationResult> mutate)
+    {
+        itemCount = 0;
+        mutate = null!;
+        if (controlled.MepDevicePlacements is { } template && controlled.PatternMepPlacements is null)
+        {
+            itemCount = template.Items.Count;
+            mutate = () => operation.Mutate(template);
+            return true;
+        }
+
+        if (controlled.PatternMepPlacements is { } pattern
+            && controlled.MepDevicePlacements is null
+            && operation.MutatePattern is not null)
+        {
+            itemCount = pattern.Items.Count;
+            var applyPattern = operation.MutatePattern;
+            mutate = () => applyPattern(pattern);
+            return true;
+        }
+
+        return false;
     }
 
     private static bool TryOwn(MepApplyOperation operation, ApplyBinding binding, out ApplyAttemptLease lease)

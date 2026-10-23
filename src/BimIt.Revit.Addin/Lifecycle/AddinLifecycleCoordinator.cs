@@ -139,8 +139,14 @@ internal sealed class AddinLifecycleCoordinator
             var getRoomLayouts = dispatcher.CreateGetRoomLayouts(metadata);
             EnsureNotStopping();
 
+            var getMepDeviceTypes = dispatcher.CreateGetMepDeviceTypes(metadata);
+            EnsureNotStopping();
+
+            var previewRoomPatternPlacements = dispatcher.CreatePreviewRoomPatternPlacements(metadata);
+            EnsureNotStopping();
+
             using var startup = new CancellationTokenSource(_startupTimeout);
-            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, startup.Token);
+            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, startup.Token);
 
             lock (_gate)
             {

@@ -155,6 +155,20 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("roomlayouts.create");
         return new RecordingGetRoomLayoutsService();
     }
+
+    public IRevitGetMepDeviceTypesService? CreateGetMepDeviceTypes(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("meptypes.create");
+        return null;
+    }
+
+    public IRevitPreviewRoomPatternPlacementsService? CreatePreviewRoomPatternPlacements(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("patternpreview.create");
+        return null;
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -413,6 +427,8 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview,
         IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements,
         IRevitGetRoomLayoutsService? getRoomLayouts,
+        IRevitGetMepDeviceTypesService? getMepDeviceTypes,
+        IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

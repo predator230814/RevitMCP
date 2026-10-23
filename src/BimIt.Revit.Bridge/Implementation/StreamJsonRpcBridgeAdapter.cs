@@ -21,6 +21,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitRequestMepDevicePlacementReviewService? _requestMepDevicePlacementReview;
     private readonly IRevitApplyMepDevicePlacementsService? _applyMepDevicePlacements;
     private readonly IRevitGetRoomLayoutsService? _getRoomLayouts;
+    private readonly IRevitGetMepDeviceTypesService? _getMepDeviceTypes;
+    private readonly IRevitPreviewRoomPatternPlacementsService? _previewRoomPatternPlacements;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -39,7 +41,9 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitPreviewMepDevicePlacementsService? previewMepDevicePlacements = null,
         IRevitRequestMepDevicePlacementReviewService? requestMepDevicePlacementReview = null,
         IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements = null,
-        IRevitGetRoomLayoutsService? getRoomLayouts = null)
+        IRevitGetRoomLayoutsService? getRoomLayouts = null,
+        IRevitGetMepDeviceTypesService? getMepDeviceTypes = null,
+        IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -57,6 +61,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _requestMepDevicePlacementReview = requestMepDevicePlacementReview;
         _applyMepDevicePlacements = applyMepDevicePlacements;
         _getRoomLayouts = getRoomLayouts;
+        _getMepDeviceTypes = getMepDeviceTypes;
+        _previewRoomPatternPlacements = previewRoomPatternPlacements;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -621,6 +627,82 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The Revit room layout request could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.get_mep_device_types")]
+    public async Task<GetMepDeviceTypesResult> GetMepDeviceTypesAsync(
+        GetMepDeviceTypesRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsGetMepDeviceTypes,
+            "revit.get_mep_device_types is not available on this connection.");
+        if (_getMepDeviceTypes is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.get_mep_device_types is not available on this endpoint."));
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            return await _getMepDeviceTypes.GetMepDeviceTypesAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The MEP device type catalog could not be read."));
+        }
+    }
+
+    [JsonRpcMethod("revit.preview_room_pattern_placements")]
+    public async Task<PreviewRoomPatternPlacementsResult> PreviewRoomPatternPlacementsAsync(
+        PreviewRoomPatternPlacementsRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsPreviewRoomPatternPlacements,
+            "revit.preview_room_pattern_placements is not available on this connection.");
+        if (_previewRoomPatternPlacements is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.preview_room_pattern_placements is not available on this endpoint."));
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            return await _previewRoomPatternPlacements.PreviewRoomPatternPlacementsAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The room pattern placement preview could not be created."));
         }
     }
 

@@ -71,4 +71,14 @@ public interface IRevitBridgeClient : IAsyncDisposable
         GetRoomLayoutsRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken);
+
+    Task<GetMepDeviceTypesResult> GetMepDeviceTypesAsync(
+        GetMepDeviceTypesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<PreviewRoomPatternPlacementsResult> PreviewRoomPatternPlacementsAsync(
+        PreviewRoomPatternPlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
 }

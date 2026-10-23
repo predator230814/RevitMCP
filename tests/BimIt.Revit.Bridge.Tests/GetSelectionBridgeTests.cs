@@ -84,7 +84,7 @@ public sealed class GetSelectionBridgeTests
         var v15 = NamedPipeBridgeHost.WithAdvertisedProtocol(metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, services.Review, services.Apply, warnings, selection, preview, review);
         var v14 = NamedPipeBridgeHost.WithAdvertisedProtocol(metadata, services.Capability, services.Query, services.Elements, services.Describe, services.Values, services.Topology, services.Preview, services.Review, services.Apply, warnings, selection, preview);
 
-        Assert.Equal(BridgeProtocol.SupportedVersions, v17.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.GetRoomLayoutsVersions, v17.SupportedProtocolVersions);
         Assert.Equal(17, v17.SupportedProtocolVersions[0]);
         Assert.Equal(BridgeProtocol.ApplyMepDevicePlacementsVersions, v16.SupportedProtocolVersions);
         Assert.Equal(16, v16.SupportedProtocolVersions[0]);
@@ -97,13 +97,13 @@ public sealed class GetSelectionBridgeTests
         Assert.True(BridgeProtocol.SupportsApplyMepDevicePlacements(17));
         Assert.True(BridgeProtocol.SupportsGetSelection(17));
         Assert.False(BridgeProtocol.SupportsGetRoomLayouts(16));
-        Assert.False(BridgeProtocol.SupportsGetSelection(18));
+        Assert.False(BridgeProtocol.SupportsGetSelection(20));
     }
 
     [Theory]
     [InlineData(1)]
     [InlineData(12)]
-    [InlineData(18)]
+    [InlineData(20)]
     public async Task Get_selection_is_rejected_outside_v13(int version)
     {
         var service = new FakeGetSelectionService();

@@ -10,6 +10,7 @@ internal sealed class McpAssistantToolSession :
     IMepDevicePlacementPreviewClient,
     IMepDevicePlacementReviewClient,
     IMepDevicePlacementApplyClient,
+    IRoomPatternPreviewClient,
     IAsyncDisposable
 {
     private readonly string _serverExecutable;
@@ -87,6 +88,32 @@ internal sealed class McpAssistantToolSession :
             }).ToArray(),
         };
         return InvokeAsync(IMepDevicePlacementPreviewClient.ToolName, arguments, cancellationToken);
+    }
+
+    public Task<AssistantToolCall> PreviewAsync(
+        string instanceId,
+        PreviewRoomPatternPlacementsRequest request,
+        CancellationToken cancellationToken)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(instanceId);
+        ArgumentNullException.ThrowIfNull(request);
+        var arguments = new Dictionary<string, object?>
+        {
+            ["instance_id"] = instanceId,
+            ["document_id"] = request.DocumentId,
+            ["placements"] = request.Placements?.Select(item => new Dictionary<string, object?>
+            {
+                ["room_ref"] = item.RoomRef,
+                ["family_type_ref"] = item.FamilyTypeRef,
+                ["role"] = item.Role,
+                ["placement_kind"] = item.PlacementKind,
+                ["x_m"] = item.XMetres,
+                ["y_m"] = item.YMetres,
+                ["mounting_height_m"] = item.MountingHeightMetres,
+                ["quarter_turns"] = item.QuarterTurns,
+            }).ToArray(),
+        };
+        return InvokeAsync(IRoomPatternPreviewClient.ToolName, arguments, cancellationToken);
     }
 
     public Task<AssistantToolCall> ReviewAsync(string instanceId, string intentRef, CancellationToken cancellationToken)

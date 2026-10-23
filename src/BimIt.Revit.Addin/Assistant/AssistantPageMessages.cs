@@ -16,6 +16,9 @@ internal enum AssistantPageIntent
     ConfirmProjectAxesPreview,
     ReviewInRevit,
     ApplyApprovedPlacements,
+    PreparePatternPreview,
+    ReviewPatternInRevit,
+    ApplyApprovedPattern,
 }
 
 internal readonly record struct AssistantPageParse(bool Accepted, AssistantPageIntent Intent, string? Action, string? Text, string Reason)
@@ -80,6 +83,13 @@ internal static class AssistantPageMessages
                 "applyApprovedPlacements" => message.Text is null && message.Action is null
                     ? AssistantPageParse.Accept(AssistantPageIntent.ApplyApprovedPlacements)
                     : AssistantPageParse.Reject("apply"),
+                "preparePatternPreview" => ParsePatternConfiguration(message),
+                "reviewPatternInRevit" => message.Text is null && message.Action is null
+                    ? AssistantPageParse.Accept(AssistantPageIntent.ReviewPatternInRevit)
+                    : AssistantPageParse.Reject("pattern-review"),
+                "applyApprovedPattern" => message.Text is null && message.Action is null
+                    ? AssistantPageParse.Accept(AssistantPageIntent.ApplyApprovedPattern)
+                    : AssistantPageParse.Reject("pattern-apply"),
                 _ => AssistantPageParse.Reject("unknown"),
             };
         }
@@ -97,6 +107,16 @@ internal static class AssistantPageMessages
         }
 
         return AssistantPageParse.Accept(AssistantPageIntent.RunQuickAction, action);
+    }
+
+    private static AssistantPageParse ParsePatternConfiguration(Envelope message)
+    {
+        if (message.Action is not null || string.IsNullOrWhiteSpace(message.Text) || message.Text.Length > MaxCommandLength)
+        {
+            return AssistantPageParse.Reject("pattern-preview");
+        }
+
+        return AssistantPageParse.Accept(AssistantPageIntent.PreparePatternPreview, text: message.Text);
     }
 
     private static AssistantPageParse ParseCommand(string? text)

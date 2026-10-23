@@ -18,7 +18,9 @@ Capability specifications define behavior before implementation. They are not Ar
 - `CAP-0010-revit-get-selection.md` — **Accepted** on 2026-10-14 by Dave, Product Owner. Bounded read of the current active-document selection as opaque ADR-0006 `element_ref` values. Implemented through Contracts, the Addin, and the MCP tool. CAP-0001 remains selection count only. At acceptance, production `tools/list` contained exactly 11. Official MCP-client live validation is recorded and is not a merge verdict.
 - `CAP-0011-revit-preview-mep-device-placements.md` — Implemented. Preview of one bounded MEP device placement batch using the template's placement strategy. Focused level-based live validation passed on Revit 2026.5 at 7123b11; wall-hosted and level-work-plane creation were not live-proven. See [BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md](../BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md).
 - `CAP-0012-revit-apply-mep-device-placements.md` — Implemented. Apply of one approved MEP device placement batch through the accepted ADR-0008 sequence. Focused level-based live validation passed on Revit 2026.5 at 7123b11; wall-hosted and level-work-plane creation were not live-proven. See [BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md](../BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md). At that specification, production `tools/list` contained exactly 14.
-- `CAP-0013-revit-get-room-layouts.md` — Accepted. Read-only room layout for pattern matching. Adds `revit_get_room_layouts`. Production `tools/list` is 15. Live checklist is not yet executed.
+- `CAP-0013-revit-get-room-layouts.md` — Accepted. Read-only room layout for pattern matching. Adds `revit_get_room_layouts`. At that slice, production `tools/list` was 15.
+- `revit_get_mep_device_types` — Read-only catalog of loaded MEP family types. Bridge protocol 18. ADR-0018.
+- `revit_preview_room_pattern_placements` — Write preview of one pattern placement batch. Bridge protocol 19. Review and apply reuse the existing MEP tools. Production `tools/list` is 17. Live checklist is [BIM_IT_PATTERN_APPLICATION_VALIDATION.md](../BIM_IT_PATTERN_APPLICATION_VALIDATION.md).
 
 ## Required sections
 

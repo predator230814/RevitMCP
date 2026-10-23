@@ -25,7 +25,7 @@ public sealed class GetContextBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -66,7 +66,7 @@ public sealed class GetContextBridgeOrchestrationTests
             var registration = TestSupport.CreateRegistration("id-v7", pipe);
             return Task.FromResult(new RecordingBridgeClient
             {
-                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 18)),
+                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 20)),
                 GetContext = (_, _, _) => throw new InvalidOperationException("GetContext must not run for protocol v10.")
             });
         });
