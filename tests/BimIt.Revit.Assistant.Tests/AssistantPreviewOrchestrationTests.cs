@@ -23,7 +23,7 @@ public sealed class AssistantPreviewOrchestrationTests
         Assert.False(AssistantIpc.IsModelToolName("revit_request_mep_device_placement_review"));
         Assert.False(AssistantIpc.IsModelToolName("revit_apply_mep_device_placements"));
         Assert.False(AssistantIpc.GrantsApprovalAuthority);
-        Assert.Equal(7, AssistantTools.AllowedReadTools.Length);
+        Assert.Equal(8, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
         Assert.DoesNotContain(IMepDevicePlacementPreviewClient.ToolName, AssistantTools.AllowedReadTools);
         Assert.True(AssistantTools.IsTrustedWriteTool(IMepDevicePlacementPreviewClient.ToolName));

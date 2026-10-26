@@ -4,7 +4,7 @@
 - Date: 2026-10-07
 - Product Owner acceptance: Dave, 2026-10-07
 
-The closed persisted event schema in this record is unchanged. MEP device placement reuses the same writer. `item_count` is the requested batch size. The record still excludes names, element refs, created refs, coordinates, offsets, prompts, and paths. This note does not change the schema version or the decision.
+The closed persisted event schema in this record is unchanged. MEP device placement reuses the same writer. `item_count` is the requested batch size. The record still excludes names, element refs, created refs, coordinates, offsets, prompts, and paths. This note does not change the schema version or the decision. ADR-0018 widens the numeric range of the existing `item_count` field from 1..20 to 1..80. It adds no field.
 
 ## Context
 

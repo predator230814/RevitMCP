@@ -138,6 +138,51 @@ internal sealed class EphemeralWriteIntentStore
         }
     }
 
+    public IntentCreateResult TryCreatePattern(string instanceId, string documentId, PatternMepPlacementIntent intent)
+    {
+        ArgumentNullException.ThrowIfNull(intent);
+        if (!PatternMepPlacementCanonicalEncoder.TryEncode(instanceId, documentId, intent, out _, out var fingerprint))
+        {
+            return new IntentCreateResult(IntentStoreCreateStatus.Rejected, null, null, null);
+        }
+
+        lock (_gate)
+        {
+            if (_closed || _clock.TimestampFrequency <= 0)
+            {
+                return new IntentCreateResult(IntentStoreCreateStatus.Rejected, null, null, null);
+            }
+
+            PurgeExpiredCore();
+            if (_entries.Count >= LiveCapacity)
+            {
+                return new IntentCreateResult(IntentStoreCreateStatus.CapacityReached, null, null, null);
+            }
+
+            if (!TryAllocateRef(out var intentRef))
+            {
+                return new IntentCreateResult(IntentStoreCreateStatus.Rejected, null, null, null);
+            }
+
+            var createdAt = _clock.GetUtcNow();
+            var expiresAt = createdAt + Lifetime;
+            var binding = new ControlledWriteIntentBinding(
+                intentRef,
+                fingerprint,
+                ControlledWriteIntentKind.MepDevicePlacements,
+                PatternMepPlacementCanonicalEncoder.SchemaVersion,
+                createdAt,
+                expiresAt,
+                instanceId,
+                documentId,
+                intent.Items.Count);
+            _entries.Add(intentRef, new StoredIntent(
+                new ControlledWriteIntent(binding, null, null, intent),
+                _clock.GetTimestamp()));
+            return new IntentCreateResult(IntentStoreCreateStatus.Created, intentRef, fingerprint, expiresAt);
+        }
+    }
+
     public bool TryGet(string intentRef, out IntentEntry? entry)
     {
         entry = null;

@@ -445,7 +445,7 @@ internal sealed class ControlledWriteAuditWriter : IDisposable
             && Fits(revitVersion, 1, 32)
             && Fits(revitBuild, 1, 64)
             && Fits(addinVersion, 1, 32)
-            && itemCount is >= 1 and <= 20;
+            && itemCount is >= 1 and <= 80;
     }
 
     private void WriteCandidate(byte[] line)

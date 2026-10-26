@@ -61,6 +61,12 @@
     expiresAt.textContent = "Expires " + String(message.expiresAt);
     metadata.hidden = false;
     idle.hidden = true;
+    if (message.reviewKind === "pattern_mep_placements") {
+      renderPatternPlacement(message);
+      setEnabled(sessionRef.length > 0);
+      return;
+    }
+
     if (message.reviewKind === "mep_device_placements") {
       renderMep(message);
       setEnabled(sessionRef.length > 0);
@@ -88,6 +94,29 @@
     }
 
     setEnabled(sessionRef.length > 0);
+  }
+
+  function renderPatternPlacement(message) {
+    var article = document.createElement("article");
+    var heading = document.createElement("h2");
+    heading.textContent = "Pattern placement";
+    article.appendChild(heading);
+    article.appendChild(textLine("Targets", String(message.roomCount || 0) + " rooms"));
+    article.appendChild(textLine("Devices", String(message.deviceCount || 0)));
+    var labels = message.roomLabels || [];
+    if (labels.length) {
+      article.appendChild(textLine("Rooms", labels.join(", ")));
+    }
+
+    var lines = message.lines || [];
+    for (var index = 0; index < lines.length; index++) {
+      var block = document.createElement("p");
+      block.style.whiteSpace = "pre-line";
+      block.textContent = String(lines[index]);
+      article.appendChild(block);
+    }
+
+    items.appendChild(article);
   }
 
   function renderMep(message) {

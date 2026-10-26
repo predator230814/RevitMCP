@@ -172,5 +172,27 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         throw new NotSupportedException("This fake client does not implement revit.get_room_layouts.");
     }
 
+    public Task<GetMepDeviceTypesResult> GetMepDeviceTypesAsync(
+        GetMepDeviceTypesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.get_mep_device_types.");
+    }
+
+    public Task<PreviewRoomPatternPlacementsResult> PreviewRoomPatternPlacementsAsync(
+        PreviewRoomPatternPlacementsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.preview_room_pattern_placements.");
+    }
+
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 }

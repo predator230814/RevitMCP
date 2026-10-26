@@ -25,7 +25,8 @@ internal sealed record CandidateRoom(
     IReadOnlyList<PlanPoint> Loop,
     bool UnsupportedLoops,
     bool VerticesTruncated,
-    IReadOnlyList<CandidateOpening> Openings);
+    IReadOnlyList<CandidateOpening> Openings,
+    string? ElementRef = null);
 
 internal sealed record ProjectedDevice(
     string Role,
@@ -33,7 +34,8 @@ internal sealed record ProjectedDevice(
     double LocalX,
     double LocalY,
     double NormalizedX,
-    double NormalizedY);
+    double NormalizedY,
+    string? FamilyHint = null);
 
 internal sealed record RoomShapeMatch(
     string Label,
@@ -44,7 +46,8 @@ internal sealed record RoomShapeMatch(
     bool Mirrored,
     string? Reason,
     IReadOnlyList<PlanPoint> Outline,
-    IReadOnlyList<ProjectedDevice> Devices);
+    IReadOnlyList<ProjectedDevice> Devices,
+    string? RoomRef = null);
 
 internal static class RoomShapeMatcher
 {
@@ -136,7 +139,8 @@ internal static class RoomShapeMatcher
             best.Mirror,
             reason,
             Normalize(room.Clean, room),
-            devices);
+            devices,
+            candidate.ElementRef);
     }
 
     private static Chosen ChooseTransform(
@@ -255,7 +259,8 @@ internal static class RoomShapeMatcher
                 Math.Round(room.CentroidX + local.X, 4, MidpointRounding.AwayFromZero),
                 Math.Round(room.CentroidY + local.Y, 4, MidpointRounding.AwayFromZero),
                 normalized.X,
-                normalized.Y));
+                normalized.Y,
+                device.FamilyHint));
         }
 
         return projected;

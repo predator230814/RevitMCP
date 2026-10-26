@@ -28,6 +28,9 @@ public enum AssistantIpcKind
     PreviewResult,
     ReviewInRevit,
     ApplyApprovedPlacements,
+    PreparePatternPreview,
+    ReviewPatternInRevit,
+    ApplyApprovedPattern,
 }
 
 public sealed record AssistantIpcMessage(
@@ -143,6 +146,9 @@ public static class AssistantIpc
                 "confirmProjectAxesPreview" => ParseSignal(body, AssistantIpcKind.ConfirmProjectAxesPreview),
                 "reviewInRevit" => ParseSignal(body, AssistantIpcKind.ReviewInRevit),
                 "applyApprovedPlacements" => ParseSignal(body, AssistantIpcKind.ApplyApprovedPlacements),
+                "preparePatternPreview" => ParsePreparePattern(body),
+                "reviewPatternInRevit" => ParseSignal(body, AssistantIpcKind.ReviewPatternInRevit),
+                "applyApprovedPattern" => ParseSignal(body, AssistantIpcKind.ApplyApprovedPattern),
                 "previewResult" => ParsePreviewResult(body),
                 _ => AssistantIpcParse.Reject("unknown"),
             };
@@ -227,6 +233,13 @@ public static class AssistantIpc
             AssistantIpcKind.ConfirmProjectAxesPreview => new Envelope { Type = "confirmProjectAxesPreview" },
             AssistantIpcKind.ReviewInRevit => new Envelope { Type = "reviewInRevit" },
             AssistantIpcKind.ApplyApprovedPlacements => new Envelope { Type = "applyApprovedPlacements" },
+            AssistantIpcKind.PreparePatternPreview => new Envelope
+            {
+                Type = "preparePatternPreview",
+                Text = message.Text,
+            },
+            AssistantIpcKind.ReviewPatternInRevit => new Envelope { Type = "reviewPatternInRevit" },
+            AssistantIpcKind.ApplyApprovedPattern => new Envelope { Type = "applyApprovedPattern" },
             AssistantIpcKind.PreviewResult => new Envelope
             {
                 Type = "previewResult",
@@ -446,6 +459,42 @@ public static class AssistantIpc
             null,
             usedTools,
             PatternReview: patternReview));
+    }
+
+    private static AssistantIpcParse ParsePreparePattern(Envelope body)
+    {
+        if (body.RequestId is not null
+            || body.Workflow is not null
+            || body.Title is not null
+            || body.Body is not null
+            || HasProvider(body)
+            || body.UsedTools is not null
+            || body.InstanceId is not null
+            || body.PatternReview is not null
+            || HasDocument(body)
+            || string.IsNullOrWhiteSpace(body.Text)
+            || body.Text.Length > MaxTextLength)
+        {
+            return AssistantIpcParse.Reject("pattern-preview");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.PreparePatternPreview,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Text: body.Text));
     }
 
     private static AssistantIpcParse ParseSignal(Envelope body, AssistantIpcKind kind)

@@ -10,7 +10,9 @@ public sealed class GetRoomLayoutsRoutingTests
     {
         Assert.False(InstanceTargetResolver.IsGetRoomLayoutsEligible(TestSupport.Ready("v16", "pipe-v16", protocolVersion: 16)));
         Assert.True(InstanceTargetResolver.IsGetRoomLayoutsEligible(TestSupport.Ready("v17", "pipe-v17", protocolVersion: 17)));
-        Assert.False(InstanceTargetResolver.IsGetRoomLayoutsEligible(TestSupport.Ready("v18", "pipe-v18", protocolVersion: 18)));
+        Assert.True(InstanceTargetResolver.IsGetRoomLayoutsEligible(TestSupport.Ready("v18", "pipe-v18", protocolVersion: 18)));
+        Assert.True(InstanceTargetResolver.IsGetRoomLayoutsEligible(TestSupport.Ready("v19", "pipe-v19", protocolVersion: 19)));
+        Assert.False(InstanceTargetResolver.IsGetRoomLayoutsEligible(TestSupport.Ready("v20", "pipe-v20", protocolVersion: 20)));
         Assert.True(InstanceTargetResolver.IsGetSelectionEligible(TestSupport.Ready("v17", "pipe-v17", protocolVersion: 17)));
         Assert.True(InstanceTargetResolver.IsApplyMepDevicePlacementsEligible(TestSupport.Ready("v17", "pipe-v17", protocolVersion: 17)));
     }

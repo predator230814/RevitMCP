@@ -35,6 +35,7 @@ internal sealed class AssistantShell
     private string? _providerError;
     private AssistantAttachmentChip? _attachment;
     private JsonElement? _patternReview;
+    private bool _patternPrepared;
     private CancellationTokenSource? _providerPoll;
     private Task _sequence = Task.CompletedTask;
 
@@ -115,6 +116,7 @@ internal sealed class AssistantShell
                 _conversation.Reset();
                 _attachment = null;
                 _patternReview = null;
+                _patternPrepared = false;
                 PostSnapshot();
                 Sequence(ResetProviderAsync);
                 break;
@@ -138,6 +140,23 @@ internal sealed class AssistantShell
                     "Apply approved placements",
                     "The placement apply could not be completed.",
                     token => _link.ApplyApprovedPlacementsAsync(token)));
+                break;
+            case AssistantPageIntent.PreparePatternPreview:
+                Sequence(() => PreparePatternPreviewAsync(parsed.Text!));
+                break;
+            case AssistantPageIntent.ReviewPatternInRevit:
+                Sequence(() => PatternActionAsync(
+                    "Review pattern in Revit",
+                    "The Revit review could not be opened.",
+                    token => _link.ReviewPatternInRevitAsync(token),
+                    prepared: false));
+                break;
+            case AssistantPageIntent.ApplyApprovedPattern:
+                Sequence(() => PatternActionAsync(
+                    "Apply approved pattern",
+                    "The pattern apply could not be completed.",
+                    token => _link.ApplyApprovedPatternAsync(token),
+                    prepared: false));
                 break;
             case AssistantPageIntent.OpenDiagnostics:
                 _diagnostics = !_diagnostics;
@@ -397,6 +416,7 @@ internal sealed class AssistantShell
             if (result.PatternReview is not null && RoomPatternReview.TryParse(result.PatternReview, out var review))
             {
                 _patternReview = review;
+                _patternPrepared = false;
             }
 
             _conversation.Add(
@@ -543,6 +563,81 @@ internal sealed class AssistantShell
         }
     }
 
+    private async Task PreparePatternPreviewAsync(string configuration)
+    {
+        await PatternActionAsync(
+            "Prepare Revit pattern preview",
+            "The pattern preview could not be created.",
+            token => _link.PreparePatternPreviewAsync(configuration, token),
+            prepared: true).ConfigureAwait(false);
+    }
+
+    private async Task PatternActionAsync(
+        string title,
+        string failure,
+        Func<CancellationToken, Task<AssistantIpcMessage?>> call,
+        bool prepared)
+    {
+        if (_busy)
+        {
+            return;
+        }
+
+        _busy = true;
+        _conversation.Add("user", "You", title);
+        PostSnapshot();
+        try
+        {
+            if (_mcpState != "ready")
+            {
+                await EnsureAssistantAsync().ConfigureAwait(false);
+            }
+
+            if (_mcpState != "ready")
+            {
+                _conversation.Add("error", "Assistant", _statusError ?? "The Assistant is not ready.");
+                return;
+            }
+
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await call(timeout.Token).ConfigureAwait(false);
+            if (result?.Kind != AssistantIpcKind.PreviewResult)
+            {
+                _conversation.Add("error", "Assistant", failure);
+                if (prepared)
+                {
+                    _patternPrepared = false;
+                }
+
+                return;
+            }
+
+            if (prepared)
+            {
+                _patternPrepared = !result.IsError;
+            }
+            else if (result.IsError && string.Equals(result.Title, "Pattern apply", StringComparison.Ordinal))
+            {
+                _patternPrepared = false;
+            }
+
+            _conversation.Add(result.IsError ? "error" : "assistant", result.Title ?? title, result.Body ?? "");
+        }
+        catch (Exception)
+        {
+            _conversation.Add("error", "Assistant", failure);
+            if (prepared)
+            {
+                _patternPrepared = false;
+            }
+        }
+        finally
+        {
+            _busy = false;
+            PostSnapshot();
+        }
+    }
+
     private async Task ConfirmProjectAxesPreviewAsync()
     {
         if (_busy)
@@ -602,6 +697,7 @@ internal sealed class AssistantShell
             {
                 _attachment = null;
                 _patternReview = null;
+                _patternPrepared = false;
                 return;
             }
 
@@ -611,6 +707,7 @@ internal sealed class AssistantShell
             {
                 _attachment = null;
                 _patternReview = null;
+                _patternPrepared = false;
             }
             else
             {
@@ -642,6 +739,7 @@ internal sealed class AssistantShell
                 result.DisplayName,
                 AssistantAttachmentSummary.Describe(result.DocumentKind, result.PageCount, result.VisualCount, result.Truncated == true));
             _patternReview = null;
+            _patternPrepared = false;
             return;
         }
 
@@ -663,6 +761,7 @@ internal sealed class AssistantShell
         _conversation.Reset();
         _attachment = null;
         _patternReview = null;
+        _patternPrepared = false;
         PostSnapshot();
         if (_mcpState != "ready")
         {
@@ -847,6 +946,7 @@ internal sealed class AssistantShell
         if (_patternReview is JsonElement review)
         {
             snapshot["patternReview"] = review;
+            snapshot["patternPrepared"] = _patternPrepared;
         }
 
         return JsonSerializer.Serialize(snapshot);

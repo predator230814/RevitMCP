@@ -88,7 +88,8 @@ internal sealed class RevitApplyMepDevicePlacementsService : IRevitApplyMepDevic
             Audit = _audit,
             Consume = intent => _approval.TryConsumeApproved(intent, ControlledWriteIntentKind.MepDevicePlacements),
             ResolveDocument = () => ResolveDocument(application),
-            Mutate = intent => RevitMepDevicePlacementMutation.Execute(application, _identity, intent)
+            Mutate = intent => RevitMepDevicePlacementMutation.Execute(application, _identity, intent),
+            MutatePattern = intent => RevitPatternMepPlacementMutation.Execute(application, _identity, _metadata.InstanceId, intent)
         });
     }
 

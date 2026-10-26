@@ -399,7 +399,8 @@ public sealed class ControlledWriteAuditWriterTests
         Assert.False(writer.Preflight(Common(fingerprint: "not-a-fingerprint")).Succeeded);
         Assert.False(writer.Preflight(Common(attempt: "ABCD")).Succeeded);
         Assert.False(writer.Preflight(Common(itemCount: 0)).Succeeded);
-        Assert.False(writer.Preflight(Common(itemCount: 21)).Succeeded);
+        Assert.True(writer.Preflight(Common(itemCount: 80)).Succeeded);
+        Assert.False(writer.Preflight(Common(itemCount: 81)).Succeeded);
         Assert.False(writer.Preflight(Common(intentRef: "")).Succeeded);
         Assert.False(writer.IsDegraded);
         Assert.True(writer.Preflight(Common()).Succeeded);

@@ -44,7 +44,7 @@ function render(snapshot) {
     timeline.insertAdjacentHTML("beforeend", `<li class="msg"><h3>Working</h3><p>Waiting for the Assistant.</p></li>`);
   }
   renderAttachment(snapshot.attachment);
-  renderPattern(snapshot.patternReview);
+  renderPattern(snapshot.patternReview, snapshot.patternPrepared === true);
 }
 
 function renderAttachment(attachment) {
@@ -60,29 +60,126 @@ function renderAttachment(attachment) {
 }
 
 let selectedRoom = 0;
+let patternState = { generation: "", selected: [], options: {}, heights: {}, dirty: true };
 
-function renderPattern(review) {
+function renderPattern(review, prepared) {
   const node = document.getElementById("pattern");
   if (!review || !Array.isArray(review.boundary) || !Array.isArray(review.devices)) {
     node.hidden = true;
     node.innerHTML = "";
     selectedRoom = 0;
+    patternState = { generation: "", selected: [], options: {}, heights: {}, dirty: true };
     return;
   }
   const rooms = Array.isArray(review.rooms) ? review.rooms : [];
+  if (patternState.generation !== review.generation) {
+    const suggested = Array.isArray(review.suggestedRooms) ? review.suggestedRooms.filter((index) => rooms[index] && rooms[index].band !== "rejected") : [];
+    const options = {};
+    const heights = {};
+    (review.roles || []).forEach((role) => {
+      if (role && role.role && role.suggestedOption) {
+        options[role.role] = role.suggestedOption;
+      }
+    });
+    patternState = {
+      generation: review.generation || "",
+      selected: suggested,
+      options,
+      heights,
+      roleNames: (review.roles || []).map((role) => role && role.role).filter(Boolean),
+      dirty: true
+    };
+  }
   if (selectedRoom >= rooms.length) {
     selectedRoom = 0;
   }
   const counts = `${review.candidateCount || 0} candidate rooms · ${review.highCount || 0} high · ${review.lowerCount || 0} lower · ${review.rejectedCount || 0} rejected`;
   const image = patternImage(review);
+  const ready = prepared === true && patternState.dirty !== true;
   node.hidden = false;
-  node.innerHTML = `<h2>Pattern review</h2><p class="sub">${escapeHtml(counts)}</p><div class="pattern-grid"><div class="sheet">${image}${patternSvg(review.boundary, review.entrance, review.devices, true, false)}</div><div class="rooms"><div class="room-list">${rooms.map((room, index) => `<button type="button" data-room="${index}" class="${index === selectedRoom ? "selected" : ""}"><strong>${escapeHtml(room.label || "Room")}</strong><span>${escapeHtml(roomBand(room))}</span></button>`).join("")}</div><div class="room-preview">${rooms.length ? roomPreview(rooms[selectedRoom]) : "<p>No Revit rooms were compared.</p>"}</div></div></div>`;
+  node.innerHTML = `<h2>Pattern review</h2><p class="sub">${escapeHtml(counts)}</p><div class="pattern-grid"><div class="sheet">${image}${patternSvg(review.boundary, review.entrance, review.devices, true, false)}</div><div class="rooms"><div class="room-list">${rooms.map((room, index) => roomButton(room, index)).join("")}</div><div class="room-preview">${rooms.length ? roomPreview(rooms[selectedRoom]) : "<p>No Revit rooms were compared.</p>"}</div></div></div>${roleConfig(review)}<div class="pattern-actions"><button type="button" id="prepare-pattern">Prepare Revit pattern preview</button><button type="button" id="review-pattern" ${ready ? "" : "disabled"}>Review in Revit</button><button type="button" id="apply-pattern" ${ready ? "" : "disabled"}>Apply approved pattern</button></div>`;
   node.querySelectorAll("[data-room]").forEach((button) => {
     button.addEventListener("click", () => {
       selectedRoom = Number(button.dataset.room);
-      renderPattern(review);
+      renderPattern(review, prepared);
     });
   });
+  node.querySelectorAll("[data-target]").forEach((input) => {
+    input.addEventListener("change", () => {
+      const index = Number(input.dataset.target);
+      const selected = new Set(patternState.selected);
+      if (input.checked) {
+        selected.add(index);
+      } else {
+        selected.delete(index);
+      }
+      patternState.selected = [...selected];
+      patternState.dirty = true;
+      renderPattern(review, prepared);
+    });
+  });
+  node.querySelectorAll("[data-option]").forEach((select) => {
+    select.addEventListener("change", () => {
+      patternState.options[select.dataset.option] = select.value;
+      patternState.dirty = true;
+      renderPattern(review, prepared);
+    });
+  });
+  node.querySelectorAll("[data-height]").forEach((input) => {
+    input.addEventListener("change", () => {
+      patternState.heights[input.dataset.height] = input.value;
+      patternState.dirty = true;
+      renderPattern(review, prepared);
+    });
+  });
+  document.getElementById("prepare-pattern").addEventListener("click", () => {
+    patternState.dirty = false;
+    post({ type: "preparePatternPreview", text: patternConfiguration() });
+  });
+  document.getElementById("review-pattern").addEventListener("click", () => {
+    if (!ready) {
+      return;
+    }
+    post({ type: "reviewPatternInRevit" });
+  });
+  document.getElementById("apply-pattern").addEventListener("click", () => {
+    if (!ready) {
+      return;
+    }
+    post({ type: "applyApprovedPattern" });
+  });
+}
+
+function roomButton(room, index) {
+  const rejected = room.band === "rejected";
+  const checked = patternState.selected.includes(index);
+  return `<div class="room-row ${index === selectedRoom ? "selected" : ""}"><label><input type="checkbox" data-target="${index}" ${rejected ? "disabled" : ""} ${checked && !rejected ? "checked" : ""} /> ${escapeHtml(room.band || "rejected")}</label><button type="button" data-room="${index}"><strong>${escapeHtml(room.label || "Room")}</strong><span>${escapeHtml(roomBand(room))}</span></button></div>`;
+}
+
+function roleConfig(review) {
+  const roles = Array.isArray(review.roles) ? review.roles : [];
+  if (!roles.length) {
+    return "<p class=\"sub\">No loaded type choices are available yet.</p>";
+  }
+  return `<div class="roles">${roles.map((role) => {
+    const options = Array.isArray(role.options) ? role.options : [];
+    const selected = patternState.options[role.role] || "";
+    const height = patternState.heights[role.role] ?? "";
+    const choices = [`<option value="">Choose a loaded type</option>`].concat(options.map((option) => `<option value="${escapeHtml(option.key || "")}" ${option.key === selected ? "selected" : ""}>${escapeHtml(option.familyName || "")} / ${escapeHtml(option.typeName || "")} · ${escapeHtml(option.placementClassification || "")}</option>`));
+    return `<section><h3>${escapeHtml(role.role || "")}</h3><p class="sub">${role.familyHint ? "Hint: " + escapeHtml(role.familyHint) : "No family hint"}${role.ambiguous ? " · choose one" : ""}</p><label>Loaded type <select data-option="${escapeHtml(role.role || "")}">${choices.join("")}</select></label><label>Mounting height (mm) <input data-height="${escapeHtml(role.role || "")}" type="number" min="0" max="6000" step="1" value="${escapeHtml(height)}" /></label></section>`;
+  }).join("")}</div>`;
+}
+
+function patternConfiguration() {
+  const roles = (patternState.roleNames || []).map((role) => {
+    const height = patternState.heights[role];
+    return {
+      role,
+      option: patternState.options[role] || "",
+      height_mm: height === undefined || height === "" ? null : Number(height)
+    };
+  });
+  return JSON.stringify({ rooms: patternState.selected, roles });
 }
 
 function patternImage(review) {

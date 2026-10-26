@@ -22,7 +22,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Get_context_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetContext(version));
@@ -46,7 +48,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Query_elements_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsQueryElements(version));
@@ -70,7 +74,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Get_elements_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetElements(version));
@@ -94,7 +100,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Describe_parameters_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsDescribeParameters(version));
@@ -118,7 +126,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Get_parameter_values_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetParameterValues(version));
@@ -127,7 +137,7 @@ public sealed class BridgeProtocolTests
     [Fact]
     public void Current_supported_versions_are_explicit_and_ordered()
     {
-        Assert.Equal(17, BridgeProtocol.CurrentVersion);
+        Assert.Equal(19, BridgeProtocol.CurrentVersion);
         Assert.Equal(new[] { 1 }, BridgeProtocol.HandshakeOnlyVersions);
         Assert.Equal(new[] { 2, 1 }, BridgeProtocol.GetContextVersions);
         Assert.Equal(new[] { 3, 2, 1 }, BridgeProtocol.QueryElementsVersions);
@@ -144,7 +154,9 @@ public sealed class BridgeProtocolTests
         Assert.Equal(new[] { 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.RequestMepDevicePlacementReviewVersions);
         Assert.Equal(new[] { 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.ApplyMepDevicePlacementsVersions);
         Assert.Equal(new[] { 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.GetRoomLayoutsVersions);
-        Assert.Equal(BridgeProtocol.GetRoomLayoutsVersions, BridgeProtocol.SupportedVersions);
+        Assert.Equal(new[] { 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.GetMepDeviceTypesVersions);
+        Assert.Equal(new[] { 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.PreviewRoomPatternPlacementsVersions);
+        Assert.Equal(BridgeProtocol.PreviewRoomPatternPlacementsVersions, BridgeProtocol.SupportedVersions);
         Assert.False(BridgeProtocol.SupportsPreviewMepDevicePlacements(13));
         Assert.True(BridgeProtocol.SupportsPreviewMepDevicePlacements(14));
         Assert.False(BridgeProtocol.SupportsRequestMepDevicePlacementReview(14));
@@ -154,8 +166,18 @@ public sealed class BridgeProtocolTests
         Assert.True(BridgeProtocol.SupportsApplyMepDevicePlacements(17));
         Assert.True(BridgeProtocol.SupportsGetContext(17));
         Assert.True(BridgeProtocol.SupportsGetRoomLayouts(17));
+        Assert.True(BridgeProtocol.SupportsGetRoomLayouts(18));
+        Assert.True(BridgeProtocol.SupportsGetRoomLayouts(19));
         Assert.False(BridgeProtocol.SupportsGetRoomLayouts(16));
-        Assert.False(BridgeProtocol.SupportsGetContext(18));
+        Assert.False(BridgeProtocol.SupportsGetRoomLayouts(20));
+        Assert.False(BridgeProtocol.SupportsGetMepDeviceTypes(17));
+        Assert.True(BridgeProtocol.SupportsGetMepDeviceTypes(18));
+        Assert.True(BridgeProtocol.SupportsGetMepDeviceTypes(19));
+        Assert.False(BridgeProtocol.SupportsPreviewRoomPatternPlacements(18));
+        Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(19));
+        Assert.True(BridgeProtocol.SupportsGetContext(18));
+        Assert.True(BridgeProtocol.SupportsGetContext(19));
+        Assert.False(BridgeProtocol.SupportsGetContext(20));
     }
 
     [Theory]
@@ -176,7 +198,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Get_mep_topology_support_includes_v7_through_v11(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetMepTopology(version));
@@ -195,7 +219,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Preview_parameter_updates_support_includes_v8_through_v11(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsPreviewParameterUpdates(version));
@@ -219,7 +245,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Request_parameter_update_review_support_is_protocol_v9_through_v11(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsRequestParameterUpdateReview(version));
@@ -234,7 +262,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Get_warnings_support_is_protocol_v11_and_v12(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetWarnings(version));
@@ -248,7 +278,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Context_document_id_is_a_v12_guarantee(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsContextDocumentId(version));
@@ -262,7 +294,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Active_view_unfiltered_query_is_a_v12_guarantee(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsActiveViewUnfilteredQuery(version));
@@ -276,7 +310,9 @@ public sealed class BridgeProtocolTests
     [InlineData(15, true)]
     [InlineData(16, true)]
     [InlineData(17, true)]
-    [InlineData(18, false)]
+    [InlineData(18, true)]
+    [InlineData(19, true)]
+    [InlineData(20, false)]
     public void Get_selection_support_is_protocol_v13_only(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetSelection(version));

@@ -21,11 +21,13 @@ internal static class GitHubCopilotSessionBlueprint
         A proposal cannot preview, approve, or modify the Revit model.
         You cannot supply Revit identities or a calibration flag.
         bimit_propose_room_pattern stores one untrusted interpretation of the current attached page.
-        Describe only what you see on that page: one room boundary, an optional entrance, and detected devices, using normalized page coordinates from 0 to 1.
-        x and page_x run left to right. y and page_y run top to bottom.
+        Describe only what you see on that page: one room boundary, an optional entrance, and detected devices.
+        Every point is {"page_x":0..1,"page_y":0..1}. page_x runs left to right. page_y runs top to bottom.
+        If the tool returns a reason, correct the call and try once more in the same turn.
         Do not send page width, height, or aspect ratio.
-        You cannot name Revit rooms, supply element references, or decide which rooms match.
-        BIM-IT computes the match. Do not invent a match score.
+        When the user names a room type, such as every studio, pass room_name as that word. Omit room_name when the user asks for rooms of the same shape.
+        You cannot supply element references or decide which rooms match.
+        BIM-IT selects the named rooms and computes the match. Do not invent a match score.
         Project-axis offsets are not PDF pixels, image pixels, sheet coordinates, or geographic coordinates.
         You cannot modify the Revit model.
         Never imply that a preview, approval, or write was performed.
@@ -182,7 +184,7 @@ internal static class GitHubCopilotSessionBlueprint
             new AIFunctionFactoryOptions
             {
                 Name = RoomPatternProposalTool.Name,
-                Description = "Store one untrusted interpretation of the current attached page. Boundary x and device page_x run left to right. Boundary y and device page_y run top to bottom, both normalized from 0 to 1. This does not match rooms, approve, or modify Revit. Do not send Revit identities, page width, height, or aspect ratio.",
+                Description = "Store one untrusted interpretation of the current attached page. Every boundary, entrance, and device point is {\"page_x\":0..1,\"page_y\":0..1}. page_x runs left to right. page_y runs top to bottom. When the user names a room type, pass room_name as that word, such as studio. Omit room_name to match rooms by shape. BIM-IT selects the rooms after this call. This does not approve or modify Revit. Do not send x, y, Revit identities, family ids, page width, height, or aspect ratio. If the result includes a reason, correct the arguments and call again.",
             });
     }
 
