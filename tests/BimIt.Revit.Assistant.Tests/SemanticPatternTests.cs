@@ -1,5 +1,6 @@
 using System.Text.Json;
 using BimIt.Revit.Assistant;
+using BimIt.Revit.Assistant.Ipc;
 using BimIt.Revit.Assistant.Patterns;
 using Xunit;
 
@@ -49,7 +50,6 @@ public sealed class SemanticPatternTests
             [
                 new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, 0.8),
                 new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair", 0.7),
-                new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair", 0.7),
                 new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, 0.9),
                 new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, 0.6),
             ],
@@ -71,7 +71,6 @@ public sealed class SemanticPatternTests
             new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null),
             new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null),
             new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, null),
-            new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair", null),
             new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair", null),
         };
         var devices = new[]
@@ -160,23 +159,211 @@ public sealed class SemanticPatternTests
     [Fact]
     public async Task Rules_reject_coordinates_and_accept_the_small_vocabulary()
     {
-        var tool = new RoomPatternProposalTool(new UnusedSession(), "instance", new RoomPatternStore(), static () => null);
-        var invented = await tool.InvokeAsync(Json(Body("""
+        var inventedStore = new RoomPatternStore();
+        var invented = await StoredTool(inventedStore).InvokeAsync(Json(Body("""
             "rules":[{"role":"switch","anchor":"entrance","x":1.2,"y":3.4}]
             """)), CancellationToken.None);
-        Assert.Equal(RoomPatternFailures.Rule, invented["code"]);
+        Assert.Equal(true, invented["stored"]);
+        Assert.Equal(SemanticReport.None, invented["semantic_status"]);
+        Assert.Contains(SemanticWarningCodes.MalformedRule, Warnings(invented));
+        Assert.NotNull(inventedStore.PeekReviewJson());
 
-        var accepted = await tool.InvokeAsync(Json(Body("""
+        var acceptedStore = new RoomPatternStore();
+        var accepted = await StoredTool(acceptedStore).InvokeAsync(Json(Body("""
             "rules":[{"role":"switch","anchor":"entrance","offset_m":0.15}],"anchors":[{"label":"door","page_x":0.4,"page_y":0.1}]
             """)), CancellationToken.None);
-        Assert.Equal(RoomPatternFailures.Attachment, accepted["code"]);
+        Assert.Equal(true, accepted["stored"]);
+        Assert.Equal(SemanticReport.Complete, accepted["semantic_status"]);
+        Assert.Equal(0, accepted["semantic_warning_count"]);
     }
 
-    private static string Body(string extra)
+    [Fact]
+    public async Task One_paired_rule_with_two_observed_receptacles_is_accepted()
+    {
+        var result = await StoredTool(new RoomPatternStore()).InvokeAsync(Json(Visual(
+            Receptacle + "," + ReceptacleRight,
+            """
+            "rules":[{"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside"}]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
+        Assert.Equal(0, result["semantic_warning_count"]);
+    }
+
+    [Fact]
+    public async Task One_pair_rule_can_coexist_with_other_receptacles_of_the_same_role()
+    {
+        var result = await StoredTool(new RoomPatternStore()).InvokeAsync(Json(Visual(
+            Receptacle + "," + ReceptacleRight + "," + ReceptacleExtra,
+            """
+            "rules":[{"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside"}]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
+        Assert.Equal(3, result["device_count"]);
+    }
+
+    [Fact]
+    public async Task Entrance_centre_pair_and_opposite_wall_can_be_proposed_together()
+    {
+        var result = await StoredTool(new RoomPatternStore()).InvokeAsync(Json(Visual(
+            Switch + "," + Luminaire + "," + Data + "," + Receptacle + "," + ReceptacleRight,
+            """
+            "rules":[
+              {"role":"switch","anchor":"entrance","offset_m":0.15},
+              {"role":"luminaire","anchor":"room_center"},
+              {"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside"},
+              {"role":"data","anchor":"opposite_boundary"}
+            ]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
+        var text = Understood(result);
+        Assert.Contains("1 switch associated with the entrance", text, StringComparison.Ordinal);
+        Assert.Contains("1 ceiling luminaire near room centre", text, StringComparison.Ordinal);
+        Assert.Contains("2 receptacles forming a symmetric pair", text, StringComparison.Ordinal);
+        Assert.Contains("1 data/TV device on an opposite wall", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task One_malformed_rule_does_not_discard_valid_visual_observations()
+    {
+        var store = new RoomPatternStore();
+        var result = await StoredTool(store).InvokeAsync(Json(Body("""
+            "rules":[{"role":"switch","anchor":"entrance","offset_m":0.15},{"role":"switch","anchor":"entrance","x":1.2,"y":3.4}]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.Partial, result["semantic_status"]);
+        Assert.Contains(SemanticWarningCodes.MalformedRule, Warnings(result));
+        Assert.Contains("1 switch associated with the entrance", Understood(result), StringComparison.Ordinal);
+        Assert.Contains("Some semantic relationships were not established.", Review(store), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Unknown_semantic_anchor_is_dropped_and_not_promoted()
+    {
+        var store = new RoomPatternStore();
+        var result = await StoredTool(store).InvokeAsync(Json(Body("""
+            "rules":[{"role":"switch","anchor":"entrance","offset_m":0.15},{"role":"data","anchor":"beside_the_bed"}]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.Partial, result["semantic_status"]);
+        Assert.Contains(SemanticWarningCodes.UnknownAnchor, Warnings(result));
+        var review = Review(store);
+        Assert.DoesNotContain("beside_the_bed", review, StringComparison.Ordinal);
+        Assert.Contains("1 switch associated with the entrance", review, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task All_invalid_semantic_rules_keep_the_visual_pattern()
+    {
+        var store = new RoomPatternStore();
+        var result = await StoredTool(store).InvokeAsync(Json(Body("""
+            "rules":[{"role":"switch","anchor":"not_a_real_anchor"},{"role":"nope","anchor":"entrance"}]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.None, result["semantic_status"]);
+        Assert.Contains("Semantic relationships were not established.", Review(store), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Partial_semantics_still_open_pattern_review()
+    {
+        var store = new RoomPatternStore();
+        var result = await StoredTool(store).InvokeAsync(Json(Body("""
+            "rules":[{"role":"switch","anchor":"entrance","offset_m":0.15},{"role":"luminaire","anchor":"ceiling"}]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.Partial, result["semantic_status"]);
+        var review = Review(store);
+        Assert.True(RoomPatternReview.TryParse(review, out _));
+        Assert.Contains("Some semantic relationships were not established.", review, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Common_group_labels_and_accented_anchor_labels_are_accepted()
+    {
+        var result = await StoredTool(new RoomPatternStore()).InvokeAsync(Json(Body("""
+            "rules":[{"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside_pair"}],"anchors":[{"label":"entrée","page_x":0.4,"page_y":0.1}]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
+        var text = Understood(result);
+        Assert.Contains("bedside_pair", text, StringComparison.Ordinal);
+        Assert.Contains("entrée", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task A_secret_inside_a_semantic_rule_is_not_echoed()
+    {
+        var store = new RoomPatternStore();
+        var result = await StoredTool(store).InvokeAsync(Json(Body("""
+            "rules":[{"role":"switch","anchor":"entrance","element_ref":"secret-room-ref-99"}]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        var model = JsonSerializer.Serialize(result);
+        var review = Review(store);
+        Assert.DoesNotContain("secret-room-ref-99", model, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-room-ref-99", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("element_ref", model, StringComparison.Ordinal);
+        Assert.DoesNotContain("element_ref", review, StringComparison.Ordinal);
+
+        var rejected = await new RoomPatternProposalTool(new UnusedSession(), "instance", new RoomPatternStore(), static () => null)
+            .InvokeAsync(Json(Body("\"element_ref\":\"secret-top\"")), CancellationToken.None);
+        Assert.Equal(false, rejected["stored"]);
+        Assert.Equal(RoomPatternFailures.Shape, rejected["code"]);
+    }
+
+    private const string Switch = """{"role":"switch","page_x":0.4,"page_y":0.12,"placement_kind":"boundary"}""";
+
+    private const string Luminaire = """{"role":"luminaire","page_x":0.4,"page_y":0.25,"placement_kind":"interior"}""";
+
+    private const string Data = """{"role":"data","page_x":0.4,"page_y":0.38,"placement_kind":"boundary"}""";
+
+    private const string Receptacle = """{"role":"receptacle","page_x":0.25,"page_y":0.38,"placement_kind":"boundary"}""";
+
+    private const string ReceptacleRight = """{"role":"receptacle","page_x":0.55,"page_y":0.38,"placement_kind":"boundary"}""";
+
+    private const string ReceptacleExtra = """{"role":"receptacle","page_x":0.15,"page_y":0.2,"placement_kind":"boundary"}""";
+
+    private static string Body(string extra) => Visual(Switch, extra);
+
+    private static string Visual(string devices, string extra)
     {
         return """
-            {"page_number":1,"boundary":[{"page_x":0.1,"page_y":0.1},{"page_x":0.7,"page_y":0.1},{"page_x":0.7,"page_y":0.4},{"page_x":0.1,"page_y":0.4}],"entrance":{"page_x":0.4,"page_y":0.1},"devices":[{"role":"switch","page_x":0.4,"page_y":0.12,"placement_kind":"boundary"}],
-            """ + extra + "}";
+            {"page_number":1,"boundary":[{"page_x":0.1,"page_y":0.1},{"page_x":0.7,"page_y":0.1},{"page_x":0.7,"page_y":0.4},{"page_x":0.1,"page_y":0.4}],"entrance":{"page_x":0.4,"page_y":0.1},"devices":[
+            """ + devices + "]," + extra + "}";
+    }
+
+    private static RoomPatternProposalTool StoredTool(RoomPatternStore store)
+    {
+        var artifact = new AssistantDocumentArtifact(
+            "sketch.png",
+            AssistantDocumentKind.Image,
+            4,
+            null,
+            false,
+            [new AssistantVisualPage(1, "image/png", [1, 2, 3, 4], 100, 100)],
+            false,
+            1);
+        return new RoomPatternProposalTool(new UnusedSession(), "instance", store, () => artifact);
+    }
+
+    private static string Understood(IReadOnlyDictionary<string, object?> result)
+    {
+        return string.Join(" ", Assert.IsAssignableFrom<IEnumerable<string>>(result["understood"]));
+    }
+
+    private static IReadOnlyList<string> Warnings(IReadOnlyDictionary<string, object?> result)
+    {
+        return Assert.IsAssignableFrom<IReadOnlyList<string>>(result["semantic_warnings"]);
+    }
+
+    private static string Review(RoomPatternStore store)
+    {
+        var review = store.PeekReviewJson();
+        Assert.NotNull(review);
+        return review;
     }
 
     private static JsonElement Json(string json) => JsonSerializer.Deserialize<JsonElement>(json);

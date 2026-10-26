@@ -19,33 +19,21 @@ internal static class SemanticPatternAdapter
         var placed = new List<Placement>(rules.Count);
         var complete = true;
         var consumed = new bool[devices.Count];
-        var pairDone = new HashSet<int>();
-        for (var index = 0; index < rules.Count; index++)
+        foreach (var rule in rules)
         {
-            if (pairDone.Contains(index))
-            {
-                continue;
-            }
-
-            var rule = rules[index];
             if (rule.Anchor == PatternAnchors.PairedSymmetric)
             {
-                var partner = Partner(rules, index);
-                if (partner < 0 || !TryPair(rule, rules[partner], loop, centroidX, centroidY, openings, out var first, out var second))
+                if (!TryPair(rule, loop, centroidX, centroidY, openings, projectedEntrance, out var first, out var second)
+                    || !Accept(first, loop, holes, out first)
+                    || !Accept(second, loop, holes, out second))
                 {
                     complete = false;
                     continue;
                 }
 
-                if (!Accept(first, loop, holes, out first) || !Accept(second, loop, holes, out second))
-                {
-                    complete = false;
-                    continue;
-                }
-
-                placed.Add(new Placement(rule.Role, "boundary", first.X, first.Y, Hint(devices, consumed, rule.Role)));
-                placed.Add(new Placement(rules[partner].Role, "boundary", second.X, second.Y, Hint(devices, consumed, rules[partner].Role)));
-                pairDone.Add(partner);
+                var pairHint = Hint(devices, consumed, rule.Role);
+                placed.Add(new Placement(rule.Role, "boundary", first.X, first.Y, pairHint));
+                placed.Add(new Placement(rule.Role, "boundary", second.X, second.Y, pairHint));
                 continue;
             }
 
@@ -65,7 +53,7 @@ internal static class SemanticPatternAdapter
         }
 
         placements = placed;
-        return complete && placed.Count == rules.Count;
+        return complete;
     }
 
     private static bool TryOne(
@@ -124,23 +112,23 @@ internal static class SemanticPatternAdapter
     }
 
     private static bool TryPair(
-        PatternRule first,
-        PatternRule second,
+        PatternRule rule,
         IReadOnlyList<PlanPoint> loop,
         double centroidX,
         double centroidY,
         IReadOnlyList<CandidateOpening> openings,
+        PlanPoint? projectedEntrance,
         out PlanPoint left,
         out PlanPoint right)
     {
         left = default;
         right = default;
-        if (!string.Equals(first.Group, second.Group, StringComparison.Ordinal) || !TryDoor(openings, null, out var door) || !TryOpposite(loop, door, out var start, out var end))
+        if (!TryDoor(openings, projectedEntrance, out var door) || !TryOpposite(loop, door, out var start, out var end))
         {
             return false;
         }
 
-        var half = first.OffsetMetres > 0 ? first.OffsetMetres : 0.6;
+        var half = rule.OffsetMetres > 0 ? rule.OffsetMetres : 0.6;
         var alongX = end.X - start.X;
         var alongY = end.Y - start.Y;
         var length = Math.Sqrt((alongX * alongX) + (alongY * alongY));
@@ -155,22 +143,6 @@ internal static class SemanticPatternAdapter
         var inset = 0.15;
         return InsetFrom(new PlanPoint(mid.X - (alongX * half), mid.Y - (alongY * half)), centroidX, centroidY, inset, out left)
             && InsetFrom(new PlanPoint(mid.X + (alongX * half), mid.Y + (alongY * half)), centroidX, centroidY, inset, out right);
-    }
-
-    private static int Partner(IReadOnlyList<PatternRule> rules, int index)
-    {
-        var rule = rules[index];
-        for (var other = index + 1; other < rules.Count; other++)
-        {
-            if (rules[other].Anchor == PatternAnchors.PairedSymmetric
-                && rules[other].Role == rule.Role
-                && string.Equals(rules[other].Group, rule.Group, StringComparison.Ordinal))
-            {
-                return other;
-            }
-        }
-
-        return -1;
     }
 
     private static string? Hint(IReadOnlyList<SourceDevice> devices, bool[] consumed, string role)

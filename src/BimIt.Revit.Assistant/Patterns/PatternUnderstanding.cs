@@ -31,19 +31,57 @@ internal sealed record PatternRule(string Role, string Anchor, double OffsetMetr
 
 internal sealed record PatternAnchor(string Label, double X, double Y);
 
+internal static class SemanticWarningCodes
+{
+    public const string UnknownAnchor = "unknown_anchor";
+
+    public const string MalformedRule = "malformed_rule";
+
+    public const string MalformedAnchor = "malformed_anchor";
+}
+
+internal sealed record SemanticReport(string Status, int WarningCount, IReadOnlyList<string> Warnings)
+{
+    public const string Complete = "complete";
+
+    public const string Partial = "partial";
+
+    public const string None = "none";
+
+    public static SemanticReport Unset(IReadOnlyList<PatternRule>? rules)
+    {
+        return new SemanticReport(rules is { Count: > 0 } ? Complete : None, 0, []);
+    }
+}
+
 internal static class PatternUnderstanding
 {
-    public static IReadOnlyList<string> Summarize(IReadOnlyList<PatternRule>? rules, IReadOnlyList<PatternAnchor>? anchors)
+    public static IReadOnlyList<string> Summarize(
+        IReadOnlyList<PatternRule>? rules,
+        IReadOnlyList<PatternAnchor>? anchors,
+        SemanticReport? semantics = null)
     {
+        var report = semantics ?? SemanticReport.Unset(rules);
         var lines = new List<string>();
-        foreach (var pair in (rules ?? []).Where(rule => rule.Anchor == PatternAnchors.PairedSymmetric).GroupBy(rule => (rule.Role, rule.Group ?? "")))
+        if (report.Status == SemanticReport.None)
         {
-            lines.Add($"{pair.Count()} {Noun(pair.Key.Role, pair.Count(), PatternAnchors.PairedSymmetric)} forming a symmetric pair");
+            lines.Add("Semantic relationships were not established.");
+        }
+
+        foreach (var rule in (rules ?? []).Where(rule => rule.Anchor == PatternAnchors.PairedSymmetric))
+        {
+            var suffix = string.IsNullOrEmpty(rule.Group) ? "" : $" ({rule.Group})";
+            lines.Add($"2 {Noun(rule.Role, 2, PatternAnchors.PairedSymmetric)} forming a symmetric pair{suffix}");
         }
 
         foreach (var group in (rules ?? []).Where(rule => rule.Anchor != PatternAnchors.PairedSymmetric).GroupBy(rule => (rule.Anchor, rule.Role)))
         {
             lines.Add($"{group.Count()} {Noun(group.Key.Role, group.Count(), group.Key.Anchor)} {Phrase(group.Key.Anchor)}");
+        }
+
+        if (report.Status == SemanticReport.Partial)
+        {
+            lines.Add("Some semantic relationships were not established.");
         }
 
         if (anchors is { Count: 1 })

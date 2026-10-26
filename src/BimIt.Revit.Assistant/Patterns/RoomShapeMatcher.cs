@@ -14,7 +14,8 @@ internal sealed record SourceRoomPattern(
     PlanPoint? Entrance,
     IReadOnlyList<SourceDevice> Devices,
     IReadOnlyList<PatternRule>? Rules = null,
-    IReadOnlyList<PatternAnchor>? Anchors = null);
+    IReadOnlyList<PatternAnchor>? Anchors = null,
+    SemanticReport? Semantics = null);
 
 internal sealed record CandidateOpening(double X, double Y, string Kind);
 

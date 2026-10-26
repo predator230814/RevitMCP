@@ -99,7 +99,7 @@ internal static class RoomPatternGrounding
                 Y = device.Y,
             }).ToList(),
             Rooms = shown.Select(Card).ToList(),
-            Understood = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors).ToList(),
+            Understood = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors, pattern.Semantics).ToList(),
         };
     }
 
@@ -154,7 +154,10 @@ internal static class RoomPatternGrounding
             ["rotated_count"] = matches.Count(match => match.Band != "rejected" && match.RotationDegrees != 0),
             ["match_state"] = state,
             ["room_name"] = roomName,
-            ["understood"] = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors),
+            ["understood"] = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors, pattern.Semantics),
+            ["semantic_status"] = (pattern.Semantics ?? SemanticReport.Unset(pattern.Rules)).Status,
+            ["semantic_warning_count"] = (pattern.Semantics ?? SemanticReport.Unset(pattern.Rules)).WarningCount,
+            ["semantic_warnings"] = (pattern.Semantics ?? SemanticReport.Unset(pattern.Rules)).Warnings,
             ["matches"] = matches
                 .OrderBy(match => BandRank(match.Band))
                 .ThenByDescending(match => match.Score)
@@ -347,7 +350,9 @@ internal sealed record Grounding(
                 Y = device.Y,
             }).ToList(),
             Rooms = [],
+            Understood = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors, pattern.Semantics).ToList(),
         };
+        var semantics = pattern.Semantics ?? SemanticReport.Unset(pattern.Rules);
         var model = new Dictionary<string, object?>
         {
             ["stored"] = true,
@@ -359,6 +364,10 @@ internal sealed record Grounding(
             ["mirrored_count"] = 0,
             ["rotated_count"] = 0,
             ["match_state"] = state,
+            ["understood"] = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors, pattern.Semantics),
+            ["semantic_status"] = semantics.Status,
+            ["semantic_warning_count"] = semantics.WarningCount,
+            ["semantic_warnings"] = semantics.Warnings,
             ["matches"] = Array.Empty<object>(),
         };
         return new Grounding(state, false, [], review, model, []);

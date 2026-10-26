@@ -21,11 +21,12 @@ internal static class GitHubCopilotSessionBlueprint
         A proposal cannot preview, approve, or modify the Revit model.
         You cannot supply Revit identities or a calibration flag.
         bimit_propose_room_pattern stores one untrusted interpretation of the current attached page.
-        Describe only what you see on that page: one room boundary, an optional entrance, and detected devices.
-        Also describe the relationships you understood as rules. Use only these anchors: room_center, entrance, nearest_boundary, opposite_boundary, corner, paired_symmetric.
-        Keep the raw page points. A rule does not replace them and must not contain coordinates in project units or a Revit identity.
-        Every point is {"page_x":0..1,"page_y":0..1}. page_x runs left to right. page_y runs top to bottom.
-        If the tool returns a reason, correct the call and try once more in the same turn.
+        Describe only what you see on that page: one room boundary, an optional entrance, and the detected devices.
+        Semantic relationships are optional. Use only these anchors: room_center, entrance, nearest_boundary, opposite_boundary, corner, paired_symmetric.
+        One paired_symmetric rule means one pair. Keep the raw page points. A rule must not contain final coordinates or a Revit identity.
+        Every observed point is {"page_x":0..1,"page_y":0..1}. page_x runs left to right. page_y runs top to bottom.
+        If stored is true, do not call the tool again. A semantic warning does not undo the stored pattern.
+        If stored is false and the result includes a reason, correct the visual observations and call once more in the same turn.
         Do not send page width, height, or aspect ratio.
         When the user names a room type, such as every studio, pass room_name as that word. Omit room_name when the user asks for rooms of the same shape.
         You cannot supply element references or decide which rooms match.
@@ -186,7 +187,7 @@ internal static class GitHubCopilotSessionBlueprint
             new AIFunctionFactoryOptions
             {
                 Name = RoomPatternProposalTool.Name,
-                Description = "Store one untrusted interpretation of the current attached page. Every boundary, entrance, and device point is {\"page_x\":0..1,\"page_y\":0..1}. page_x runs left to right. page_y runs top to bottom. Optional rules describe relationships you understood, using anchor room_center, entrance, nearest_boundary, opposite_boundary, corner, or paired_symmetric. When the user names a room type, pass room_name as that word, such as studio. Omit room_name to match rooms by shape. BIM-IT selects the rooms after this call, including rooms in a loaded architecture link. This does not approve or modify Revit. Do not send x, y, Revit identities, family ids, page width, height, or aspect ratio. If the result includes a reason, correct the arguments and call again.",
+                Description = "Store one untrusted reading of the current attached page. First describe the observed boundary, optional entrance, and devices. Every point is {\"page_x\":0..1,\"page_y\":0..1}, left to right and top to bottom. Optionally add semantic relationships. One paired_symmetric rule means one pair. Semantic enrichment is optional. BIM-IT keeps a valid visual pattern when a relationship cannot be read. This does not approve or modify Revit. Never send Revit identities or final coordinates. If stored is true, stop. If stored is false and a reason is present, correct the visual observations once.",
             });
     }
 
