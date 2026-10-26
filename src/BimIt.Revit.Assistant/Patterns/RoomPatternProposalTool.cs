@@ -31,6 +31,8 @@ internal static class RoomPatternFailures
     public const string Attachment = "visual_page_required";
 
     public const string RoomName = "invalid_room_name";
+
+    public const string Rule = "invalid_rule";
 }
 
 internal sealed class RoomPatternProposalRequest
@@ -52,6 +54,14 @@ internal sealed class RoomPatternProposalRequest
     [JsonPropertyName("room_name")]
     [Description("Optional room word from the user, such as studio. BIM-IT lists rooms whose names contain it. Omit this when the user asks for rooms of the same shape. Do not send a Revit identity.")]
     public string? RoomName { get; init; }
+
+    [JsonPropertyName("rules")]
+    [Description("Optional relationships you understood. Each rule is {role, anchor, optional offset_m, optional group, optional confidence}. anchor is room_center, entrance, nearest_boundary, opposite_boundary, corner, or paired_symmetric. Do not send coordinates or Revit identities.")]
+    public IReadOnlyList<RoomPatternRuleRequest>? Rules { get; init; }
+
+    [JsonPropertyName("anchors")]
+    [Description("Optional visual reference objects you see, such as a bed. Each anchor is {label, page_x, page_y}. These are observations, not placement coordinates.")]
+    public IReadOnlyList<RoomPatternAnchorRequest>? Anchors { get; init; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
@@ -97,6 +107,42 @@ internal sealed class RoomPatternDeviceRequest
 
     [JsonPropertyName("confidence")]
     public double? Confidence { get; init; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+}
+
+internal sealed class RoomPatternRuleRequest
+{
+    [JsonPropertyName("role")]
+    public string? Role { get; init; }
+
+    [JsonPropertyName("anchor")]
+    public string? Anchor { get; init; }
+
+    [JsonPropertyName("offset_m")]
+    public double? OffsetMetres { get; init; }
+
+    [JsonPropertyName("group")]
+    public string? Group { get; init; }
+
+    [JsonPropertyName("confidence")]
+    public double? Confidence { get; init; }
+
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement>? ExtensionData { get; init; }
+}
+
+internal sealed class RoomPatternAnchorRequest
+{
+    [JsonPropertyName("label")]
+    public string? Label { get; init; }
+
+    [JsonPropertyName("page_x")]
+    public double? PageX { get; init; }
+
+    [JsonPropertyName("page_y")]
+    public double? PageY { get; init; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
@@ -267,7 +313,7 @@ internal sealed class RoomPatternProposalTool
 
         foreach (var property in arguments.EnumerateObject())
         {
-            if (property.Name is not ("page_number" or "boundary" or "entrance" or "devices" or "room_name"))
+            if (property.Name is not ("page_number" or "boundary" or "entrance" or "devices" or "room_name" or "rules" or "anchors"))
             {
                 return false;
             }
@@ -332,8 +378,163 @@ internal sealed class RoomPatternProposalTool
             devices.Add(device);
         }
 
-        pattern = new SourceRoomPattern(boundary, entrance, devices);
+        if (!TryRules(arguments, devices, out var rules, out failure) || !TryAnchors(arguments, out var anchors, out failure))
+        {
+            return false;
+        }
+
+        pattern = new SourceRoomPattern(boundary, entrance, devices, rules, anchors);
         return true;
+    }
+
+    private static bool TryRules(JsonElement arguments, IReadOnlyList<SourceDevice> devices, out IReadOnlyList<PatternRule> rules, out string failure)
+    {
+        rules = [];
+        failure = RoomPatternFailures.Rule;
+        if (!arguments.TryGetProperty("rules", out var property) || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return true;
+        }
+
+        if (property.ValueKind != JsonValueKind.Array || property.GetArrayLength() is < 1 or > MaxDevices)
+        {
+            return false;
+        }
+
+        var parsed = new List<PatternRule>();
+        foreach (var item in property.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            foreach (var field in item.EnumerateObject())
+            {
+                if (field.Name is not ("role" or "anchor" or "offset_m" or "group" or "confidence"))
+                {
+                    return false;
+                }
+            }
+
+            if (!item.TryGetProperty("role", out var roleProperty) || roleProperty.ValueKind != JsonValueKind.String || !IsRole(roleProperty.GetString()))
+            {
+                failure = RoomPatternFailures.Role;
+                return false;
+            }
+
+            if (!item.TryGetProperty("anchor", out var anchorProperty) || !PatternAnchors.IsAnchor(anchorProperty.GetString()))
+            {
+                return false;
+            }
+
+            double offset = 0;
+            if (item.TryGetProperty("offset_m", out var offsetProperty) && offsetProperty.ValueKind != JsonValueKind.Null)
+            {
+                if (offsetProperty.ValueKind != JsonValueKind.Number || !offsetProperty.TryGetDouble(out offset) || !double.IsFinite(offset) || offset is < 0 or > 6)
+                {
+                    return false;
+                }
+            }
+
+            string? group = null;
+            if (item.TryGetProperty("group", out var groupProperty) && groupProperty.ValueKind != JsonValueKind.Null)
+            {
+                group = groupProperty.GetString();
+                if (groupProperty.ValueKind != JsonValueKind.String || group is null || group.Length is < 1 or > 40 || group.Any(character => !char.IsLetterOrDigit(character) && character is not (' ' or '-' or '\'')))
+                {
+                    return false;
+                }
+            }
+
+            double? confidence = null;
+            if (item.TryGetProperty("confidence", out var confidenceProperty) && confidenceProperty.ValueKind != JsonValueKind.Null)
+            {
+                if (!TryUnit(confidenceProperty, out var value))
+                {
+                    failure = RoomPatternFailures.Confidence;
+                    return false;
+                }
+
+                confidence = value;
+            }
+
+            var role = roleProperty.GetString()!;
+            if (parsed.Count(rule => rule.Role == role) >= devices.Count(device => device.Role == role))
+            {
+                return false;
+            }
+
+            parsed.Add(new PatternRule(role, anchorProperty.GetString()!, offset, group, confidence));
+        }
+
+        var pairs = parsed.Where(rule => rule.Anchor == PatternAnchors.PairedSymmetric).GroupBy(rule => (rule.Role, rule.Group ?? ""));
+        if (pairs.Any(group => group.Count() != 2))
+        {
+            return false;
+        }
+
+        rules = parsed;
+        return true;
+    }
+
+    private static bool TryAnchors(JsonElement arguments, out IReadOnlyList<PatternAnchor> anchors, out string failure)
+    {
+        anchors = [];
+        failure = RoomPatternFailures.Rule;
+        if (!arguments.TryGetProperty("anchors", out var property) || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return true;
+        }
+
+        if (property.ValueKind != JsonValueKind.Array || property.GetArrayLength() > 8)
+        {
+            return false;
+        }
+
+        var parsed = new List<PatternAnchor>();
+        foreach (var item in property.EnumerateArray())
+        {
+            if (item.ValueKind != JsonValueKind.Object)
+            {
+                return false;
+            }
+
+            foreach (var field in item.EnumerateObject())
+            {
+                if (field.Name is not ("label" or "page_x" or "page_y"))
+                {
+                    return false;
+                }
+            }
+
+            if (!item.TryGetProperty("label", out var labelProperty) || labelProperty.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            var label = labelProperty.GetString();
+            if (label is null || label.Length is < 1 or > 40 || label.Any(character => !char.IsLetterOrDigit(character) && character is not (' ' or '-' or '\'')))
+            {
+                return false;
+            }
+
+            if (!item.TryGetProperty("page_x", out var xProperty) || !item.TryGetProperty("page_y", out var yProperty) || !TryUnit(xProperty, out var x) || !TryUnit(yProperty, out var y))
+            {
+                failure = RoomPatternFailures.Coordinate;
+                return false;
+            }
+
+            parsed.Add(new PatternAnchor(label, x, y));
+        }
+
+        anchors = parsed;
+        return true;
+    }
+
+    private static bool IsRole(string? role)
+    {
+        return role is "receptacle" or "switch" or "luminaire" or "smoke_detector" or "thermostat" or "data" or "other";
     }
 
     private static bool TryRoomName(JsonElement arguments, out string? roomName, out string failure)
@@ -517,7 +718,9 @@ internal sealed class RoomPatternProposalTool
         return request.ExtensionData is { Count: > 0 }
             || request.Entrance?.ExtensionData is { Count: > 0 }
             || (request.Boundary?.Any(point => point?.ExtensionData is { Count: > 0 }) ?? false)
-            || (request.Devices?.Any(device => device?.ExtensionData is { Count: > 0 }) ?? false);
+            || (request.Devices?.Any(device => device?.ExtensionData is { Count: > 0 }) ?? false)
+            || (request.Rules?.Any(rule => rule?.ExtensionData is { Count: > 0 }) ?? false)
+            || (request.Anchors?.Any(anchor => anchor?.ExtensionData is { Count: > 0 }) ?? false);
     }
 
     private void RecordUse()
@@ -556,7 +759,8 @@ internal sealed class RoomPatternProposalTool
             RoomPatternFailures.NonFinite => "Coordinates and confidence must be finite numbers.",
             RoomPatternFailures.Attachment => "Attach one visual page before proposing a room pattern.",
             RoomPatternFailures.RoomName => "room_name must be 1 to 40 letters, digits, spaces, hyphens, or apostrophes, such as studio. Do not send a Revit identity.",
-            _ => "Send page_number, boundary, optional entrance, devices, and optional room_name. Every point uses page_x and page_y from 0 to 1.",
+            RoomPatternFailures.Rule => "rules use anchor room_center, entrance, nearest_boundary, opposite_boundary, corner, or paired_symmetric. A symmetric pair needs exactly two rules with the same group. Do not send coordinates or Revit identities.",
+            _ => "Send page_number, boundary, optional entrance, devices, optional rules, and optional room_name. Every point uses page_x and page_y from 0 to 1.",
         };
     }
 }

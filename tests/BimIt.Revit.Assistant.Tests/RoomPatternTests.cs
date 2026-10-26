@@ -58,12 +58,12 @@ public sealed class RoomPatternTests
     {
         var source = Pattern(Rectangle(0, 0, 4, 2), null);
         var diagonal = Room("A", "1", "L1", [new PlanPoint(0, 1), new PlanPoint(1, 0), new PlanPoint(0, -1), new PlanPoint(-1, 0)], null);
-        var loops = new CandidateRoom("B", "2", "L1", 0, 0, Rectangle(0, 0, 4, 2), true, false, []);
-        var complex = new CandidateRoom("C", "3", "L1", 0, 0, Rectangle(0, 0, 4, 2), false, true, []);
+        var loops = new CandidateRoom("B", "2", "L1", 0, 0, Rectangle(0, 0, 4, 2), false, [], LoopFailure: "ambiguous_outer_loop");
+        var complex = new CandidateRoom("C", "3", "L1", 0, 0, Rectangle(0, 0, 4, 2), true, []);
         var wide = Room("D", "4", "L1", Rectangle(0, 0, 8, 1), null);
         var matches = RoomShapeMatcher.Match(source, [diagonal, loops, complex, wide]);
         Assert.Equal("non_orthogonal_boundary", matches[0].Reason);
-        Assert.Equal("multiple_boundary_loops", matches[1].Reason);
+        Assert.Equal("ambiguous_outer_loop", matches[1].Reason);
         Assert.Equal("boundary_too_complex", matches[2].Reason);
         Assert.Equal("rejected", matches[0].Band);
         Assert.Equal("rejected", matches[3].Band);
@@ -154,6 +154,8 @@ public sealed class RoomPatternTests
         var model = JsonSerializer.Serialize(result);
         Assert.Equal(true, result["stored"]);
         Assert.DoesNotContain(secretRef, model, StringComparison.Ordinal);
+        Assert.DoesNotContain("sr1.", model, StringComparison.Ordinal);
+        Assert.DoesNotContain(".rvt", model, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(secretDocument, model, StringComparison.Ordinal);
         Assert.DoesNotContain("element_ref", model, StringComparison.Ordinal);
         Assert.DoesNotContain("instance_id", model, StringComparison.Ordinal);
@@ -203,6 +205,7 @@ public sealed class RoomPatternTests
         Assert.Contains(RoomPatternProposalTool.Name, AssistantModelTools.Names);
         Assert.DoesNotContain(AssistantTools.GetRoomLayouts, AssistantModelTools.Names);
         Assert.Contains(AssistantTools.GetRoomLayouts, AssistantTools.AllowedReadTools);
+        Assert.Contains(AssistantTools.ReadSpatialRooms, AssistantTools.AllowedReadTools);
         Assert.Contains(AssistantTools.GetMepDeviceTypes, AssistantTools.AllowedReadTools);
         Assert.DoesNotContain(AssistantTools.GetMepDeviceTypes, AssistantModelTools.Names);
         Assert.False(AssistantTools.IsTrustedWriteTool(AssistantTools.GetRoomLayouts));
@@ -288,7 +291,7 @@ public sealed class RoomPatternTests
     {
         var centroid = Centroid(loop);
         var openings = door is PlanPoint point ? new[] { new CandidateOpening(point.X, point.Y, "door") } : Array.Empty<CandidateOpening>();
-        return new CandidateRoom(name, number, level, centroid.X, centroid.Y, loop, false, false, openings);
+        return new CandidateRoom(name, number, level, centroid.X, centroid.Y, loop, false, openings);
     }
 
     private static PlanPoint Centroid(IReadOnlyList<PlanPoint> loop)
@@ -421,6 +424,45 @@ public sealed class RoomPatternTests
                             TypeName = "Standard",
                             PlacementClassification = "one_level_based_hosted",
                             Active = true,
+                        },
+                    ],
+                }, ContractJson.Options),
+                AssistantTools.ReadSpatialRooms => JsonSerializer.SerializeToElement(new ReadSpatialRoomsResult
+                {
+                    Context = new GetRoomLayoutsContext { InstanceId = "wire-instance", DocumentId = documentId },
+                    LengthUnit = "m",
+                    ChordToleranceMetres = 0.05,
+                    Truncated = false,
+                    Links = [],
+                    Items =
+                    [
+                        new SpatialRoomItem
+                        {
+                            SpatialRoomRef = SpatialRoomRefCodec.Host(roomRef!),
+                            Source = "host",
+                            Status = RoomLayoutItemStatus.Ok,
+                            Name = "Bedroom",
+                            Number = "201",
+                            LevelName = "Level 2",
+                            CentroidXMetres = 12,
+                            CentroidYMetres = 8,
+                            LoopsTruncated = false,
+                            FeaturesTruncated = false,
+                            Loops =
+                            [
+                                new GetRoomLayoutLoop
+                                {
+                                    VerticesTruncated = false,
+                                    Vertices =
+                                    [
+                                        new GetRoomLayoutVertex { XMetres = 10, YMetres = 7 },
+                                        new GetRoomLayoutVertex { XMetres = 14, YMetres = 7 },
+                                        new GetRoomLayoutVertex { XMetres = 14, YMetres = 9 },
+                                        new GetRoomLayoutVertex { XMetres = 10, YMetres = 9 },
+                                    ],
+                                },
+                            ],
+                            Features = [new GetRoomLayoutFeature { Kind = RoomFeatureKind.Door, XMetres = 12, YMetres = 7, FacingX = 0, FacingY = 1, WidthMetres = 0.9 }],
                         },
                     ],
                 }, ContractJson.Options),

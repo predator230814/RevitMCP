@@ -255,6 +255,7 @@ public sealed class AssistantAgentTests
                 AssistantTools.GetMepTopology,
                 AssistantTools.GetRoomLayouts,
                 AssistantTools.GetMepDeviceTypes,
+                AssistantTools.ReadSpatialRooms,
             ],
             AssistantTools.AllowedReadTools);
         Assert.DoesNotContain(AssistantTools.AllowedReadTools, AssistantTools.IsTrustedWriteTool);

@@ -647,6 +647,28 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             .ConfigureAwait(false);
     }
 
+    public async Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(
+        ReadSpatialRoomsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<ReadSpatialRoomsResult>(
+                "revit.read_spatial_rooms",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureReadSpatialRoomsAllowed,
+                "The spatial room request timed out.",
+                "The spatial room request could not be executed.")
+            .ConfigureAwait(false);
+    }
+
     private void EnsureGetRoomLayoutsAllowed()
     {
         EnsureCapabilityReady();
@@ -677,6 +699,17 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             throw new BridgeException(
                 BridgeErrorCodes.ProtocolIncompatible,
                 "revit.preview_room_pattern_placements requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
+    private void EnsureReadSpatialRoomsAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsReadSpatialRooms(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.read_spatial_rooms requires a negotiated bridge protocol version that explicitly supports it.");
         }
     }
 

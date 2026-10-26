@@ -20,7 +20,8 @@ Capability specifications define behavior before implementation. They are not Ar
 - `CAP-0012-revit-apply-mep-device-placements.md` — Implemented. Apply of one approved MEP device placement batch through the accepted ADR-0008 sequence. Focused level-based live validation passed on Revit 2026.5 at 7123b11; wall-hosted and level-work-plane creation were not live-proven. See [BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md](../BIM_IT_MEP_DEVICE_PLACEMENT_WRITE_VALIDATION.md). At that specification, production `tools/list` contained exactly 14.
 - `CAP-0013-revit-get-room-layouts.md` — Accepted. Read-only room layout for pattern matching. Adds `revit_get_room_layouts`. At that slice, production `tools/list` was 15.
 - `revit_get_mep_device_types` — Read-only catalog of loaded MEP family types. Bridge protocol 18. ADR-0018.
-- `revit_preview_room_pattern_placements` — Write preview of one pattern placement batch. Bridge protocol 19. Review and apply reuse the existing MEP tools. Production `tools/list` is 17. Live checklist is [BIM_IT_PATTERN_APPLICATION_VALIDATION.md](../BIM_IT_PATTERN_APPLICATION_VALIDATION.md).
+- `revit_preview_room_pattern_placements` — Write preview of one pattern placement batch. Bridge protocol 19. Review and apply reuse the existing MEP tools. At that slice, production `tools/list` was 17. Live checklist is [BIM_IT_PATTERN_APPLICATION_VALIDATION.md](../BIM_IT_PATTERN_APPLICATION_VALIDATION.md).
+- `revit_read_spatial_rooms` — Read-only host and top-level linked Rooms for pattern review. Bridge protocol 20. Production `tools/list` is 18. The model still has seven tools. No linked-room write. Live checklist is [BIM_IT_LINKED_PATTERN_INTELLIGENCE_VALIDATION.md](../BIM_IT_LINKED_PATTERN_INTELLIGENCE_VALIDATION.md) and has not been executed.
 
 ## Required sections
 

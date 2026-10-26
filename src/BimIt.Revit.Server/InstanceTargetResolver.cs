@@ -109,6 +109,11 @@ internal static class InstanceTargetResolver
         return Resolve(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsGetMepDeviceTypes));
     }
 
+    public static TargetResolution ResolveForReadSpatialRooms(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        return Resolve(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsReadSpatialRooms));
+    }
+
     public static TargetResolution ResolveForPreviewRoomPatternPlacements(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
     {
         return Resolve(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsPreviewRoomPatternPlacements));

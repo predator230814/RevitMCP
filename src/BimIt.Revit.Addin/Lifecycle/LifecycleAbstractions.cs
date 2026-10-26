@@ -48,6 +48,8 @@ internal interface ILifecycleDispatcher : IDisposable
     IRevitGetMepDeviceTypesService? CreateGetMepDeviceTypes(BridgeInstanceMetadata metadata);
 
     IRevitPreviewRoomPatternPlacementsService? CreatePreviewRoomPatternPlacements(BridgeInstanceMetadata metadata);
+
+    IRevitReadSpatialRoomsService? CreateReadSpatialRooms(BridgeInstanceMetadata metadata);
 }
 
 internal interface ILifecycleBridge : IAsyncDisposable
@@ -81,6 +83,7 @@ internal interface ILifecycleBridgeFactory
         IRevitGetRoomLayoutsService? getRoomLayouts,
         IRevitGetMepDeviceTypesService? getMepDeviceTypes,
         IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements,
+        IRevitReadSpatialRoomsService? readSpatialRooms,
         CancellationToken cancellationToken);
 }
 

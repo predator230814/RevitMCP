@@ -96,8 +96,10 @@ function renderPattern(review, prepared) {
   const counts = `${review.candidateCount || 0} candidate rooms · ${review.highCount || 0} high · ${review.lowerCount || 0} lower · ${review.rejectedCount || 0} rejected`;
   const image = patternImage(review);
   const ready = prepared === true && patternState.dirty !== true;
+  const understoodLines = Array.isArray(review.understood) ? review.understood : [];
+  const understood = understoodLines.length ? `<section class="understood"><h3>BIM-IT understood</h3><ul>${understoodLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul></section>` : "";
   node.hidden = false;
-  node.innerHTML = `<h2>Pattern review</h2><p class="sub">${escapeHtml(counts)}</p><div class="pattern-grid"><div class="sheet">${image}${patternSvg(review.boundary, review.entrance, review.devices, true, false)}</div><div class="rooms"><div class="room-list">${rooms.map((room, index) => roomButton(room, index)).join("")}</div><div class="room-preview">${rooms.length ? roomPreview(rooms[selectedRoom]) : "<p>No Revit rooms were compared.</p>"}</div></div></div>${roleConfig(review)}<div class="pattern-actions"><button type="button" id="prepare-pattern">Prepare Revit pattern preview</button><button type="button" id="review-pattern" ${ready ? "" : "disabled"}>Review in Revit</button><button type="button" id="apply-pattern" ${ready ? "" : "disabled"}>Apply approved pattern</button></div>`;
+  node.innerHTML = `<h2>Pattern review</h2>${understood}<p class="sub">${escapeHtml(counts)}</p><div class="pattern-grid"><div class="sheet">${image}${patternSvg(review.boundary, review.entrance, review.devices, true, false)}</div><div class="rooms"><div class="room-list">${rooms.map((room, index) => roomButton(room, index)).join("")}</div><div class="room-preview">${rooms.length ? roomPreview(rooms[selectedRoom]) : "<p>No Revit rooms were compared.</p>"}</div></div></div>${roleConfig(review)}<div class="pattern-actions"><button type="button" id="prepare-pattern">Prepare Revit pattern preview</button><button type="button" id="review-pattern" ${ready ? "" : "disabled"}>Review in Revit</button><button type="button" id="apply-pattern" ${ready ? "" : "disabled"}>Apply approved pattern</button></div>`;
   node.querySelectorAll("[data-room]").forEach((button) => {
     button.addEventListener("click", () => {
       selectedRoom = Number(button.dataset.room);
@@ -151,7 +153,7 @@ function renderPattern(review, prepared) {
 }
 
 function roomButton(room, index) {
-  const rejected = room.band === "rejected";
+  const rejected = room.band === "rejected" || room.source === "link";
   const checked = patternState.selected.includes(index);
   return `<div class="room-row ${index === selectedRoom ? "selected" : ""}"><label><input type="checkbox" data-target="${index}" ${rejected ? "disabled" : ""} ${checked && !rejected ? "checked" : ""} /> ${escapeHtml(room.band || "rejected")}</label><button type="button" data-room="${index}"><strong>${escapeHtml(room.label || "Room")}</strong><span>${escapeHtml(roomBand(room))}</span></button></div>`;
 }
@@ -209,7 +211,8 @@ function roomPreview(room) {
 
 function roomBand(room) {
   const mirror = room.mirrored ? " · mirrored" : "";
-  return `${room.band || "rejected"} · ${room.rotationDegrees || 0}°${mirror}`;
+  const source = room.source === "link" ? ` · link${room.linkLabel ? " " + room.linkLabel : ""}` : room.source === "host" ? " · host" : "";
+  return `${room.band || "rejected"} · ${room.rotationDegrees || 0}°${mirror}${source}`;
 }
 
 function unit(value) {

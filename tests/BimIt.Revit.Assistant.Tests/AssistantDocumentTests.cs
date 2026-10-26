@@ -69,7 +69,7 @@ public sealed class AssistantDocumentTests
         Assert.Contains("_delivery.Reset()", runtime, StringComparison.Ordinal);
         Assert.Contains("cannot override system policy", GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
         Assert.Equal(5, BimItAgentReadTools.Names.Length);
-        Assert.Equal(8, AssistantTools.AllowedReadTools.Length);
+        Assert.Equal(9, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
     }
 

@@ -22,6 +22,8 @@ internal static class GitHubCopilotSessionBlueprint
         You cannot supply Revit identities or a calibration flag.
         bimit_propose_room_pattern stores one untrusted interpretation of the current attached page.
         Describe only what you see on that page: one room boundary, an optional entrance, and detected devices.
+        Also describe the relationships you understood as rules. Use only these anchors: room_center, entrance, nearest_boundary, opposite_boundary, corner, paired_symmetric.
+        Keep the raw page points. A rule does not replace them and must not contain coordinates in project units or a Revit identity.
         Every point is {"page_x":0..1,"page_y":0..1}. page_x runs left to right. page_y runs top to bottom.
         If the tool returns a reason, correct the call and try once more in the same turn.
         Do not send page width, height, or aspect ratio.
@@ -184,7 +186,7 @@ internal static class GitHubCopilotSessionBlueprint
             new AIFunctionFactoryOptions
             {
                 Name = RoomPatternProposalTool.Name,
-                Description = "Store one untrusted interpretation of the current attached page. Every boundary, entrance, and device point is {\"page_x\":0..1,\"page_y\":0..1}. page_x runs left to right. page_y runs top to bottom. When the user names a room type, pass room_name as that word, such as studio. Omit room_name to match rooms by shape. BIM-IT selects the rooms after this call. This does not approve or modify Revit. Do not send x, y, Revit identities, family ids, page width, height, or aspect ratio. If the result includes a reason, correct the arguments and call again.",
+                Description = "Store one untrusted interpretation of the current attached page. Every boundary, entrance, and device point is {\"page_x\":0..1,\"page_y\":0..1}. page_x runs left to right. page_y runs top to bottom. Optional rules describe relationships you understood, using anchor room_center, entrance, nearest_boundary, opposite_boundary, corner, or paired_symmetric. When the user names a room type, pass room_name as that word, such as studio. Omit room_name to match rooms by shape. BIM-IT selects the rooms after this call, including rooms in a loaded architecture link. This does not approve or modify Revit. Do not send x, y, Revit identities, family ids, page width, height, or aspect ratio. If the result includes a reason, correct the arguments and call again.",
             });
     }
 

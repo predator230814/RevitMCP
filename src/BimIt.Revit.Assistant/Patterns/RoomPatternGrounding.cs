@@ -8,22 +8,6 @@ internal static class RoomPatternGrounding
 {
     public const int QueryLimit = 100;
 
-    public const int BatchSize = 20;
-
-    public static readonly string[] RoomCategoryNames =
-    [
-        "Rooms",
-        "Pièces",
-        "Räume",
-        "Habitaciones",
-        "Locali",
-        "Ruimten",
-        "Rum",
-        "Huoneet",
-        "Pomieszczenia",
-        "Cômodos",
-    ];
-
     public static async Task<Grounding> ReadAsync(
         IAssistantToolSession session,
         string instanceId,
@@ -41,68 +25,52 @@ internal static class RoomPatternGrounding
             return Grounding.Failed(display, "read_failed");
         }
 
-        var query = await session.CallAsync(
-            AssistantTools.QueryElements,
+        var spatial = await session.CallAsync(
+            AssistantTools.ReadSpatialRooms,
             new Dictionary<string, object?>
             {
                 ["instance_id"] = instanceId,
                 ["document_id"] = documentId,
-                ["scope"] = "document",
+                ["name_contains"] = roomName,
                 ["limit"] = QueryLimit,
-                ["filters"] = RoomFilters(roomName),
             },
             cancellationToken).ConfigureAwait(false);
-        if (query.IsError || !TryQuery(query.Structured, out var refs, out var truncated))
+        if (spatial.IsError || !TrySpatial(spatial.Structured, out var result))
         {
             return Grounding.Failed(display, "read_failed");
         }
 
         var candidates = new List<CandidateRoom>();
         var rejected = new List<RoomShapeMatch>();
-        for (var offset = 0; offset < refs.Count; offset += BatchSize)
+        foreach (var item in result.Items)
         {
-            var batch = refs.Skip(offset).Take(BatchSize).ToArray();
-            var layouts = await session.CallAsync(
-                AssistantTools.GetRoomLayouts,
-                new Dictionary<string, object?>
-                {
-                    ["instance_id"] = instanceId,
-                    ["document_id"] = documentId,
-                    ["element_refs"] = batch,
-                },
-                cancellationToken).ConfigureAwait(false);
-            if (layouts.IsError || !TryLayouts(layouts.Structured, out var result))
+            if (TryCandidate(item, out var candidate))
             {
-                return Grounding.Failed(display, "read_failed");
+                candidates.Add(candidate);
             }
-
-            foreach (var item in result.Items)
+            else
             {
-                if (TryCandidate(item, out var candidate))
-                {
-                    candidates.Add(candidate);
-                }
-                else
-                {
-                    rejected.Add(new RoomShapeMatch(
-                        "Room",
-                        null,
-                        "rejected",
-                        0,
-                        0,
-                        false,
-                        StatusReason(item.Status),
-                        [],
-                        []));
-                }
+                rejected.Add(new RoomShapeMatch(
+                    Label(item),
+                    item.LevelName,
+                    "rejected",
+                    0,
+                    0,
+                    false,
+                    StatusReason(item.Status),
+                    [],
+                    [],
+                    null,
+                    item.Source,
+                    item.LinkLabel));
             }
         }
 
         var matched = PromoteNamedRooms(RoomShapeMatcher.Match(geometry, candidates), roomName);
         var all = matched.Concat(rejected).ToArray();
-        var state = refs.Count == 0 ? "no_candidates" : "matched";
+        var state = result.Items.Count == 0 ? "no_candidates" : "matched";
         var shown = ShownMatches(all, roomName is not null);
-        return new Grounding(state, truncated, all, BuildReview(display, state, truncated, all, shown), ModelResult(display, state, all, roomName), shown, documentId, roomName);
+        return new Grounding(state, result.Truncated, all, BuildReview(display, state, result.Truncated, all, shown), ModelResult(display, state, all, roomName), shown, documentId, roomName);
     }
 
     private static RoomPatternReview.Review BuildReview(
@@ -131,6 +99,7 @@ internal static class RoomPatternGrounding
                 Y = device.Y,
             }).ToList(),
             Rooms = shown.Select(Card).ToList(),
+            Understood = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors).ToList(),
         };
     }
 
@@ -166,20 +135,6 @@ internal static class RoomPatternGrounding
             .ToArray();
     }
 
-    private static Dictionary<string, object?> RoomFilters(string? roomName)
-    {
-        var filters = new Dictionary<string, object?>
-        {
-            ["category_names"] = RoomCategoryNames,
-        };
-        if (!string.IsNullOrWhiteSpace(roomName))
-        {
-            filters["text_contains"] = roomName;
-        }
-
-        return filters;
-    }
-
     private static IReadOnlyDictionary<string, object?> ModelResult(
         SourceRoomPattern pattern,
         string state,
@@ -199,6 +154,7 @@ internal static class RoomPatternGrounding
             ["rotated_count"] = matches.Count(match => match.Band != "rejected" && match.RotationDegrees != 0),
             ["match_state"] = state,
             ["room_name"] = roomName,
+            ["understood"] = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors),
             ["matches"] = matches
                 .OrderBy(match => BandRank(match.Band))
                 .ThenByDescending(match => match.Score)
@@ -234,6 +190,8 @@ internal static class RoomPatternGrounding
                 X = device.NormalizedX,
                 Y = device.NormalizedY,
             }).ToList(),
+            Source = match.SourceKind,
+            LinkLabel = match.LinkLabel,
         };
     }
 
@@ -275,27 +233,7 @@ internal static class RoomPatternGrounding
         return true;
     }
 
-    private static bool TryQuery(JsonElement? structured, out IReadOnlyList<string> refs, out bool truncated)
-    {
-        refs = [];
-        truncated = false;
-        if (structured is not JsonElement json)
-        {
-            return false;
-        }
-
-        var result = json.Deserialize<QueryElementsResult>(ContractJson.Options);
-        if (result?.ElementRefs is null)
-        {
-            return false;
-        }
-
-        refs = result.ElementRefs;
-        truncated = result.Truncated;
-        return true;
-    }
-
-    private static bool TryLayouts(JsonElement? structured, out GetRoomLayoutsResult result)
+    private static bool TrySpatial(JsonElement? structured, out ReadSpatialRoomsResult result)
     {
         result = null!;
         if (structured is not JsonElement json)
@@ -303,8 +241,8 @@ internal static class RoomPatternGrounding
             return false;
         }
 
-        var parsed = json.Deserialize<GetRoomLayoutsResult>(ContractJson.Options);
-        if (parsed?.Items is null || parsed.LengthUnit != GetRoomLayoutsResult.Metres)
+        var parsed = json.Deserialize<ReadSpatialRoomsResult>(ContractJson.Options);
+        if (parsed?.Items is null || parsed.Links is null || parsed.LengthUnit != GetRoomLayoutsResult.Metres)
         {
             return false;
         }
@@ -313,19 +251,39 @@ internal static class RoomPatternGrounding
         return true;
     }
 
-    private static bool TryCandidate(GetRoomLayoutItem item, out CandidateRoom candidate)
+    private static bool TryCandidate(SpatialRoomItem item, out CandidateRoom candidate)
     {
         candidate = null!;
         if (item.Status != RoomLayoutItemStatus.Ok
             || item.Loops is null
             || item.Loops.Count == 0
             || item.CentroidXMetres is not double centroidX
-            || item.CentroidYMetres is not double centroidY)
+            || item.CentroidYMetres is not double centroidY
+            || item.Source is not ("host" or "link"))
         {
             return false;
         }
 
-        var loop = item.Loops[0].Vertices.Select(vertex => new PlanPoint(vertex.XMetres, vertex.YMetres)).ToArray();
+        var loops = item.Loops.Select(loop => (IReadOnlyList<PlanPoint>)loop.Vertices.Select(vertex => new PlanPoint(vertex.XMetres, vertex.YMetres)).ToArray()).ToArray();
+        if (!BoundaryLoopSelector.TrySelect(loops, out var outer, out var holes, out var failure))
+        {
+            candidate = new CandidateRoom(
+                item.Name,
+                item.Number,
+                item.LevelName,
+                centroidX,
+                centroidY,
+                [],
+                item.Loops[0].VerticesTruncated,
+                [],
+                RoomRef(item),
+                holes,
+                item.Source,
+                item.LinkLabel,
+                failure);
+            return true;
+        }
+
         var openings = (item.Features ?? [])
             .Select(feature => new CandidateOpening(feature.XMetres, feature.YMetres, feature.Kind == RoomFeatureKind.Door ? "door" : "window"))
             .ToArray();
@@ -335,12 +293,32 @@ internal static class RoomPatternGrounding
             item.LevelName,
             centroidX,
             centroidY,
-            loop,
-            item.Loops.Count > 1 || item.LoopsTruncated == true,
-            item.Loops[0].VerticesTruncated,
+            outer,
+            item.LoopsTruncated == true,
             openings,
-            item.ElementRef);
+            RoomRef(item),
+            holes,
+            item.Source,
+            item.LinkLabel);
         return true;
+    }
+
+    private static string? RoomRef(SpatialRoomItem item)
+    {
+        if (item.Source == "host" && SpatialRoomRefCodec.TryHost(item.SpatialRoomRef, out var uniqueId))
+        {
+            return uniqueId;
+        }
+
+        return item.SpatialRoomRef;
+    }
+
+    private static string Label(SpatialRoomItem item)
+    {
+        var name = string.IsNullOrWhiteSpace(item.Name) ? null : item.Name.Trim();
+        var number = string.IsNullOrWhiteSpace(item.Number) ? null : item.Number.Trim();
+        var label = name is null ? number : number is null ? name : name + " " + number;
+        return string.IsNullOrWhiteSpace(label) ? "Room" : label;
     }
 }
 

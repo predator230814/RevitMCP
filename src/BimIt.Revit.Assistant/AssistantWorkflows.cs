@@ -38,6 +38,8 @@ public static class AssistantTools
 
     public const string GetMepDeviceTypes = "revit_get_mep_device_types";
 
+    public const string ReadSpatialRooms = "revit_read_spatial_rooms";
+
     public static readonly string[] WorkflowTools = [GetContext, GetWarnings, QueryElements];
 
     public static readonly string[] AllowedReadTools =
@@ -50,6 +52,7 @@ public static class AssistantTools
         GetMepTopology,
         GetRoomLayouts,
         GetMepDeviceTypes,
+        ReadSpatialRooms,
     ];
 
     public static bool IsTrustedWriteTool(string toolName)

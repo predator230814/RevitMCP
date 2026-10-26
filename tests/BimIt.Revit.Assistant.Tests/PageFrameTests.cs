@@ -212,7 +212,7 @@ public sealed class PageFrameTests
     {
         var centroid = new PlanPoint(loop.Average(point => point.X), loop.Average(point => point.Y));
         var openings = door is PlanPoint point ? new[] { new CandidateOpening(point.X, point.Y, "door") } : Array.Empty<CandidateOpening>();
-        return new CandidateRoom("Bedroom", "201", "Level 2", centroid.X, centroid.Y, loop, false, false, openings);
+        return new CandidateRoom("Bedroom", "201", "Level 2", centroid.X, centroid.Y, loop, false, openings);
     }
 
     private static IReadOnlyList<PlanPoint> Rectangle(double x0, double y0, double x1, double y1)

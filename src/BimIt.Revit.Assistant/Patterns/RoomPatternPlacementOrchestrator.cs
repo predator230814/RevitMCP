@@ -198,6 +198,10 @@ internal sealed class RoomPatternPlacementOrchestrator
         }
 
         var request = PatternPlacementRequestBuilder.Build(generation, configuration);
+        if (request.Placements?.Any(placement => SpatialRoomRefCodec.IsLink(placement.RoomRef)) == true)
+        {
+            return Fail(PreviewTitle, "Linked rooms stay in review. This pattern does not place devices into a linked room.");
+        }
         AssistantToolCall call;
         try
         {
