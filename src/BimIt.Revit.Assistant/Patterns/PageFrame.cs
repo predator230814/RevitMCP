@@ -19,7 +19,14 @@ internal static class PageFrame
             {
                 var point = ToCartesian(device.X, device.Y, rasterWidth, rasterHeight);
                 return new SourceDevice(device.Role, point.X, point.Y, device.PlacementKind, device.FamilyHint);
-            }).ToArray());
+            }).ToArray(),
+            page.Rules,
+            page.Anchors?.Select(anchor =>
+            {
+                var point = ToCartesian(anchor.X, anchor.Y, rasterWidth, rasterHeight);
+                return new PatternAnchor(anchor.Label, point.X, point.Y);
+            }).ToArray(),
+            page.Semantics);
     }
 
     // Page coordinates are normalized and Y-down. Matching uses the raster's Y-up frame.

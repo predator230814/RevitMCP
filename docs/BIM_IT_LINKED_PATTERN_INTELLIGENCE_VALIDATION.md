@@ -97,3 +97,7 @@ Studio Unit 203 L2 was `lower · 0.3563 · 0° · named_room`. Its plan showed a
 `named_room` is applied only when the matcher leaves a low-scoring room rejected for shape. The review text is taken from the stored proposal, which kept the four rules. The geometry passed to the matcher is `PageFrame.ForMatching`, and that frame copies the boundary, entrance, and devices only. The semantic rules are not on that frame, so the adapter did not run and the plans are the projected sketch. Entrance, room centre, pair, and opposite-wall placement were not shown.
 
 After the review, Revit Undo was empty. The chat said nothing was applied. The standing assistant buttons were not pressed.
+
+## Matching-frame handoff, not yet retested
+
+The retest above stands. A later change keeps the semantic rules and the semantic report on the pattern passed to the matcher, and converts anchor coordinates with the same raster frame as the boundary, entrance, and devices. Pattern Review still draws the original page-space pattern. The Part B retest of this handoff has not been run.
