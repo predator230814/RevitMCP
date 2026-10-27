@@ -97,7 +97,7 @@ function renderPattern(review, prepared) {
   const image = patternImage(review);
   const ready = prepared === true && patternState.dirty !== true;
   const understoodLines = Array.isArray(review.understood) ? review.understood : [];
-  const understood = understoodLines.length ? `<section class="understood"><h3>BIM-IT understood</h3><ul>${understoodLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul></section>` : "";
+  const understood = understoodLines.length ? `<section class="understood"><h3>Pattern logic</h3><ul>${understoodLines.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul></section>` : "";
   node.hidden = false;
   node.innerHTML = `<h2>Pattern review</h2>${understood}<p class="sub">${escapeHtml(counts)}</p><div class="pattern-grid"><div class="sheet">${image}${patternSvg(review.boundary, review.entrance, review.devices, true, false)}</div><div class="rooms"><div class="room-list">${rooms.map((room, index) => roomButton(room, index)).join("")}</div><div class="room-preview">${rooms.length ? roomPreview(rooms[selectedRoom]) : "<p>No Revit rooms were compared.</p>"}</div></div></div>${roleConfig(review)}<div class="pattern-actions"><button type="button" id="prepare-pattern">Prepare Revit pattern preview</button><button type="button" id="review-pattern" ${ready ? "" : "disabled"}>Review in Revit</button><button type="button" id="apply-pattern" ${ready ? "" : "disabled"}>Apply approved pattern</button></div>`;
   node.querySelectorAll("[data-room]").forEach((button) => {

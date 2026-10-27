@@ -77,3 +77,7 @@ Part A used the same natural French prompt. The proposal was stored in that turn
 Part B was a new chat with the same sketch. The prompt stated an entrance switch, a centred luminaire, a symmetric receptacle pair, and a data device on the wall opposite the entrance. The model repeated those four relations in prose. It said the entrance was not clear on the sketch, so it would keep the relations without assigning a position. It did not call Propose room pattern. Pattern Review did not open. The deterministic adaptation engine was not exercised. Entrance, room centre, pair, and opposite-wall placement were not shown on a linked studio.
 
 Undo was not reopened during this restart. The chat for Part A said the model was not modified, and no approval pane was opened by either prompt.
+
+## User-stated intent, not yet retested
+
+Part B above stands. The model repeated the requested relationships and did not store them. A later change tells the model to encode an explicit user instruction even when the drawing does not confirm it. Optional `basis` may be `user_stated`. Pattern Review calls the section Pattern logic. The Part B retest has not been run.

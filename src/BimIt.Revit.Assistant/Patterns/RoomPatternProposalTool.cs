@@ -56,7 +56,7 @@ internal sealed class RoomPatternProposalRequest
     public string? RoomName { get; init; }
 
     [JsonPropertyName("rules")]
-    [Description("Optional relationships. One rule is one relationship. One paired_symmetric rule means one pair. Use entrance for a switch beside the entrance, room_center for a ceiling light centred in the room, nearest_boundary for the closest wall, opposite_boundary for the wall opposite the entrance, corner for a device near a corner, and paired_symmetric for two equivalent devices. Infer a rule only when the image or the user request supports it. Omit rules when you are unsure. Do not send coordinates or Revit identities.")]
+    [Description("Optional relationships. One rule is one relationship. One paired_symmetric rule means one pair. Encode a relationship inferred from the image or explicitly requested by the user, even when the image does not prove a user-stated relationship. Use entrance, room_center, nearest_boundary, opposite_boundary, corner, or paired_symmetric. Optional basis is observed or user_stated. An entrance rule does not need a page entrance point. Omit rules that neither the image nor the user supports. Do not send coordinates or Revit identities.")]
     public IReadOnlyList<RoomPatternRuleRequest>? Rules { get; init; }
 
     [JsonPropertyName("anchors")]
@@ -128,6 +128,10 @@ internal sealed class RoomPatternRuleRequest
 
     [JsonPropertyName("confidence")]
     public double? Confidence { get; init; }
+
+    [JsonPropertyName("basis")]
+    [Description("Optional. user_stated when the user explicitly requested the relationship. observed when the image supports it. Omit it when unsure.")]
+    public string? Basis { get; init; }
 
     [JsonExtensionData]
     public Dictionary<string, JsonElement>? ExtensionData { get; init; }
@@ -451,7 +455,7 @@ internal sealed class RoomPatternProposalTool
 
         foreach (var field in item.EnumerateObject())
         {
-            if (field.Name is not ("role" or "anchor" or "offset_m" or "group" or "confidence"))
+            if (field.Name is not ("role" or "anchor" or "offset_m" or "group" or "confidence" or "basis"))
             {
                 return false;
             }
@@ -505,7 +509,13 @@ internal sealed class RoomPatternProposalTool
             confidence = value;
         }
 
-        rule = new PatternRule(roleProperty.GetString()!, anchor!, offset, group, confidence);
+        string? basis = null;
+        if (item.TryGetProperty("basis", out var basisProperty) && basisProperty.ValueKind == JsonValueKind.String && PatternRuleBasis.IsBasis(basisProperty.GetString()))
+        {
+            basis = basisProperty.GetString();
+        }
+
+        rule = new PatternRule(roleProperty.GetString()!, anchor!, offset, group, confidence, basis);
         return true;
     }
 

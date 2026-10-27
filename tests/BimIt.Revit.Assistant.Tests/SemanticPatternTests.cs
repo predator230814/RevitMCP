@@ -327,6 +327,13 @@ public sealed class SemanticPatternTests
 
     private const string ReceptacleExtra = """{"role":"receptacle","page_x":0.15,"page_y":0.2,"placement_kind":"boundary"}""";
 
+    private static string WithoutEntrance(string devices, string extra)
+    {
+        return """
+            {"page_number":1,"boundary":[{"page_x":0.1,"page_y":0.1},{"page_x":0.7,"page_y":0.1},{"page_x":0.7,"page_y":0.4},{"page_x":0.1,"page_y":0.4}],"devices":[
+            """ + devices + "]," + extra + "}";
+    }
+
     private static string Body(string extra) => Visual(Switch, extra);
 
     private static string Visual(string devices, string extra)
@@ -481,15 +488,104 @@ public sealed class SemanticPatternTests
         var guidance = GitHubCopilotSessionBlueprint.SemanticRelationshipGuidance;
         Assert.Contains(guidance, GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
         Assert.Contains(guidance, GitHubCopilotSessionBlueprint.RoomPatternToolDescription, StringComparison.Ordinal);
-        Assert.Contains("Do not invent a bed, an entrance, a pair, or a luminaire.", guidance, StringComparison.Ordinal);
-        Assert.Contains("→ entrance", guidance, StringComparison.Ordinal);
-        Assert.Contains("→ room_center", guidance, StringComparison.Ordinal);
-        Assert.Contains("→ nearest_boundary", guidance, StringComparison.Ordinal);
-        Assert.Contains("→ opposite_boundary", guidance, StringComparison.Ordinal);
-        Assert.Contains("→ corner", guidance, StringComparison.Ordinal);
-        Assert.Contains("→ paired_symmetric", guidance, StringComparison.Ordinal);
+        Assert.Contains("explicitly requested by the user", guidance, StringComparison.Ordinal);
+        Assert.Contains("Never invent a relationship unsupported by either the image or the user.", guidance, StringComparison.Ordinal);
+        Assert.Contains("does not require a source-page entrance point", guidance, StringComparison.Ordinal);
+        Assert.Contains("user says switch at entrance → entrance", guidance, StringComparison.Ordinal);
+        Assert.Contains("user says centred luminaire → room_center", guidance, StringComparison.Ordinal);
+        Assert.Contains("user says two receptacles form a pair → paired_symmetric", guidance, StringComparison.Ordinal);
+        Assert.Contains("user says data on wall opposite entrance → opposite_boundary", guidance, StringComparison.Ordinal);
+        Assert.DoesNotContain("Describe only what you see", GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
         Assert.DoesNotContain("element_ref", GitHubCopilotSessionBlueprint.RoomPatternToolDescription, StringComparison.Ordinal);
         Assert.Equal(7, AssistantModelTools.Names.Length);
+    }
+
+    [Fact]
+    public async Task Explicit_user_rules_store_without_a_source_entrance()
+    {
+        var store = new RoomPatternStore();
+        var result = await StoredTool(store).InvokeAsync(Json(WithoutEntrance(
+            Switch + "," + Luminaire + "," + Data + "," + Receptacle + "," + ReceptacleRight,
+            """
+            "rules":[
+              {"role":"switch","anchor":"entrance","basis":"user_stated"},
+              {"role":"luminaire","anchor":"room_center","basis":"user_stated"},
+              {"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside","basis":"user_stated"},
+              {"role":"data","anchor":"opposite_boundary","basis":"user_stated"},
+              {"role":"receptacle","anchor":"nearest_boundary","basis":"not_a_basis"}
+            ]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
+        var review = Review(store);
+        Assert.Contains("User requested:", review, StringComparison.Ordinal);
+        Assert.Contains("1 switch associated with the entrance", review, StringComparison.Ordinal);
+        Assert.Contains("1 ceiling luminaire near room centre", review, StringComparison.Ordinal);
+        Assert.Contains("2 receptacles forming a symmetric pair", review, StringComparison.Ordinal);
+        Assert.Contains("1 data/TV device on an opposite wall", review, StringComparison.Ordinal);
+        Assert.Contains("Observed:", review, StringComparison.Ordinal);
+        Assert.Contains("1 receptacle on the nearest wall", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("not_a_basis", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("element_ref", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("element_ref", JsonSerializer.Serialize(result), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void User_stated_centre_resolves_and_entrance_rules_fail_without_a_door()
+    {
+        var rules = new[]
+        {
+            new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null, PatternRuleBasis.UserStated),
+            new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null, PatternRuleBasis.UserStated),
+            new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "bedside", null, PatternRuleBasis.UserStated),
+            new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, null, PatternRuleBasis.UserStated),
+        };
+        var source = new SourceRoomPattern(
+            Rectangle(0, 0, 1, 1),
+            null,
+            [
+                new SourceDevice("switch", 0.2, 0.1, "boundary", null),
+                new SourceDevice("luminaire", 0.5, 0.5, "interior", null),
+                new SourceDevice("receptacle", 0.3, 0.9, "boundary", null),
+                new SourceDevice("receptacle", 0.7, 0.9, "boundary", null),
+                new SourceDevice("data", 0.5, 0.9, "boundary", null),
+            ],
+            rules);
+        var noDoor = new CandidateRoom("Studio", "9", "L1", 5, 3, Rectangle(0, 0, 10, 6), false, []);
+        var missed = Assert.Single(RoomShapeMatcher.Match(source, [noDoor]));
+        Assert.Equal("unresolved_rule", missed.Reason);
+
+        var oneDoor = new CandidateRoom("Studio", "203", "L2", 5, 3, Rectangle(0, 0, 10, 6), false, [new CandidateOpening(1, 0, "door")]);
+        var placed = Assert.Single(RoomShapeMatcher.Match(source, [oneDoor]));
+        Assert.NotEqual("unresolved_rule", placed.Reason);
+        Assert.NotEqual("rejected", placed.Band);
+        var byRole = placed.Devices.GroupBy(device => device.Role).ToDictionary(group => group.Key, group => group.ToArray());
+        Assert.InRange(byRole["switch"][0].LocalY, 0, 1.5);
+        Assert.InRange(byRole["luminaire"][0].LocalX, 4.5, 5.5);
+        Assert.InRange(byRole["luminaire"][0].LocalY, 2.5, 3.5);
+        Assert.Equal(2, byRole["receptacle"].Length);
+        Assert.True(byRole["data"][0].LocalY > 4);
+    }
+
+    [Fact]
+    public void Several_target_doors_without_a_source_entrance_stay_unresolved()
+    {
+        var source = new SourceRoomPattern(
+            Rectangle(0, 0, 1, 1),
+            null,
+            [new SourceDevice("switch", 0.2, 0.1, "boundary", null)],
+            [new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null, PatternRuleBasis.UserStated)]);
+        var room = new CandidateRoom(
+            "Studio",
+            "203",
+            "L2",
+            5,
+            3,
+            Rectangle(0, 0, 10, 6),
+            false,
+            [new CandidateOpening(1, 0, "door"), new CandidateOpening(9, 0, "door")]);
+        var match = Assert.Single(RoomShapeMatcher.Match(source, [room]));
+        Assert.Equal("unresolved_rule", match.Reason);
     }
 
     [Fact]

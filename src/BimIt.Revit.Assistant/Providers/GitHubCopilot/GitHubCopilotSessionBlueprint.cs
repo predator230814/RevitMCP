@@ -11,13 +11,11 @@ internal static class GitHubCopilotSessionBlueprint
 
     public const string SemanticRelationshipGuidance =
         """
-        Infer a semantic rule only when the image or the user request supports it. Do not require every anchor. Do not invent a bed, an entrance, a pair, or a luminaire.
-        switch beside or at the entrance → entrance
-        ceiling light centred in the room → room_center
-        device against the closest wall → nearest_boundary
-        device on the wall opposite the entrance → opposite_boundary
-        device near a room corner → corner
-        two equivalent devices forming a pair → paired_symmetric
+        Semantic rules may express either relationships inferred from the visual source or relationships explicitly requested by the user. When the user explicitly states a relationship, encode it even when the image does not independently prove that relationship. Never invent a relationship unsupported by either the image or the user. An entrance or opposite_boundary rule does not require a source-page entrance point. Optional basis is observed or user_stated; set user_stated for an explicit user instruction. One paired_symmetric rule means one pair.
+        user says switch at entrance → entrance
+        user says centred luminaire → room_center
+        user says two receptacles form a pair → paired_symmetric
+        user says data on wall opposite entrance → opposite_boundary
         """;
 
     public const string RoomPatternToolDescription =
@@ -37,7 +35,7 @@ internal static class GitHubCopilotSessionBlueprint
         A proposal cannot preview, approve, or modify the Revit model.
         You cannot supply Revit identities or a calibration flag.
         bimit_propose_room_pattern stores one untrusted interpretation of the current attached page.
-        Describe only what you see on that page: one room boundary, an optional entrance, and the detected devices.
+        Describe the observed boundary, the detected devices, and an entrance or visual anchor only when you see it.
         Semantic relationships are optional. Use only these anchors: room_center, entrance, nearest_boundary, opposite_boundary, corner, paired_symmetric.
         One paired_symmetric rule means one pair. Keep the raw page points. A rule must not contain final coordinates or a Revit identity.
         """ + SemanticRelationshipGuidance + """

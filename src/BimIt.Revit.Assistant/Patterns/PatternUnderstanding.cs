@@ -27,7 +27,16 @@ internal static class PatternAnchors
     public static bool IsAnchor(string? value) => value is not null && All.Contains(value, StringComparer.Ordinal);
 }
 
-internal sealed record PatternRule(string Role, string Anchor, double OffsetMetres, string? Group, double? Confidence);
+internal sealed record PatternRule(string Role, string Anchor, double OffsetMetres, string? Group, double? Confidence, string? Basis = null);
+
+internal static class PatternRuleBasis
+{
+    public const string Observed = "observed";
+
+    public const string UserStated = "user_stated";
+
+    public static bool IsBasis(string? value) => value is Observed or UserStated;
+}
 
 internal sealed record PatternAnchor(string Label, double X, double Y);
 
@@ -68,15 +77,22 @@ internal static class PatternUnderstanding
             lines.Add("Semantic relationships were not established.");
         }
 
-        foreach (var rule in (rules ?? []).Where(rule => rule.Anchor == PatternAnchors.PairedSymmetric))
+        var requested = (rules ?? []).Where(rule => rule.Basis == PatternRuleBasis.UserStated).ToArray();
+        var observed = (rules ?? []).Where(rule => rule.Basis != PatternRuleBasis.UserStated).ToArray();
+        if (requested.Length > 0)
         {
-            var suffix = string.IsNullOrEmpty(rule.Group) ? "" : $" ({rule.Group})";
-            lines.Add($"2 {Noun(rule.Role, 2, PatternAnchors.PairedSymmetric)} forming a symmetric pair{suffix}");
+            lines.Add("User requested:");
+            AppendRules(lines, requested);
         }
 
-        foreach (var group in (rules ?? []).Where(rule => rule.Anchor != PatternAnchors.PairedSymmetric).GroupBy(rule => (rule.Anchor, rule.Role)))
+        if (observed.Length > 0)
         {
-            lines.Add($"{group.Count()} {Noun(group.Key.Role, group.Count(), group.Key.Anchor)} {Phrase(group.Key.Anchor)}");
+            if (requested.Length > 0)
+            {
+                lines.Add("Observed:");
+            }
+
+            AppendRules(lines, observed);
         }
 
         if (report.Status == SemanticReport.Partial)
@@ -94,6 +110,20 @@ internal static class PatternUnderstanding
         }
 
         return lines;
+    }
+
+    private static void AppendRules(List<string> lines, IReadOnlyList<PatternRule> rules)
+    {
+        foreach (var rule in rules.Where(rule => rule.Anchor == PatternAnchors.PairedSymmetric))
+        {
+            var suffix = string.IsNullOrEmpty(rule.Group) ? "" : $" ({rule.Group})";
+            lines.Add($"2 {Noun(rule.Role, 2, PatternAnchors.PairedSymmetric)} forming a symmetric pair{suffix}");
+        }
+
+        foreach (var group in rules.Where(rule => rule.Anchor != PatternAnchors.PairedSymmetric).GroupBy(rule => (rule.Anchor, rule.Role)))
+        {
+            lines.Add($"{group.Count()} {Noun(group.Key.Role, group.Count(), group.Key.Anchor)} {Phrase(group.Key.Anchor)}");
+        }
     }
 
     private static string Phrase(string anchor) => anchor switch
