@@ -98,6 +98,18 @@ Studio Unit 203 L2 was `lower · 0.3563 · 0° · named_room`. Its plan showed a
 
 After the review, Revit Undo was empty. The chat said nothing was applied. The standing assistant buttons were not pressed.
 
-## Matching-frame handoff, not yet retested
+## Matching-frame retest, 2026-10-27, commit `8517dc6`
 
-The retest above stands. A later change keeps the semantic rules and the semantic report on the pattern passed to the matcher, and converts anchor coordinates with the same raster frame as the boundary, entrance, and devices. Pattern Review still draws the original page-space pattern. The Part B retest of this handoff has not been run.
+Revit 2026 was opened after the Release assistant was rebuilt. GitHub CLI during the run was `QIB-Dave-CoffeeDrivenCoding`. The same MEP host, Architectural link, and sketch were used. This was a new chat and Part B only, with the same prompt as the `15d769e` retest. Prepare, Review in Revit, and Apply were not pressed. This record is not a merge verdict.
+
+The proposal was stored in that turn. Tool used: Propose room pattern. The chat said the four relations were taken from the instruction, that the search returned six studios, and that all six were rejected for `unresolved_rule`. It said nothing was applied.
+
+Pattern Review opened. Pattern logic was marked User requested: two receptacles forming a symmetric pair (`prises-paire`), one switch associated with the entrance, one ceiling luminaire near room centre, and one data/TV device on an opposite wall. Counts were 6 candidate rooms, 0 high, 0 lower, 6 rejected. The visible link text was Snowdon Towers Sample Architectural. The list showed only the two highest-scoring rejected rooms, Two Story Studio Unit 406 and Two Story Studio Unit 204. Studio Unit 203 was not in the list. No spatial ref, UniqueId, element_ref, or `.rvt` path was visible.
+
+Two Story Studio Unit 406 L4 was `rejected · 0.6328 · 0° · unresolved_rule`. Its stepped plan showed one luminaire and no switch, receptacle pair, or data device.
+
+Two Story Studio Unit 204 L2 was `rejected · 0.6321 · 0° · unresolved_rule`. Its outline was a different step. Its plan also showed one interior luminaire and no switch, receptacle pair, or data device.
+
+The plans are no longer the projected sketch. The room-centre luminaire was placed. The entrance switch, the symmetric pair, and the opposite-wall data were not placed. Those three relations need one deterministic door, and the proposal had no source-page entrance. Every visible studio stayed `unresolved_rule` rather than guessing a door. Entrance, pair, and opposite-wall adaptation were not shown.
+
+After the review, Revit Undo was empty. The chat said nothing was applied. The standing assistant buttons were not pressed.
