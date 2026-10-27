@@ -78,6 +78,22 @@ Part B was a new chat with the same sketch. The prompt stated an entrance switch
 
 Undo was not reopened during this restart. The chat for Part A said the model was not modified, and no approval pane was opened by either prompt.
 
-## User-stated intent, not yet retested
+## User-stated intent retest, 2026-10-27, commit `15d769e`
 
-Part B above stands. The model repeated the requested relationships and did not store them. A later change tells the model to encode an explicit user instruction even when the drawing does not confirm it. Optional `basis` may be `user_stated`. Pattern Review calls the section Pattern logic. The Part B retest has not been run.
+Revit 2026 was already open on the user-stated-intent build. GitHub CLI during the run was `QIB-Dave-CoffeeDrivenCoding`. The same MEP host, Architectural link, and sketch were used. This was a new chat and Part B only. Prepare, Review in Revit, and Apply were not pressed. This record is not a merge verdict.
+
+The prompt was:
+
+> Pour ce test, utilise cette logique d'aménagement même si le croquis ne permet pas de confirmer chaque relation : l'interrupteur est associé à l'entrée, le luminaire est au centre de la pièce, deux prises forment une paire symétrique et la prise data est sur le mur opposé à l'entrée. Trouve les studios et montre-moi comment BIM-IT adapterait cette logique. N'applique rien.
+
+The proposal was stored in that turn. Tool used: Propose room pattern. The chat reported six studios, the two best at about `0.6287` and `0.6282`, and the other four at about `0.3580` or `0.3563`. It said the four relations were explicit user instructions, that BIM-IT reported no semantic warning, and that nothing was applied to the model.
+
+Pattern Review opened. The heading was Pattern logic. The lines were marked User requested: two receptacles forming a symmetric pair (`pair-1`), one switch associated with the entrance, one ceiling luminaire near room centre, and one data/TV device on an opposite wall. There was no Observed block. Counts were 6 candidate rooms, 0 high, 6 lower, 0 rejected. The visible link text was Snowdon Towers Sample Architectural. The six studios were Two Story Studio Unit 406, Two Story Studio Unit 204, Studio Unit 504, Studio Unit 203, Studio Unit 304, and Studio Unit 404. No spatial ref, UniqueId, element_ref, or `.rvt` path was visible.
+
+Two Story Studio Unit 406 L4 was `lower · 0.6287 · 0°`. Its stepped plan showed two receptacles on the upper arms and the switch and data stacked at the bottom of the stem. No luminaire was visible at the room centre.
+
+Studio Unit 203 L2 was `lower · 0.3563 · 0° · named_room`. Its plan showed a rectangular outline with a notch on the right, one receptacle on the left wall, one receptacle on the right wall, an unlabeled point on the top edge, and the switch and data stacked on the bottom edge. No device sat at the room centre. The switch was not at the right-hand notch.
+
+`named_room` is applied only when the matcher leaves a low-scoring room rejected for shape. The review text is taken from the stored proposal, which kept the four rules. The geometry passed to the matcher is `PageFrame.ForMatching`, and that frame copies the boundary, entrance, and devices only. The semantic rules are not on that frame, so the adapter did not run and the plans are the projected sketch. Entrance, room centre, pair, and opposite-wall placement were not shown.
+
+After the review, Revit Undo was empty. The chat said nothing was applied. The standing assistant buttons were not pressed.
