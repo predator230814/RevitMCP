@@ -68,8 +68,12 @@ Six linked studios from Snowdon Towers Sample Architectural were listed. Studio 
 | 12. No Revit model mutation, no approval pane, and Undo unchanged | Observed. Undo was empty. The Approval Pane did not open. The buttons were not pressed. |
 | 13. No hidden host/link identity or filesystem path | Observed in the opened review. The visible link text was the sanitized sample name. |
 
-## Cleaned-loop correction, not yet retested
+## Final mini-live, 2026-10-27, commit `8c11a86`
 
-The evening result stands. Two Story Studio Units 204 and 406 were rejected for `boundary_too_complex` before collinear Revit vertices could be removed. A later change measures that limit on the cleaned outer loop and adds the six natural anchor examples to the model guidance. It does not add a write.
+Revit 2026 was restarted on the cleaned-loop build. The loaded add-in was the Release 2026 development add-in. GitHub CLI during the run was `QIB-Dave-CoffeeDrivenCoding`. The same MEP host, Architectural link, and sketch were used. Prepare, Review in Revit, and Apply were not pressed. This record is not a merge verdict.
 
-The final mini-live has not been run. Part A is the same natural French prompt. Part B states entrance, room centre, symmetric pair, and opposite wall explicitly. Neither part is marked passed.
+Part A used the same natural French prompt. The proposal was stored in that turn. Tool used: Propose room pattern. Pattern Review opened. Six linked studios were listed: 0 high, 6 lower, 0 rejected. Two Story Studio Units 204 and 406 were `lower`, not `boundary_too_complex`. Unit 406 was `lower · 0.6243 · 0°` and its preview showed the stepped outline. BIM-IT understood showed one relationship: one receptacle on the nearest wall. The chat said the sketch had eight symbols, that the `CTR` symbol stayed uncertain, and that nothing was applied.
+
+Part B was a new chat with the same sketch. The prompt stated an entrance switch, a centred luminaire, a symmetric receptacle pair, and a data device on the wall opposite the entrance. The model repeated those four relations in prose. It said the entrance was not clear on the sketch, so it would keep the relations without assigning a position. It did not call Propose room pattern. Pattern Review did not open. The deterministic adaptation engine was not exercised. Entrance, room centre, pair, and opposite-wall placement were not shown on a linked studio.
+
+Undo was not reopened during this restart. The chat for Part A said the model was not modified, and no approval pane was opened by either prompt.
