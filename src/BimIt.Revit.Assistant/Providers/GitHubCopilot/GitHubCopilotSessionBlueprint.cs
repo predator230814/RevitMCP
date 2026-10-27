@@ -9,6 +9,22 @@ internal static class GitHubCopilotSessionBlueprint
 
     public const string AutoModel = "auto";
 
+    public const string SemanticRelationshipGuidance =
+        """
+        Infer a semantic rule only when the image or the user request supports it. Do not require every anchor. Do not invent a bed, an entrance, a pair, or a luminaire.
+        switch beside or at the entrance → entrance
+        ceiling light centred in the room → room_center
+        device against the closest wall → nearest_boundary
+        device on the wall opposite the entrance → opposite_boundary
+        device near a room corner → corner
+        two equivalent devices forming a pair → paired_symmetric
+        """;
+
+    public const string RoomPatternToolDescription =
+        "Store one untrusted reading of the current attached page. First describe the observed boundary, optional entrance, and devices. Every point is {\"page_x\":0..1,\"page_y\":0..1}, left to right and top to bottom. Optionally add semantic relationships. One paired_symmetric rule means one pair. Semantic enrichment is optional. BIM-IT keeps a valid visual pattern when a relationship cannot be read. "
+        + SemanticRelationshipGuidance
+        + " This does not approve or modify Revit. Never send Revit identities or final coordinates. If stored is true, stop. If stored is false and a reason is present, correct the visual observations once.";
+
     public const string SystemPrompt =
         """
         You are BIM-IT Assistant operating on the current Revit session.
@@ -24,6 +40,7 @@ internal static class GitHubCopilotSessionBlueprint
         Describe only what you see on that page: one room boundary, an optional entrance, and the detected devices.
         Semantic relationships are optional. Use only these anchors: room_center, entrance, nearest_boundary, opposite_boundary, corner, paired_symmetric.
         One paired_symmetric rule means one pair. Keep the raw page points. A rule must not contain final coordinates or a Revit identity.
+        """ + SemanticRelationshipGuidance + """
         Every observed point is {"page_x":0..1,"page_y":0..1}. page_x runs left to right. page_y runs top to bottom.
         If stored is true, do not call the tool again. A semantic warning does not undo the stored pattern.
         If stored is false and the result includes a reason, correct the visual observations and call once more in the same turn.
@@ -187,7 +204,7 @@ internal static class GitHubCopilotSessionBlueprint
             new AIFunctionFactoryOptions
             {
                 Name = RoomPatternProposalTool.Name,
-                Description = "Store one untrusted reading of the current attached page. First describe the observed boundary, optional entrance, and devices. Every point is {\"page_x\":0..1,\"page_y\":0..1}, left to right and top to bottom. Optionally add semantic relationships. One paired_symmetric rule means one pair. Semantic enrichment is optional. BIM-IT keeps a valid visual pattern when a relationship cannot be read. This does not approve or modify Revit. Never send Revit identities or final coordinates. If stored is true, stop. If stored is false and a reason is present, correct the visual observations once.",
+                Description = RoomPatternToolDescription,
             });
     }
 

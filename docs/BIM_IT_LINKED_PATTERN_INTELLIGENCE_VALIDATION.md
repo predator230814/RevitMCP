@@ -67,3 +67,9 @@ Six linked studios from Snowdon Towers Sample Architectural were listed. Studio 
 | 11. Pattern Review shows deterministic projected results | Observed. Pattern Review showed the understood lines, the sketch, and a plan for the selected studio. |
 | 12. No Revit model mutation, no approval pane, and Undo unchanged | Observed. Undo was empty. The Approval Pane did not open. The buttons were not pressed. |
 | 13. No hidden host/link identity or filesystem path | Observed in the opened review. The visible link text was the sanitized sample name. |
+
+## Cleaned-loop correction, not yet retested
+
+The evening result stands. Two Story Studio Units 204 and 406 were rejected for `boundary_too_complex` before collinear Revit vertices could be removed. A later change measures that limit on the cleaned outer loop and adds the six natural anchor examples to the model guidance. It does not add a write.
+
+The final mini-live has not been run. Part A is the same natural French prompt. Part B states entrance, room centre, symmetric pair, and opposite wall explicitly. Neither part is marked passed.

@@ -56,7 +56,7 @@ internal sealed class RoomPatternProposalRequest
     public string? RoomName { get; init; }
 
     [JsonPropertyName("rules")]
-    [Description("Optional relationships. One rule is one relationship: {role, anchor, optional offset_m, optional group, optional confidence}. One paired_symmetric rule means one pair. anchor is room_center, entrance, nearest_boundary, opposite_boundary, corner, or paired_symmetric. Omit rules when you are unsure. Do not send coordinates or Revit identities.")]
+    [Description("Optional relationships. One rule is one relationship. One paired_symmetric rule means one pair. Use entrance for a switch beside the entrance, room_center for a ceiling light centred in the room, nearest_boundary for the closest wall, opposite_boundary for the wall opposite the entrance, corner for a device near a corner, and paired_symmetric for two equivalent devices. Infer a rule only when the image or the user request supports it. Omit rules when you are unsure. Do not send coordinates or Revit identities.")]
     public IReadOnlyList<RoomPatternRuleRequest>? Rules { get; init; }
 
     [JsonPropertyName("anchors")]

@@ -103,7 +103,7 @@ internal static class RoomShapeMatcher
             return Rejected(label, candidate.LevelName, candidate.LoopFailure, candidate);
         }
 
-        if (candidate.VerticesTruncated || candidate.Loop.Count > MaxStraightVertices)
+        if (candidate.VerticesTruncated)
         {
             return Rejected(label, candidate.LevelName, "boundary_too_complex", candidate);
         }
@@ -112,6 +112,11 @@ internal static class RoomShapeMatcher
         if (prepared is not { } room || sourceShape is not { } sourcePrepared)
         {
             return Rejected(label, candidate.LevelName, "degenerate_boundary", candidate);
+        }
+
+        if (room.Clean.Count > MaxStraightVertices)
+        {
+            return Rejected(label, candidate.LevelName, "boundary_too_complex", candidate);
         }
 
         if (SelfIntersects(room.Clean))

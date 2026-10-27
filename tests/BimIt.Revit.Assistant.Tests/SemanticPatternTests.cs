@@ -2,6 +2,7 @@ using System.Text.Json;
 using BimIt.Revit.Assistant;
 using BimIt.Revit.Assistant.Ipc;
 using BimIt.Revit.Assistant.Patterns;
+using BimIt.Revit.Assistant.Providers.GitHubCopilot;
 using Xunit;
 
 namespace BimIt.Revit.Assistant.Tests;
@@ -382,9 +383,113 @@ public sealed class SemanticPatternTests
         ];
     }
 
+    private static SourceRoomPattern PlainStudio()
+    {
+        return new SourceRoomPattern(Rectangle(0, 0, 10, 6), new PlanPoint(1, 0), [new SourceDevice("switch", 1, 0.2, "boundary", null)]);
+    }
+
+    private static CandidateRoom Candidate(IReadOnlyList<PlanPoint> loop, IReadOnlyList<IReadOnlyList<PlanPoint>>? holes = null)
+    {
+        return new CandidateRoom("Studio", "1", "L1", loop.Average(point => point.X), loop.Average(point => point.Y), loop, false, [], Holes: holes);
+    }
+
+    private static List<PlanPoint> SegmentedRectangle(double x0, double y0, double x1, double y1, int segments)
+    {
+        var points = new List<PlanPoint>();
+        void Edge(double ax, double ay, double bx, double by)
+        {
+            for (var step = 0; step < segments; step++)
+            {
+                var t = step / (double)segments;
+                points.Add(new PlanPoint(ax + ((bx - ax) * t), ay + ((by - ay) * t)));
+            }
+        }
+
+        Edge(x0, y0, x1, y0);
+        Edge(x1, y0, x1, y1);
+        Edge(x1, y1, x0, y1);
+        Edge(x0, y1, x0, y0);
+        return points;
+    }
+
+    private static List<PlanPoint> Comb()
+    {
+        var points = new List<PlanPoint> { new(0, 0) };
+        for (var tooth = 0; tooth < 4; tooth++)
+        {
+            var x = tooth * 2;
+            points.Add(new PlanPoint(x + 1, 0));
+            points.Add(new PlanPoint(x + 1, 1));
+            points.Add(new PlanPoint(x + 2, 1));
+            points.Add(new PlanPoint(x + 2, 0));
+        }
+
+        points.Add(new PlanPoint(8, 3));
+        points.Add(new PlanPoint(0, 3));
+        return points;
+    }
+
     private static IReadOnlyList<PlanPoint> Rectangle(double x0, double y0, double x1, double y1)
     {
         return [new(x0, y0), new(x1, y0), new(x1, y1), new(x0, y1)];
+    }
+
+    [Fact]
+    public void Over_segmented_orthogonal_room_stays_matchable()
+    {
+        var dense = SegmentedRectangle(0, 0, 10, 6, 6);
+        Assert.True(dense.Count > RoomShapeMatcher.MaxStraightVertices);
+        var match = Assert.Single(RoomShapeMatcher.Match(PlainStudio(), [Candidate(dense)]));
+        Assert.NotEqual("boundary_too_complex", match.Reason);
+        Assert.NotEqual("rejected", match.Band);
+    }
+
+    [Fact]
+    public void Many_meaningful_corners_stay_boundary_too_complex()
+    {
+        var comb = Comb();
+        Assert.True(comb.Count > RoomShapeMatcher.MaxStraightVertices);
+        var match = Assert.Single(RoomShapeMatcher.Match(PlainStudio(), [Candidate(comb)]));
+        Assert.Equal("boundary_too_complex", match.Reason);
+        Assert.Equal("rejected", match.Band);
+    }
+
+    [Fact]
+    public void A_dense_hole_is_not_counted_as_outer_loop_complexity()
+    {
+        var hole = SegmentedRectangle(3, 2, 5, 4, 6);
+        Assert.True(hole.Count > RoomShapeMatcher.MaxStraightVertices);
+        var room = Candidate(SegmentedRectangle(0, 0, 10, 6, 6), [hole]);
+        var match = Assert.Single(RoomShapeMatcher.Match(PlainStudio(), [room]));
+        Assert.NotEqual("boundary_too_complex", match.Reason);
+        Assert.NotEqual("rejected", match.Band);
+    }
+
+    [Fact]
+    public void Self_intersection_and_non_orthogonal_checks_remain()
+    {
+        var bowtie = Candidate([new(0, 0), new(5, 0), new(5, 2), new(1, 2), new(1, 1), new(4, 1), new(4, 3), new(0, 3)]);
+        var diamond = Candidate([new(0, 1), new(1, 0), new(0, -1), new(-1, 0)]);
+        var matches = RoomShapeMatcher.Match(PlainStudio(), [bowtie, diamond]);
+        Assert.Equal("self_intersecting_boundary", matches[0].Reason);
+        Assert.Equal("non_orthogonal_boundary", matches[1].Reason);
+    }
+
+    [Fact]
+    public void Prompt_documents_the_six_natural_anchor_mappings_without_adding_a_tool()
+    {
+        var guidance = GitHubCopilotSessionBlueprint.SemanticRelationshipGuidance;
+        Assert.Contains(guidance, GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
+        Assert.Contains(guidance, GitHubCopilotSessionBlueprint.RoomPatternToolDescription, StringComparison.Ordinal);
+        Assert.Contains("Do not invent a bed, an entrance, a pair, or a luminaire.", guidance, StringComparison.Ordinal);
+        Assert.Contains("→ entrance", guidance, StringComparison.Ordinal);
+        Assert.Contains("→ room_center", guidance, StringComparison.Ordinal);
+        Assert.Contains("→ nearest_boundary", guidance, StringComparison.Ordinal);
+        Assert.Contains("→ opposite_boundary", guidance, StringComparison.Ordinal);
+        Assert.Contains("→ corner", guidance, StringComparison.Ordinal);
+        Assert.Contains("→ paired_symmetric", guidance, StringComparison.Ordinal);
+        Assert.DoesNotContain("element_ref", GitHubCopilotSessionBlueprint.RoomPatternToolDescription, StringComparison.Ordinal);
+        Assert.Equal(7, AssistantModelTools.Names.Length);
     }
 
     [Fact]
