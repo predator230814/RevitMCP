@@ -113,3 +113,56 @@ Two Story Studio Unit 204 L2 was `rejected · 0.6321 · 0° · unresolved_rule`.
 The plans are no longer the projected sketch. The room-centre luminaire was placed. The entrance switch, the symmetric pair, and the opposite-wall data were not placed. Those three relations need one deterministic door, and the proposal had no source-page entrance. Every visible studio stayed `unresolved_rule` rather than guessing a door. Entrance, pair, and opposite-wall adaptation were not shown.
 
 After the review, Revit Undo was empty. The chat said nothing was applied. The standing assistant buttons were not pressed.
+
+## Target-reasoning live, 2026-10-27 evening
+
+Revit 2026 used the same MEP host, the loaded Snowdon Towers Sample Architectural link, and the same sketch. GitHub CLI during the run was `QIB-Dave-CoffeeDrivenCoding`. Before every attempt the running assistant was confirmed to be the Release build at `src\BimIt.Revit.Assistant\bin\Release\net10.0`, started after that build. The 2026 add-in and server were rebuilt at the start of the session. Every attempt used a new chat. Confirm, Prepare, Review in Revit, and Apply were not pressed. Revit Undo was empty after every attempt. This record is not a merge verdict.
+
+### Test 1, first attempt
+
+The proposal was stored. Pattern logic showed the four user-requested relations and the line `Target reasoning was unavailable (target_reasoning_unavailable).` Counts were 6 candidate rooms, 0 high, 6 lower, 0 rejected. The plans were the geometric projection. The fallback behaved as specified: no premature `unresolved_rule`, the geometric review kept, the provider not marked unavailable.
+
+Cause found in code: the response reader expected snake_case keys without a snake_case naming policy, so every valid reply was refused. The prompt also did not state the reply shape. Both were fixed. The unavailable line now names `provider_error` or `unreadable_response`. The assistant was rebuilt.
+
+### Test 1, second attempt
+
+The target pass ran. Counts were 6 candidate rooms, 0 high, 0 lower, 6 rejected. Two Story Studio Unit 406 L4 was `rejected · 0.6391 · 0° · unresolved_rule`, with Target reasoning: Entrance: door connected to Corridor; Resolved: switch, luminaire; Unresolved: receptacle pair, data. The switch sat at the corridor door and the luminaire at the room centre.
+
+Cause found in code: the old opposite-wall rule took the parallel edge farthest from the door. On a real L-shaped Revit outline with short wall jogs, that edge was a jog in a corner. The pair did not fit on it, and an inset toward the centroid could leave the room, so both points were correctly refused. The opposite wall is now the first boundary reached from the entrance moving into the room perpendicular to the entrance wall. The inset follows that wall's inward normal. A test reproduces the L-shaped case. The assistant was rebuilt.
+
+### Test 1, third attempt
+
+Prompt: “Pour ce test, utilise cette logique d'aménagement même si le croquis ne permet pas de confirmer chaque relation : l'interrupteur est associé à l'entrée, le luminaire est au centre de la pièce, deux prises forment une paire symétrique et la prise data est sur le mur opposé à l'entrée. Trouve les studios et montre-moi comment BIM-IT adapterait cette logique. N'applique rien.”
+
+The proposal was stored. Tool used: Propose room pattern. Pattern logic showed the four relations under User requested, pair group `pair-1`. Counts were 6 candidate rooms, 0 high, 6 lower, 0 rejected. All six linked studios were listed: Two Story Studio Units 406 and 204, Studio Units 504, 203, 304, and 404, each `lower · 0° · link Snowdon Towers Sample Architectural`. No temporary key, spatial ref, UniqueId, element_ref, or `.rvt` path was visible.
+
+Two Story Studio Unit 406 L4 was `lower · 0.6371 · 0°`. Target reasoning: Entrance: door connected to Corridor; Pair mapped onto the target wall; Data mapped opposite the entrance; Resolved: switch, luminaire, receptacle pair, data. The switch was at the bottom-left door. The luminaire was in the centre of the L. The receptacle pair and data were on the top wall above the entrance.
+
+Studio Unit 203 L2 was `lower · 0.3633 · 0° · named_room`. Target reasoning had the same four lines and resolved all four relations. The switch was at the bottom-right door. The luminaire was at the room centre. The receptacle pair and data were on the top wall, at the right, facing that entrance.
+
+The two layouts differ and follow each studio's own door and outline. They are not the scaled sketch. The chat said nothing was applied. On both plans the labels of the pair and data overlap on the top wall. The points are distinct.
+
+### Test 2, natural prompt
+
+Prompt: “Voici mon croquis électrique d'un studio. Trouve tous les studios de ce type dans le modèle, comprends la logique d'aménagement et montre-moi comment tu l'adapterais à chaque studio. N'applique rien.”
+
+The source pass understood three observed relations: a receptacle pair on the upper side wall, a receptacle pair on the lower side wall, and an interior luminaire pair. It did not infer an entrance, switch, or data relation, and said GFCI and CTR were uncertain. Counts were 6 candidate rooms, 0 high, 4 lower, 2 rejected. Lower: Two Story Studio Unit 204 and Studio Units 203, 304, and 404. Rejected: Two Story Studio Unit 406 and Studio Unit 504.
+
+Two Story Studio Unit 204 L2 was `lower · 0.6342 · 0°`. Target reasoning: Entrance: door connected to Corridor; Pair mapped onto the target wall; Resolved: luminaire, receptacle pair. All pairs were placed on the same short top wall facing the entrance, including the luminaire pair. That is not a meaningful adaptation of the side-wall pairs.
+
+Two Story Studio Unit 406 L4 was `rejected · 0.6346 · 0° · unresolved_rule`. Target reasoning: Several possible entrance doors remain plausible; Unresolved: receptacle pair. No device was drawn.
+
+The main chat answer was written before the target pass and said it could not show a per-studio adaptation. Pattern Review was completed after that answer. The chat said nothing was applied.
+
+### Result
+
+Test 1 shows target-aware semantic adaptation on linked studios. The target pass chose the corridor door. Deterministic code placed the entrance switch, room-centre luminaire, symmetric pair, and opposite-wall data on each studio's own geometry. Ambiguous doors stayed unresolved. No mutation occurred.
+
+Open limits:
+
+- A pair rule without a bound target edge goes to the wall facing the entrance, so several pair rules collapse onto one wall.
+- A luminaire pair is placed as a boundary pair.
+- The target pass did not supply separate edges for the observed side-wall pairs.
+- The explanation calls every pair a receptacle pair.
+- The main chat text can lag behind the final Pattern Review.
+- Device labels overlap on short walls.
