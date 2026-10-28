@@ -124,7 +124,7 @@ internal static class SemanticPatternAdapter
 
         var hint = Hint(source, spec, evidence);
         var inset = spec.OffsetMetres > 0 ? spec.OffsetMetres : DefaultInset;
-        var centre = new PlanPoint(target.CentroidX, target.CentroidY);
+        var centre = Centre(target);
         var points = new List<PlanPoint>(2);
         EdgeSegment? used = null;
         string? failure = null;
@@ -343,7 +343,7 @@ internal static class SemanticPatternAdapter
     {
         first = default;
         second = default;
-        var centre = new PlanPoint(target.CentroidX, target.CentroidY);
+        var centre = Centre(target);
         var axis = target.OrientationTrusted && evidence.Axis is PlanPoint sourceAxis
             ? Normalize(RoomShapeMatcher.Orient(sourceAxis, target.Quarters, target.Mirror))
             : PrincipalAxis(target.Loop);
@@ -704,6 +704,32 @@ internal static class SemanticPatternAdapter
     {
         var length = Math.Sqrt((vector.X * vector.X) + (vector.Y * vector.Y));
         return length < 1e-9 ? new PlanPoint(1, 0) : new PlanPoint(vector.X / length, vector.Y / length);
+    }
+
+    internal static PlanPoint Centre(Target target)
+    {
+        var fallback = new PlanPoint(target.CentroidX, target.CentroidY);
+        var loop = target.Loop;
+        double twice = 0;
+        double cx = 0;
+        double cy = 0;
+        for (var index = 0; index < loop.Count; index++)
+        {
+            var current = loop[index];
+            var next = loop[(index + 1) % loop.Count];
+            var cross = (current.X * next.Y) - (next.X * current.Y);
+            twice += cross;
+            cx += (current.X + next.X) * cross;
+            cy += (current.Y + next.Y) * cross;
+        }
+
+        if (Math.Abs(twice) < 1e-9)
+        {
+            return fallback;
+        }
+
+        var centroid = new PlanPoint(cx / (3 * twice), cy / (3 * twice));
+        return Accept(centroid, loop, target.Holes, out var accepted) ? accepted : fallback;
     }
 
     private static double Clear(PlanPoint point, Target target)

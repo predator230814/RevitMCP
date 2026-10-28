@@ -444,6 +444,30 @@ public sealed class PatternTargetTests
     }
 
     [Fact]
+    public void Room_centre_is_the_geometric_centre_not_the_revit_room_point()
+    {
+        var source = Interior();
+        var offCentre = SemanticPatternAdapter.Adapt(source, new SemanticPatternAdapter.Target
+        {
+            Loop = Rectangle(0, 0, 10, 6),
+            CentroidX = 2,
+            CentroidY = 5,
+        });
+        var lights = offCentre.Placements.Where(placement => placement.Role == "luminaire").ToArray();
+        Assert.Equal(2, lights.Length);
+        Assert.Equal(5, (lights[0].X + lights[1].X) / 2, 3);
+        Assert.Equal(3, (lights[0].Y + lights[1].Y) / 2, 3);
+
+        var uShape = new SemanticPatternAdapter.Target
+        {
+            Loop = [new(0, 0), new(9, 0), new(9, 6), new(6, 6), new(6, 1), new(3, 1), new(3, 6), new(0, 6)],
+            CentroidX = 1.5,
+            CentroidY = 3,
+        };
+        Assert.Equal(new PlanPoint(1.5, 3), SemanticPatternAdapter.Centre(uShape));
+    }
+
+    [Fact]
     public async Task Reasoning_wording_comes_from_the_role_and_never_shows_keys()
     {
         var (store, _) = Store(Studio(), "wording", Interior());

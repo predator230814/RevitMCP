@@ -206,7 +206,7 @@ function patternSvg(boundary, entrance, devices, showRoles, flipY) {
     if (showRoles) {
       const text = device.role || "";
       const left = x > 0.7;
-      let labelY = y - 0.015;
+      let labelY = Math.max(0.04, y - 0.015);
       while (labels.some((placed) => Math.abs(placed.y - labelY) < 0.035 && Math.abs(placed.x - x) < 0.2)) {
         labelY += 0.04;
       }

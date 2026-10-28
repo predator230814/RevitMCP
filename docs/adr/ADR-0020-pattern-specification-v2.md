@@ -36,8 +36,9 @@ Cardinality is the intended count. It is independent of how many devices were ob
 
 Deterministic adaptation resolves each item independently.
 
-- A single interior `room_center` item is placed at the room centroid.
-- An interior pair is two points symmetric about the centroid. The axis follows the source orientation when the geometric match is trusted, and otherwise the room's principal direction. Spacing follows the source spread within 0.6 m to 5 m. Both points must be inside the outer loop, outside every hole, and at least 0.3 m from every wall and hole edge, or the item is unresolved. It is never moved to a wall.
+- The room centre is the area centroid of the outer loop. When that point is outside the room or inside a hole, the Revit room location point is used instead. The Revit location point is where the room was placed, not its centre.
+- A single interior `room_center` item is placed at the room centre.
+- An interior pair is two points symmetric about the room centre. The axis follows the source orientation when the geometric match is trusted, and otherwise the room's principal direction. Spacing follows the source spread within 0.6 m to 5 m. Both points must be inside the outer loop, outside every hole, and at least 0.3 m from every wall and hole edge, or the item is unresolved. It is never moved to a wall.
 - A boundary pair with `source_correspondence` is centred on its bound edge, uses the source spacing along the edge, and is inset into the room. Items bound to the same edge share it in equal slots.
 - `entrance`, `opposite_boundary`, `nearest_boundary`, and `corner` keep the ADR-0019 behaviour. A `corner` pair is unsupported.
 
