@@ -206,7 +206,7 @@ Record the same fields as Test A. Compare them with the PR #93 natural-prompt re
 
 ### Run record, 2026-10-28
 
-Revit 2026 with the MEP host and the Snowdon Towers Sample Architectural link. The add-in, Assistant, and server were Release builds from the PR #94 branch. The Assistant and server ran from the repository output. The AI Provider showed `GitHub Copilot · auto`, and the turns ran as `gpt-6-luna` on the Copilot Business account. No Confirm, Prepare, Review in Revit, or Apply was used.
+Revit 2026.5 build `26.5.0.55` with the MEP host and the Snowdon Towers Sample Architectural link. The add-in, Assistant, and server were Release builds from the PR #94 branch. The Assistant and server ran from the repository output. The AI Provider showed `GitHub Copilot · auto`, and the turns ran as `gpt-6-luna` on the Copilot Business account. No Confirm, Prepare, Review in Revit, or Apply was used.
 
 #### Test A, first run against `e47bab6`
 
