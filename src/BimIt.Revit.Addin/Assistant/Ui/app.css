@@ -330,6 +330,8 @@ textarea {
 .roles select, .roles input { font: inherit; box-sizing: border-box; max-width: 100%; min-width: 0; }
 .roles select { width: 100%; }
 .roles input { width: 8rem; }
+.understood { margin: 8px 0 12px; }
+.understood ul { margin: 4px 0 0; padding-left: 18px; }
 
 @media (max-width: 720px) {
   .pattern-grid { grid-template-columns: 1fr; }

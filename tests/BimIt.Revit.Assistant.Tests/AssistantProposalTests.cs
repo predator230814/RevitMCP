@@ -31,7 +31,7 @@ public sealed class AssistantProposalTests
             ],
             AssistantModelTools.Names);
         Assert.Equal(5, BimItAgentReadTools.Names.Length);
-        Assert.Equal(8, AssistantTools.AllowedReadTools.Length);
+        Assert.Equal(9, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
         Assert.DoesNotContain(MepDevicePlacementProposalTool.Name, BimItAgentReadTools.Names);
         Assert.DoesNotContain(MepDevicePlacementProposalTool.Name, AssistantTools.AllowedReadTools);

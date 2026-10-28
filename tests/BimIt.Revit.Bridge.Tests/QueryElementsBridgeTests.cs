@@ -104,8 +104,8 @@ public sealed class QueryElementsBridgeTests
         Assert.True(BridgeProtocol.SupportsQueryElements(8));
         Assert.True(BridgeProtocol.SupportsGetContext(9));
         Assert.True(BridgeProtocol.SupportsQueryElements(9));
-        Assert.True(BridgeProtocol.SupportsGetContext(11)); Assert.True(BridgeProtocol.SupportsGetContext(12)); Assert.True(BridgeProtocol.SupportsGetContext(13)); Assert.True(BridgeProtocol.SupportsGetContext(14)); Assert.True(BridgeProtocol.SupportsGetContext(15)); Assert.True(BridgeProtocol.SupportsGetContext(16)); Assert.False(BridgeProtocol.SupportsGetContext(20));
-        Assert.True(BridgeProtocol.SupportsQueryElements(11)); Assert.True(BridgeProtocol.SupportsQueryElements(12)); Assert.True(BridgeProtocol.SupportsQueryElements(13)); Assert.True(BridgeProtocol.SupportsQueryElements(14)); Assert.True(BridgeProtocol.SupportsQueryElements(15)); Assert.True(BridgeProtocol.SupportsQueryElements(16)); Assert.False(BridgeProtocol.SupportsQueryElements(20));
+        Assert.True(BridgeProtocol.SupportsGetContext(11)); Assert.True(BridgeProtocol.SupportsGetContext(12)); Assert.True(BridgeProtocol.SupportsGetContext(13)); Assert.True(BridgeProtocol.SupportsGetContext(14)); Assert.True(BridgeProtocol.SupportsGetContext(15)); Assert.True(BridgeProtocol.SupportsGetContext(16)); Assert.True(BridgeProtocol.SupportsGetContext(20)); Assert.False(BridgeProtocol.SupportsGetContext(21));
+        Assert.True(BridgeProtocol.SupportsQueryElements(11)); Assert.True(BridgeProtocol.SupportsQueryElements(12)); Assert.True(BridgeProtocol.SupportsQueryElements(13)); Assert.True(BridgeProtocol.SupportsQueryElements(14)); Assert.True(BridgeProtocol.SupportsQueryElements(15)); Assert.True(BridgeProtocol.SupportsQueryElements(16)); Assert.True(BridgeProtocol.SupportsQueryElements(20)); Assert.False(BridgeProtocol.SupportsQueryElements(21));
     }
 
     [Fact]

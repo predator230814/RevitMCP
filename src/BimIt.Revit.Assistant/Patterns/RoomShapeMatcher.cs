@@ -12,9 +12,21 @@ internal sealed record SourceDevice(
 internal sealed record SourceRoomPattern(
     IReadOnlyList<PlanPoint> Boundary,
     PlanPoint? Entrance,
-    IReadOnlyList<SourceDevice> Devices);
+    IReadOnlyList<SourceDevice> Devices,
+    IReadOnlyList<PatternRule>? Rules = null,
+    IReadOnlyList<PatternAnchor>? Anchors = null,
+    SemanticReport? Semantics = null);
 
-internal sealed record CandidateOpening(double X, double Y, string Kind);
+internal sealed record CandidateOpening(
+    double X,
+    double Y,
+    string Kind,
+    string? OtherSideName = null,
+    string? OtherSideNumber = null,
+    string? OtherSideStatus = null,
+    double? FacingX = null,
+    double? FacingY = null,
+    double? WidthMetres = null);
 
 internal sealed record CandidateRoom(
     string? Name,
@@ -23,10 +35,13 @@ internal sealed record CandidateRoom(
     double CentroidX,
     double CentroidY,
     IReadOnlyList<PlanPoint> Loop,
-    bool UnsupportedLoops,
     bool VerticesTruncated,
     IReadOnlyList<CandidateOpening> Openings,
-    string? ElementRef = null);
+    string? ElementRef = null,
+    IReadOnlyList<IReadOnlyList<PlanPoint>>? Holes = null,
+    string? SourceKind = null,
+    string? LinkLabel = null,
+    string? LoopFailure = null);
 
 internal sealed record ProjectedDevice(
     string Role,
@@ -47,7 +62,9 @@ internal sealed record RoomShapeMatch(
     string? Reason,
     IReadOnlyList<PlanPoint> Outline,
     IReadOnlyList<ProjectedDevice> Devices,
-    string? RoomRef = null);
+    string? RoomRef = null,
+    string? SourceKind = null,
+    string? LinkLabel = null);
 
 internal static class RoomShapeMatcher
 {
@@ -69,7 +86,8 @@ internal static class RoomShapeMatcher
 
     public static IReadOnlyList<RoomShapeMatch> Match(
         SourceRoomPattern source,
-        IReadOnlyList<CandidateRoom> candidates)
+        IReadOnlyList<CandidateRoom> candidates,
+        bool resolveSemantics = true)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(candidates);
@@ -77,7 +95,7 @@ internal static class RoomShapeMatcher
         var matches = new List<RoomShapeMatch>(candidates.Count);
         for (var index = 0; index < candidates.Count; index++)
         {
-            matches.Add(MatchOne(source, preparedSource, candidates[index], index));
+            matches.Add(MatchOne(source, preparedSource, candidates[index], index, resolveSemantics));
         }
 
         return matches;
@@ -87,33 +105,39 @@ internal static class RoomShapeMatcher
         SourceRoomPattern source,
         PreparedShape? sourceShape,
         CandidateRoom candidate,
-        int index)
+        int index,
+        bool resolveSemantics)
     {
         var label = Label(candidate, index);
-        if (candidate.UnsupportedLoops)
+        if (candidate.LoopFailure is not null)
         {
-            return Rejected(label, candidate.LevelName, "multiple_boundary_loops");
+            return Rejected(label, candidate.LevelName, candidate.LoopFailure, candidate);
         }
 
-        if (candidate.VerticesTruncated || candidate.Loop.Count > MaxStraightVertices)
+        if (candidate.VerticesTruncated)
         {
-            return Rejected(label, candidate.LevelName, "boundary_too_complex");
+            return Rejected(label, candidate.LevelName, "boundary_too_complex", candidate);
         }
 
         var prepared = Prepare(candidate.Loop);
         if (prepared is not { } room || sourceShape is not { } sourcePrepared)
         {
-            return Rejected(label, candidate.LevelName, "degenerate_boundary");
+            return Rejected(label, candidate.LevelName, "degenerate_boundary", candidate);
+        }
+
+        if (room.Clean.Count > MaxStraightVertices)
+        {
+            return Rejected(label, candidate.LevelName, "boundary_too_complex", candidate);
         }
 
         if (SelfIntersects(room.Clean))
         {
-            return Rejected(label, candidate.LevelName, "self_intersecting_boundary");
+            return Rejected(label, candidate.LevelName, "self_intersecting_boundary", candidate);
         }
 
         if (!IsMostlyOrthogonal(room.Clean))
         {
-            return Rejected(label, candidate.LevelName, "non_orthogonal_boundary");
+            return Rejected(label, candidate.LevelName, "non_orthogonal_boundary", candidate);
         }
 
         var aspectGap = Math.Abs(sourcePrepared.Aspect - room.Aspect) / Math.Max(sourcePrepared.Aspect, room.Aspect);
@@ -130,6 +154,41 @@ internal static class RoomShapeMatcher
             : null;
         var band = score >= HighConfidence ? "high" : score >= LowerConfidence ? "lower" : "rejected";
         var devices = ProjectDevices(source, sourcePrepared, room, candidate, best);
+        var rules = source.Rules ?? [];
+        if (resolveSemantics && rules.Count > 0)
+        {
+            PlanPoint? entrance = source.Entrance is PlanPoint pageEntrance
+                ? Absolute(ToLocal(pageEntrance, sourcePrepared, room, best.Quarters, best.Mirror), candidate)
+                : null;
+            var adapted = SemanticPatternAdapter.TryPlace(
+                rules,
+                source.Devices,
+                candidate.Loop,
+                candidate.Holes ?? [],
+                candidate.CentroidX,
+                candidate.CentroidY,
+                candidate.Openings,
+                devices,
+                entrance,
+                out var placements);
+            devices = placements.Select(placement =>
+            {
+                var local = new PlanPoint(placement.X - candidate.CentroidX, placement.Y - candidate.CentroidY);
+                var normalized = NormalizePoint(local, room);
+                return new ProjectedDevice(placement.Role, placement.PlacementKind, placement.X, placement.Y, normalized.X, normalized.Y, placement.FamilyHint);
+            }).ToArray();
+            if (!adapted)
+            {
+                reason = "unresolved_rule";
+                band = "rejected";
+            }
+            else if (band == "rejected")
+            {
+                band = "lower";
+                reason = "semantic_match";
+            }
+        }
+
         return new RoomShapeMatch(
             label,
             candidate.LevelName,
@@ -140,7 +199,14 @@ internal static class RoomShapeMatcher
             reason,
             Normalize(room.Clean, room),
             devices,
-            candidate.ElementRef);
+            candidate.ElementRef,
+            candidate.SourceKind,
+            candidate.LinkLabel);
+    }
+
+    private static PlanPoint Absolute(PlanPoint local, CandidateRoom room)
+    {
+        return new PlanPoint(room.CentroidX + local.X, room.CentroidY + local.Y);
     }
 
     private static Chosen ChooseTransform(
@@ -661,9 +727,9 @@ internal static class RoomShapeMatcher
         return string.IsNullOrWhiteSpace(label) ? "Room " + (index + 1) : label;
     }
 
-    private static RoomShapeMatch Rejected(string label, string? level, string reason)
+    private static RoomShapeMatch Rejected(string label, string? level, string reason, CandidateRoom? candidate = null)
     {
-        return new RoomShapeMatch(label, level, "rejected", 0, 0, false, reason, [], []);
+        return new RoomShapeMatch(label, level, "rejected", 0, 0, false, reason, [], [], candidate?.ElementRef, candidate?.SourceKind, candidate?.LinkLabel);
     }
 
     private readonly record struct PreparedShape(

@@ -49,6 +49,7 @@ internal static class TestSupport
             {
                 BridgeProtocol.GetSelectionVersion => BridgeProtocol.GetSelectionVersions,
                 BridgeProtocol.PreviewRoomPatternPlacementsVersion => BridgeProtocol.PreviewRoomPatternPlacementsVersions,
+                BridgeProtocol.ReadSpatialRoomsVersion => BridgeProtocol.ReadSpatialRoomsVersions,
                 BridgeProtocol.GetMepDeviceTypesVersion => BridgeProtocol.GetMepDeviceTypesVersions,
                 BridgeProtocol.GetRoomLayoutsVersion => BridgeProtocol.GetRoomLayoutsVersions,
                 BridgeProtocol.ApplyMepDevicePlacementsVersion => BridgeProtocol.ApplyMepDevicePlacementsVersions,
@@ -844,6 +845,17 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         _ = timeout;
         _ = cancellationToken;
         throw new NotSupportedException("This recording client does not implement revit.preview_room_pattern_placements.");
+    }
+
+    public Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(
+        ReadSpatialRoomsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.read_spatial_rooms.");
     }
 
     public Task<GetWarningsResult> GetWarningsAsync(

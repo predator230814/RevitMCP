@@ -60,6 +60,9 @@ public static class RoomPatternReview
             && !json.Contains("familyTypeRef", StringComparison.Ordinal)
             && !json.Contains("room_ref", StringComparison.Ordinal)
             && !json.Contains("roomRef", StringComparison.Ordinal)
+            && !json.Contains("spatial_room_ref", StringComparison.Ordinal)
+            && !json.Contains("spatialRoomRef", StringComparison.Ordinal)
+            && !json.Contains(".rvt", StringComparison.OrdinalIgnoreCase)
             && !json.Contains(":\\", StringComparison.Ordinal)
             && !json.Contains("://", StringComparison.Ordinal)
             && !json.Contains("\\\\", StringComparison.Ordinal);
@@ -112,7 +115,7 @@ public static class RoomPatternReview
             return false;
         }
 
-        return review.Rooms.All(IsRoom) && (review.Roles is null || review.Roles.All(IsRoleCard));
+        return review.Rooms.All(IsRoom) && (review.Roles is null || review.Roles.All(IsRoleCard)) && IsUnderstood(review.Understood);
     }
 
     private static bool IsGeneration(string value)
@@ -178,6 +181,8 @@ public static class RoomPatternReview
     {
         return IsLabel(room.Label)
             && IsLabel(room.Level)
+            && IsLabel(room.LinkLabel)
+            && room.Source is null or "host" or "link"
             && room.Band is "high" or "lower" or "rejected"
             && room.Score is >= 0 and <= 1
             && room.RotationDegrees is 0 or 90 or 180 or 270
@@ -185,7 +190,8 @@ public static class RoomPatternReview
             && room.Outline is { Count: <= 24 }
             && room.Outline.All(IsUnit)
             && room.Devices is { Count: <= 20 }
-            && room.Devices.All(device => IsRole(device.Role) && IsPlacement(device.Placement) && IsUnit(device));
+            && room.Devices.All(device => IsRole(device.Role) && IsPlacement(device.Placement) && IsUnit(device))
+            && IsReasoning(room.Reasoning);
     }
 
     private static bool IsReason(string? reason)
@@ -200,7 +206,13 @@ public static class RoomPatternReview
             or "low_shape_similarity"
             or "not_found"
             or "not_a_room"
-            or "boundary_unavailable";
+            or "boundary_unavailable"
+            or "named_room"
+            or "no_outer_loop"
+            or "ambiguous_outer_loop"
+            or "unresolved_rule"
+            or "semantic_match"
+            or "target_reasoning_unavailable";
     }
 
     private static bool IsRole(string? role)
@@ -223,6 +235,16 @@ public static class RoomPatternReview
     private static bool IsLabel(string? value)
     {
         return value is null || (value.Length <= 120 && !value.Any(char.IsControl));
+    }
+
+    private static bool IsUnderstood(List<string>? lines)
+    {
+        return lines is null || (lines.Count <= 12 && lines.All(line => line.Length is >= 1 and <= 160 && !line.Any(char.IsControl)));
+    }
+
+    private static bool IsReasoning(List<string>? lines)
+    {
+        return lines is null || (lines.Count <= 8 && lines.All(line => line.Length is >= 1 and <= 160 && !line.Any(char.IsControl)));
     }
 
     public sealed class Review
@@ -258,6 +280,8 @@ public static class RoomPatternReview
         public List<RoleCard>? Roles { get; set; }
 
         public List<RoomCard>? Rooms { get; set; }
+
+        public List<string>? Understood { get; set; }
     }
 
     public sealed class RoleCard
@@ -325,5 +349,11 @@ public static class RoomPatternReview
         public List<Point>? Outline { get; set; }
 
         public List<DevicePoint>? Devices { get; set; }
+
+        public string? Source { get; set; }
+
+        public string? LinkLabel { get; set; }
+
+        public List<string>? Reasoning { get; set; }
     }
 }

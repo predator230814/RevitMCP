@@ -138,6 +138,24 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                 content = "The assistant did not return an answer.";
             }
 
+            if (_client is not null)
+            {
+                try
+                {
+                    await PatternTargetOrchestrator.CompleteAsync(
+                        _patternStore,
+                        new GitHubCopilotPatternTargetReasoner(_client, _directory, Status.Model),
+                        budget.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+                {
+                    throw;
+                }
+                catch (Exception)
+                {
+                }
+            }
+
             return new AssistantAgentTurn("BIM-IT Assistant", content, false, ConsumeTurnTools(), _patternStore.PeekReviewJson());
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !_stop.IsCancellationRequested)

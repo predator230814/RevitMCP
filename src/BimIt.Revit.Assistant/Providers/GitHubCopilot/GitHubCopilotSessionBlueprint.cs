@@ -9,6 +9,20 @@ internal static class GitHubCopilotSessionBlueprint
 
     public const string AutoModel = "auto";
 
+    public const string SemanticRelationshipGuidance =
+        """
+        Semantic rules may express either relationships inferred from the visual source or relationships explicitly requested by the user. When the user explicitly states a relationship, encode it even when the image does not independently prove that relationship. Never invent a relationship unsupported by either the image or the user. An entrance or opposite_boundary rule does not require a source-page entrance point. Optional basis is observed or user_stated; set user_stated for an explicit user instruction. One paired_symmetric rule means one pair.
+        user says switch at entrance → entrance
+        user says centred luminaire → room_center
+        user says two receptacles form a pair → paired_symmetric
+        user says data on wall opposite entrance → opposite_boundary
+        """;
+
+    public const string RoomPatternToolDescription =
+        "Store one untrusted reading of the current attached page. First describe the observed boundary, optional entrance, and devices. Every point is {\"page_x\":0..1,\"page_y\":0..1}, left to right and top to bottom. Optionally add semantic relationships. One paired_symmetric rule means one pair. Semantic enrichment is optional. BIM-IT keeps a valid visual pattern when a relationship cannot be read. "
+        + SemanticRelationshipGuidance
+        + " This does not approve or modify Revit. Never send Revit identities or final coordinates. Do not choose a target door in this call. Target rooms are compared after this tool returns. If stored is true, stop. If stored is false and a reason is present, correct the visual observations once.";
+
     public const string SystemPrompt =
         """
         You are BIM-IT Assistant operating on the current Revit session.
@@ -21,9 +35,13 @@ internal static class GitHubCopilotSessionBlueprint
         A proposal cannot preview, approve, or modify the Revit model.
         You cannot supply Revit identities or a calibration flag.
         bimit_propose_room_pattern stores one untrusted interpretation of the current attached page.
-        Describe only what you see on that page: one room boundary, an optional entrance, and detected devices.
-        Every point is {"page_x":0..1,"page_y":0..1}. page_x runs left to right. page_y runs top to bottom.
-        If the tool returns a reason, correct the call and try once more in the same turn.
+        Describe the observed boundary, the detected devices, and an entrance or visual anchor only when you see it.
+        Semantic relationships are optional. Use only these anchors: room_center, entrance, nearest_boundary, opposite_boundary, corner, paired_symmetric.
+        One paired_symmetric rule means one pair. Keep the raw page points. A rule must not contain final coordinates or a Revit identity.
+        """ + SemanticRelationshipGuidance + """
+        Every observed point is {"page_x":0..1,"page_y":0..1}. page_x runs left to right. page_y runs top to bottom.
+        If stored is true, do not call the tool again. A semantic warning does not undo the stored pattern.
+        If stored is false and the result includes a reason, correct the visual observations and call once more in the same turn.
         Do not send page width, height, or aspect ratio.
         When the user names a room type, such as every studio, pass room_name as that word. Omit room_name when the user asks for rooms of the same shape.
         You cannot supply element references or decide which rooms match.
@@ -142,7 +160,62 @@ internal static class GitHubCopilotSessionBlueprint
         };
     }
 
+    public const string TargetReasoningPrompt =
+        """
+        You compare one stored room pattern with candidate rooms. Return only JSON. Choose semantic correspondence keys supplied in the request. Do not invent keys, coordinates, Revit identities, walls, approvals, or model changes. Assessments are compatible, uncertain, or incompatible. If several entrance doors remain equally plausible, use uncertain and omit the entrance key.
+        """;
+
+    public static SessionConfig CreateTargetSessionConfig(string workingDirectory, string? model)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
+        return new SessionConfig
+        {
+            Model = string.IsNullOrWhiteSpace(model) ? AutoModel : model,
+            Streaming = false,
+            WorkingDirectory = workingDirectory,
+            EnableSessionStore = false,
+            EnableSkills = false,
+            Memory = new MemoryConfiguration { Enabled = false },
+            InfiniteSessions = new InfiniteSessionConfig { Enabled = false },
+            McpServers = new Dictionary<string, McpServerConfig>(),
+            AvailableTools = new ToolSet(),
+            ExcludedTools = [],
+            Tools = [],
+            SystemMessage = new SystemMessageConfig
+            {
+                Mode = SystemMessageMode.Replace,
+                Content = TargetReasoningPrompt,
+            },
+            OnPermissionRequest = Deny,
+#pragma warning disable GHCP001
+            EnableMcpApps = false,
+#pragma warning restore GHCP001
+            EnableHostGitOperations = false,
+            EnableFileHooks = false,
+            EnableConfigDiscovery = false,
+            SkipCustomInstructions = true,
+            EnableOnDemandInstructionDiscovery = false,
+            CoauthorEnabled = false,
+            ManageScheduleEnabled = false,
+            EnableExperimentalMode = false,
+            SkillDirectories = [],
+            PluginDirectories = [],
+            HookDirectories = [],
+            AgentDirectories = [],
+            InstructionDirectories = [],
+            IncludedBuiltinSkills = [],
+            CustomAgents = [],
+            Commands = [],
+            GitHubToken = null,
+        };
+    }
+
 #pragma warning disable GHCP001 // PermissionDecision is the current SDK permission contract.
+    private static Task<GitHub.Copilot.Rpc.PermissionDecision> Deny(PermissionRequest request, PermissionInvocation invocation)
+    {
+        return Task.FromResult(GitHub.Copilot.Rpc.PermissionDecision.Reject("Target reasoning cannot grant a capability."));
+    }
+
     private static Task<GitHub.Copilot.Rpc.PermissionDecision> Decide(PermissionRequest request, PermissionInvocation invocation)
     {
         if (GitHubCopilotPermissions.IsAllowed(request))
@@ -184,7 +257,7 @@ internal static class GitHubCopilotSessionBlueprint
             new AIFunctionFactoryOptions
             {
                 Name = RoomPatternProposalTool.Name,
-                Description = "Store one untrusted interpretation of the current attached page. Every boundary, entrance, and device point is {\"page_x\":0..1,\"page_y\":0..1}. page_x runs left to right. page_y runs top to bottom. When the user names a room type, pass room_name as that word, such as studio. Omit room_name to match rooms by shape. BIM-IT selects the rooms after this call. This does not approve or modify Revit. Do not send x, y, Revit identities, family ids, page width, height, or aspect ratio. If the result includes a reason, correct the arguments and call again.",
+                Description = RoomPatternToolDescription,
             });
     }
 

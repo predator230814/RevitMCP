@@ -169,6 +169,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("patternpreview.create");
         return null;
     }
+
+    public IRevitReadSpatialRoomsService? CreateReadSpatialRooms(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("spatialrooms.create");
+        return new RecordingReadSpatialRoomsService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -266,6 +273,16 @@ internal sealed class RecordingGetRoomLayoutsService : IRevitGetRoomLayoutsServi
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording room layouts does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingReadSpatialRoomsService : IRevitReadSpatialRoomsService
+{
+    public Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(ReadSpatialRoomsRequest request, CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording spatial rooms does not execute Revit work.");
     }
 }
 
@@ -429,6 +446,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitGetRoomLayoutsService? getRoomLayouts,
         IRevitGetMepDeviceTypesService? getMepDeviceTypes,
         IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements,
+        IRevitReadSpatialRoomsService? readSpatialRooms,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

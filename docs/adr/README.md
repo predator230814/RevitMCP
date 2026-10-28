@@ -22,6 +22,7 @@ Accepted ADRs:
 - [ADR-0016](ADR-0016-assistant-structured-proposals-and-controlled-write-orchestration.md) — Assistant structured proposals and controlled-write orchestration. Accepted. Slice 1 stores an untrusted proposal; preview, review, and apply orchestration remain unimplemented.
 - [ADR-0017](ADR-0017-pattern-intelligence-and-spatial-grounding.md) — Pattern intelligence and spatial grounding. Accepted. Replaces the unmerged PR #90 calibration draft. This slice is read-only.
 - [ADR-0018](ADR-0018-pattern-family-resolution-and-controlled-application.md) — Pattern family resolution and controlled application. Accepted. Resolves loaded family types, previews pattern placements, and applies them through the existing approval.
+- [ADR-0019](ADR-0019-linked-spatial-context-and-semantic-adaptation.md) — Linked spatial context and semantic pattern adaptation. Accepted. Reads host and linked rooms, keeps inner boundary loops, and adapts a stated pattern in review. No new write.
 
 RevitMCP was renamed to BIM-IT Revit MCP. ADR-0001 through ADR-0011 keep the name used when they were accepted. See ADR-0012.
 

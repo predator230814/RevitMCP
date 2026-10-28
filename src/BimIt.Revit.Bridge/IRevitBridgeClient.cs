@@ -81,4 +81,9 @@ public interface IRevitBridgeClient : IAsyncDisposable
         PreviewRoomPatternPlacementsRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken);
+
+    Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(
+        ReadSpatialRoomsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
 }

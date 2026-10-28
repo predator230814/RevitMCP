@@ -23,6 +23,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitGetRoomLayoutsService? _getRoomLayouts;
     private readonly IRevitGetMepDeviceTypesService? _getMepDeviceTypes;
     private readonly IRevitPreviewRoomPatternPlacementsService? _previewRoomPatternPlacements;
+    private readonly IRevitReadSpatialRoomsService? _readSpatialRooms;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -43,7 +44,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitApplyMepDevicePlacementsService? applyMepDevicePlacements = null,
         IRevitGetRoomLayoutsService? getRoomLayouts = null,
         IRevitGetMepDeviceTypesService? getMepDeviceTypes = null,
-        IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements = null)
+        IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements = null,
+        IRevitReadSpatialRoomsService? readSpatialRooms = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -63,6 +65,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _getRoomLayouts = getRoomLayouts;
         _getMepDeviceTypes = getMepDeviceTypes;
         _previewRoomPatternPlacements = previewRoomPatternPlacements;
+        _readSpatialRooms = readSpatialRooms;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -703,6 +706,44 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The room pattern placement preview could not be created."));
+        }
+    }
+
+    [JsonRpcMethod("revit.read_spatial_rooms")]
+    public async Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(
+        ReadSpatialRoomsRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsReadSpatialRooms,
+            "revit.read_spatial_rooms is not available on this connection.");
+        if (_readSpatialRooms is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.read_spatial_rooms is not available on this endpoint."));
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            return await _readSpatialRooms.ReadSpatialRoomsAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The spatial room request could not be executed."));
         }
     }
 

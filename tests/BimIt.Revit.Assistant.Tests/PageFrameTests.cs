@@ -155,6 +155,112 @@ public sealed class PageFrameTests
         Assert.Contains("left to right", Description(typeof(RoomPatternDeviceRequest), "PageX"), StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Matching_frame_keeps_rules_and_converts_anchor_coordinates()
+    {
+        var rules = new[]
+        {
+            new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null, PatternRuleBasis.UserStated),
+            new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null, PatternRuleBasis.UserStated),
+            new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair-1", null, PatternRuleBasis.UserStated),
+            new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, null, PatternRuleBasis.UserStated),
+        };
+        var semantics = new SemanticReport(SemanticReport.Complete, 0, []);
+        var page = new SourceRoomPattern(
+            [new PlanPoint(0.1, 0.2), new PlanPoint(0.9, 0.2), new PlanPoint(0.9, 0.8), new PlanPoint(0.1, 0.8)],
+            null,
+            [new SourceDevice("luminaire", 0.15, 0.15, "interior", "centre")],
+            rules,
+            [new PatternAnchor("counter", 0.25, 0.75)],
+            semantics);
+
+        var matching = PageFrame.ForMatching(page, 400, 200);
+
+        Assert.Same(rules, matching.Rules);
+        Assert.Same(semantics, matching.Semantics);
+        Assert.Equal(PatternRuleBasis.UserStated, matching.Rules![0].Basis);
+        Assert.Equal("pair-1", matching.Rules[2].Group);
+        var anchor = Assert.Single(matching.Anchors!);
+        Assert.Equal("counter", anchor.Label);
+        Assert.Equal(100, anchor.X, 6);
+        Assert.Equal(50, anchor.Y, 6);
+        Assert.Equal(40, matching.Boundary[0].X, 6);
+        Assert.Equal(160, matching.Boundary[0].Y, 6);
+        Assert.Null(matching.Entrance);
+        Assert.Equal(60, matching.Devices[0].X, 6);
+        Assert.Equal(170, matching.Devices[0].Y, 6);
+        Assert.Equal("centre", matching.Devices[0].FamilyHint);
+        Assert.Equal(new PlanPoint(0.1, 0.2), page.Boundary[0]);
+        Assert.Equal(0.15, page.Devices[0].X, 6);
+        Assert.Equal(0.15, page.Devices[0].Y, 6);
+        Assert.Equal(0.25, page.Anchors![0].X, 6);
+        Assert.Equal(0.75, page.Anchors[0].Y, 6);
+        Assert.Equal(7, AssistantModelTools.Names.Length);
+    }
+
+    [Fact]
+    public void Matching_frame_adapts_user_stated_rules_instead_of_projecting_the_sketch()
+    {
+        var rules = new[]
+        {
+            new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null, PatternRuleBasis.UserStated),
+            new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null, PatternRuleBasis.UserStated),
+            new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair-1", null, PatternRuleBasis.UserStated),
+            new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, null, PatternRuleBasis.UserStated),
+        };
+        var page = new SourceRoomPattern(
+            [new PlanPoint(0, 0), new PlanPoint(1, 0), new PlanPoint(1, 1), new PlanPoint(0, 1)],
+            null,
+            [
+                new SourceDevice("switch", 0.02, 0.02, "boundary", null),
+                new SourceDevice("luminaire", 0.02, 0.04, "interior", null),
+                new SourceDevice("receptacle", 0.04, 0.02, "boundary", null),
+                new SourceDevice("receptacle", 0.06, 0.02, "boundary", null),
+                new SourceDevice("data", 0.03, 0.05, "boundary", null),
+            ],
+            rules,
+            null,
+            new SemanticReport(SemanticReport.Complete, 0, []));
+        var matching = PageFrame.ForMatching(page, 300, 180);
+        var oneDoor = new CandidateRoom("Studio", "203", "L2", 5, 3, Rectangle(0, 0, 10, 6), false, [new CandidateOpening(1, 0, "door")]);
+        var adapted = Assert.Single(RoomShapeMatcher.Match(matching, [oneDoor]));
+        var projected = Assert.Single(RoomShapeMatcher.Match(
+            new SourceRoomPattern(matching.Boundary, matching.Entrance, matching.Devices),
+            [oneDoor]));
+
+        Assert.NotEqual("rejected", adapted.Band);
+        Assert.NotEqual("unresolved_rule", adapted.Reason);
+        var light = adapted.Devices.Single(device => device.Role == "luminaire");
+        var sketchLight = projected.Devices.Single(device => device.Role == "luminaire");
+        Assert.InRange(light.LocalX, 4.5, 5.5);
+        Assert.InRange(light.LocalY, 2.5, 3.5);
+        Assert.True(Math.Abs(sketchLight.LocalX - 5) > 1.5 || Math.Abs(sketchLight.LocalY - 3) > 1.5);
+        var entranceSwitch = adapted.Devices.Single(device => device.Role == "switch");
+        Assert.InRange(entranceSwitch.LocalX, 0, 2.5);
+        Assert.InRange(entranceSwitch.LocalY, 0, 1.5);
+        var pair = adapted.Devices.Where(device => device.Role == "receptacle").ToArray();
+        Assert.Equal(2, pair.Length);
+        Assert.True(pair.All(device => device.LocalY > 4));
+        Assert.True(Math.Abs(pair[0].LocalX - pair[1].LocalX) > 0.8 || Math.Abs(pair[0].LocalY - pair[1].LocalY) > 0.8);
+        Assert.True(adapted.Devices.Single(device => device.Role == "data").LocalY > 4);
+        Assert.Equal(new PlanPoint(0, 0), page.Boundary[0]);
+        Assert.Equal(0.02, page.Devices[0].X, 6);
+
+        var severalDoors = new CandidateRoom(
+            "Studio",
+            "406",
+            "L4",
+            5,
+            3,
+            Rectangle(0, 0, 10, 6),
+            false,
+            [new CandidateOpening(1, 0, "door"), new CandidateOpening(9, 0, "door")]);
+        var unresolved = Assert.Single(RoomShapeMatcher.Match(matching, [severalDoors]));
+        Assert.Equal("rejected", unresolved.Band);
+        Assert.Equal("unresolved_rule", unresolved.Reason);
+        Assert.Equal(7, AssistantModelTools.Names.Length);
+    }
+
     private static string Description(Type type, string property)
     {
         return type.GetProperty(property)!.GetCustomAttributes(typeof(DescriptionAttribute), false).Cast<DescriptionAttribute>().Single().Description;
@@ -212,7 +318,7 @@ public sealed class PageFrameTests
     {
         var centroid = new PlanPoint(loop.Average(point => point.X), loop.Average(point => point.Y));
         var openings = door is PlanPoint point ? new[] { new CandidateOpening(point.X, point.Y, "door") } : Array.Empty<CandidateOpening>();
-        return new CandidateRoom("Bedroom", "201", "Level 2", centroid.X, centroid.Y, loop, false, false, openings);
+        return new CandidateRoom("Bedroom", "201", "Level 2", centroid.X, centroid.Y, loop, false, openings);
     }
 
     private static IReadOnlyList<PlanPoint> Rectangle(double x0, double y0, double x1, double y1)
