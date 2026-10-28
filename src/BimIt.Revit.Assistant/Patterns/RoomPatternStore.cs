@@ -201,13 +201,13 @@ internal sealed class RoomPatternStore
         }
     }
 
-    public void MarkTargetReasoningUnavailable(string generationId, string line)
+    public bool MarkTargetReasoningUnavailable(string generationId, string line)
     {
         lock (_gate)
         {
             if (_pending is null || !string.Equals(_pending.GenerationId, generationId, StringComparison.Ordinal) || !PendingIsCurrent(_pending))
             {
-                return;
+                return false;
             }
 
             var review = _pending.Snapshot.Review;
@@ -224,10 +224,11 @@ internal sealed class RoomPatternStore
             }
 
             _pending = null;
+            return true;
         }
     }
 
-    public void CompleteTargetReasoning(string generationId, PatternTargetOutcome outcome)
+    public bool CompleteTargetReasoning(string generationId, PatternTargetOutcome outcome)
     {
         ArgumentNullException.ThrowIfNull(outcome);
         lock (_gate)
@@ -238,14 +239,14 @@ internal sealed class RoomPatternStore
                 || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal)
                 || !PendingIsCurrent(_pending))
             {
-                return;
+                return false;
             }
 
             var json = RoomPatternReview.Serialize(outcome.Review);
             if (json is null)
             {
                 _pending = null;
-                return;
+                return false;
             }
 
             _reviewJson = json;
@@ -267,6 +268,7 @@ internal sealed class RoomPatternStore
                     Score = match.Score,
                     RotationDegrees = match.RotationDegrees,
                     Mirrored = match.Mirrored,
+                    AdaptationStatus = match.AdaptationStatus,
                     Devices = match.Devices.Select(device => new HiddenPatternDevice
                     {
                         Role = device.Role,
@@ -280,6 +282,7 @@ internal sealed class RoomPatternStore
             };
             _configuration = PatternLocalConfiguration.Default(_generation);
             _pending = null;
+            return true;
         }
     }
 
@@ -382,6 +385,8 @@ internal sealed class HiddenPatternRoom
 
     public required bool Mirrored { get; init; }
 
+    public string? AdaptationStatus { get; init; }
+
     public required IReadOnlyList<HiddenPatternDevice> Devices { get; init; }
 }
 
@@ -410,7 +415,10 @@ internal sealed class PatternLocalConfiguration
 
     public static PatternLocalConfiguration Default(RoomPatternGeneration generation)
     {
-        var selected = generation.Rooms.Where(room => room.Band == "high").Select(room => room.Index).ToArray();
+        var selected = generation.Rooms
+            .Where(room => room.Band == "high" && PatternAdaptationStatus.Selectable(room.AdaptationStatus))
+            .Select(room => room.Index)
+            .ToArray();
         return new PatternLocalConfiguration
         {
             SelectedRooms = selected,
@@ -429,7 +437,7 @@ internal sealed class PatternLocalConfiguration
         foreach (var index in SelectedRooms)
         {
             var room = generation.Rooms.FirstOrDefault(item => item.Index == index);
-            if (room is null || room.Band == "rejected" || string.IsNullOrEmpty(room.RoomRef))
+            if (room is null || room.Band == "rejected" || string.IsNullOrEmpty(room.RoomRef) || !PatternAdaptationStatus.Selectable(room.AdaptationStatus))
             {
                 return false;
             }

@@ -191,6 +191,7 @@ public static class RoomPatternReview
             && room.Outline.All(IsUnit)
             && room.Devices is { Count: <= 20 }
             && room.Devices.All(device => IsRole(device.Role) && IsPlacement(device.Placement) && IsUnit(device))
+            && room.AdaptationStatus is null or "resolved" or "partial" or "unresolved"
             && IsReasoning(room.Reasoning);
     }
 
@@ -210,8 +211,6 @@ public static class RoomPatternReview
             or "named_room"
             or "no_outer_loop"
             or "ambiguous_outer_loop"
-            or "unresolved_rule"
-            or "semantic_match"
             or "target_reasoning_unavailable";
     }
 
@@ -244,7 +243,7 @@ public static class RoomPatternReview
 
     private static bool IsReasoning(List<string>? lines)
     {
-        return lines is null || (lines.Count <= 8 && lines.All(line => line.Length is >= 1 and <= 160 && !line.Any(char.IsControl)));
+        return lines is null || (lines.Count <= 12 && lines.All(line => line.Length is >= 1 and <= 160 && !line.Any(char.IsControl)));
     }
 
     public sealed class Review
@@ -353,6 +352,8 @@ public static class RoomPatternReview
         public string? Source { get; set; }
 
         public string? LinkLabel { get; set; }
+
+        public string? AdaptationStatus { get; set; }
 
         public List<string>? Reasoning { get; set; }
     }

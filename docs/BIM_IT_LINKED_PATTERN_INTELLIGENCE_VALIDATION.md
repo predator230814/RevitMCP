@@ -166,3 +166,90 @@ Open limits:
 - The explanation calls every pair a receptacle pair.
 - The main chat text can lag behind the final Pattern Review.
 - Device labels overlap on short walls.
+
+## PR #94 live gate: pattern specification v2
+
+Status: run on 2026-10-28. Results are recorded after the checklist. Product owner verdict: merge gate met.
+
+[ADR-0020](adr/ADR-0020-pattern-specification-v2.md) targets the open limits above. A pair is an arrangement, not an anchor. An unbound `source_correspondence` item is unresolved instead of moving to the facing wall. Interior pairs stay interior. Reasoning wording follows the role. The chat answer is written after target reasoning.
+
+Setup: Revit 2026.5, the MEP host with the Snowdon architectural link loaded, and the PR #94 head built for Revit 2026.
+
+Do not use Confirm, Prepare, Review in Revit, or Apply. Undo must remain unchanged.
+
+### Test A: controlled v2 instruction
+
+Attach the studio sketch. State the items explicitly: one switch at the entrance, two ceiling luminaires around the room centre, a receptacle pair on each side wall as drawn, and one data device on the wall opposite the entrance. Ask BIM-IT to find the studios and show the adaptation without applying anything.
+
+Record:
+
+- the stored items, with role, placement, anchor, count, and arrangement;
+- for each studio: geometry band, adaptation status, and each Resolved ✓ and Unresolved ! line;
+- whether the luminaires stay interior and the two receptacle pairs land on two different walls;
+- the chat answer, and whether its counts match Pattern Review;
+- the Undo list.
+
+### Test B: natural French prompt
+
+Attach the same sketch and send exactly:
+
+> Voici mon croquis électrique d'un studio. Trouve tous les studios de ce type dans le modèle, comprends la logique d'aménagement et montre-moi comment tu l'adapterais à chaque studio. N'applique rien.
+
+Record the same fields as Test A. Compare them with the PR #93 natural-prompt result above. Report a relation as not established when the sketch does not support it. Do not record a PASS for it.
+
+### Merge gate
+
+- Test A shows v2 behaviour.
+- Test B is materially better than PR #93.
+- No security or regression issue.
+- The full Release matrix is green.
+
+### Run record, 2026-10-28
+
+Revit 2026.5 build `26.5.0.55` with the MEP host and the Snowdon Towers Sample Architectural link. The add-in, Assistant, and server were Release builds from the PR #94 branch. The Assistant and server ran from the repository output. The AI Provider showed `GitHub Copilot · auto`, and the turns ran as `gpt-6-luna` on the Copilot Business account. No Confirm, Prepare, Review in Revit, or Apply was used.
+
+#### Test A, first run against `e47bab6`
+
+Pattern logic, user requested: 1 switch · entrance; 2 luminaires · symmetric pair · interior · room centre; 2 receptacles · symmetric pair · boundary · left wall in sketch; 2 receptacles · symmetric pair · boundary · right wall in sketch; 1 data device · opposite entrance. Counts: 6 candidate rooms, 0 high, 6 lower, 0 rejected.
+
+The chat answer was the deterministic completion: "BIM-IT found 6 candidate studio rooms. Target adaptation completed for 4 and is partial for 2. Review the Pattern Review panel for the proposed layouts. No Revit changes were made." Pattern Review agreed: Two Story Studio Unit 204 and Studio Units 203, 304, and 404 were resolved. Two Story Studio Unit 406 and Studio Unit 504 were partial.
+
+Studio Unit 203 chose the door connected to Corridor. Its two receptacle pairs went to the west wall and to the east wall. The switch was at the entrance, the data device was on the opposite wall, and both luminaires stayed inside the room. Two defects were found:
+
+- The luminaire pair was off-centre. The room centre was the Revit room location point, not the geometric centre.
+- The data device label was clipped at the top of the plan.
+
+Two Story Studio Unit 406 reported "Several possible entrance doors remain plausible". The luminaire pair resolved. The switch, both receptacle pairs, and the data device were listed as unresolved, each with its own reason. The room stayed visible and could not be selected. Undo was empty.
+
+#### Test A, second run against `9a02ca1`
+
+The fix uses the area centroid of the outer loop as the room centre. It falls back to the Revit room location point only when the centroid is outside the room or inside a hole. Review labels are kept inside the plan.
+
+The stored pattern logic, the counts, and the chat answer matched the first run. Studio Unit 203 was resolved with the same five lines. Its luminaire pair was centred on the room, and the data device label was visible. Two Story Studio Unit 406 placed its luminaire pair about the geometric centre of the L. Studio Unit 504 was partial for the same reason as 406, although its outline is close to 203's. Undo was empty.
+
+Result: PASS. Test A shows v2 behaviour.
+
+#### Test B, natural French prompt against `9a02ca1`
+
+Pattern logic, observed: 1 receptacle · boundary · top wall in sketch; 2 receptacles · symmetric pair · boundary · left wall in sketch; 2 receptacles · symmetric pair · boundary · right wall in sketch; 1 receptacle · boundary · bottom wall in sketch; 1 other device · boundary · bottom wall in sketch; 1 receptacle · boundary · bottom wall in sketch. Counts: 6 candidate rooms, 0 high, 6 lower, 0 rejected.
+
+The chat answer was "BIM-IT found 6 candidate studio rooms. Target adaptation completed for 6. Review the Pattern Review panel for the proposed layouts. No Revit changes were made." All six studios were resolved. Two Story Studio Unit 406 showed: 1 receptacle → north wall; receptacle pair → west wall; receptacle pair → east wall; 1 receptacle → south wall; 1 other device → south wall; 1 receptacle → south wall.
+
+Compared with PR #93, the pairs no longer collapse onto the wall facing the entrance. Each source group kept its own target wall. Two Story Studio Unit 406 was resolved because no item depended on the entrance. The kitchenette counter (GFCI, CTR, GFCI) was read as three devices on one wall, not as a pair.
+
+Not established:
+
+- The luminaires were not observed in this run, so no interior or room-centre logic was produced.
+- No switch-at-entrance or data-opposite relation was produced.
+
+These are omissions by the source interpretation, not results. They are not recorded as PASS.
+
+Result: materially better than PR #93 on wall correspondence. Incomplete on source interpretation.
+
+#### Limits observed
+
+- The target pass did not settle the entrance for Two Story Studio Unit 406 or Studio Unit 504 in Test A, in either run. Deterministic code refused to guess.
+- Without a trusted geometric match, an interior pair follows the room's principal axis, not the sketch orientation.
+- Three devices on one wall are three single items. The `distributed` arrangement is deferred.
+- Source interpretation of the natural prompt varies between runs. Test B missed the luminaires that Test A observed.
+- The kitchenette wall chosen for Two Story Studio Unit 406 was not checked against the architectural plan.

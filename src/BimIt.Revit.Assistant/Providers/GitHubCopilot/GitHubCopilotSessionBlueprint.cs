@@ -11,15 +11,16 @@ internal static class GitHubCopilotSessionBlueprint
 
     public const string SemanticRelationshipGuidance =
         """
-        Semantic rules may express either relationships inferred from the visual source or relationships explicitly requested by the user. When the user explicitly states a relationship, encode it even when the image does not independently prove that relationship. Never invent a relationship unsupported by either the image or the user. An entrance or opposite_boundary rule does not require a source-page entrance point. Optional basis is observed or user_stated; set user_stated for an explicit user instruction. One paired_symmetric rule means one pair.
-        user says switch at entrance → entrance
-        user says centred luminaire → room_center
-        user says two receptacles form a pair → paired_symmetric
-        user says data on wall opposite entrance → opposite_boundary
+        Each rule describes one independent group of devices: what (role), where (placement and anchor), how many (count 1 to 4), and how they are arranged (single or symmetric_pair). A pair is an arrangement, not an anchor. Placement is boundary for a wall device and interior for a ceiling or floor device; take it from the drawing or the user, not from the role. Anchors: room_center (interior only), entrance, opposite_boundary, nearest_boundary, corner, source_correspondence. Use source_correspondence for a wall group whose meaning is the wall it is drawn on, so BIM-IT keeps that wall instead of a generic one. Two pairs on two different walls are two rules. Do not call every repeated symbol a wall pair. Optional device_indexes lists the observed devices that a rule describes.
+        Semantic rules may express either relationships inferred from the visual source or relationships explicitly requested by the user. When the user explicitly states a relationship, encode it even when the image does not independently prove that relationship. Never invent a relationship unsupported by either the image or the user. An entrance or opposite_boundary rule does not require a source-page entrance point. Optional basis is observed or user_stated; set user_stated for an explicit user instruction.
+        two receptacles drawn on one wall → receptacle, boundary, source_correspondence, count 2, symmetric_pair
+        two ceiling luminaires → luminaire, interior, room_center, count 2, symmetric_pair
+        user says switch at entrance → switch, boundary, entrance, count 1, single
+        user says data on wall opposite entrance → data, boundary, opposite_boundary, count 1, single
         """;
 
     public const string RoomPatternToolDescription =
-        "Store one untrusted reading of the current attached page. First describe the observed boundary, optional entrance, and devices. Every point is {\"page_x\":0..1,\"page_y\":0..1}, left to right and top to bottom. Optionally add semantic relationships. One paired_symmetric rule means one pair. Semantic enrichment is optional. BIM-IT keeps a valid visual pattern when a relationship cannot be read. "
+        "Store one untrusted reading of the current attached page. First describe the observed boundary, optional entrance, and devices. Every point is {\"page_x\":0..1,\"page_y\":0..1}, left to right and top to bottom. Optionally add pattern logic rules. Semantic enrichment is optional. BIM-IT keeps a valid visual pattern when a relationship cannot be read. "
         + SemanticRelationshipGuidance
         + " This does not approve or modify Revit. Never send Revit identities or final coordinates. Do not choose a target door in this call. Target rooms are compared after this tool returns. If stored is true, stop. If stored is false and a reason is present, correct the visual observations once.";
 
@@ -36,8 +37,8 @@ internal static class GitHubCopilotSessionBlueprint
         You cannot supply Revit identities or a calibration flag.
         bimit_propose_room_pattern stores one untrusted interpretation of the current attached page.
         Describe the observed boundary, the detected devices, and an entrance or visual anchor only when you see it.
-        Semantic relationships are optional. Use only these anchors: room_center, entrance, nearest_boundary, opposite_boundary, corner, paired_symmetric.
-        One paired_symmetric rule means one pair. Keep the raw page points. A rule must not contain final coordinates or a Revit identity.
+        Semantic relationships are optional. Use only these anchors: room_center, entrance, nearest_boundary, opposite_boundary, corner, source_correspondence.
+        Use only these arrangements: single, symmetric_pair. Keep the raw page points. A rule must not contain final coordinates or a Revit identity.
         """ + SemanticRelationshipGuidance + """
         Every observed point is {"page_x":0..1,"page_y":0..1}. page_x runs left to right. page_y runs top to bottom.
         If stored is true, do not call the tool again. A semantic warning does not undo the stored pattern.
@@ -162,7 +163,7 @@ internal static class GitHubCopilotSessionBlueprint
 
     public const string TargetReasoningPrompt =
         """
-        You compare one stored room pattern with candidate rooms. Return only JSON. Choose semantic correspondence keys supplied in the request. Do not invent keys, coordinates, Revit identities, walls, approvals, or model changes. Assessments are compatible, uncertain, or incompatible. If several entrance doors remain equally plausible, use uncertain and omit the entrance key.
+        You compare one stored room pattern with candidate rooms. Return only JSON. Choose semantic correspondence keys supplied in the request. Do not invent keys, coordinates, Revit identities, walls, approvals, or model changes. Assessments are compatible, uncertain, or incompatible. If several entrance doors remain equally plausible, use uncertain and omit the entrance key. Bind a target edge only for a boundary pattern whose anchor is source_correspondence. Keep independent source groups on their own corresponding target edges.
         """;
 
     public static SessionConfig CreateTargetSessionConfig(string workingDirectory, string? model)

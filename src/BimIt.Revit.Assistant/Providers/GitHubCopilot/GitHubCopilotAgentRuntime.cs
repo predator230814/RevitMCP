@@ -142,10 +142,14 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             {
                 try
                 {
-                    await PatternTargetOrchestrator.CompleteAsync(
+                    var completion = await PatternTargetOrchestrator.CompleteAsync(
                         _patternStore,
                         new GitHubCopilotPatternTargetReasoner(_client, _directory, Status.Model),
                         budget.Token).ConfigureAwait(false);
+                    if (completion is not null)
+                    {
+                        content = PatternTargetCompletionText.Compose(completion);
+                    }
                 }
                 catch (OperationCanceledException) when (_stop.IsCancellationRequested)
                 {

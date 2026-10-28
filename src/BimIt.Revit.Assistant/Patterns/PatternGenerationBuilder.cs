@@ -130,6 +130,7 @@ internal static class PatternGenerationBuilder
                 Score = match.Score,
                 RotationDegrees = match.RotationDegrees,
                 Mirrored = match.Mirrored,
+                AdaptationStatus = match.AdaptationStatus,
                 Devices = match.Devices.Select(device => new HiddenPatternDevice
                 {
                     Role = device.Role,
@@ -155,7 +156,7 @@ internal static class PatternGenerationBuilder
         };
 
         grounding.Review.Generation = generation.GenerationId;
-        var selectable = rooms.Where(room => room.Band != "rejected" && room.RoomRef.Length > 0);
+        var selectable = rooms.Where(room => room.Band != "rejected" && room.RoomRef.Length > 0 && PatternAdaptationStatus.Selectable(room.AdaptationStatus));
         grounding.Review.SuggestedRooms = (grounding.RoomName is null
                 ? selectable.Where(room => room.Band == "high")
                 : selectable)

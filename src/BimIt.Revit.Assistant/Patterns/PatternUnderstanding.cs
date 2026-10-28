@@ -1,45 +1,5 @@
 namespace BimIt.Revit.Assistant.Patterns;
 
-internal static class PatternAnchors
-{
-    public const string RoomCenter = "room_center";
-
-    public const string Entrance = "entrance";
-
-    public const string NearestBoundary = "nearest_boundary";
-
-    public const string OppositeBoundary = "opposite_boundary";
-
-    public const string Corner = "corner";
-
-    public const string PairedSymmetric = "paired_symmetric";
-
-    public static readonly string[] All =
-    [
-        RoomCenter,
-        Entrance,
-        NearestBoundary,
-        OppositeBoundary,
-        Corner,
-        PairedSymmetric,
-    ];
-
-    public static bool IsAnchor(string? value) => value is not null && All.Contains(value, StringComparer.Ordinal);
-}
-
-internal sealed record PatternRule(string Role, string Anchor, double OffsetMetres, string? Group, double? Confidence, string? Basis = null);
-
-internal static class PatternRuleBasis
-{
-    public const string Observed = "observed";
-
-    public const string UserStated = "user_stated";
-
-    public static bool IsBasis(string? value) => value is Observed or UserStated;
-}
-
-internal sealed record PatternAnchor(string Label, double X, double Y);
-
 internal static class SemanticWarningCodes
 {
     public const string UnknownAnchor = "unknown_anchor";
@@ -47,6 +7,14 @@ internal static class SemanticWarningCodes
     public const string MalformedRule = "malformed_rule";
 
     public const string MalformedAnchor = "malformed_anchor";
+
+    public const string IncompatiblePlacement = "incompatible_placement";
+
+    public const string InvalidCount = "invalid_count";
+
+    public const string UnknownArrangement = "unknown_arrangement";
+
+    public const string UnsupportedArrangement = "unsupported_arrangement";
 }
 
 internal sealed record SemanticReport(string Status, int WarningCount, IReadOnlyList<string> Warnings)
@@ -57,32 +25,34 @@ internal sealed record SemanticReport(string Status, int WarningCount, IReadOnly
 
     public const string None = "none";
 
-    public static SemanticReport Unset(IReadOnlyList<PatternRule>? rules)
+    public static SemanticReport Unset(IReadOnlyList<PatternSpec>? specs)
     {
-        return new SemanticReport(rules is { Count: > 0 } ? Complete : None, 0, []);
+        return new SemanticReport(specs is { Count: > 0 } ? Complete : None, 0, []);
     }
 }
 
 internal static class PatternUnderstanding
 {
     public static IReadOnlyList<string> Summarize(
-        IReadOnlyList<PatternRule>? rules,
+        IReadOnlyList<PatternSpec>? specs,
         IReadOnlyList<PatternAnchor>? anchors,
-        SemanticReport? semantics = null)
+        SemanticReport? semantics = null,
+        IReadOnlyList<PatternSpecEvidence>? evidence = null)
     {
-        var report = semantics ?? SemanticReport.Unset(rules);
+        var report = semantics ?? SemanticReport.Unset(specs);
         var lines = new List<string>();
         if (report.Status == SemanticReport.None)
         {
             lines.Add("Semantic relationships were not established.");
         }
 
-        var requested = (rules ?? []).Where(rule => rule.Basis == PatternRuleBasis.UserStated).ToArray();
-        var observed = (rules ?? []).Where(rule => rule.Basis != PatternRuleBasis.UserStated).ToArray();
+        var all = (specs ?? []).Select((spec, index) => (spec, side: Side(evidence, index))).ToArray();
+        var requested = all.Where(item => item.spec.Basis == PatternBasis.UserStated).ToArray();
+        var observed = all.Where(item => item.spec.Basis != PatternBasis.UserStated).ToArray();
         if (requested.Length > 0)
         {
             lines.Add("User requested:");
-            AppendRules(lines, requested);
+            lines.AddRange(requested.Select(item => Describe(item.spec, item.side)));
         }
 
         if (observed.Length > 0)
@@ -92,7 +62,7 @@ internal static class PatternUnderstanding
                 lines.Add("Observed:");
             }
 
-            AppendRules(lines, observed);
+            lines.AddRange(observed.Select(item => Describe(item.spec, item.side)));
         }
 
         if (report.Status == SemanticReport.Partial)
@@ -109,45 +79,54 @@ internal static class PatternUnderstanding
             lines.Add($"Saw {anchors.Count} visual anchors");
         }
 
-        return lines;
+        return lines.Take(12).ToList();
     }
 
-    private static void AppendRules(List<string> lines, IReadOnlyList<PatternRule> rules)
+    public static string Describe(PatternSpec spec, string? sourceSide = null)
     {
-        foreach (var rule in rules.Where(rule => rule.Anchor == PatternAnchors.PairedSymmetric))
+        var parts = new List<string> { $"{spec.Count} {Noun(spec.Role, spec.Count)}" };
+        if (spec.IsPair)
         {
-            var suffix = string.IsNullOrEmpty(rule.Group) ? "" : $" ({rule.Group})";
-            lines.Add($"2 {Noun(rule.Role, 2, PatternAnchors.PairedSymmetric)} forming a symmetric pair{suffix}");
+            parts.Add("symmetric pair");
         }
 
-        foreach (var group in rules.Where(rule => rule.Anchor != PatternAnchors.PairedSymmetric).GroupBy(rule => (rule.Anchor, rule.Role)))
+        parts.Add(spec.Anchor switch
         {
-            lines.Add($"{group.Count()} {Noun(group.Key.Role, group.Count(), group.Key.Anchor)} {Phrase(group.Key.Anchor)}");
+            PatternAnchors.RoomCenter => "interior · room centre",
+            PatternAnchors.Entrance => "entrance",
+            PatternAnchors.OppositeBoundary => "opposite entrance",
+            PatternAnchors.NearestBoundary => "nearest wall",
+            PatternAnchors.Corner => "corner",
+            PatternAnchors.SourceCorrespondence => sourceSide is null ? "boundary" : $"boundary · {sourceSide} wall in sketch",
+            _ => spec.Placement,
+        });
+        if (!string.IsNullOrEmpty(spec.Group))
+        {
+            parts.Add("(" + spec.Group + ")");
         }
+
+        return string.Join(" · ", parts).Replace(" · (", " (", StringComparison.Ordinal);
     }
 
-    private static string Phrase(string anchor) => anchor switch
+    public static string Noun(string role, int count)
     {
-        PatternAnchors.Entrance => "associated with the entrance",
-        PatternAnchors.RoomCenter => "near room centre",
-        PatternAnchors.OppositeBoundary => "on an opposite wall",
-        PatternAnchors.NearestBoundary => "on the nearest wall",
-        PatternAnchors.Corner => "near a corner",
-        _ => "in the room",
-    };
-
-    private static string Noun(string role, int count, string anchor)
-    {
-        if (role == "luminaire" && anchor == PatternAnchors.RoomCenter)
+        var singular = role switch
         {
-            return count == 1 ? "ceiling luminaire" : "ceiling luminaires";
+            "smoke_detector" => "smoke detector",
+            "data" => "data device",
+            "other" => "other device",
+            _ => role,
+        };
+        if (count == 1)
+        {
+            return singular;
         }
 
-        if (role == "data" && anchor == PatternAnchors.OppositeBoundary)
-        {
-            return count == 1 ? "data/TV device" : "data/TV devices";
-        }
+        return singular.EndsWith("ch", StringComparison.Ordinal) ? singular + "es" : singular + "s";
+    }
 
-        return count == 1 ? role : role + "s";
+    private static string? Side(IReadOnlyList<PatternSpecEvidence>? evidence, int index)
+    {
+        return evidence is not null && index < evidence.Count ? evidence[index].Side : null;
     }
 }

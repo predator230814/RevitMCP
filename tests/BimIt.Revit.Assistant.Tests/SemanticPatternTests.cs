@@ -49,17 +49,17 @@ public sealed class SemanticPatternTests
     {
         var lines = PatternUnderstanding.Summarize(
             [
-                new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, 0.8),
-                new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair", 0.7),
-                new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, 0.9),
-                new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, 0.6),
+                Spec("switch", PatternAnchors.Entrance, offset: 0.15),
+                Spec("receptacle", PatternAnchors.SourceCorrespondence, pair: true, group: "pair"),
+                Spec("luminaire", PatternAnchors.RoomCenter),
+                Spec("data", PatternAnchors.OppositeBoundary, offset: 0.2),
             ],
             [new PatternAnchor("bed", 0.5, 0.5)]);
         var text = string.Join(" ", lines);
-        Assert.Contains("1 switch associated with the entrance", text, StringComparison.Ordinal);
-        Assert.Contains("2 receptacles forming a symmetric pair", text, StringComparison.Ordinal);
-        Assert.Contains("1 ceiling luminaire near room centre", text, StringComparison.Ordinal);
-        Assert.Contains("1 data/TV device on an opposite wall", text, StringComparison.Ordinal);
+        Assert.Contains("1 switch · entrance", text, StringComparison.Ordinal);
+        Assert.Contains("2 receptacles · symmetric pair · boundary (pair)", text, StringComparison.Ordinal);
+        Assert.Contains("1 luminaire · interior · room centre", text, StringComparison.Ordinal);
+        Assert.Contains("1 data device · opposite entrance", text, StringComparison.Ordinal);
         Assert.Contains("Saw a visual anchor: bed", text, StringComparison.Ordinal);
         Assert.DoesNotContain("page_", text, StringComparison.Ordinal);
     }
@@ -69,10 +69,10 @@ public sealed class SemanticPatternTests
     {
         var rules = new[]
         {
-            new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null),
-            new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null),
-            new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, null),
-            new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair", null),
+            Spec("switch", PatternAnchors.Entrance, offset: 0.15),
+            Spec("luminaire", PatternAnchors.RoomCenter),
+            Spec("data", PatternAnchors.OppositeBoundary, offset: 0.2),
+            Spec("receptacle", PatternAnchors.OppositeBoundary, pair: true, group: "pair"),
         };
         var devices = new[]
         {
@@ -85,7 +85,7 @@ public sealed class SemanticPatternTests
         var source = new SourceRoomPattern(Rectangle(0, 0, 1, 1), new PlanPoint(0.5, 0), devices, rules);
         var room = new CandidateRoom("Bedroom", "2", "L1", 5, 3, Rectangle(0, 0, 10, 6), false, [new CandidateOpening(1, 0, "door")]);
         var match = Assert.Single(RoomShapeMatcher.Match(source, [room]));
-        Assert.NotEqual("rejected", match.Band);
+        Assert.Equal(PatternAdaptationStatus.Resolved, match.AdaptationStatus);
         var byRole = match.Devices.GroupBy(device => device.Role).ToDictionary(group => group.Key, group => group.ToArray());
         Assert.InRange(byRole["switch"][0].LocalY, 0, 1.5);
         Assert.InRange(byRole["switch"][0].LocalX, 0, 2.5);
@@ -103,13 +103,13 @@ public sealed class SemanticPatternTests
             Rectangle(0, 0, 4, 2),
             new PlanPoint(2, 0),
             [new SourceDevice("switch", 2, 0.2, "boundary", null)],
-            [new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null)]);
+            [Spec("switch", PatternAnchors.Entrance, offset: 0.15)]);
         var room = new CandidateRoom("Bedroom", "9", "L1", 1, 2, Rectangle(0, 0, 2, 4), false, [new CandidateOpening(1, 0, "door")]);
         var match = Assert.Single(RoomShapeMatcher.Match(source, [room]));
         var device = Assert.Single(match.Devices);
         Assert.InRange(device.LocalX, 0.2, 1.8);
         Assert.InRange(device.LocalY, 0, 1);
-        Assert.NotEqual("unresolved_rule", match.Reason);
+        Assert.Equal(PatternAdaptationStatus.Resolved, match.AdaptationStatus);
     }
 
     [Fact]
@@ -120,13 +120,13 @@ public sealed class SemanticPatternTests
             new PlanPoint(2, 0),
             [new SourceDevice("switch", 2, 0.2, "boundary", null), new SourceDevice("luminaire", 2, 1, "interior", null)],
             [
-                new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null),
-                new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null),
+                Spec("switch", PatternAnchors.Entrance, offset: 0.15),
+                Spec("luminaire", PatternAnchors.RoomCenter),
             ]);
         var room = new CandidateRoom("Bedroom", "4", "L1", 4, 1, Rectangle(0, 0, 8, 2), false, [new CandidateOpening(1, 0, "door")]);
         var match = Assert.Single(RoomShapeMatcher.Match(source, [room]));
-        Assert.Equal("lower", match.Band);
-        Assert.Equal("semantic_match", match.Reason);
+        Assert.Equal("aspect_mismatch", match.Reason);
+        Assert.Equal(PatternAdaptationStatus.Resolved, match.AdaptationStatus);
         Assert.Equal(2, match.Devices.Count);
     }
 
@@ -137,11 +137,12 @@ public sealed class SemanticPatternTests
             Rectangle(0, 0, 4, 2),
             new PlanPoint(2, 0),
             [new SourceDevice("switch", 2, 0.2, "boundary", null)],
-            [new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null)]);
+            [Spec("switch", PatternAnchors.Entrance, offset: 0.15)]);
         var room = new CandidateRoom("Bedroom", "5", "L1", 2, 1, Rectangle(0, 0, 4, 2), false, []);
         var match = Assert.Single(RoomShapeMatcher.Match(source, [room]));
-        Assert.Equal("rejected", match.Band);
-        Assert.Equal("unresolved_rule", match.Reason);
+        Assert.Equal("high", match.Band);
+        Assert.Equal(PatternAdaptationStatus.Unresolved, match.AdaptationStatus);
+        Assert.Empty(match.Devices);
     }
 
     [Fact]
@@ -151,10 +152,11 @@ public sealed class SemanticPatternTests
             Rectangle(0, 0, 10, 8),
             null,
             [new SourceDevice("luminaire", 5, 4, "interior", null)],
-            [new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null)]);
+            [Spec("luminaire", PatternAnchors.RoomCenter)]);
         var room = new CandidateRoom("Bedroom", "6", "L1", 5, 4, Rectangle(0, 0, 10, 8), false, [], Holes: [Rectangle(4, 3, 6, 5)]);
         var match = Assert.Single(RoomShapeMatcher.Match(source, [room]));
-        Assert.Equal("unresolved_rule", match.Reason);
+        Assert.Equal(PatternAdaptationStatus.Unresolved, match.AdaptationStatus);
+        Assert.Empty(match.Devices);
     }
 
     [Fact]
@@ -162,7 +164,7 @@ public sealed class SemanticPatternTests
     {
         var inventedStore = new RoomPatternStore();
         var invented = await StoredTool(inventedStore).InvokeAsync(Json(Body("""
-            "rules":[{"role":"switch","anchor":"entrance","x":1.2,"y":3.4}]
+            "rules":[{"role":"switch","placement":"boundary","anchor":"entrance","x":1.2,"y":3.4}]
             """)), CancellationToken.None);
         Assert.Equal(true, invented["stored"]);
         Assert.Equal(SemanticReport.None, invented["semantic_status"]);
@@ -171,7 +173,7 @@ public sealed class SemanticPatternTests
 
         var acceptedStore = new RoomPatternStore();
         var accepted = await StoredTool(acceptedStore).InvokeAsync(Json(Body("""
-            "rules":[{"role":"switch","anchor":"entrance","offset_m":0.15}],"anchors":[{"label":"door","page_x":0.4,"page_y":0.1}]
+            "rules":[{"role":"switch","placement":"boundary","anchor":"entrance","offset_m":0.15}],"anchors":[{"label":"door","page_x":0.4,"page_y":0.1}]
             """)), CancellationToken.None);
         Assert.Equal(true, accepted["stored"]);
         Assert.Equal(SemanticReport.Complete, accepted["semantic_status"]);
@@ -184,7 +186,7 @@ public sealed class SemanticPatternTests
         var result = await StoredTool(new RoomPatternStore()).InvokeAsync(Json(Visual(
             Receptacle + "," + ReceptacleRight,
             """
-            "rules":[{"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside"}]
+            "rules":[{"role":"receptacle","placement":"boundary","anchor":"source_correspondence","count":2,"arrangement":"symmetric_pair","group":"bedside"}]
             """)), CancellationToken.None);
         Assert.Equal(true, result["stored"]);
         Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
@@ -197,7 +199,7 @@ public sealed class SemanticPatternTests
         var result = await StoredTool(new RoomPatternStore()).InvokeAsync(Json(Visual(
             Receptacle + "," + ReceptacleRight + "," + ReceptacleExtra,
             """
-            "rules":[{"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside"}]
+            "rules":[{"role":"receptacle","placement":"boundary","anchor":"source_correspondence","count":2,"arrangement":"symmetric_pair","group":"bedside"}]
             """)), CancellationToken.None);
         Assert.Equal(true, result["stored"]);
         Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
@@ -211,19 +213,19 @@ public sealed class SemanticPatternTests
             Switch + "," + Luminaire + "," + Data + "," + Receptacle + "," + ReceptacleRight,
             """
             "rules":[
-              {"role":"switch","anchor":"entrance","offset_m":0.15},
-              {"role":"luminaire","anchor":"room_center"},
-              {"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside"},
-              {"role":"data","anchor":"opposite_boundary"}
+              {"role":"switch","placement":"boundary","anchor":"entrance","offset_m":0.15},
+              {"role":"luminaire","placement":"interior","anchor":"room_center"},
+              {"role":"receptacle","placement":"boundary","anchor":"source_correspondence","count":2,"arrangement":"symmetric_pair","group":"bedside"},
+              {"role":"data","placement":"boundary","anchor":"opposite_boundary"}
             ]
             """)), CancellationToken.None);
         Assert.Equal(true, result["stored"]);
         Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
         var text = Understood(result);
-        Assert.Contains("1 switch associated with the entrance", text, StringComparison.Ordinal);
-        Assert.Contains("1 ceiling luminaire near room centre", text, StringComparison.Ordinal);
-        Assert.Contains("2 receptacles forming a symmetric pair", text, StringComparison.Ordinal);
-        Assert.Contains("1 data/TV device on an opposite wall", text, StringComparison.Ordinal);
+        Assert.Contains("1 switch · entrance", text, StringComparison.Ordinal);
+        Assert.Contains("1 luminaire · interior · room centre", text, StringComparison.Ordinal);
+        Assert.Contains("2 receptacles · symmetric pair · boundary", text, StringComparison.Ordinal);
+        Assert.Contains("1 data device · opposite entrance", text, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -231,12 +233,12 @@ public sealed class SemanticPatternTests
     {
         var store = new RoomPatternStore();
         var result = await StoredTool(store).InvokeAsync(Json(Body("""
-            "rules":[{"role":"switch","anchor":"entrance","offset_m":0.15},{"role":"switch","anchor":"entrance","x":1.2,"y":3.4}]
+            "rules":[{"role":"switch","placement":"boundary","anchor":"entrance","offset_m":0.15},{"role":"switch","placement":"boundary","anchor":"entrance","x":1.2,"y":3.4}]
             """)), CancellationToken.None);
         Assert.Equal(true, result["stored"]);
         Assert.Equal(SemanticReport.Partial, result["semantic_status"]);
         Assert.Contains(SemanticWarningCodes.MalformedRule, Warnings(result));
-        Assert.Contains("1 switch associated with the entrance", Understood(result), StringComparison.Ordinal);
+        Assert.Contains("1 switch · entrance", Understood(result), StringComparison.Ordinal);
         Assert.Contains("Some semantic relationships were not established.", Review(store), StringComparison.Ordinal);
     }
 
@@ -245,14 +247,14 @@ public sealed class SemanticPatternTests
     {
         var store = new RoomPatternStore();
         var result = await StoredTool(store).InvokeAsync(Json(Body("""
-            "rules":[{"role":"switch","anchor":"entrance","offset_m":0.15},{"role":"data","anchor":"beside_the_bed"}]
+            "rules":[{"role":"switch","placement":"boundary","anchor":"entrance","offset_m":0.15},{"role":"data","anchor":"beside_the_bed"}]
             """)), CancellationToken.None);
         Assert.Equal(true, result["stored"]);
         Assert.Equal(SemanticReport.Partial, result["semantic_status"]);
         Assert.Contains(SemanticWarningCodes.UnknownAnchor, Warnings(result));
         var review = Review(store);
         Assert.DoesNotContain("beside_the_bed", review, StringComparison.Ordinal);
-        Assert.Contains("1 switch associated with the entrance", review, StringComparison.Ordinal);
+        Assert.Contains("1 switch · entrance", review, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -272,7 +274,7 @@ public sealed class SemanticPatternTests
     {
         var store = new RoomPatternStore();
         var result = await StoredTool(store).InvokeAsync(Json(Body("""
-            "rules":[{"role":"switch","anchor":"entrance","offset_m":0.15},{"role":"luminaire","anchor":"ceiling"}]
+            "rules":[{"role":"switch","placement":"boundary","anchor":"entrance","offset_m":0.15},{"role":"luminaire","anchor":"ceiling"}]
             """)), CancellationToken.None);
         Assert.Equal(true, result["stored"]);
         Assert.Equal(SemanticReport.Partial, result["semantic_status"]);
@@ -285,7 +287,7 @@ public sealed class SemanticPatternTests
     public async Task Common_group_labels_and_accented_anchor_labels_are_accepted()
     {
         var result = await StoredTool(new RoomPatternStore()).InvokeAsync(Json(Body("""
-            "rules":[{"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside_pair"}],"anchors":[{"label":"entrée","page_x":0.4,"page_y":0.1}]
+            "rules":[{"role":"receptacle","placement":"boundary","anchor":"source_correspondence","count":2,"arrangement":"symmetric_pair","group":"bedside_pair"}],"anchors":[{"label":"entrée","page_x":0.4,"page_y":0.1}]
             """)), CancellationToken.None);
         Assert.Equal(true, result["stored"]);
         Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
@@ -295,11 +297,121 @@ public sealed class SemanticPatternTests
     }
 
     [Fact]
+    public async Task V2_contract_rejects_each_invalid_item_and_keeps_the_valid_ones()
+    {
+        var store = new RoomPatternStore();
+        var result = await StoredTool(store).InvokeAsync(Json(Visual(
+            Switch + "," + Luminaire + "," + Receptacle + "," + ReceptacleRight,
+            """
+            "rules":[
+              {"role":"switch","placement":"boundary","anchor":"entrance","count":1,"arrangement":"single"},
+              {"role":"luminaire","placement":"boundary","anchor":"room_center"},
+              {"role":"switch","placement":"interior","anchor":"entrance"},
+              {"role":"receptacle","placement":"boundary","anchor":"source_correspondence","count":5},
+              {"role":"receptacle","placement":"boundary","anchor":"source_correspondence","count":2,"arrangement":"single"},
+              {"role":"receptacle","placement":"boundary","anchor":"source_correspondence","count":2,"arrangement":"zigzag"},
+              {"role":"receptacle","placement":"boundary","anchor":"source_correspondence","count":3,"arrangement":"distributed"},
+              {"role":"receptacle","placement":"boundary","anchor":"paired_symmetric","count":2}
+            ]
+            """)), CancellationToken.None);
+        Assert.Equal(true, result["stored"]);
+        Assert.Equal(SemanticReport.Partial, result["semantic_status"]);
+        var warnings = Warnings(result);
+        Assert.Contains(SemanticWarningCodes.IncompatiblePlacement, warnings);
+        Assert.Contains(SemanticWarningCodes.InvalidCount, warnings);
+        Assert.Contains(SemanticWarningCodes.UnknownArrangement, warnings);
+        Assert.Contains(SemanticWarningCodes.UnsupportedArrangement, warnings);
+        Assert.Contains(SemanticWarningCodes.UnknownAnchor, warnings);
+        var review = Review(store);
+        Assert.Contains("1 switch · entrance", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("paired_symmetric", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("zigzag", review, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task V2_items_require_a_placement_and_default_the_arrangement_from_the_count()
+    {
+        var missing = await StoredTool(new RoomPatternStore()).InvokeAsync(Json(Body("""
+            "rules":[{"role":"switch","anchor":"entrance"}]
+            """)), CancellationToken.None);
+        Assert.Equal(true, missing["stored"]);
+        Assert.Contains(SemanticWarningCodes.MalformedRule, Warnings(missing));
+
+        var store = new RoomPatternStore();
+        var paired = await StoredTool(store).InvokeAsync(Json(Visual(
+            Luminaire + "," + """{"role":"luminaire","page_x":0.55,"page_y":0.25,"placement_kind":"interior"}""",
+            """
+            "rules":[{"role":"luminaire","placement":"interior","anchor":"room_center","count":2}]
+            """)), CancellationToken.None);
+        Assert.Equal(SemanticReport.Complete, paired["semantic_status"]);
+        var text = Understood(paired);
+        Assert.Contains("2 luminaires · symmetric pair · interior", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("receptacle", text, StringComparison.Ordinal);
+        Assert.DoesNotContain("wall in sketch", text, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Cardinality_is_independent_of_the_observed_device_count()
+    {
+        var devices = new[]
+        {
+            new SourceDevice("receptacle", 0.2, 0.9, "boundary", null),
+            new SourceDevice("receptacle", 0.4, 0.9, "boundary", null),
+            new SourceDevice("receptacle", 0.6, 0.9, "boundary", null),
+            new SourceDevice("receptacle", 0.95, 0.5, "boundary", null),
+        };
+        var specs = PatternEvidence.AssignDevices(
+            [
+                Spec("receptacle", PatternAnchors.SourceCorrespondence, pair: true),
+                Spec("receptacle", PatternAnchors.SourceCorrespondence, devices: [3]),
+            ],
+            devices);
+        Assert.Equal(2, specs[0].Count);
+        Assert.Equal(2, specs[0].DeviceIndexes!.Count);
+        Assert.DoesNotContain(3, specs[0].DeviceIndexes!);
+        Assert.Equal([3], specs[1].DeviceIndexes);
+    }
+
+    [Fact]
+    public void Source_evidence_distinguishes_pairs_on_different_walls_without_identities()
+    {
+        var devices = new[]
+        {
+            new SourceDevice("receptacle", 3, 5.9, "boundary", null),
+            new SourceDevice("receptacle", 5, 5.9, "boundary", null),
+            new SourceDevice("receptacle", 9.9, 2, "boundary", null),
+            new SourceDevice("receptacle", 9.9, 4, "boundary", null),
+            new SourceDevice("luminaire", 4, 3, "interior", null),
+            new SourceDevice("luminaire", 6, 3, "interior", null),
+        };
+        var specs = PatternEvidence.AssignDevices(
+            [
+                Spec("receptacle", PatternAnchors.SourceCorrespondence, pair: true, devices: [0, 1]),
+                Spec("receptacle", PatternAnchors.SourceCorrespondence, pair: true, devices: [2, 3]),
+                Spec("luminaire", PatternAnchors.RoomCenter, pair: true),
+            ],
+            devices);
+        var evidence = PatternEvidence.Describe(new SourceRoomPattern(Rectangle(0, 0, 10, 6), null, devices, specs));
+        Assert.Equal("top", evidence[0].Side);
+        Assert.Equal("right", evidence[1].Side);
+        Assert.NotEqual(evidence[0].EdgeIndex, evidence[1].EdgeIndex);
+        Assert.Equal(PatternPlacements.Boundary, evidence[0].Placement);
+        Assert.Equal(PatternPlacements.Interior, evidence[2].Placement);
+        Assert.Equal([4, 5], evidence[2].DeviceIndexes);
+        Assert.InRange(evidence[0].Centroid!.Value.X, 0.35, 0.45);
+        Assert.InRange(evidence[0].Along!.Value, 0, 1);
+        Assert.NotNull(evidence[0].Spread);
+        var json = JsonSerializer.Serialize(evidence);
+        Assert.DoesNotContain("ref", json, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Id\"", json, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task A_secret_inside_a_semantic_rule_is_not_echoed()
     {
         var store = new RoomPatternStore();
         var result = await StoredTool(store).InvokeAsync(Json(Body("""
-            "rules":[{"role":"switch","anchor":"entrance","element_ref":"secret-room-ref-99"}]
+            "rules":[{"role":"switch","placement":"boundary","anchor":"entrance","element_ref":"secret-room-ref-99"}]
             """)), CancellationToken.None);
         Assert.Equal(true, result["stored"]);
         var model = JsonSerializer.Serialize(result);
@@ -371,7 +483,8 @@ public sealed class SemanticPatternTests
     {
         var review = store.PeekReviewJson();
         Assert.NotNull(review);
-        return review;
+        using var document = JsonDocument.Parse(review);
+        return JsonSerializer.Serialize(document.RootElement, new JsonSerializerOptions { Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping });
     }
 
     private static JsonElement Json(string json) => JsonSerializer.Deserialize<JsonElement>(json);
@@ -491,10 +604,14 @@ public sealed class SemanticPatternTests
         Assert.Contains("explicitly requested by the user", guidance, StringComparison.Ordinal);
         Assert.Contains("Never invent a relationship unsupported by either the image or the user.", guidance, StringComparison.Ordinal);
         Assert.Contains("does not require a source-page entrance point", guidance, StringComparison.Ordinal);
-        Assert.Contains("user says switch at entrance → entrance", guidance, StringComparison.Ordinal);
-        Assert.Contains("user says centred luminaire → room_center", guidance, StringComparison.Ordinal);
-        Assert.Contains("user says two receptacles form a pair → paired_symmetric", guidance, StringComparison.Ordinal);
-        Assert.Contains("user says data on wall opposite entrance → opposite_boundary", guidance, StringComparison.Ordinal);
+        Assert.Contains("A pair is an arrangement, not an anchor.", guidance, StringComparison.Ordinal);
+        Assert.Contains("two receptacles drawn on one wall → receptacle, boundary, source_correspondence, count 2, symmetric_pair", guidance, StringComparison.Ordinal);
+        Assert.Contains("two ceiling luminaires → luminaire, interior, room_center, count 2, symmetric_pair", guidance, StringComparison.Ordinal);
+        Assert.Contains("user says switch at entrance → switch, boundary, entrance, count 1, single", guidance, StringComparison.Ordinal);
+        Assert.Contains("user says data on wall opposite entrance → data, boundary, opposite_boundary, count 1, single", guidance, StringComparison.Ordinal);
+        Assert.Contains("Do not call every repeated symbol a wall pair.", guidance, StringComparison.Ordinal);
+        Assert.DoesNotContain("paired_symmetric", GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("paired_symmetric", GitHubCopilotSessionBlueprint.RoomPatternToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("Describe only what you see", GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
         Assert.DoesNotContain("element_ref", GitHubCopilotSessionBlueprint.RoomPatternToolDescription, StringComparison.Ordinal);
         Assert.Equal(7, AssistantModelTools.Names.Length);
@@ -508,23 +625,23 @@ public sealed class SemanticPatternTests
             Switch + "," + Luminaire + "," + Data + "," + Receptacle + "," + ReceptacleRight,
             """
             "rules":[
-              {"role":"switch","anchor":"entrance","basis":"user_stated"},
-              {"role":"luminaire","anchor":"room_center","basis":"user_stated"},
-              {"role":"receptacle","anchor":"paired_symmetric","offset_m":0.6,"group":"bedside","basis":"user_stated"},
-              {"role":"data","anchor":"opposite_boundary","basis":"user_stated"},
-              {"role":"receptacle","anchor":"nearest_boundary","basis":"not_a_basis"}
+              {"role":"switch","placement":"boundary","anchor":"entrance","basis":"user_stated"},
+              {"role":"luminaire","placement":"interior","anchor":"room_center","basis":"user_stated"},
+              {"role":"receptacle","placement":"boundary","anchor":"source_correspondence","count":2,"arrangement":"symmetric_pair","group":"bedside","basis":"user_stated"},
+              {"role":"data","placement":"boundary","anchor":"opposite_boundary","basis":"user_stated"},
+              {"role":"receptacle","placement":"boundary","anchor":"nearest_boundary","basis":"not_a_basis"}
             ]
             """)), CancellationToken.None);
         Assert.Equal(true, result["stored"]);
         Assert.Equal(SemanticReport.Complete, result["semantic_status"]);
         var review = Review(store);
         Assert.Contains("User requested:", review, StringComparison.Ordinal);
-        Assert.Contains("1 switch associated with the entrance", review, StringComparison.Ordinal);
-        Assert.Contains("1 ceiling luminaire near room centre", review, StringComparison.Ordinal);
-        Assert.Contains("2 receptacles forming a symmetric pair", review, StringComparison.Ordinal);
-        Assert.Contains("1 data/TV device on an opposite wall", review, StringComparison.Ordinal);
+        Assert.Contains("1 switch · entrance", review, StringComparison.Ordinal);
+        Assert.Contains("1 luminaire · interior · room centre", review, StringComparison.Ordinal);
+        Assert.Contains("2 receptacles · symmetric pair · boundary", review, StringComparison.Ordinal);
+        Assert.Contains("1 data device · opposite entrance", review, StringComparison.Ordinal);
         Assert.Contains("Observed:", review, StringComparison.Ordinal);
-        Assert.Contains("1 receptacle on the nearest wall", review, StringComparison.Ordinal);
+        Assert.Contains("1 receptacle · nearest wall", review, StringComparison.Ordinal);
         Assert.DoesNotContain("not_a_basis", review, StringComparison.Ordinal);
         Assert.DoesNotContain("element_ref", review, StringComparison.Ordinal);
         Assert.DoesNotContain("element_ref", JsonSerializer.Serialize(result), StringComparison.Ordinal);
@@ -535,10 +652,10 @@ public sealed class SemanticPatternTests
     {
         var rules = new[]
         {
-            new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null, PatternRuleBasis.UserStated),
-            new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null, PatternRuleBasis.UserStated),
-            new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "bedside", null, PatternRuleBasis.UserStated),
-            new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, null, PatternRuleBasis.UserStated),
+            Spec("switch", PatternAnchors.Entrance, offset: 0.15, basis: PatternBasis.UserStated),
+            Spec("luminaire", PatternAnchors.RoomCenter, basis: PatternBasis.UserStated),
+            Spec("receptacle", PatternAnchors.OppositeBoundary, pair: true, group: "bedside", basis: PatternBasis.UserStated),
+            Spec("data", PatternAnchors.OppositeBoundary, offset: 0.2, basis: PatternBasis.UserStated),
         };
         var source = new SourceRoomPattern(
             Rectangle(0, 0, 1, 1),
@@ -553,12 +670,12 @@ public sealed class SemanticPatternTests
             rules);
         var noDoor = new CandidateRoom("Studio", "9", "L1", 5, 3, Rectangle(0, 0, 10, 6), false, []);
         var missed = Assert.Single(RoomShapeMatcher.Match(source, [noDoor]));
-        Assert.Equal("unresolved_rule", missed.Reason);
+        Assert.Equal(PatternAdaptationStatus.Partial, missed.AdaptationStatus);
+        Assert.Equal("luminaire", Assert.Single(missed.Devices).Role);
 
         var oneDoor = new CandidateRoom("Studio", "203", "L2", 5, 3, Rectangle(0, 0, 10, 6), false, [new CandidateOpening(1, 0, "door")]);
         var placed = Assert.Single(RoomShapeMatcher.Match(source, [oneDoor]));
-        Assert.NotEqual("unresolved_rule", placed.Reason);
-        Assert.NotEqual("rejected", placed.Band);
+        Assert.Equal(PatternAdaptationStatus.Resolved, placed.AdaptationStatus);
         var byRole = placed.Devices.GroupBy(device => device.Role).ToDictionary(group => group.Key, group => group.ToArray());
         Assert.InRange(byRole["switch"][0].LocalY, 0, 1.5);
         Assert.InRange(byRole["luminaire"][0].LocalX, 4.5, 5.5);
@@ -574,7 +691,7 @@ public sealed class SemanticPatternTests
             Rectangle(0, 0, 1, 1),
             null,
             [new SourceDevice("switch", 0.2, 0.1, "boundary", null)],
-            [new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null, PatternRuleBasis.UserStated)]);
+            [Spec("switch", PatternAnchors.Entrance, offset: 0.15, basis: PatternBasis.UserStated)]);
         var room = new CandidateRoom(
             "Studio",
             "203",
@@ -585,7 +702,29 @@ public sealed class SemanticPatternTests
             false,
             [new CandidateOpening(1, 0, "door"), new CandidateOpening(9, 0, "door")]);
         var match = Assert.Single(RoomShapeMatcher.Match(source, [room]));
-        Assert.Equal("unresolved_rule", match.Reason);
+        Assert.Equal(PatternAdaptationStatus.Unresolved, match.AdaptationStatus);
+    }
+
+    internal static PatternSpec Spec(
+        string role,
+        string anchor,
+        bool pair = false,
+        double offset = 0,
+        string? group = null,
+        string? basis = null,
+        IReadOnlyList<int>? devices = null)
+    {
+        return new PatternSpec(
+            role,
+            PatternAnchors.PlacementFor(anchor),
+            anchor,
+            pair ? 2 : 1,
+            pair ? PatternArrangements.SymmetricPair : PatternArrangements.Single,
+            offset,
+            group,
+            null,
+            basis,
+            devices);
     }
 
     [Fact]

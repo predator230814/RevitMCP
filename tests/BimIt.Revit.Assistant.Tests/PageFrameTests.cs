@@ -160,10 +160,10 @@ public sealed class PageFrameTests
     {
         var rules = new[]
         {
-            new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null, PatternRuleBasis.UserStated),
-            new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null, PatternRuleBasis.UserStated),
-            new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair-1", null, PatternRuleBasis.UserStated),
-            new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, null, PatternRuleBasis.UserStated),
+            SemanticPatternTests.Spec("switch", PatternAnchors.Entrance, offset: 0.15, basis: PatternBasis.UserStated),
+            SemanticPatternTests.Spec("luminaire", PatternAnchors.RoomCenter, basis: PatternBasis.UserStated),
+            SemanticPatternTests.Spec("receptacle", PatternAnchors.OppositeBoundary, pair: true, group: "pair-1", basis: PatternBasis.UserStated),
+            SemanticPatternTests.Spec("data", PatternAnchors.OppositeBoundary, offset: 0.2, basis: PatternBasis.UserStated),
         };
         var semantics = new SemanticReport(SemanticReport.Complete, 0, []);
         var page = new SourceRoomPattern(
@@ -176,10 +176,10 @@ public sealed class PageFrameTests
 
         var matching = PageFrame.ForMatching(page, 400, 200);
 
-        Assert.Same(rules, matching.Rules);
+        Assert.Same(rules, matching.Specs);
         Assert.Same(semantics, matching.Semantics);
-        Assert.Equal(PatternRuleBasis.UserStated, matching.Rules![0].Basis);
-        Assert.Equal("pair-1", matching.Rules[2].Group);
+        Assert.Equal(PatternBasis.UserStated, matching.Specs![0].Basis);
+        Assert.Equal("pair-1", matching.Specs[2].Group);
         var anchor = Assert.Single(matching.Anchors!);
         Assert.Equal("counter", anchor.Label);
         Assert.Equal(100, anchor.X, 6);
@@ -203,10 +203,10 @@ public sealed class PageFrameTests
     {
         var rules = new[]
         {
-            new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null, PatternRuleBasis.UserStated),
-            new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null, PatternRuleBasis.UserStated),
-            new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair-1", null, PatternRuleBasis.UserStated),
-            new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, null, PatternRuleBasis.UserStated),
+            SemanticPatternTests.Spec("switch", PatternAnchors.Entrance, offset: 0.15, basis: PatternBasis.UserStated),
+            SemanticPatternTests.Spec("luminaire", PatternAnchors.RoomCenter, basis: PatternBasis.UserStated),
+            SemanticPatternTests.Spec("receptacle", PatternAnchors.OppositeBoundary, pair: true, group: "pair-1", basis: PatternBasis.UserStated),
+            SemanticPatternTests.Spec("data", PatternAnchors.OppositeBoundary, offset: 0.2, basis: PatternBasis.UserStated),
         };
         var page = new SourceRoomPattern(
             [new PlanPoint(0, 0), new PlanPoint(1, 0), new PlanPoint(1, 1), new PlanPoint(0, 1)],
@@ -229,7 +229,7 @@ public sealed class PageFrameTests
             [oneDoor]));
 
         Assert.NotEqual("rejected", adapted.Band);
-        Assert.NotEqual("unresolved_rule", adapted.Reason);
+        Assert.Equal(PatternAdaptationStatus.Resolved, adapted.AdaptationStatus);
         var light = adapted.Devices.Single(device => device.Role == "luminaire");
         var sketchLight = projected.Devices.Single(device => device.Role == "luminaire");
         Assert.InRange(light.LocalX, 4.5, 5.5);
@@ -256,8 +256,8 @@ public sealed class PageFrameTests
             false,
             [new CandidateOpening(1, 0, "door"), new CandidateOpening(9, 0, "door")]);
         var unresolved = Assert.Single(RoomShapeMatcher.Match(matching, [severalDoors]));
-        Assert.Equal("rejected", unresolved.Band);
-        Assert.Equal("unresolved_rule", unresolved.Reason);
+        Assert.Equal(PatternAdaptationStatus.Partial, unresolved.AdaptationStatus);
+        Assert.Equal("luminaire", Assert.Single(unresolved.Devices).Role);
         Assert.Equal(7, AssistantModelTools.Names.Length);
     }
 
