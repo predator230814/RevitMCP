@@ -4,6 +4,8 @@ internal static class SemanticPatternAdapter
 {
     public readonly record struct Placement(string Role, string PlacementKind, double X, double Y, string? FamilyHint);
 
+    public readonly record struct EdgeSegment(PlanPoint Start, PlanPoint End);
+
     public static bool TryPlace(
         IReadOnlyList<PatternRule> rules,
         IReadOnlyList<SourceDevice> devices,
@@ -16,14 +18,33 @@ internal static class SemanticPatternAdapter
         PlanPoint? projectedEntrance,
         out IReadOnlyList<Placement> placements)
     {
+        return TryPlace(rules, devices, loop, holes, centroidX, centroidY, openings, geometric, projectedEntrance, null, null, out placements);
+    }
+
+    public static bool TryPlace(
+        IReadOnlyList<PatternRule> rules,
+        IReadOnlyList<SourceDevice> devices,
+        IReadOnlyList<PlanPoint> loop,
+        IReadOnlyList<IReadOnlyList<PlanPoint>> holes,
+        double centroidX,
+        double centroidY,
+        IReadOnlyList<CandidateOpening> openings,
+        IReadOnlyList<ProjectedDevice> geometric,
+        PlanPoint? projectedEntrance,
+        PlanPoint? selectedDoor,
+        IReadOnlyDictionary<int, EdgeSegment>? boundEdges,
+        out IReadOnlyList<Placement> placements)
+    {
         var placed = new List<Placement>(rules.Count);
         var complete = true;
         var consumed = new bool[devices.Count];
-        foreach (var rule in rules)
+        for (var index = 0; index < rules.Count; index++)
         {
+            var rule = rules[index];
+            EdgeSegment? edge = boundEdges is not null && boundEdges.TryGetValue(index, out var bound) ? bound : null;
             if (rule.Anchor == PatternAnchors.PairedSymmetric)
             {
-                if (!TryPair(rule, loop, centroidX, centroidY, openings, projectedEntrance, out var first, out var second)
+                if (!TryPair(rule, loop, centroidX, centroidY, openings, projectedEntrance, selectedDoor, edge, out var first, out var second)
                     || !Accept(first, loop, holes, out first)
                     || !Accept(second, loop, holes, out second))
                 {
@@ -37,7 +58,7 @@ internal static class SemanticPatternAdapter
                 continue;
             }
 
-            if (!TryOne(rule, devices, consumed, loop, centroidX, centroidY, openings, geometric, projectedEntrance, out var point, out var kind, out var hint))
+            if (!TryOne(rule, devices, consumed, loop, centroidX, centroidY, openings, geometric, projectedEntrance, selectedDoor, out var point, out var kind, out var hint))
             {
                 complete = false;
                 continue;
@@ -66,6 +87,7 @@ internal static class SemanticPatternAdapter
         IReadOnlyList<CandidateOpening> openings,
         IReadOnlyList<ProjectedDevice> geometric,
         PlanPoint? projectedEntrance,
+        PlanPoint? selectedDoor,
         out PlanPoint point,
         out string kind,
         out string? hint)
@@ -83,7 +105,7 @@ internal static class SemanticPatternAdapter
         kind = "boundary";
         if (rule.Anchor == PatternAnchors.Entrance)
         {
-            return TryDoor(openings, projectedEntrance, out var door) && InsetFrom(door, centroidX, centroidY, inset, out point);
+            return TryDoor(openings, projectedEntrance, selectedDoor, out var door) && InsetFrom(door, centroidX, centroidY, inset, out point);
         }
 
         if (!TryDevicePoint(geometric, devices, rule.Role, out var observed))
@@ -103,9 +125,14 @@ internal static class SemanticPatternAdapter
 
         if (rule.Anchor == PatternAnchors.OppositeBoundary)
         {
-            return TryDoor(openings, projectedEntrance, out var door)
-                && TryOpposite(loop, door, out var start, out var end)
-                && InsetFrom(Mid(start, end), centroidX, centroidY, inset, out point);
+            if (!TryDoor(openings, projectedEntrance, selectedDoor, out var door)
+                || !TryFacing(loop, door, out var facing))
+            {
+                return false;
+            }
+
+            point = new PlanPoint(facing.Hit.X + (facing.Inward.X * inset), facing.Hit.Y + (facing.Inward.Y * inset));
+            return true;
         }
 
         return false;
@@ -118,12 +145,35 @@ internal static class SemanticPatternAdapter
         double centroidY,
         IReadOnlyList<CandidateOpening> openings,
         PlanPoint? projectedEntrance,
+        PlanPoint? selectedDoor,
+        EdgeSegment? boundEdge,
         out PlanPoint left,
         out PlanPoint right)
     {
         left = default;
         right = default;
-        if (!TryDoor(openings, projectedEntrance, out var door) || !TryOpposite(loop, door, out var start, out var end))
+        PlanPoint start;
+        PlanPoint end;
+        PlanPoint centre;
+        PlanPoint inward;
+        if (boundEdge is EdgeSegment edge)
+        {
+            start = edge.Start;
+            end = edge.End;
+            centre = Mid(start, end);
+            if (!TryInward(loop, start, end, centre, out inward))
+            {
+                return false;
+            }
+        }
+        else if (TryDoor(openings, projectedEntrance, selectedDoor, out var door) && TryFacing(loop, door, out var facing))
+        {
+            start = facing.Start;
+            end = facing.End;
+            centre = facing.Hit;
+            inward = facing.Inward;
+        }
+        else
         {
             return false;
         }
@@ -139,10 +189,101 @@ internal static class SemanticPatternAdapter
 
         alongX /= length;
         alongY /= length;
-        var mid = Mid(start, end);
-        var inset = 0.15;
-        return InsetFrom(new PlanPoint(mid.X - (alongX * half), mid.Y - (alongY * half)), centroidX, centroidY, inset, out left)
-            && InsetFrom(new PlanPoint(mid.X + (alongX * half), mid.Y + (alongY * half)), centroidX, centroidY, inset, out right);
+        var along = ((centre.X - start.X) * alongX) + ((centre.Y - start.Y) * alongY);
+        const double margin = 0.15;
+        if (length >= (2 * (half + margin)))
+        {
+            along = Math.Clamp(along, half + margin, length - half - margin);
+        }
+
+        var middle = new PlanPoint(start.X + (alongX * along), start.Y + (alongY * along));
+        const double inset = 0.15;
+        left = new PlanPoint(middle.X - (alongX * half) + (inward.X * inset), middle.Y - (alongY * half) + (inward.Y * inset));
+        right = new PlanPoint(middle.X + (alongX * half) + (inward.X * inset), middle.Y + (alongY * half) + (inward.Y * inset));
+        return true;
+    }
+
+    private readonly record struct Facing(PlanPoint Hit, PlanPoint Start, PlanPoint End, PlanPoint Inward);
+
+    private static bool TryFacing(IReadOnlyList<PlanPoint> loop, PlanPoint door, out Facing facing)
+    {
+        facing = default;
+        if (!TryNearestEdge(loop, door, out var doorStart, out var doorEnd)
+            || !TryInward(loop, doorStart, doorEnd, Project(door, doorStart, doorEnd), out var normal))
+        {
+            return false;
+        }
+
+        var origin = Project(door, doorStart, doorEnd);
+        var best = double.MaxValue;
+        var found = false;
+        for (var index = 0; index < loop.Count; index++)
+        {
+            var edgeStart = loop[index];
+            var edgeEnd = loop[(index + 1) % loop.Count];
+            if (!TryRay(origin, normal, edgeStart, edgeEnd, out var distance) || distance < 0.3 || distance >= best)
+            {
+                continue;
+            }
+
+            best = distance;
+            facing = new Facing(
+                new PlanPoint(origin.X + (normal.X * distance), origin.Y + (normal.Y * distance)),
+                edgeStart,
+                edgeEnd,
+                default);
+            found = true;
+        }
+
+        if (!found || !TryInward(loop, facing.Start, facing.End, facing.Hit, out var inward))
+        {
+            return false;
+        }
+
+        facing = facing with { Inward = inward };
+        return true;
+    }
+
+    private static bool TryRay(PlanPoint origin, PlanPoint direction, PlanPoint start, PlanPoint end, out double distance)
+    {
+        distance = 0;
+        var segmentX = end.X - start.X;
+        var segmentY = end.Y - start.Y;
+        var denominator = (direction.X * segmentY) - (direction.Y * segmentX);
+        if (Math.Abs(denominator) < 1e-9)
+        {
+            return false;
+        }
+
+        var offsetX = start.X - origin.X;
+        var offsetY = start.Y - origin.Y;
+        var t = ((offsetX * segmentY) - (offsetY * segmentX)) / denominator;
+        var u = ((offsetX * direction.Y) - (offsetY * direction.X)) / denominator;
+        if (t <= 0 || u < 0 || u > 1)
+        {
+            return false;
+        }
+
+        distance = t;
+        return true;
+    }
+
+    private static bool TryInward(IReadOnlyList<PlanPoint> loop, PlanPoint start, PlanPoint end, PlanPoint at, out PlanPoint inward)
+    {
+        var direction = Direction(start, end);
+        var left = new PlanPoint(-direction.Y, direction.X);
+        foreach (var candidate in new[] { left, new PlanPoint(-left.X, -left.Y) })
+        {
+            var probe = new PlanPoint(at.X + (candidate.X * 0.05), at.Y + (candidate.Y * 0.05));
+            if (Inside(probe, loop))
+            {
+                inward = candidate;
+                return true;
+            }
+        }
+
+        inward = default;
+        return false;
     }
 
     private static string? Hint(IReadOnlyList<SourceDevice> devices, bool[] consumed, string role)
@@ -174,8 +315,14 @@ internal static class SemanticPatternAdapter
         return false;
     }
 
-    private static bool TryDoor(IReadOnlyList<CandidateOpening> openings, PlanPoint? preferred, out PlanPoint door)
+    private static bool TryDoor(IReadOnlyList<CandidateOpening> openings, PlanPoint? preferred, PlanPoint? selected, out PlanPoint door)
     {
+        if (selected is PlanPoint chosen)
+        {
+            door = chosen;
+            return true;
+        }
+
         var doors = openings.Where(opening => opening.Kind == "door").ToArray();
         door = default;
         if (doors.Length == 0 || (doors.Length > 1 && preferred is null))
@@ -251,50 +398,6 @@ internal static class SemanticPatternAdapter
         }
 
         return loop.Count > 0;
-    }
-
-    private static bool TryOpposite(IReadOnlyList<PlanPoint> loop, PlanPoint door, out PlanPoint start, out PlanPoint end)
-    {
-        start = default;
-        end = default;
-        if (!TryNearestEdge(loop, door, out var doorStart, out var doorEnd))
-        {
-            return false;
-        }
-
-        var doorVector = Direction(doorStart, doorEnd);
-        var best = double.MinValue;
-        var found = false;
-        for (var index = 0; index < loop.Count; index++)
-        {
-            var edgeStart = loop[index];
-            var edgeEnd = loop[(index + 1) % loop.Count];
-            if (Same(edgeStart, doorStart) && Same(edgeEnd, doorEnd))
-            {
-                continue;
-            }
-
-            var edgeVector = Direction(edgeStart, edgeEnd);
-            var parallel = Math.Abs((doorVector.X * edgeVector.X) + (doorVector.Y * edgeVector.Y));
-            if (parallel < 0.85)
-            {
-                continue;
-            }
-
-            var mid = Mid(edgeStart, edgeEnd);
-            var dx = mid.X - door.X;
-            var dy = mid.Y - door.Y;
-            var distance = (dx * dx) + (dy * dy);
-            if (distance > best)
-            {
-                best = distance;
-                start = edgeStart;
-                end = edgeEnd;
-                found = true;
-            }
-        }
-
-        return found;
     }
 
     private static bool TryNearestEdge(IReadOnlyList<PlanPoint> loop, PlanPoint point, out PlanPoint start, out PlanPoint end)
@@ -391,10 +494,5 @@ internal static class SemanticPatternAdapter
         var dy = end.Y - start.Y;
         var length = Math.Sqrt((dx * dx) + (dy * dy));
         return length < 1e-6 ? new PlanPoint(1, 0) : new PlanPoint(dx / length, dy / length);
-    }
-
-    private static bool Same(PlanPoint left, PlanPoint right)
-    {
-        return Math.Abs(left.X - right.X) < 1e-6 && Math.Abs(left.Y - right.Y) < 1e-6;
     }
 }

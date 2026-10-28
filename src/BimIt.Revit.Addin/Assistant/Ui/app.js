@@ -206,7 +206,9 @@ function roomPreview(room) {
   const adaptation = `${room.rotationDegrees || 0}°${room.mirrored ? " · mirrored" : ""}`;
   const outline = Array.isArray(room.outline) ? room.outline : [];
   const devices = Array.isArray(room.devices) ? room.devices : [];
-  return `<p><strong>${escapeHtml(room.label || "Room")}</strong> ${escapeHtml(room.level || "")}</p><p class="sub">${escapeHtml(room.band || "rejected")} · ${escapeHtml(String(room.score ?? 0))} · ${escapeHtml(adaptation)}${room.reason ? " · " + escapeHtml(room.reason) : ""}</p>${patternSvg(outline, null, devices, true, true)}`;
+  const notes = Array.isArray(room.reasoning) ? room.reasoning : [];
+  const reasoning = notes.length ? `<ul>${notes.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : "";
+  return `<p><strong>${escapeHtml(room.label || "Room")}</strong> ${escapeHtml(room.level || "")}</p><p class="sub">${escapeHtml(room.band || "rejected")} · ${escapeHtml(String(room.score ?? 0))} · ${escapeHtml(adaptation)}${room.reason ? " · " + escapeHtml(room.reason) : ""}</p>${reasoning}${patternSvg(outline, null, devices, true, true)}`;
 }
 
 function roomBand(room) {

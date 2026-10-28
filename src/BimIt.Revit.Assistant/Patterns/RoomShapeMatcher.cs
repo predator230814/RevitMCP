@@ -17,7 +17,16 @@ internal sealed record SourceRoomPattern(
     IReadOnlyList<PatternAnchor>? Anchors = null,
     SemanticReport? Semantics = null);
 
-internal sealed record CandidateOpening(double X, double Y, string Kind);
+internal sealed record CandidateOpening(
+    double X,
+    double Y,
+    string Kind,
+    string? OtherSideName = null,
+    string? OtherSideNumber = null,
+    string? OtherSideStatus = null,
+    double? FacingX = null,
+    double? FacingY = null,
+    double? WidthMetres = null);
 
 internal sealed record CandidateRoom(
     string? Name,
@@ -77,7 +86,8 @@ internal static class RoomShapeMatcher
 
     public static IReadOnlyList<RoomShapeMatch> Match(
         SourceRoomPattern source,
-        IReadOnlyList<CandidateRoom> candidates)
+        IReadOnlyList<CandidateRoom> candidates,
+        bool resolveSemantics = true)
     {
         ArgumentNullException.ThrowIfNull(source);
         ArgumentNullException.ThrowIfNull(candidates);
@@ -85,7 +95,7 @@ internal static class RoomShapeMatcher
         var matches = new List<RoomShapeMatch>(candidates.Count);
         for (var index = 0; index < candidates.Count; index++)
         {
-            matches.Add(MatchOne(source, preparedSource, candidates[index], index));
+            matches.Add(MatchOne(source, preparedSource, candidates[index], index, resolveSemantics));
         }
 
         return matches;
@@ -95,7 +105,8 @@ internal static class RoomShapeMatcher
         SourceRoomPattern source,
         PreparedShape? sourceShape,
         CandidateRoom candidate,
-        int index)
+        int index,
+        bool resolveSemantics)
     {
         var label = Label(candidate, index);
         if (candidate.LoopFailure is not null)
@@ -144,7 +155,7 @@ internal static class RoomShapeMatcher
         var band = score >= HighConfidence ? "high" : score >= LowerConfidence ? "lower" : "rejected";
         var devices = ProjectDevices(source, sourcePrepared, room, candidate, best);
         var rules = source.Rules ?? [];
-        if (rules.Count > 0)
+        if (resolveSemantics && rules.Count > 0)
         {
             PlanPoint? entrance = source.Entrance is PlanPoint pageEntrance
                 ? Absolute(ToLocal(pageEntrance, sourcePrepared, room, best.Quarters, best.Mirror), candidate)

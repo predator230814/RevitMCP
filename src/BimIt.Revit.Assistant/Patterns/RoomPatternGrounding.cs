@@ -66,11 +66,16 @@ internal static class RoomPatternGrounding
             }
         }
 
-        var matched = PromoteNamedRooms(RoomShapeMatcher.Match(geometry, candidates), roomName);
+        var deferSemantics = geometry.Rules is { Count: > 0 };
+        var matched = PromoteNamedRooms(RoomShapeMatcher.Match(geometry, candidates, resolveSemantics: !deferSemantics), roomName);
         var all = matched.Concat(rejected).ToArray();
         var state = result.Items.Count == 0 ? "no_candidates" : "matched";
         var shown = ShownMatches(all, roomName is not null);
-        return new Grounding(state, result.Truncated, all, BuildReview(display, state, result.Truncated, all, shown), ModelResult(display, state, all, roomName), shown, documentId, roomName);
+        var review = BuildReview(display, state, result.Truncated, all, shown);
+        var draft = deferSemantics
+            ? PatternTargetContext.Build(display, candidates, all, review, roomName is not null)
+            : null;
+        return new Grounding(state, result.Truncated, all, review, ModelResult(display, state, all, roomName), shown, documentId, roomName, draft);
     }
 
     private static RoomPatternReview.Review BuildReview(
@@ -125,7 +130,8 @@ internal static class RoomPatternGrounding
         if (namedRooms)
         {
             return ordered.Where(match => match.Band != "rejected").Take(8)
-                .Concat(ordered.Where(match => match.Band == "rejected").Take(2))
+                .Concat(ordered.Where(match => match.Band == "rejected"))
+                .Take(8)
                 .ToArray();
         }
 
@@ -288,7 +294,16 @@ internal static class RoomPatternGrounding
         }
 
         var openings = (item.Features ?? [])
-            .Select(feature => new CandidateOpening(feature.XMetres, feature.YMetres, feature.Kind == RoomFeatureKind.Door ? "door" : "window"))
+            .Select(feature => new CandidateOpening(
+                feature.XMetres,
+                feature.YMetres,
+                feature.Kind == RoomFeatureKind.Door ? "door" : "window",
+                feature.OtherSideName,
+                feature.OtherSideNumber,
+                feature.OtherSideStatus,
+                feature.FacingX,
+                feature.FacingY,
+                feature.WidthMetres))
             .ToArray();
         candidate = new CandidateRoom(
             item.Name,
@@ -333,7 +348,8 @@ internal sealed record Grounding(
     IReadOnlyDictionary<string, object?> Model,
     IReadOnlyList<RoomShapeMatch> Shown,
     string? DocumentId = null,
-    string? RoomName = null)
+    string? RoomName = null,
+    PatternTargetDraft? TargetDraft = null)
 {
     public static Grounding Failed(SourceRoomPattern pattern, string state)
     {

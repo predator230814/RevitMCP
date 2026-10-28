@@ -21,7 +21,7 @@ internal static class GitHubCopilotSessionBlueprint
     public const string RoomPatternToolDescription =
         "Store one untrusted reading of the current attached page. First describe the observed boundary, optional entrance, and devices. Every point is {\"page_x\":0..1,\"page_y\":0..1}, left to right and top to bottom. Optionally add semantic relationships. One paired_symmetric rule means one pair. Semantic enrichment is optional. BIM-IT keeps a valid visual pattern when a relationship cannot be read. "
         + SemanticRelationshipGuidance
-        + " This does not approve or modify Revit. Never send Revit identities or final coordinates. If stored is true, stop. If stored is false and a reason is present, correct the visual observations once.";
+        + " This does not approve or modify Revit. Never send Revit identities or final coordinates. Do not choose a target door in this call. Target rooms are compared after this tool returns. If stored is true, stop. If stored is false and a reason is present, correct the visual observations once.";
 
     public const string SystemPrompt =
         """
@@ -160,7 +160,62 @@ internal static class GitHubCopilotSessionBlueprint
         };
     }
 
+    public const string TargetReasoningPrompt =
+        """
+        You compare one stored room pattern with candidate rooms. Return only JSON. Choose semantic correspondence keys supplied in the request. Do not invent keys, coordinates, Revit identities, walls, approvals, or model changes. Assessments are compatible, uncertain, or incompatible. If several entrance doors remain equally plausible, use uncertain and omit the entrance key.
+        """;
+
+    public static SessionConfig CreateTargetSessionConfig(string workingDirectory, string? model)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
+        return new SessionConfig
+        {
+            Model = string.IsNullOrWhiteSpace(model) ? AutoModel : model,
+            Streaming = false,
+            WorkingDirectory = workingDirectory,
+            EnableSessionStore = false,
+            EnableSkills = false,
+            Memory = new MemoryConfiguration { Enabled = false },
+            InfiniteSessions = new InfiniteSessionConfig { Enabled = false },
+            McpServers = new Dictionary<string, McpServerConfig>(),
+            AvailableTools = new ToolSet(),
+            ExcludedTools = [],
+            Tools = [],
+            SystemMessage = new SystemMessageConfig
+            {
+                Mode = SystemMessageMode.Replace,
+                Content = TargetReasoningPrompt,
+            },
+            OnPermissionRequest = Deny,
+#pragma warning disable GHCP001
+            EnableMcpApps = false,
+#pragma warning restore GHCP001
+            EnableHostGitOperations = false,
+            EnableFileHooks = false,
+            EnableConfigDiscovery = false,
+            SkipCustomInstructions = true,
+            EnableOnDemandInstructionDiscovery = false,
+            CoauthorEnabled = false,
+            ManageScheduleEnabled = false,
+            EnableExperimentalMode = false,
+            SkillDirectories = [],
+            PluginDirectories = [],
+            HookDirectories = [],
+            AgentDirectories = [],
+            InstructionDirectories = [],
+            IncludedBuiltinSkills = [],
+            CustomAgents = [],
+            Commands = [],
+            GitHubToken = null,
+        };
+    }
+
 #pragma warning disable GHCP001 // PermissionDecision is the current SDK permission contract.
+    private static Task<GitHub.Copilot.Rpc.PermissionDecision> Deny(PermissionRequest request, PermissionInvocation invocation)
+    {
+        return Task.FromResult(GitHub.Copilot.Rpc.PermissionDecision.Reject("Target reasoning cannot grant a capability."));
+    }
+
     private static Task<GitHub.Copilot.Rpc.PermissionDecision> Decide(PermissionRequest request, PermissionInvocation invocation)
     {
         if (GitHubCopilotPermissions.IsAllowed(request))

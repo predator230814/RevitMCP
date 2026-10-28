@@ -62,6 +62,15 @@ public sealed class GetRoomLayoutFeature
 
     [JsonPropertyName("width_m")]
     public double? WidthMetres { get; init; }
+
+    [JsonPropertyName("other_side_name")]
+    public string? OtherSideName { get; init; }
+
+    [JsonPropertyName("other_side_number")]
+    public string? OtherSideNumber { get; init; }
+
+    [JsonPropertyName("other_side_status")]
+    public string? OtherSideStatus { get; init; }
 }
 
 public sealed class GetRoomLayoutItem

@@ -283,6 +283,19 @@ internal sealed class RoomPatternProposalTool
         {
             ["page_number"] = pageNumber,
         };
+        if (generation is not null && grounding.TargetDraft is PatternTargetDraft draft)
+        {
+            _store.RememberPending(new PatternTargetPending(
+                generation.GenerationId,
+                _instanceId,
+                grounding.DocumentId,
+                attachment.ArtifactId,
+                pageNumber,
+                draft.Request,
+                draft.Snapshot));
+            model["target_reasoning"] = "pending";
+        }
+
         return model;
     }
 

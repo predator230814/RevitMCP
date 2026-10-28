@@ -1,3 +1,5 @@
+using BimIt.Revit.Assistant.Ipc;
+
 namespace BimIt.Revit.Assistant.Patterns;
 
 internal sealed class RoomPatternStore
@@ -9,6 +11,7 @@ internal sealed class RoomPatternStore
     private PatternLocalConfiguration? _configuration;
     private PatternPreviewBinding? _preview;
     private PatternTerminalApply? _terminal;
+    private PatternTargetPending? _pending;
 
     public void Replace(RoomPatternRecord record, string? reviewJson, RoomPatternGeneration? generation = null)
     {
@@ -21,6 +24,7 @@ internal sealed class RoomPatternStore
             _configuration = generation is null ? null : PatternLocalConfiguration.Default(generation);
             _preview = null;
             _terminal = null;
+            _pending = null;
         }
     }
 
@@ -34,6 +38,7 @@ internal sealed class RoomPatternStore
             _configuration = null;
             _preview = null;
             _terminal = null;
+            _pending = null;
         }
     }
 
@@ -157,6 +162,138 @@ internal sealed class RoomPatternStore
         }
     }
 
+    public void RememberPending(PatternTargetPending pending)
+    {
+        ArgumentNullException.ThrowIfNull(pending);
+        lock (_gate)
+        {
+            if (!PendingIsCurrent(pending))
+            {
+                return;
+            }
+
+            _pending = pending;
+        }
+    }
+
+    public bool TryCopyPending(out PatternTargetPending pending)
+    {
+        lock (_gate)
+        {
+            pending = null!;
+            if (_pending is null || !PendingIsCurrent(_pending))
+            {
+                return false;
+            }
+
+            pending = _pending;
+            return true;
+        }
+    }
+
+    public bool PendingMatches(PatternTargetPending pending)
+    {
+        lock (_gate)
+        {
+            return _pending is not null
+                && string.Equals(_pending.GenerationId, pending.GenerationId, StringComparison.Ordinal)
+                && PendingIsCurrent(pending);
+        }
+    }
+
+    public void MarkTargetReasoningUnavailable(string generationId, string line)
+    {
+        lock (_gate)
+        {
+            if (_pending is null || !string.Equals(_pending.GenerationId, generationId, StringComparison.Ordinal) || !PendingIsCurrent(_pending))
+            {
+                return;
+            }
+
+            var review = _pending.Snapshot.Review;
+            review.Understood ??= [];
+            if (review.Understood.Count < 12 && review.Understood.All(item => item != line))
+            {
+                review.Understood.Add(line);
+            }
+
+            var json = RoomPatternReview.Serialize(review);
+            if (json is not null)
+            {
+                _reviewJson = json;
+            }
+
+            _pending = null;
+        }
+    }
+
+    public void CompleteTargetReasoning(string generationId, PatternTargetOutcome outcome)
+    {
+        ArgumentNullException.ThrowIfNull(outcome);
+        lock (_gate)
+        {
+            if (_pending is null
+                || _generation is null
+                || !string.Equals(_pending.GenerationId, generationId, StringComparison.Ordinal)
+                || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal)
+                || !PendingIsCurrent(_pending))
+            {
+                return;
+            }
+
+            var json = RoomPatternReview.Serialize(outcome.Review);
+            if (json is null)
+            {
+                _pending = null;
+                return;
+            }
+
+            _reviewJson = json;
+            _generation = new RoomPatternGeneration
+            {
+                GenerationId = _generation.GenerationId,
+                InstanceId = _generation.InstanceId,
+                DocumentId = _generation.DocumentId,
+                ArtifactId = _generation.ArtifactId,
+                PageNumber = _generation.PageNumber,
+                Source = _generation.Source,
+                Options = _generation.Options,
+                Rooms = outcome.Shown.Select((match, index) => new HiddenPatternRoom
+                {
+                    Index = index,
+                    RoomRef = match.RoomRef ?? string.Empty,
+                    Label = match.Label,
+                    Band = match.Band,
+                    Score = match.Score,
+                    RotationDegrees = match.RotationDegrees,
+                    Mirrored = match.Mirrored,
+                    Devices = match.Devices.Select(device => new HiddenPatternDevice
+                    {
+                        Role = device.Role,
+                        FamilyHint = device.FamilyHint,
+                        PlacementKind = device.PlacementKind,
+                        XMetres = device.LocalX,
+                        YMetres = device.LocalY,
+                        QuarterTurns = device.PlacementKind == "interior" ? match.RotationDegrees / 90 : 0,
+                    }).ToArray(),
+                }).ToArray(),
+            };
+            _configuration = PatternLocalConfiguration.Default(_generation);
+            _pending = null;
+        }
+    }
+
+    private bool PendingIsCurrent(PatternTargetPending pending)
+    {
+        return _generation is not null
+            && _current is not null
+            && string.Equals(_generation.GenerationId, pending.GenerationId, StringComparison.Ordinal)
+            && string.Equals(_generation.InstanceId, pending.InstanceId, StringComparison.Ordinal)
+            && string.Equals(_generation.DocumentId, pending.DocumentId, StringComparison.Ordinal)
+            && string.Equals(_current.SourceArtifactId, pending.ArtifactId, StringComparison.Ordinal)
+            && _current.PageNumber == pending.PageNumber;
+    }
+
     public bool TryTerminal(out string summary, out bool isError)
     {
         lock (_gate)
@@ -204,6 +341,7 @@ internal sealed class RoomPatternStore
         _configuration = null;
         _preview = null;
         _terminal = null;
+        _pending = null;
     }
 }
 

@@ -190,7 +190,8 @@ public static class RoomPatternReview
             && room.Outline is { Count: <= 24 }
             && room.Outline.All(IsUnit)
             && room.Devices is { Count: <= 20 }
-            && room.Devices.All(device => IsRole(device.Role) && IsPlacement(device.Placement) && IsUnit(device));
+            && room.Devices.All(device => IsRole(device.Role) && IsPlacement(device.Placement) && IsUnit(device))
+            && IsReasoning(room.Reasoning);
     }
 
     private static bool IsReason(string? reason)
@@ -210,7 +211,8 @@ public static class RoomPatternReview
             or "no_outer_loop"
             or "ambiguous_outer_loop"
             or "unresolved_rule"
-            or "semantic_match";
+            or "semantic_match"
+            or "target_reasoning_unavailable";
     }
 
     private static bool IsRole(string? role)
@@ -238,6 +240,11 @@ public static class RoomPatternReview
     private static bool IsUnderstood(List<string>? lines)
     {
         return lines is null || (lines.Count <= 12 && lines.All(line => line.Length is >= 1 and <= 160 && !line.Any(char.IsControl)));
+    }
+
+    private static bool IsReasoning(List<string>? lines)
+    {
+        return lines is null || (lines.Count <= 8 && lines.All(line => line.Length is >= 1 and <= 160 && !line.Any(char.IsControl)));
     }
 
     public sealed class Review
@@ -346,5 +353,7 @@ public static class RoomPatternReview
         public string? Source { get; set; }
 
         public string? LinkLabel { get; set; }
+
+        public List<string>? Reasoning { get; set; }
     }
 }

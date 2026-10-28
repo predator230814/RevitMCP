@@ -39,7 +39,19 @@ Amendment, 2026-10-27. A semantic rule is valid when the drawing supports it or 
 
 Amendment, 2026-10-27, later the same day. The matching frame converts boundary, entrance, device, and anchor coordinates into the raster’s Cartesian frame. It keeps the coordinate-free rules and the semantic report unchanged. Pattern Review continues to draw the original page-space pattern. Only deterministic matching uses the converted pattern.
 
-There is no second model call and no temporary candidate-key tool in v1. The rules are the correspondence. Deterministic code resolves each rule onto each candidate room and validates the point. Geometry score remains evidence. When every rule resolves and the shape score would have rejected the room, the room stays reviewable as a semantic match. An unresolved rule stays unresolved. The model does not supply final Revit coordinates.
+Amendment, 2026-10-27, after the linked-studio live. The live showed that a deterministic adapter correctly refuses to guess which of several doors is the dwelling entrance, and that the model which could make that distinction never saw the target room. The earlier decision that there is no second model call in v1 is withdrawn. The correspondence is no longer the source rules alone.
+
+```text
+Source interpretation
+→ deterministic spatial discovery
+→ bounded target context
+→ provider-neutral target reasoning
+→ deterministic resolution
+→ Pattern Review
+→ no mutation
+```
+
+The second pass is an internal Assistant capability. It is not a model tool, not a server tool, and not a write. It returns only key-based semantic correspondence. It does not return final coordinates, Revit identities, approval, or a mutation. Deterministic code checks every key against the stored target and calculates the preview. A provider failure stays on that pattern and does not mark the Assistant unavailable. Temporary room, door, edge, and rule keys exist only for that request. Door topology may include a safe other-side room label. It still excludes spatial references, unique ids, element ids, and file paths. The opposite wall is the first boundary reached from the entrance when moving into the room perpendicular to the entrance wall. A pair without a bound edge is centred on that point, and boundary placements are inset along the wall's inward normal. A Revit outline with short wall jogs therefore does not select a jog as the opposite wall.
 
 Pattern Review shows a deterministic “BIM-IT understood” summary before the overlay. Host and link rooms use the same matching path. A link room can be shown and cannot be selected for prepare. The existing write still requires one boundary loop, so a host room that needed an inner loop can be reviewed and cannot be applied in this slice.
 

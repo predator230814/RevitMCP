@@ -253,6 +253,7 @@ internal sealed class RevitReadSpatialRoomsService : IRevitReadSpatialRoomsServi
             var facing = frame.ApplyVector(opening.FacingOrientation.X, opening.FacingOrientation.Y);
             var length = Math.Sqrt((facing.X * facing.X) + (facing.Y * facing.Y));
             var kind = opening.Category?.BuiltInCategory == BuiltInCategory.OST_Doors ? RoomFeatureKind.Door : RoomFeatureKind.Window;
+            var other = OtherSide(opening, room);
             features.Add(new GetRoomLayoutFeature
             {
                 Kind = kind,
@@ -260,10 +261,112 @@ internal sealed class RevitReadSpatialRoomsService : IRevitReadSpatialRoomsServi
                 YMetres = Round(point.Y),
                 FacingX = length > 1e-6 ? Round(facing.X / length) : null,
                 FacingY = length > 1e-6 ? Round(facing.Y / length) : null,
+                WidthMetres = WidthMetres(opening),
+                OtherSideName = other.Name,
+                OtherSideNumber = other.Number,
+                OtherSideStatus = other.Status,
             });
         }
 
         return features;
+    }
+
+    internal readonly record struct OpeningSide(string? Name, string? Number, string Status);
+
+    internal static OpeningSide DescribeSide(bool currentIsFrom, bool currentIsTo, bool otherExists, string? otherName, string? otherNumber)
+    {
+        if (!currentIsFrom && !currentIsTo)
+        {
+            return new OpeningSide(null, null, "unknown");
+        }
+
+        if (!otherExists)
+        {
+            return new OpeningSide(null, null, "outside");
+        }
+
+        if (Unsafe(otherName) || Unsafe(otherNumber))
+        {
+            return new OpeningSide(null, null, "unknown");
+        }
+
+        return new OpeningSide(otherName, otherNumber, "room");
+    }
+
+    private static OpeningSide OtherSide(FamilyInstance opening, Room room)
+    {
+        var phase = PhaseOf(room);
+        var from = Side(opening, phase, true);
+        var to = Side(opening, phase, false);
+        var currentIsFrom = from?.UniqueId == room.UniqueId;
+        var currentIsTo = to?.UniqueId == room.UniqueId;
+        Room? other = currentIsFrom ? to : currentIsTo ? from : null;
+        return DescribeSide(
+            currentIsFrom,
+            currentIsTo,
+            other is not null,
+            other is null ? null : Text(other, BuiltInParameter.ROOM_NAME),
+            other is null ? null : Text(other, BuiltInParameter.ROOM_NUMBER));
+    }
+
+    private static Phase? PhaseOf(Room room)
+    {
+        try
+        {
+            return room.Document.GetElement(room.CreatedPhaseId) as Phase;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static Room? Side(FamilyInstance opening, Phase? phase, bool from)
+    {
+        try
+        {
+            if (phase is not null)
+            {
+                return from ? opening.get_FromRoom(phase) : opening.get_ToRoom(phase);
+            }
+
+            return from ? opening.FromRoom : opening.ToRoom;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
+    }
+
+    private static double? WidthMetres(FamilyInstance opening)
+    {
+        var parameter = Parameter(opening, BuiltInParameter.DOOR_WIDTH)
+            ?? Parameter(opening, BuiltInParameter.WINDOW_WIDTH)
+            ?? Parameter(opening, BuiltInParameter.FAMILY_WIDTH_PARAM)
+            ?? Parameter(opening.Symbol, BuiltInParameter.DOOR_WIDTH)
+            ?? Parameter(opening.Symbol, BuiltInParameter.WINDOW_WIDTH)
+            ?? Parameter(opening.Symbol, BuiltInParameter.FAMILY_WIDTH_PARAM);
+        if (parameter is null || parameter.StorageType != StorageType.Double || !parameter.HasValue)
+        {
+            return null;
+        }
+
+        var metres = Metres(parameter.AsDouble());
+        return double.IsFinite(metres) && metres > 0 && metres <= 20 ? Round(metres) : null;
+    }
+
+    private static Parameter? Parameter(Element? element, BuiltInParameter builtIn)
+    {
+        return element?.get_Parameter(builtIn);
+    }
+
+    private static bool Unsafe(string? value)
+    {
+        return value is not null
+            && (value.Contains('\\', StringComparison.Ordinal)
+                || value.Contains('/', StringComparison.Ordinal)
+                || value.Contains(':', StringComparison.Ordinal)
+                || value.Contains(".rvt", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool Touches(FamilyInstance opening, Room room)
