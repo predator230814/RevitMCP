@@ -166,3 +166,40 @@ Open limits:
 - The explanation calls every pair a receptacle pair.
 - The main chat text can lag behind the final Pattern Review.
 - Device labels overlap on short walls.
+
+## PR #94 live gate: pattern specification v2
+
+Status: not yet run. Nothing below is a result.
+
+[ADR-0020](adr/ADR-0020-pattern-specification-v2.md) targets the open limits above. A pair is an arrangement, not an anchor. An unbound `source_correspondence` item is unresolved instead of moving to the facing wall. Interior pairs stay interior. Reasoning wording follows the role. The chat answer is written after target reasoning.
+
+Setup: Revit 2026.5, the MEP host with the Snowdon architectural link loaded, and the PR #94 head built for Revit 2026.
+
+Do not use Confirm, Prepare, Review in Revit, or Apply. Undo must remain unchanged.
+
+### Test A: controlled v2 instruction
+
+Attach the studio sketch. State the items explicitly: one switch at the entrance, two ceiling luminaires around the room centre, a receptacle pair on each side wall as drawn, and one data device on the wall opposite the entrance. Ask BIM-IT to find the studios and show the adaptation without applying anything.
+
+Record:
+
+- the stored items, with role, placement, anchor, count, and arrangement;
+- for each studio: geometry band, adaptation status, and each Resolved ✓ and Unresolved ! line;
+- whether the luminaires stay interior and the two receptacle pairs land on two different walls;
+- the chat answer, and whether its counts match Pattern Review;
+- the Undo list.
+
+### Test B: natural French prompt
+
+Attach the same sketch and send exactly:
+
+> Voici mon croquis électrique d'un studio. Trouve tous les studios de ce type dans le modèle, comprends la logique d'aménagement et montre-moi comment tu l'adapterais à chaque studio. N'applique rien.
+
+Record the same fields as Test A. Compare them with the PR #93 natural-prompt result above. Report a relation as not established when the sketch does not support it. Do not record a PASS for it.
+
+### Merge gate
+
+- Test A shows v2 behaviour.
+- Test B is materially better than PR #93.
+- No security or regression issue.
+- The full Release matrix is green.

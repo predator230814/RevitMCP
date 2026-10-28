@@ -296,6 +296,10 @@ textarea {
   font-size: 0.035px;
 }
 
+.room-preview .reasoning { list-style: none; padding-left: 0; }
+
+.room-preview .reasoning .heading { font-weight: 600; margin-top: 4px; }
+
 .room-list { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
 
 .room-list button {

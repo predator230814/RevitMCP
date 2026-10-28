@@ -56,7 +56,7 @@ internal sealed class RoomPatternProposalRequest
     public string? RoomName { get; init; }
 
     [JsonPropertyName("rules")]
-    [Description("Optional relationships. One rule is one relationship. One paired_symmetric rule means one pair. Encode a relationship inferred from the image or explicitly requested by the user, even when the image does not prove a user-stated relationship. Use entrance, room_center, nearest_boundary, opposite_boundary, corner, or paired_symmetric. Optional basis is observed or user_stated. An entrance rule does not need a page entrance point. Omit rules that neither the image nor the user supports. Do not send coordinates or Revit identities.")]
+    [Description("Optional pattern logic, at most 8 rules. One rule is one independent group of devices: what (role), where (placement and anchor), how many (count), and how they are arranged (arrangement). A pair is arrangement symmetric_pair, not an anchor. Two pairs on two different walls are two rules. Encode a relationship inferred from the image or explicitly requested by the user, even when the image does not prove a user-stated relationship. Optional basis is observed or user_stated. An entrance rule does not need a page entrance point. Omit rules that neither the image nor the user supports. Do not send coordinates or Revit identities.")]
     public IReadOnlyList<RoomPatternRuleRequest>? Rules { get; init; }
 
     [JsonPropertyName("anchors")]
@@ -115,10 +115,28 @@ internal sealed class RoomPatternDeviceRequest
 internal sealed class RoomPatternRuleRequest
 {
     [JsonPropertyName("role")]
+    [Description("What is placed: receptacle, switch, luminaire, smoke_detector, thermostat, data, or other.")]
     public string? Role { get; init; }
 
+    [JsonPropertyName("placement")]
+    [Description("Required. boundary for a wall device, interior for a ceiling or floor device. Take it from the drawing or the user, not from the role.")]
+    public string? Placement { get; init; }
+
     [JsonPropertyName("anchor")]
+    [Description("Where the group belongs. room_center (interior only), entrance, opposite_boundary, nearest_boundary, corner, or source_correspondence. source_correspondence keeps the wall the group is drawn on in the source instead of a generic wall.")]
     public string? Anchor { get; init; }
+
+    [JsonPropertyName("count")]
+    [Description("How many devices, 1 to 4. single is 1 and symmetric_pair is 2. Do not infer larger quantities.")]
+    public int? Count { get; init; }
+
+    [JsonPropertyName("arrangement")]
+    [Description("single or symmetric_pair.")]
+    public string? Arrangement { get; init; }
+
+    [JsonPropertyName("device_indexes")]
+    [Description("Optional 0-based positions in devices that this group describes. Indexes are evidence only. They need not match count.")]
+    public IReadOnlyList<int>? DeviceIndexes { get; init; }
 
     [JsonPropertyName("offset_m")]
     public double? OffsetMetres { get; init; }
@@ -264,6 +282,9 @@ internal sealed class RoomPatternProposalTool
         }
 
         var geometry = PageFrame.ForMatching(pattern, page.RasterWidth, page.RasterHeight);
+        var evidence = PatternEvidence.Describe(geometry);
+        pattern = pattern with { Evidence = evidence };
+        geometry = geometry with { Evidence = evidence };
         var grounding = await RoomPatternGrounding.ReadAsync(_session, _instanceId, pattern, geometry, roomName, cancellationToken).ConfigureAwait(false);
         grounding.Review.PageNumber = pageNumber;
         if (RoomPatternReviewRaster.TryCreate(page.Bytes, out var mime, out var image))
@@ -395,27 +416,28 @@ internal sealed class RoomPatternProposalTool
             devices.Add(device);
         }
 
-        var semantics = NormalizeSemantics(arguments, out var rules, out var anchors);
-        pattern = new SourceRoomPattern(boundary, entrance, devices, rules, anchors, semantics);
+        var semantics = NormalizeSemantics(arguments, devices, out var specs, out var anchors);
+        pattern = new SourceRoomPattern(boundary, entrance, devices, specs, anchors, semantics);
         return true;
     }
 
     private static SemanticReport NormalizeSemantics(
         JsonElement arguments,
-        out IReadOnlyList<PatternRule> rules,
+        IReadOnlyList<SourceDevice> devices,
+        out IReadOnlyList<PatternSpec> specs,
         out IReadOnlyList<PatternAnchor> anchors)
     {
         var codes = new List<string>();
         var dropped = 0;
-        rules = ReadRules(arguments, codes, ref dropped);
+        specs = PatternEvidence.AssignDevices(ReadRules(arguments, codes, ref dropped), devices);
         anchors = ReadAnchors(arguments, codes, ref dropped);
-        var status = rules.Count == 0
+        var status = specs.Count == 0
             ? SemanticReport.None
             : dropped == 0 ? SemanticReport.Complete : SemanticReport.Partial;
         return new SemanticReport(status, Math.Min(dropped, 20), codes.Distinct(StringComparer.Ordinal).Take(8).ToArray());
     }
 
-    private static IReadOnlyList<PatternRule> ReadRules(JsonElement arguments, List<string> codes, ref int dropped)
+    private static IReadOnlyList<PatternSpec> ReadRules(JsonElement arguments, List<string> codes, ref int dropped)
     {
         if (!arguments.TryGetProperty("rules", out var property) || property.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
         {
@@ -428,15 +450,15 @@ internal sealed class RoomPatternProposalTool
             return [];
         }
 
-        var parsed = new List<PatternRule>();
+        var parsed = new List<PatternSpec>();
         var seen = 0;
         var length = property.GetArrayLength();
         foreach (var item in property.EnumerateArray())
         {
             seen++;
-            if (seen > MaxDevices)
+            if (seen > PatternSpec.MaxSpecs)
             {
-                dropped += length - MaxDevices;
+                dropped += length - PatternSpec.MaxSpecs;
                 if (codes.Count < 8 && !codes.Contains(SemanticWarningCodes.MalformedRule, StringComparer.Ordinal))
                 {
                     codes.Add(SemanticWarningCodes.MalformedRule);
@@ -457,7 +479,7 @@ internal sealed class RoomPatternProposalTool
         return parsed;
     }
 
-    private static bool TrySemanticRule(JsonElement item, out PatternRule rule, out string code)
+    private static bool TrySemanticRule(JsonElement item, out PatternSpec rule, out string code)
     {
         rule = null!;
         code = SemanticWarningCodes.MalformedRule;
@@ -468,7 +490,7 @@ internal sealed class RoomPatternProposalTool
 
         foreach (var field in item.EnumerateObject())
         {
-            if (field.Name is not ("role" or "anchor" or "offset_m" or "group" or "confidence" or "basis"))
+            if (field.Name is not ("role" or "placement" or "anchor" or "count" or "arrangement" or "device_indexes" or "offset_m" or "group" or "confidence" or "basis"))
             {
                 return false;
             }
@@ -489,6 +511,76 @@ internal sealed class RoomPatternProposalTool
         {
             code = SemanticWarningCodes.UnknownAnchor;
             return false;
+        }
+
+        if (!item.TryGetProperty("placement", out var placementProperty)
+            || placementProperty.ValueKind != JsonValueKind.String
+            || placementProperty.GetString() is not string placement
+            || !PatternPlacements.IsPlacement(placement))
+        {
+            return false;
+        }
+
+        if (PatternAnchors.PlacementFor(anchor!) != placement)
+        {
+            code = SemanticWarningCodes.IncompatiblePlacement;
+            return false;
+        }
+
+        int? count = null;
+        if (item.TryGetProperty("count", out var countProperty) && countProperty.ValueKind != JsonValueKind.Null)
+        {
+            if (countProperty.ValueKind != JsonValueKind.Number
+                || !countProperty.TryGetInt32(out var parsedCount)
+                || parsedCount is < PatternSpec.MinCount or > PatternSpec.MaxCount)
+            {
+                code = SemanticWarningCodes.InvalidCount;
+                return false;
+            }
+
+            count = parsedCount;
+        }
+
+        string? arrangement = null;
+        if (item.TryGetProperty("arrangement", out var arrangementProperty) && arrangementProperty.ValueKind != JsonValueKind.Null)
+        {
+            if (arrangementProperty.ValueKind != JsonValueKind.String || !PatternArrangements.IsKnown(arrangementProperty.GetString()))
+            {
+                code = SemanticWarningCodes.UnknownArrangement;
+                return false;
+            }
+
+            arrangement = arrangementProperty.GetString();
+        }
+
+        arrangement ??= count switch
+        {
+            null or 1 => PatternArrangements.Single,
+            2 => PatternArrangements.SymmetricPair,
+            _ => PatternArrangements.Distributed,
+        };
+        if (!PatternArrangements.IsSupported(arrangement))
+        {
+            code = SemanticWarningCodes.UnsupportedArrangement;
+            return false;
+        }
+
+        count ??= PatternArrangements.CountFor(arrangement);
+        if (count != PatternArrangements.CountFor(arrangement))
+        {
+            code = SemanticWarningCodes.InvalidCount;
+            return false;
+        }
+
+        IReadOnlyList<int>? indexes = null;
+        if (item.TryGetProperty("device_indexes", out var indexesProperty) && indexesProperty.ValueKind == JsonValueKind.Array)
+        {
+            indexes = indexesProperty.EnumerateArray()
+                .Where(value => value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var index) && index is >= 0 and < MaxDevices)
+                .Select(value => value.GetInt32())
+                .Distinct()
+                .Take(PatternSpec.MaxCount)
+                .ToArray();
         }
 
         double offset = 0;
@@ -523,12 +615,12 @@ internal sealed class RoomPatternProposalTool
         }
 
         string? basis = null;
-        if (item.TryGetProperty("basis", out var basisProperty) && basisProperty.ValueKind == JsonValueKind.String && PatternRuleBasis.IsBasis(basisProperty.GetString()))
+        if (item.TryGetProperty("basis", out var basisProperty) && basisProperty.ValueKind == JsonValueKind.String && PatternBasis.IsBasis(basisProperty.GetString()))
         {
             basis = basisProperty.GetString();
         }
 
-        rule = new PatternRule(roleProperty.GetString()!, anchor!, offset, group, confidence, basis);
+        rule = new PatternSpec(roleProperty.GetString()!, placement, anchor!, count.Value, arrangement, offset, group, confidence, basis, indexes);
         return true;
     }
 
@@ -837,7 +929,7 @@ internal sealed class RoomPatternProposalTool
             RoomPatternFailures.NonFinite => "Coordinates and confidence must be finite numbers.",
             RoomPatternFailures.Attachment => "Attach one visual page before proposing a room pattern.",
             RoomPatternFailures.RoomName => "room_name must be 1 to 40 letters, digits, spaces, hyphens, or apostrophes, such as studio. Do not send a Revit identity.",
-            RoomPatternFailures.Rule => "A semantic rule that cannot be read is dropped. The visual pattern is kept. One paired_symmetric rule means one pair.",
+            RoomPatternFailures.Rule => "A semantic rule that cannot be read is dropped. The visual pattern is kept. A pair is arrangement symmetric_pair with count 2, not an anchor.",
             _ => "Send page_number, boundary, optional entrance, devices, optional rules, and optional room_name. Every point uses page_x and page_y from 0 to 1.",
         };
     }

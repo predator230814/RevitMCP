@@ -32,6 +32,8 @@ internal sealed class PatternTargetSnapshot
 
     public required bool NamedRooms { get; init; }
 
+    public string? RoomName { get; init; }
+
     public required IReadOnlyList<RoomShapeMatch> Matches { get; init; }
 
     public required IReadOnlyList<PatternTargetRoomSnapshot> Rooms { get; init; }
@@ -74,22 +76,86 @@ internal sealed class PatternTargetEdgeSnapshot
 
 internal sealed class PatternTargetReasoningRequest
 {
-    public IReadOnlyList<PatternTargetRuleContext> Rules { get; init; } = [];
+    public PatternTargetSourceContext? Source { get; init; }
+
+    public IReadOnlyList<PatternTargetSpecContext> Patterns { get; init; } = [];
 
     public IReadOnlyList<PatternTargetRoomContext> Rooms { get; init; } = [];
 }
 
-internal sealed class PatternTargetRuleContext
+internal sealed class PatternTargetSourceContext
 {
-    public required string RuleKey { get; init; }
+    public IReadOnlyList<PatternTargetPoint> Outline { get; init; } = [];
+
+    public IReadOnlyList<PatternTargetSourceEdgeContext> Edges { get; init; } = [];
+
+    public PatternTargetSourceEntranceContext? Entrance { get; init; }
+}
+
+internal sealed class PatternTargetSourceEdgeContext
+{
+    public required string Key { get; init; }
+
+    public string? Side { get; init; }
+
+    public double StartX { get; init; }
+
+    public double StartY { get; init; }
+
+    public double EndX { get; init; }
+
+    public double EndY { get; init; }
+
+    public double RelativeLength { get; init; }
+}
+
+internal sealed class PatternTargetSourceEntranceContext
+{
+    public double X { get; init; }
+
+    public double Y { get; init; }
+
+    public string? EdgeKey { get; init; }
+}
+
+internal sealed class PatternTargetSpecContext
+{
+    public required string PatternKey { get; init; }
 
     public required string Role { get; init; }
 
+    public required string Placement { get; init; }
+
     public required string Anchor { get; init; }
+
+    public int Count { get; init; }
+
+    public required string Arrangement { get; init; }
 
     public string? Basis { get; init; }
 
     public string? Group { get; init; }
+
+    public PatternTargetEvidenceContext? Evidence { get; init; }
+}
+
+internal sealed class PatternTargetEvidenceContext
+{
+    public int DeviceCount { get; init; }
+
+    public string? Placement { get; init; }
+
+    public double? CentroidX { get; init; }
+
+    public double? CentroidY { get; init; }
+
+    public double? Spread { get; init; }
+
+    public string? SourceEdgeKey { get; init; }
+
+    public string? Side { get; init; }
+
+    public double? Along { get; init; }
 }
 
 internal sealed class PatternTargetRoomContext
@@ -158,6 +224,8 @@ internal sealed class PatternTargetEdgeContext
 {
     public required string Key { get; init; }
 
+    public string? Side { get; init; }
+
     public double StartX { get; init; }
 
     public double StartY { get; init; }
@@ -175,7 +243,7 @@ internal sealed record PatternTargetRoomChoice(
     string? EntranceFeatureKey,
     IReadOnlyList<PatternTargetEdgeBinding> Bindings);
 
-internal sealed record PatternTargetEdgeBinding(string RuleKey, string EdgeKey);
+internal sealed record PatternTargetEdgeBinding(string PatternKey, string EdgeKey);
 
 internal sealed record PatternTargetReasoningResult(bool Unavailable, IReadOnlyList<PatternTargetRoomChoice> Rooms, string? Failure = null)
 {
@@ -191,6 +259,8 @@ internal static class PatternTargetContext
 {
     public const int MaxRooms = 8;
 
+    public const string PatternKeyPrefix = "pattern_";
+
     private static readonly JsonSerializerOptions Json = new()
     {
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
@@ -202,10 +272,10 @@ internal static class PatternTargetContext
         IReadOnlyList<CandidateRoom> candidates,
         IReadOnlyList<RoomShapeMatch> matches,
         RoomPatternReview.Review review,
-        bool namedRooms)
+        string? roomName)
     {
-        var rules = source.Rules ?? [];
-        if (rules.Count == 0)
+        var specs = source.Specs ?? [];
+        if (specs.Count == 0)
         {
             return null;
         }
@@ -230,13 +300,18 @@ internal static class PatternTargetContext
             return null;
         }
 
-        var ruleContexts = rules.Select((rule, index) => new PatternTargetRuleContext
+        var evidence = source.Evidence ?? PatternEvidence.Describe(source);
+        var patternContexts = specs.Select((spec, index) => new PatternTargetSpecContext
         {
-            RuleKey = "rule_" + index.ToString(CultureInfo.InvariantCulture),
-            Role = rule.Role,
-            Anchor = rule.Anchor,
-            Basis = rule.Basis,
-            Group = rule.Group,
+            PatternKey = PatternKeyPrefix + index.ToString(CultureInfo.InvariantCulture),
+            Role = spec.Role,
+            Placement = spec.Placement,
+            Anchor = spec.Anchor,
+            Count = spec.Count,
+            Arrangement = spec.Arrangement,
+            Basis = spec.Basis,
+            Group = spec.Group,
+            Evidence = Evidence(index < evidence.Count ? evidence[index] : null),
         }).ToArray();
         var snapshots = new List<PatternTargetRoomSnapshot>(eligible.Length);
         var contexts = new List<PatternTargetRoomContext>(eligible.Length);
@@ -293,16 +368,7 @@ internal static class PatternTargetContext
             var edges = new List<PatternTargetEdgeSnapshot>();
             var edgeContexts = new List<PatternTargetEdgeContext>();
             var loop = room.Loop;
-            var perimeter = 0.0;
-            for (var edgeIndex = 0; edgeIndex < loop.Count; edgeIndex++)
-            {
-                var start = loop[edgeIndex];
-                var end = loop[(edgeIndex + 1) % loop.Count];
-                var dx = end.X - start.X;
-                var dy = end.Y - start.Y;
-                perimeter += Math.Sqrt((dx * dx) + (dy * dy));
-            }
-
+            var perimeter = Perimeter(loop);
             for (var edgeIndex = 0; edgeIndex < loop.Count; edgeIndex++)
             {
                 var start = loop[edgeIndex];
@@ -310,18 +376,16 @@ internal static class PatternTargetContext
                 var key = "edge_" + edgeIndex.ToString(CultureInfo.InvariantCulture);
                 var startUnit = Unit(start.X, start.Y, room);
                 var endUnit = Unit(end.X, end.Y, room);
-                var dx = end.X - start.X;
-                var dy = end.Y - start.Y;
-                var length = Math.Sqrt((dx * dx) + (dy * dy));
                 edges.Add(new PatternTargetEdgeSnapshot { Key = key, Start = start, End = end });
                 edgeContexts.Add(new PatternTargetEdgeContext
                 {
                     Key = key,
+                    Side = PatternEvidence.Compass(loop, edgeIndex),
                     StartX = startUnit.X,
                     StartY = startUnit.Y,
                     EndX = endUnit.X,
                     EndY = endUnit.Y,
-                    RelativeLength = perimeter < 1e-6 ? 0 : Math.Round(length / perimeter, 3, MidpointRounding.AwayFromZero),
+                    RelativeLength = Relative(Length(start, end), perimeter),
                 });
             }
 
@@ -360,11 +424,12 @@ internal static class PatternTargetContext
 
         return new PatternTargetDraft
         {
-            Request = new PatternTargetReasoningRequest { Rules = ruleContexts, Rooms = contexts },
+            Request = new PatternTargetReasoningRequest { Source = SourceContext(source), Patterns = patternContexts, Rooms = contexts },
             Snapshot = new PatternTargetSnapshot
             {
-                Source = source,
-                NamedRooms = namedRooms,
+                Source = source with { Evidence = evidence },
+                NamedRooms = roomName is not null,
+                RoomName = roomName,
                 Matches = matches.ToArray(),
                 Rooms = snapshots,
                 Review = review,
@@ -374,12 +439,13 @@ internal static class PatternTargetContext
 
     public const string ResponseContract =
         """
-        Compare the pattern rules with each candidate room. Door other_side tells which room a door connects to. A dwelling entrance usually connects to a corridor, hall, lobby, or the outside, not to a bathroom or closet.
+        Compare the source pattern with each candidate room. Door other_side tells which room a door connects to. A dwelling entrance usually connects to a corridor, hall, lobby, or the outside, not to a bathroom or closet.
+        Each pattern names a role, a placement (boundary or interior), an anchor, a count, and an arrangement. Its evidence says where the group sits in the source: the source edge, the side of the source drawing, and the position along that edge. Source sides are drawing sides. Target edge sides are plan directions. Compare relations, not names: which wall holds the entrance, which wall faces it, and which walls are beside it.
         Reply with one JSON object and nothing else, in exactly this shape:
-        {"rooms":[{"room_key":"room_0","assessment":"compatible","entrance_feature_key":"door_0","bindings":[{"rule_key":"rule_2","target_edge_key":"edge_3"}]}]}
+        {"rooms":[{"room_key":"room_0","assessment":"compatible","entrance_feature_key":"door_0","bindings":[{"pattern_key":"pattern_2","target_edge_key":"edge_3"}]}]}
         assessment is compatible, uncertain, or incompatible.
         entrance_feature_key is one door key of that room, or null when the entrance is not clear.
-        bindings is optional. Use it only to name the target edge for a paired_symmetric rule. Otherwise use [].
+        bindings names the target edge for each pattern whose anchor is source_correspondence. Choose the target edge that plays the same role as the pattern's source edge. Independent patterns on different source edges should bind to different target edges. Bind two patterns to the same target edge only when their source evidence names the same source edge. Never bind an interior pattern or a pattern with another anchor. Omit a binding when no edge corresponds clearly.
         Use only keys from the request. Do not add other fields, coordinates, or explanations.
         """;
 
@@ -393,10 +459,124 @@ internal static class PatternTargetContext
         return ResponseContract + "\n\nRequest:\n" + Serialize(request);
     }
 
+    private static PatternTargetSourceContext SourceContext(SourceRoomPattern source)
+    {
+        var loop = source.Boundary;
+        var minX = loop.Min(point => point.X);
+        var minY = loop.Min(point => point.Y);
+        var width = Math.Max(loop.Max(point => point.X) - minX, 1e-9);
+        var height = Math.Max(loop.Max(point => point.Y) - minY, 1e-9);
+        PatternTargetPoint Normal(PlanPoint point) => new()
+        {
+            X = Round(Math.Clamp((point.X - minX) / width, 0, 1)),
+            Y = Round(Math.Clamp((point.Y - minY) / height, 0, 1)),
+        };
+
+        var perimeter = Perimeter(loop);
+        var edges = new List<PatternTargetSourceEdgeContext>(loop.Count);
+        for (var index = 0; index < loop.Count; index++)
+        {
+            var start = Normal(loop[index]);
+            var end = Normal(loop[(index + 1) % loop.Count]);
+            edges.Add(new PatternTargetSourceEdgeContext
+            {
+                Key = SourceEdgeKey(index),
+                Side = PatternEvidence.Side(loop, index),
+                StartX = start.X,
+                StartY = start.Y,
+                EndX = end.X,
+                EndY = end.Y,
+                RelativeLength = Relative(Length(loop[index], loop[(index + 1) % loop.Count]), perimeter),
+            });
+        }
+
+        PatternTargetSourceEntranceContext? entrance = null;
+        if (source.Entrance is PlanPoint point)
+        {
+            var nearest = 0;
+            var best = double.MaxValue;
+            for (var index = 0; index < loop.Count; index++)
+            {
+                var distance = DistanceToSegment(point, loop[index], loop[(index + 1) % loop.Count]);
+                if (distance < best)
+                {
+                    best = distance;
+                    nearest = index;
+                }
+            }
+
+            var unit = Normal(point);
+            entrance = new PatternTargetSourceEntranceContext { X = unit.X, Y = unit.Y, EdgeKey = SourceEdgeKey(nearest) };
+        }
+
+        return new PatternTargetSourceContext
+        {
+            Outline = loop.Select(Normal).ToArray(),
+            Edges = edges,
+            Entrance = entrance,
+        };
+    }
+
+    private static PatternTargetEvidenceContext? Evidence(PatternSpecEvidence? evidence)
+    {
+        if (evidence is null || evidence.DeviceIndexes.Count == 0)
+        {
+            return null;
+        }
+
+        return new PatternTargetEvidenceContext
+        {
+            DeviceCount = evidence.DeviceIndexes.Count,
+            Placement = evidence.Placement,
+            CentroidX = evidence.Centroid?.X,
+            CentroidY = evidence.Centroid?.Y,
+            Spread = evidence.Spread,
+            SourceEdgeKey = evidence.EdgeIndex is int edge ? SourceEdgeKey(edge) : null,
+            Side = evidence.Side,
+            Along = evidence.Along,
+        };
+    }
+
+    private static string SourceEdgeKey(int index) => "source_edge_" + index.ToString(CultureInfo.InvariantCulture);
+
     private static bool IsEligible(RoomShapeMatch match)
     {
-        return match.Reason is null or "low_shape_similarity" or "aspect_mismatch" or "named_room" or "semantic_match";
+        return match.Reason is null or "low_shape_similarity" or "aspect_mismatch" or "named_room";
     }
+
+    private static double Perimeter(IReadOnlyList<PlanPoint> loop)
+    {
+        var perimeter = 0.0;
+        for (var index = 0; index < loop.Count; index++)
+        {
+            perimeter += Length(loop[index], loop[(index + 1) % loop.Count]);
+        }
+
+        return perimeter;
+    }
+
+    private static double Relative(double length, double perimeter)
+    {
+        return perimeter < 1e-6 ? 0 : Math.Round(length / perimeter, 3, MidpointRounding.AwayFromZero);
+    }
+
+    private static double Length(PlanPoint start, PlanPoint end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        return Math.Sqrt((dx * dx) + (dy * dy));
+    }
+
+    private static double DistanceToSegment(PlanPoint point, PlanPoint start, PlanPoint end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var squared = (dx * dx) + (dy * dy);
+        var t = squared < 1e-18 ? 0 : Math.Clamp((((point.X - start.X) * dx) + ((point.Y - start.Y) * dy)) / squared, 0, 1);
+        return Length(point, new PlanPoint(start.X + (t * dx), start.Y + (t * dy)));
+    }
+
+    private static double Round(double value) => Math.Round(value, 4, MidpointRounding.AwayFromZero);
 
     private static PlanPoint Unit(double x, double y, CandidateRoom room)
     {
@@ -500,12 +680,12 @@ internal static class PatternTargetResponseParser
             var bindings = new List<PatternTargetEdgeBinding>();
             foreach (var binding in room.Bindings ?? [])
             {
-                if (binding.RuleKey is null || binding.TargetEdgeKey is null)
+                if (binding.PatternKey is null || binding.TargetEdgeKey is null || bindings.Count >= PatternSpec.MaxSpecs * 2)
                 {
                     return false;
                 }
 
-                bindings.Add(new PatternTargetEdgeBinding(binding.RuleKey, binding.TargetEdgeKey));
+                bindings.Add(new PatternTargetEdgeBinding(binding.PatternKey, binding.TargetEdgeKey));
             }
 
             rooms.Add(new PatternTargetRoomChoice(room.RoomKey, room.Assessment, room.EntranceFeatureKey, bindings));
@@ -533,7 +713,7 @@ internal static class PatternTargetResponseParser
 
     private sealed class TargetBinding
     {
-        public string? RuleKey { get; set; }
+        public string? PatternKey { get; set; }
 
         public string? TargetEdgeKey { get; set; }
     }
@@ -544,6 +724,12 @@ internal sealed class PatternTargetOutcome
     public required RoomPatternReview.Review Review { get; init; }
 
     public required IReadOnlyList<RoomShapeMatch> Shown { get; init; }
+
+    public int Resolved { get; init; }
+
+    public int Partial { get; init; }
+
+    public int Unresolved { get; init; }
 }
 
 internal static class PatternTargetResolution
@@ -558,6 +744,7 @@ internal static class PatternTargetResolution
 
         var notes = new Dictionary<string, List<string>>(StringComparer.Ordinal);
         var updated = new List<RoomShapeMatch>(pending.Snapshot.Matches.Count);
+        var statuses = new List<string>();
         foreach (var match in pending.Snapshot.Matches)
         {
             var snapshot = pending.Snapshot.Rooms.FirstOrDefault(room => room.RoomRef == match.RoomRef);
@@ -570,6 +757,7 @@ internal static class PatternTargetResolution
             choices.TryGetValue(snapshot.RoomKey, out var choice);
             var resolved = Resolve(pending.Snapshot.Source, match, snapshot, choice, out var lines);
             updated.Add(resolved);
+            statuses.Add(resolved.AdaptationStatus ?? PatternAdaptationStatus.Unresolved);
             if (!string.IsNullOrEmpty(match.RoomRef))
             {
                 notes[match.RoomRef] = lines;
@@ -581,6 +769,9 @@ internal static class PatternTargetResolution
         {
             Review = Rebuild(pending.Snapshot.Review, updated, shown, notes, pending.Snapshot.NamedRooms),
             Shown = shown,
+            Resolved = statuses.Count(status => status == PatternAdaptationStatus.Resolved),
+            Partial = statuses.Count(status => status == PatternAdaptationStatus.Partial),
+            Unresolved = statuses.Count(status => status == PatternAdaptationStatus.Unresolved),
         };
     }
 
@@ -591,51 +782,43 @@ internal static class PatternTargetResolution
         PatternTargetRoomChoice? choice,
         out List<string> lines)
     {
-        var rules = source.Rules ?? [];
-        var selected = Select(snapshot, choice, out var inventedEntrance, out var edges);
-        var adapted = SemanticPatternAdapter.TryPlace(
-            rules,
-            source.Devices,
-            snapshot.Room.Loop,
-            snapshot.Room.Holes ?? [],
-            snapshot.Room.CentroidX,
-            snapshot.Room.CentroidY,
-            snapshot.Room.Openings,
-            match.Devices,
-            null,
-            selected,
-            edges,
-            out var placements);
-        var devices = placements.Select(placement =>
+        var specs = source.Specs ?? [];
+        var selected = Select(snapshot, choice, specs, out var inventedEntrance, out var bindings, out var rejected);
+        var adaptation = SemanticPatternAdapter.Adapt(source, new SemanticPatternAdapter.Target
+        {
+            Loop = snapshot.Room.Loop,
+            Holes = snapshot.Room.Holes ?? [],
+            CentroidX = snapshot.Room.CentroidX,
+            CentroidY = snapshot.Room.CentroidY,
+            Openings = snapshot.Room.Openings,
+            Projected = match.Devices,
+            SelectedDoor = selected,
+            Bindings = bindings,
+            RejectedBindings = rejected,
+            Quarters = match.RotationDegrees / 90,
+            Mirror = match.Mirrored,
+            OrientationTrusted = match.Band == "high",
+        });
+        var devices = adaptation.Placements.Select(placement =>
         {
             var unit = Unit(placement.X, placement.Y, snapshot.Room);
             return new ProjectedDevice(placement.Role, placement.PlacementKind, placement.X, placement.Y, unit.X, unit.Y, placement.FamilyHint);
         }).ToArray();
-        var reason = match.Reason;
-        var band = match.Band;
-        if (!adapted)
-        {
-            reason = "unresolved_rule";
-            band = "rejected";
-        }
-        else if (band == "rejected")
-        {
-            band = "lower";
-            reason = "semantic_match";
-        }
-
-        lines = Explain(snapshot, choice, selected, inventedEntrance, devices, rules);
-        return match with { Band = band, Reason = reason, Devices = devices };
+        lines = Explain(snapshot, choice, selected, inventedEntrance, adaptation);
+        return match with { Devices = devices, AdaptationStatus = adaptation.Status };
     }
 
     private static PlanPoint? Select(
         PatternTargetRoomSnapshot snapshot,
         PatternTargetRoomChoice? choice,
+        IReadOnlyList<PatternSpec> specs,
         out bool inventedEntrance,
-        out Dictionary<int, SemanticPatternAdapter.EdgeSegment> edges)
+        out Dictionary<int, SemanticPatternAdapter.EdgeSegment> bindings,
+        out HashSet<int> rejected)
     {
         inventedEntrance = false;
-        edges = new Dictionary<int, SemanticPatternAdapter.EdgeSegment>();
+        bindings = new Dictionary<int, SemanticPatternAdapter.EdgeSegment>();
+        rejected = [];
         if (choice is null || choice.Assessment != "compatible")
         {
             return null;
@@ -657,19 +840,33 @@ internal static class PatternTargetResolution
 
         foreach (var binding in choice.Bindings)
         {
-            if (!binding.RuleKey.StartsWith("rule_", StringComparison.Ordinal)
-                || !int.TryParse(binding.RuleKey["rule_".Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var index))
+            if (!binding.PatternKey.StartsWith(PatternTargetContext.PatternKeyPrefix, StringComparison.Ordinal)
+                || !int.TryParse(binding.PatternKey[PatternTargetContext.PatternKeyPrefix.Length..], NumberStyles.None, CultureInfo.InvariantCulture, out var index)
+                || index >= specs.Count)
             {
                 continue;
             }
 
             var edge = snapshot.Edges.FirstOrDefault(item => item.Key == binding.EdgeKey);
-            if (edge is null)
+            if (edge is null || specs[index].Anchor != PatternAnchors.SourceCorrespondence || specs[index].Placement != PatternPlacements.Boundary)
             {
+                rejected.Add(index);
                 continue;
             }
 
-            edges[index] = new SemanticPatternAdapter.EdgeSegment(edge.Start, edge.End);
+            var segment = new SemanticPatternAdapter.EdgeSegment(edge.Start, edge.End);
+            if (bindings.TryGetValue(index, out var existing) && existing != segment)
+            {
+                rejected.Add(index);
+                continue;
+            }
+
+            bindings[index] = segment;
+        }
+
+        foreach (var index in rejected)
+        {
+            bindings.Remove(index);
         }
 
         return door;
@@ -680,80 +877,45 @@ internal static class PatternTargetResolution
         PatternTargetRoomChoice? choice,
         PlanPoint? selected,
         bool inventedEntrance,
-        IReadOnlyList<ProjectedDevice> devices,
-        IReadOnlyList<PatternRule> rules)
+        SemanticPatternAdapter.Adaptation adaptation)
     {
-        var lines = new List<string> { "Target reasoning" };
-        if (choice is null || choice.Assessment is "uncertain" or "incompatible" || inventedEntrance || (selected is null && snapshot.Doors.Count != 1))
+        var lines = new List<string>();
+        var needsEntrance = adaptation.Outcomes.Any(outcome => outcome.Spec.Anchor is PatternAnchors.Entrance or PatternAnchors.OppositeBoundary);
+        if (needsEntrance)
         {
-            lines.Add(snapshot.Doors.Count > 1
-                ? snapshot.Doors.Count == 2
-                    ? "Two possible entrance doors remain plausible"
-                    : "Several possible entrance doors remain plausible"
-                : "No deterministic entrance door was established");
-        }
-        else if (selected is PlanPoint door)
-        {
-            var feature = snapshot.Doors.FirstOrDefault(item => item.Point.X == door.X && item.Point.Y == door.Y);
-            var other = feature?.OtherSideStatus == "room" && !string.IsNullOrEmpty(feature.OtherSideName)
-                ? feature.OtherSideName
-                : feature?.OtherSideStatus == "outside" ? "the outside" : null;
-            lines.Add(other is null ? "Entrance: selected door" : "Entrance: door connected to " + other);
-        }
-
-        if (devices.Any(device => device.Role == "receptacle"))
-        {
-            lines.Add("Pair mapped onto the target wall");
-        }
-
-        if (devices.Any(device => device.Role == "data"))
-        {
-            lines.Add("Data mapped opposite the entrance");
+            if (choice is null || choice.Assessment is "uncertain" or "incompatible" || inventedEntrance || (selected is null && snapshot.Doors.Count != 1))
+            {
+                lines.Add(snapshot.Doors.Count > 1
+                    ? snapshot.Doors.Count == 2
+                        ? "Two possible entrance doors remain plausible"
+                        : "Several possible entrance doors remain plausible"
+                    : "No deterministic entrance door was established");
+            }
+            else if (selected is PlanPoint door)
+            {
+                var feature = snapshot.Doors.FirstOrDefault(item => item.Point.X == door.X && item.Point.Y == door.Y);
+                var other = feature?.OtherSideStatus == "room" && !string.IsNullOrEmpty(feature.OtherSideName)
+                    ? feature.OtherSideName
+                    : feature?.OtherSideStatus == "outside" ? "the outside" : null;
+                lines.Add(other is null ? "Entrance: selected door" : "Entrance: door connected to " + other);
+            }
         }
 
-        var resolved = ResolvedRoles(devices);
-        var missing = rules
-            .Select(rule => rule.Anchor == PatternAnchors.PairedSymmetric ? "receptacle pair" : rule.Role)
-            .Where(role => role == "receptacle pair" ? !devices.Any(device => device.Role == "receptacle") : !devices.Any(device => device.Role == role))
-            .Distinct(StringComparer.Ordinal)
-            .ToArray();
+        var resolved = adaptation.Outcomes.Where(outcome => outcome.Resolved).ToArray();
+        var unresolved = adaptation.Outcomes.Where(outcome => !outcome.Resolved).ToArray();
         if (resolved.Length > 0)
         {
-            lines.Add("Resolved: " + string.Join(", ", resolved));
+            lines.Add("Resolved");
+            lines.AddRange(resolved.Select(outcome => "✓ " + PatternAdaptationText.Resolved(outcome, snapshot.Room.Loop)));
         }
 
-        if (missing.Length > 0)
+        if (unresolved.Length > 0)
         {
-            lines.Add("Unresolved: " + string.Join(", ", missing));
+            lines.Add("Unresolved");
+            lines.AddRange(unresolved.Select(outcome => "! " + PatternAdaptationText.Unresolved(outcome)));
         }
 
-        return lines.Take(8).ToList();
-    }
-
-    private static string[] ResolvedRoles(IReadOnlyList<ProjectedDevice> devices)
-    {
-        var roles = new List<string>();
-        if (devices.Any(device => device.Role == "switch"))
-        {
-            roles.Add("switch");
-        }
-
-        if (devices.Any(device => device.Role == "luminaire"))
-        {
-            roles.Add("luminaire");
-        }
-
-        if (devices.Count(device => device.Role == "receptacle") >= 2)
-        {
-            roles.Add("receptacle pair");
-        }
-
-        if (devices.Any(device => device.Role == "data"))
-        {
-            roles.Add("data");
-        }
-
-        return roles.ToArray();
+        return lines.Take(12).ToList();
     }
 
     private static RoomPatternReview.Review Rebuild(
@@ -786,12 +948,14 @@ internal static class PatternTargetResolution
             }).ToList(),
             Source = match.SourceKind,
             LinkLabel = match.LinkLabel,
+            AdaptationStatus = match.AdaptationStatus,
             Reasoning = match.RoomRef is not null && notes.TryGetValue(match.RoomRef, out var lines) ? lines : null,
         }).ToList();
         template.SuggestedRooms = shown
             .Select((match, index) => (match, index))
             .Where(item => item.match.Band != "rejected"
                 && !string.IsNullOrEmpty(item.match.RoomRef)
+                && PatternAdaptationStatus.Selectable(item.match.AdaptationStatus)
                 && (namedRooms || item.match.Band == "high"))
             .Select(item => item.index)
             .Take(8)
@@ -821,17 +985,140 @@ internal static class PatternTargetResolution
     }
 }
 
+internal static class PatternAdaptationText
+{
+    public static string Resolved(SemanticPatternAdapter.SpecOutcome outcome, IReadOnlyList<PlanPoint> loop)
+    {
+        var spec = outcome.Spec;
+        var subject = Subject(spec);
+        return spec.Anchor switch
+        {
+            PatternAnchors.RoomCenter => spec.IsPair
+                ? $"{spec.Count} {PatternUnderstanding.Noun(spec.Role, spec.Count)} around room centre"
+                : $"{subject} at room centre",
+            PatternAnchors.Entrance => subject + " at the entrance",
+            PatternAnchors.OppositeBoundary => subject + " opposite the entrance",
+            PatternAnchors.NearestBoundary => subject + " on the nearest wall",
+            PatternAnchors.Corner => subject + " near a corner",
+            PatternAnchors.SourceCorrespondence => subject + " → " + Wall(outcome, loop),
+            _ => subject,
+        };
+    }
+
+    public static string Unresolved(SemanticPatternAdapter.SpecOutcome outcome)
+    {
+        var spec = outcome.Spec;
+        var where = spec.Anchor switch
+        {
+            PatternAnchors.RoomCenter => "at room centre",
+            PatternAnchors.Entrance => "at the entrance",
+            PatternAnchors.OppositeBoundary => "opposite the entrance",
+            PatternAnchors.NearestBoundary => "on the nearest wall",
+            PatternAnchors.Corner => "near a corner",
+            PatternAnchors.SourceCorrespondence => "on its corresponding wall",
+            _ => "in the room",
+        };
+        var reason = outcome.Failure switch
+        {
+            SemanticPatternAdapter.Failures.EntranceAmbiguous => "entrance is ambiguous",
+            SemanticPatternAdapter.Failures.NoFacingWall => "no facing wall was found",
+            SemanticPatternAdapter.Failures.NoCorrespondingWall => "no corresponding wall was chosen",
+            SemanticPatternAdapter.Failures.IncompatibleBinding => "the proposed wall was not compatible",
+            SemanticPatternAdapter.Failures.NoObservedDevice => "no observed device to anchor it",
+            SemanticPatternAdapter.Failures.WallTooShort => "the wall is too short",
+            SemanticPatternAdapter.Failures.UnsupportedArrangement => "this arrangement is not supported yet",
+            _ => "no valid position inside the room",
+        };
+        return $"{Subject(spec)} {where}: {reason}";
+    }
+
+    private static string Subject(PatternSpec spec)
+    {
+        return spec.IsPair
+            ? PatternUnderstanding.Noun(spec.Role, 1) + " pair"
+            : $"{spec.Count} {PatternUnderstanding.Noun(spec.Role, spec.Count)}";
+    }
+
+    private static string Wall(SemanticPatternAdapter.SpecOutcome outcome, IReadOnlyList<PlanPoint> loop)
+    {
+        var side = outcome.Edge is SemanticPatternAdapter.EdgeSegment edge ? PatternEvidence.Compass(loop, edge.Start, edge.End) : null;
+        return side is null ? "corresponding wall" : side + " wall";
+    }
+}
+
+internal sealed record PatternTargetCompletion(
+    int CandidateCount,
+    string? RoomName,
+    bool Unavailable,
+    int Resolved,
+    int Partial,
+    int Unresolved);
+
+internal static class PatternTargetCompletionText
+{
+    public static string Compose(PatternTargetCompletion completion)
+    {
+        ArgumentNullException.ThrowIfNull(completion);
+        var count = completion.CandidateCount;
+        var kind = completion.RoomName is null ? "" : completion.RoomName.Trim() + " ";
+        var lines = new List<string>
+        {
+            $"BIM-IT found {count} candidate {kind}{(count == 1 ? "room" : "rooms")}.",
+        };
+        if (completion.Unavailable)
+        {
+            lines.Add("Target reasoning was unavailable, so Pattern Review shows the geometric comparison only.");
+        }
+        else
+        {
+            var clauses = new List<string>();
+            if (completion.Resolved > 0)
+            {
+                clauses.Add($"completed for {completion.Resolved}");
+            }
+
+            if (completion.Partial > 0)
+            {
+                clauses.Add($"is partial for {completion.Partial}");
+            }
+
+            if (completion.Unresolved > 0)
+            {
+                clauses.Add($"is unresolved for {completion.Unresolved}");
+            }
+
+            lines.Add(clauses.Count == 0
+                ? "No candidate room could be adapted."
+                : "Target adaptation " + Join(clauses) + ".");
+        }
+
+        lines.Add("Review the Pattern Review panel for the proposed layouts.");
+        lines.Add("No Revit changes were made.");
+        return string.Join("\n", lines);
+    }
+
+    private static string Join(IReadOnlyList<string> clauses)
+    {
+        return clauses.Count switch
+        {
+            1 => clauses[0],
+            2 => clauses[0] + " and " + clauses[1],
+            _ => string.Join(", ", clauses.Take(clauses.Count - 1)) + ", and " + clauses[^1],
+        };
+    }
+}
+
 internal static class PatternTargetOrchestrator
 {
     public const string UnavailableLine = "Target reasoning was unavailable (target_reasoning_unavailable).";
 
-    public static async Task CompleteAsync(RoomPatternStore store, IPatternTargetReasoner reasoner, CancellationToken cancellationToken)
+    public static async Task<PatternTargetCompletion?> CompleteAsync(RoomPatternStore store, IPatternTargetReasoner reasoner, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(reasoner);
         if (!store.TryCopyPending(out var pending))
         {
-            return;
+            return null;
         }
 
         PatternTargetReasoningResult result;
@@ -855,17 +1142,21 @@ internal static class PatternTargetOrchestrator
 
         if (!store.PendingMatches(pending))
         {
-            return;
+            return null;
         }
 
+        var candidates = pending.Snapshot.Matches.Count;
         if (result.Unavailable)
         {
-            store.MarkTargetReasoningUnavailable(pending.GenerationId, UnavailableText(result.Failure));
-            return;
+            return store.MarkTargetReasoningUnavailable(pending.GenerationId, UnavailableText(result.Failure))
+                ? new PatternTargetCompletion(candidates, pending.Snapshot.RoomName, true, 0, 0, 0)
+                : null;
         }
 
         var outcome = PatternTargetResolution.Apply(pending, result);
-        store.CompleteTargetReasoning(pending.GenerationId, outcome);
+        return store.CompleteTargetReasoning(pending.GenerationId, outcome)
+            ? new PatternTargetCompletion(candidates, pending.Snapshot.RoomName, false, outcome.Resolved, outcome.Partial, outcome.Unresolved)
+            : null;
     }
 
     internal static string UnavailableText(string? failure)

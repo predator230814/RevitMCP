@@ -66,14 +66,14 @@ internal static class RoomPatternGrounding
             }
         }
 
-        var deferSemantics = geometry.Rules is { Count: > 0 };
+        var deferSemantics = geometry.Specs is { Count: > 0 };
         var matched = PromoteNamedRooms(RoomShapeMatcher.Match(geometry, candidates, resolveSemantics: !deferSemantics), roomName);
         var all = matched.Concat(rejected).ToArray();
         var state = result.Items.Count == 0 ? "no_candidates" : "matched";
         var shown = ShownMatches(all, roomName is not null);
         var review = BuildReview(display, state, result.Truncated, all, shown);
         var draft = deferSemantics
-            ? PatternTargetContext.Build(display, candidates, all, review, roomName is not null)
+            ? PatternTargetContext.Build(geometry, candidates, all, review, roomName)
             : null;
         return new Grounding(state, result.Truncated, all, review, ModelResult(display, state, all, roomName), shown, documentId, roomName, draft);
     }
@@ -104,7 +104,7 @@ internal static class RoomPatternGrounding
                 Y = device.Y,
             }).ToList(),
             Rooms = shown.Select(Card).ToList(),
-            Understood = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors, pattern.Semantics).ToList(),
+            Understood = PatternUnderstanding.Summarize(pattern.Specs, pattern.Anchors, pattern.Semantics, pattern.Evidence).ToList(),
         };
     }
 
@@ -160,17 +160,18 @@ internal static class RoomPatternGrounding
             ["rotated_count"] = matches.Count(match => match.Band != "rejected" && match.RotationDegrees != 0),
             ["match_state"] = state,
             ["room_name"] = roomName,
-            ["understood"] = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors, pattern.Semantics),
-            ["semantic_status"] = (pattern.Semantics ?? SemanticReport.Unset(pattern.Rules)).Status,
-            ["semantic_warning_count"] = (pattern.Semantics ?? SemanticReport.Unset(pattern.Rules)).WarningCount,
-            ["semantic_warnings"] = (pattern.Semantics ?? SemanticReport.Unset(pattern.Rules)).Warnings,
+            ["understood"] = PatternUnderstanding.Summarize(pattern.Specs, pattern.Anchors, pattern.Semantics, pattern.Evidence),
+            ["semantic_status"] = (pattern.Semantics ?? SemanticReport.Unset(pattern.Specs)).Status,
+            ["semantic_warning_count"] = (pattern.Semantics ?? SemanticReport.Unset(pattern.Specs)).WarningCount,
+            ["semantic_warnings"] = (pattern.Semantics ?? SemanticReport.Unset(pattern.Specs)).Warnings,
             ["matches"] = matches
                 .OrderBy(match => BandRank(match.Band))
                 .ThenByDescending(match => match.Score)
                 .Take(8)
                 .Select(match => new Dictionary<string, object?>
                 {
-                    ["band"] = match.Band,
+                    ["geometry_band"] = match.Band,
+                    ["adaptation_status"] = match.AdaptationStatus,
                     ["score"] = match.Score,
                     ["rotation_degrees"] = match.RotationDegrees,
                     ["mirrored"] = match.Mirrored,
@@ -201,6 +202,7 @@ internal static class RoomPatternGrounding
             }).ToList(),
             Source = match.SourceKind,
             LinkLabel = match.LinkLabel,
+            AdaptationStatus = match.AdaptationStatus,
         };
     }
 
@@ -366,9 +368,9 @@ internal sealed record Grounding(
                 Y = device.Y,
             }).ToList(),
             Rooms = [],
-            Understood = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors, pattern.Semantics).ToList(),
+            Understood = PatternUnderstanding.Summarize(pattern.Specs, pattern.Anchors, pattern.Semantics, pattern.Evidence).ToList(),
         };
-        var semantics = pattern.Semantics ?? SemanticReport.Unset(pattern.Rules);
+        var semantics = pattern.Semantics ?? SemanticReport.Unset(pattern.Specs);
         var model = new Dictionary<string, object?>
         {
             ["stored"] = true,
@@ -380,7 +382,7 @@ internal sealed record Grounding(
             ["mirrored_count"] = 0,
             ["rotated_count"] = 0,
             ["match_state"] = state,
-            ["understood"] = PatternUnderstanding.Summarize(pattern.Rules, pattern.Anchors, pattern.Semantics),
+            ["understood"] = PatternUnderstanding.Summarize(pattern.Specs, pattern.Anchors, pattern.Semantics, pattern.Evidence),
             ["semantic_status"] = semantics.Status,
             ["semantic_warning_count"] = semantics.WarningCount,
             ["semantic_warnings"] = semantics.Warnings,

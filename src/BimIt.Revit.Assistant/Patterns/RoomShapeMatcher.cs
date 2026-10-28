@@ -13,9 +13,10 @@ internal sealed record SourceRoomPattern(
     IReadOnlyList<PlanPoint> Boundary,
     PlanPoint? Entrance,
     IReadOnlyList<SourceDevice> Devices,
-    IReadOnlyList<PatternRule>? Rules = null,
+    IReadOnlyList<PatternSpec>? Specs = null,
     IReadOnlyList<PatternAnchor>? Anchors = null,
-    SemanticReport? Semantics = null);
+    SemanticReport? Semantics = null,
+    IReadOnlyList<PatternSpecEvidence>? Evidence = null);
 
 internal sealed record CandidateOpening(
     double X,
@@ -64,7 +65,19 @@ internal sealed record RoomShapeMatch(
     IReadOnlyList<ProjectedDevice> Devices,
     string? RoomRef = null,
     string? SourceKind = null,
-    string? LinkLabel = null);
+    string? LinkLabel = null,
+    string? AdaptationStatus = null);
+
+internal static class PatternAdaptationStatus
+{
+    public const string Resolved = "resolved";
+
+    public const string Partial = "partial";
+
+    public const string Unresolved = "unresolved";
+
+    public static bool Selectable(string? status) => status is null or Resolved;
+}
 
 internal static class RoomShapeMatcher
 {
@@ -154,39 +167,32 @@ internal static class RoomShapeMatcher
             : null;
         var band = score >= HighConfidence ? "high" : score >= LowerConfidence ? "lower" : "rejected";
         var devices = ProjectDevices(source, sourcePrepared, room, candidate, best);
-        var rules = source.Rules ?? [];
-        if (resolveSemantics && rules.Count > 0)
+        string? status = null;
+        if (resolveSemantics && source.Specs is { Count: > 0 })
         {
             PlanPoint? entrance = source.Entrance is PlanPoint pageEntrance
                 ? Absolute(ToLocal(pageEntrance, sourcePrepared, room, best.Quarters, best.Mirror), candidate)
                 : null;
-            var adapted = SemanticPatternAdapter.TryPlace(
-                rules,
-                source.Devices,
-                candidate.Loop,
-                candidate.Holes ?? [],
-                candidate.CentroidX,
-                candidate.CentroidY,
-                candidate.Openings,
-                devices,
-                entrance,
-                out var placements);
-            devices = placements.Select(placement =>
+            var adaptation = SemanticPatternAdapter.Adapt(source, new SemanticPatternAdapter.Target
+            {
+                Loop = candidate.Loop,
+                Holes = candidate.Holes ?? [],
+                CentroidX = candidate.CentroidX,
+                CentroidY = candidate.CentroidY,
+                Openings = candidate.Openings,
+                Projected = devices,
+                ProjectedEntrance = entrance,
+                Quarters = best.Quarters,
+                Mirror = best.Mirror,
+                OrientationTrusted = band == "high",
+            });
+            devices = adaptation.Placements.Select(placement =>
             {
                 var local = new PlanPoint(placement.X - candidate.CentroidX, placement.Y - candidate.CentroidY);
                 var normalized = NormalizePoint(local, room);
                 return new ProjectedDevice(placement.Role, placement.PlacementKind, placement.X, placement.Y, normalized.X, normalized.Y, placement.FamilyHint);
             }).ToArray();
-            if (!adapted)
-            {
-                reason = "unresolved_rule";
-                band = "rejected";
-            }
-            else if (band == "rejected")
-            {
-                band = "lower";
-                reason = "semantic_match";
-            }
+            status = adaptation.Status;
         }
 
         return new RoomShapeMatch(
@@ -201,8 +207,11 @@ internal static class RoomShapeMatcher
             devices,
             candidate.ElementRef,
             candidate.SourceKind,
-            candidate.LinkLabel);
+            candidate.LinkLabel,
+            status);
     }
+
+    internal static PlanPoint Orient(PlanPoint direction, int quarters, bool mirror) => Turn(direction, quarters, mirror);
 
     private static PlanPoint Absolute(PlanPoint local, CandidateRoom room)
     {

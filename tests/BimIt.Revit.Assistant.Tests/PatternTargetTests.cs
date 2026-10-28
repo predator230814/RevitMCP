@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BimIt.Revit.Assistant.Patterns;
 using BimIt.Revit.Assistant.Providers.GitHubCopilot;
 using BimIt.Revit.Assistant.Ipc;
@@ -11,8 +12,7 @@ public sealed class PatternTargetTests
     public async Task Corridor_door_is_chosen_before_deterministic_placement()
     {
         var steps = new List<string> { "source", "discovery" };
-        var (store, pending) = Store(Studio(), "sr1.l.hidden-link-room");
-        Assert.DoesNotContain("unresolved_rule", store.PeekReviewJson() ?? "", StringComparison.Ordinal);
+        var (store, _) = Store(Studio(), "sr1.l.hidden-link-room");
         var reasoner = new FakeReasoner
         {
             Steps = steps,
@@ -20,17 +20,31 @@ public sealed class PatternTargetTests
             [
                 new PatternTargetRoomChoice("room_0", "compatible", "door_0",
                 [
-                    new PatternTargetEdgeBinding("rule_2", "edge_2"),
+                    new PatternTargetEdgeBinding("pattern_2", "edge_2"),
                 ]),
             ]),
         };
-        await PatternTargetOrchestrator.CompleteAsync(store, reasoner, CancellationToken.None);
+        var completion = await PatternTargetOrchestrator.CompleteAsync(store, reasoner, CancellationToken.None);
         steps.Add("review");
         Assert.Equal(["source", "discovery", "reasoning", "review"], steps);
+        Assert.Equal(new PatternTargetCompletion(1, "studio", false, 1, 0, 0), completion);
         var review = store.PeekReviewJson() ?? "";
-        Assert.Contains("Entrance: door connected to Corridor", review, StringComparison.Ordinal);
-        Assert.Contains("Resolved: switch, luminaire, receptacle pair, data", review, StringComparison.Ordinal);
+        var card = Card(store);
+        Assert.Equal(PatternAdaptationStatus.Resolved, card.AdaptationStatus);
+        Assert.Equal(
+            new[]
+            {
+                "Entrance: door connected to Corridor",
+                "Resolved",
+                "✓ 1 switch at the entrance",
+                "✓ 1 luminaire at room centre",
+                "✓ receptacle pair → north wall",
+                "✓ 1 data device opposite the entrance",
+            },
+            card.Reasoning!);
         Assert.DoesNotContain("door_0", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("edge_2", review, StringComparison.Ordinal);
+        Assert.DoesNotContain("pattern_2", review, StringComparison.Ordinal);
         Assert.DoesNotContain("sr1", review, StringComparison.Ordinal);
         Assert.DoesNotContain("hidden-link-room", review, StringComparison.Ordinal);
         var placed = store.CurrentGeneration!.Rooms[0];
@@ -41,11 +55,73 @@ public sealed class PatternTargetTests
         var entrance = placed.Devices.Single(device => device.Role == "switch");
         Assert.InRange(entrance.XMetres, 0, 2.5);
         Assert.InRange(entrance.YMetres, 0, 1.5);
-        Assert.Equal(2, placed.Devices.Count(device => device.Role == "receptacle"));
-        Assert.True(placed.Devices.Where(device => device.Role == "receptacle").All(device => device.YMetres > 4));
+        var pair = placed.Devices.Where(device => device.Role == "receptacle").ToArray();
+        Assert.Equal(2, pair.Length);
+        Assert.All(pair, device => Assert.InRange(device.YMetres, 5.5, 6));
+        Assert.Equal(2, Math.Abs(pair[0].XMetres - pair[1].XMetres), 2);
+        Assert.Equal(5, (pair[0].XMetres + pair[1].XMetres) / 2, 2);
         Assert.True(placed.Devices.Single(device => device.Role == "data").YMetres > 4);
         Assert.Contains("Corridor", reasoner.Seen!.Rooms[0].Doors[0].OtherSideName, StringComparison.Ordinal);
         Assert.Equal("Bathroom", reasoner.Seen.Rooms[0].Doors[1].OtherSideName);
+    }
+
+    [Fact]
+    public async Task Two_pairs_on_two_source_walls_bind_to_two_target_walls()
+    {
+        var reasoner = new FakeReasoner
+        {
+            Next = new PatternTargetReasoningResult(false,
+            [
+                new PatternTargetRoomChoice("room_0", "compatible", "door_0",
+                [
+                    new PatternTargetEdgeBinding("pattern_1", "edge_2"),
+                    new PatternTargetEdgeBinding("pattern_2", "edge_1"),
+                ]),
+            ]),
+        };
+        var (store, _) = Store(Studio(), "two-pairs", TwoPairs());
+        var completion = await PatternTargetOrchestrator.CompleteAsync(store, reasoner, CancellationToken.None);
+        Assert.Equal(1, completion!.Resolved);
+        Assert.Equal("top", reasoner.Seen!.Patterns[1].Evidence!.Side);
+        Assert.Equal("right", reasoner.Seen.Patterns[2].Evidence!.Side);
+        Assert.NotEqual(reasoner.Seen.Patterns[1].Evidence!.SourceEdgeKey, reasoner.Seen.Patterns[2].Evidence!.SourceEdgeKey);
+        var card = Card(store);
+        Assert.Equal(PatternAdaptationStatus.Resolved, card.AdaptationStatus);
+        Assert.Contains("✓ 1 switch at the entrance", card.Reasoning!);
+        Assert.Contains("✓ receptacle pair → north wall", card.Reasoning!);
+        Assert.Contains("✓ receptacle pair → east wall", card.Reasoning!);
+        var receptacles = store.CurrentGeneration!.Rooms[0].Devices.Where(device => device.Role == "receptacle").ToArray();
+        Assert.Equal(4, receptacles.Length);
+        Assert.Equal(2, receptacles.Count(device => device.YMetres > 5.5 && device.XMetres < 9.5));
+        Assert.Equal(2, receptacles.Count(device => device.XMetres > 9.5 && device.YMetres < 5.5));
+    }
+
+    [Fact]
+    public async Task Invented_edge_keys_and_interior_bindings_fail_closed()
+    {
+        var reasoner = new FakeReasoner
+        {
+            Next = new PatternTargetReasoningResult(false,
+            [
+                new PatternTargetRoomChoice("room_0", "compatible", "door_0",
+                [
+                    new PatternTargetEdgeBinding("pattern_3", "edge_99"),
+                    new PatternTargetEdgeBinding("pattern_1", "edge_2"),
+                    new PatternTargetEdgeBinding("pattern_9", "edge_0"),
+                    new PatternTargetEdgeBinding("rule_2", "edge_1"),
+                ]),
+            ]),
+        };
+        var (store, _) = Store(Studio(), "fail-closed", Interior());
+        await PatternTargetOrchestrator.CompleteAsync(store, reasoner, CancellationToken.None);
+        var card = Card(store);
+        Assert.Equal(PatternAdaptationStatus.Partial, card.AdaptationStatus);
+        Assert.Contains("✓ 1 switch at the entrance", card.Reasoning!);
+        Assert.Contains("! receptacle pair on its corresponding wall: the proposed wall was not compatible", card.Reasoning!);
+        Assert.Contains("! luminaire pair at room centre: the proposed wall was not compatible", card.Reasoning!);
+        var devices = store.CurrentGeneration!.Rooms[0].Devices;
+        Assert.DoesNotContain(devices, device => device.Role is "luminaire" or "receptacle");
+        Assert.DoesNotContain(store.CurrentGeneration.Rooms, room => PatternAdaptationStatus.Selectable(room.AdaptationStatus));
     }
 
     [Fact]
@@ -59,20 +135,57 @@ public sealed class PatternTargetTests
                 new PatternTargetRoomChoice("room_0", "compatible", "door_9", []),
             ]),
         }, CancellationToken.None);
-        var invented = inventedStore.PeekReviewJson() ?? "";
-        Assert.Contains("unresolved_rule", invented, StringComparison.Ordinal);
-        Assert.Contains("Two possible entrance doors remain plausible", invented, StringComparison.Ordinal);
-        Assert.DoesNotContain("Resolved: switch", invented, StringComparison.Ordinal);
+        var invented = Card(inventedStore);
+        Assert.Equal(PatternAdaptationStatus.Partial, invented.AdaptationStatus);
+        Assert.Equal("Two possible entrance doors remain plausible", invented.Reasoning![0]);
+        Assert.Contains(invented.Reasoning, line => line.StartsWith("! 1 switch at the entrance:", StringComparison.Ordinal));
+        Assert.Contains("! receptacle pair on its corresponding wall: no corresponding wall was chosen", invented.Reasoning);
+        Assert.Contains("✓ 1 luminaire at room centre", invented.Reasoning);
 
         var (uncertainStore, _) = Store(Studio(), "room-ref");
         await PatternTargetOrchestrator.CompleteAsync(uncertainStore, new FakeReasoner
         {
             Next = new PatternTargetReasoningResult(false,
             [
-                new PatternTargetRoomChoice("room_0", "uncertain", null, []),
+                new PatternTargetRoomChoice("room_0", "uncertain", null, [new PatternTargetEdgeBinding("pattern_2", "edge_2")]),
             ]),
         }, CancellationToken.None);
-        Assert.Contains("Unresolved: switch", uncertainStore.PeekReviewJson() ?? "", StringComparison.Ordinal);
+        var uncertain = Card(uncertainStore);
+        Assert.Contains(uncertain.Reasoning!, line => line.StartsWith("! 1 switch at the entrance:", StringComparison.Ordinal));
+        Assert.Contains("! receptacle pair on its corresponding wall: no corresponding wall was chosen", uncertain.Reasoning!);
+    }
+
+    [Fact]
+    public async Task Three_resolved_and_one_failed_item_make_a_partial_room_that_stays_visible()
+    {
+        var (store, _) = Store(Studio(), "partial-ref");
+        var completion = await PatternTargetOrchestrator.CompleteAsync(store, Choice("door_0"), CancellationToken.None);
+        Assert.Equal(new PatternTargetCompletion(1, "studio", false, 0, 1, 0), completion);
+        var parsed = Parsed(store);
+        var card = Assert.Single(parsed.Rooms!);
+        Assert.Equal(PatternAdaptationStatus.Partial, card.AdaptationStatus);
+        Assert.NotEqual("rejected", card.Band);
+        Assert.Equal(3, card.Devices!.Count);
+        Assert.Empty(parsed.SuggestedRooms ?? []);
+        Assert.Contains("Resolved", card.Reasoning!);
+        Assert.Contains("Unresolved", card.Reasoning!);
+        var hidden = Assert.Single(store.CurrentGeneration!.Rooms);
+        Assert.Equal(PatternAdaptationStatus.Partial, hidden.AdaptationStatus);
+        Assert.Equal(
+            "BIM-IT found 1 candidate studio room.\nTarget adaptation is partial for 1.\nReview the Pattern Review panel for the proposed layouts.\nNo Revit changes were made.",
+            PatternTargetCompletionText.Compose(completion!));
+    }
+
+    [Fact]
+    public void Completion_text_is_deterministic_and_states_no_changes()
+    {
+        Assert.Equal(
+            "BIM-IT found 6 candidate studio rooms.\nTarget adaptation completed for 5 and is partial for 1.\nReview the Pattern Review panel for the proposed layouts.\nNo Revit changes were made.",
+            PatternTargetCompletionText.Compose(new PatternTargetCompletion(6, "studio", false, 5, 1, 0)));
+        var unavailable = PatternTargetCompletionText.Compose(new PatternTargetCompletion(2, null, true, 0, 0, 0));
+        Assert.StartsWith("BIM-IT found 2 candidate rooms.", unavailable, StringComparison.Ordinal);
+        Assert.Contains("geometric comparison only", unavailable, StringComparison.Ordinal);
+        Assert.EndsWith("No Revit changes were made.", unavailable, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -80,27 +193,30 @@ public sealed class PatternTargetTests
     {
         var (store, _) = Store(Studio(), "room-ref");
         var before = store.PeekReviewJson();
-        await PatternTargetOrchestrator.CompleteAsync(store, new FakeReasoner { Next = PatternTargetReasoningResult.None }, CancellationToken.None);
+        var completion = await PatternTargetOrchestrator.CompleteAsync(store, new FakeReasoner { Next = PatternTargetReasoningResult.None }, CancellationToken.None);
         var after = store.PeekReviewJson() ?? "";
+        Assert.True(completion!.Unavailable);
         Assert.Contains("target_reasoning_unavailable", after, StringComparison.Ordinal);
-        Assert.DoesNotContain("unresolved_rule", after, StringComparison.Ordinal);
         Assert.Contains("User requested:", before ?? "", StringComparison.Ordinal);
     }
 
     [Fact]
     public void Snake_case_reply_is_read_and_extra_fields_are_refused()
     {
-        var reply = "Here is the result:\n```json\n{\"rooms\":[{\"room_key\":\"room_0\",\"assessment\":\"compatible\",\"entrance_feature_key\":\"door_0\",\"bindings\":[{\"rule_key\":\"rule_2\",\"target_edge_key\":\"edge_2\"}]}]}\n```";
+        var reply = "Here is the result:\n```json\n{\"rooms\":[{\"room_key\":\"room_0\",\"assessment\":\"compatible\",\"entrance_feature_key\":\"door_0\",\"bindings\":[{\"pattern_key\":\"pattern_2\",\"target_edge_key\":\"edge_2\"}]}]}\n```";
         Assert.True(PatternTargetResponseParser.TryParse(reply, out var result));
         Assert.False(result.Unavailable);
         var room = Assert.Single(result.Rooms);
         Assert.Equal("room_0", room.RoomKey);
         Assert.Equal("door_0", room.EntranceFeatureKey);
-        Assert.Equal("edge_2", Assert.Single(room.Bindings).EdgeKey);
+        var binding = Assert.Single(room.Bindings);
+        Assert.Equal("pattern_2", binding.PatternKey);
+        Assert.Equal("edge_2", binding.EdgeKey);
 
         Assert.True(PatternTargetResponseParser.TryParse("{\"rooms\":[{\"room_key\":\"room_0\",\"assessment\":\"uncertain\",\"entrance_feature_key\":null}]}", out var uncertain));
         Assert.Null(Assert.Single(uncertain.Rooms).EntranceFeatureKey);
 
+        Assert.False(PatternTargetResponseParser.TryParse("{\"rooms\":[{\"room_key\":\"room_0\",\"assessment\":\"compatible\",\"bindings\":[{\"rule_key\":\"rule_2\",\"target_edge_key\":\"edge_2\"}]}]}", out _));
         Assert.False(PatternTargetResponseParser.TryParse("{\"rooms\":[{\"room_key\":\"room_0\",\"assessment\":\"compatible\",\"x\":1.2,\"y\":3.4}]}", out _));
         Assert.False(PatternTargetResponseParser.TryParse("{\"rooms\":[{\"room_key\":\"room_0\",\"assessment\":\"approved\"}]}", out _));
         Assert.False(PatternTargetResponseParser.TryParse("no json here", out _));
@@ -111,13 +227,21 @@ public sealed class PatternTargetTests
     {
         var rooms = new[] { Studio() };
         var matches = RoomShapeMatcher.Match(Pattern(), rooms, resolveSemantics: false);
-        var draft = PatternTargetContext.Build(Pattern(), rooms, matches, Review(), namedRooms: true);
+        var draft = PatternTargetContext.Build(Pattern(), rooms, matches, Review(), "studio");
         var prompt = PatternTargetContext.Compose(draft!.Request);
         Assert.Contains("\"room_key\"", prompt, StringComparison.Ordinal);
         Assert.Contains("entrance_feature_key", prompt, StringComparison.Ordinal);
+        Assert.Contains("\"pattern_key\":\"pattern_2\"", prompt, StringComparison.Ordinal);
+        Assert.Contains("\"anchor\":\"source_correspondence\"", prompt, StringComparison.Ordinal);
+        Assert.Contains("\"arrangement\":\"symmetric_pair\"", prompt, StringComparison.Ordinal);
+        Assert.Contains("\"source_edge_key\":\"source_edge_2\"", prompt, StringComparison.Ordinal);
+        Assert.Contains("\"side\":\"north\"", prompt, StringComparison.Ordinal);
+        Assert.Contains("Never bind an interior pattern", prompt, StringComparison.Ordinal);
         Assert.Contains("\"other_side_name\":\"Corridor\"", prompt, StringComparison.Ordinal);
         Assert.Contains("\"other_side_name\":\"Bathroom\"", prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("ref-0", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("paired_symmetric", prompt, StringComparison.Ordinal);
+        Assert.DoesNotContain("rule_key", prompt, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -132,12 +256,23 @@ public sealed class PatternTargetTests
     }
 
     [Fact]
-    public void Stale_generation_result_is_ignored()
+    public async Task Stale_generation_result_is_ignored()
     {
         var (store, pending) = Store(Studio(), "room-ref");
         var before = store.PeekReviewJson();
-        store.CompleteTargetReasoning("ffffffffffffffffffffffffffffffff", PatternTargetResolution.Apply(pending, PatternTargetReasoningResult.None));
+        Assert.False(store.CompleteTargetReasoning("ffffffffffffffffffffffffffffffff", PatternTargetResolution.Apply(pending, PatternTargetReasoningResult.None)));
         Assert.Equal(before, store.PeekReviewJson());
+
+        var (replaced, _) = Store(Studio(), "room-ref");
+        var newer = replaced.PeekReviewJson();
+        var completion = await PatternTargetOrchestrator.CompleteAsync(replaced, new FakeReasoner
+        {
+            During = () => replaced.Replace(new RoomPatternRecord("artifact-2", 1, 5), newer),
+            Next = new PatternTargetReasoningResult(false,
+                [new PatternTargetRoomChoice("room_0", "compatible", "door_0", [new PatternTargetEdgeBinding("pattern_2", "edge_2")])]),
+        }, CancellationToken.None);
+        Assert.Null(completion);
+        Assert.Equal(newer, replaced.PeekReviewJson());
     }
 
     [Fact]
@@ -145,7 +280,7 @@ public sealed class PatternTargetTests
     {
         var rooms = Enumerable.Range(0, 10).Select(index => Room(index, "Studio " + index.ToString())).ToArray();
         var matches = RoomShapeMatcher.Match(Pattern(), rooms, resolveSemantics: false);
-        var draft = PatternTargetContext.Build(Pattern(), rooms, matches, Review(), namedRooms: true);
+        var draft = PatternTargetContext.Build(Pattern(), rooms, matches, Review(), "studio");
         Assert.NotNull(draft);
         Assert.Equal(8, draft!.Request.Rooms.Count);
         var json = PatternTargetContext.Serialize(draft.Request);
@@ -160,7 +295,13 @@ public sealed class PatternTargetTests
             Assert.InRange(door.X, 0, 1);
             Assert.InRange(door.Y, 0, 1);
         });
-        Assert.All(draft.Request.Rules, rule => Assert.StartsWith("rule_", rule.RuleKey, StringComparison.Ordinal));
+        Assert.Equal(4, draft.Request.Patterns.Count);
+        Assert.All(draft.Request.Patterns, pattern => Assert.StartsWith("pattern_", pattern.PatternKey, StringComparison.Ordinal));
+        Assert.Equal(PatternPlacements.Interior, draft.Request.Patterns[1].Evidence!.Placement);
+        Assert.Equal(2, draft.Request.Patterns[2].Evidence!.DeviceCount);
+        Assert.Equal("top", draft.Request.Patterns[2].Evidence!.Side);
+        Assert.Equal(4, draft.Request.Source!.Edges.Count);
+        Assert.Equal("source_edge_0", draft.Request.Source.Entrance?.EdgeKey);
     }
 
     [Fact]
@@ -188,7 +329,23 @@ public sealed class PatternTargetTests
     }
 
     [Fact]
-    public async Task L_shaped_studio_with_wall_jogs_places_pair_and_data_on_the_wall_facing_the_entrance()
+    public async Task Mirrored_studio_follows_its_own_corridor_door()
+    {
+        var mirrored = Studio() with { Openings = [Door(9, 0, "Corridor", "C2"), Door(1, 0, "Bathroom", "B2")] };
+        var (store, _) = Store(mirrored, "mirror-ref");
+        await PatternTargetOrchestrator.CompleteAsync(store, Choice("door_0", new PatternTargetEdgeBinding("pattern_2", "edge_2")), CancellationToken.None);
+        var devices = store.CurrentGeneration!.Rooms[0].Devices;
+        var entrance = devices.Single(device => device.Role == "switch");
+        Assert.InRange(entrance.XMetres, 7.5, 10);
+        Assert.InRange(entrance.YMetres, 0, 1.5);
+        var data = devices.Single(device => device.Role == "data");
+        Assert.InRange(data.XMetres, 8, 10);
+        Assert.True(data.YMetres > 4);
+        Assert.Equal(PatternAdaptationStatus.Resolved, Card(store).AdaptationStatus);
+    }
+
+    [Fact]
+    public async Task L_shaped_studio_with_wall_jogs_places_pair_and_data_on_the_bound_and_facing_walls()
     {
         var room = Room(0, "Two Story Studio Unit 406") with
         {
@@ -203,11 +360,11 @@ public sealed class PatternTargetTests
             Openings = [Door(1, 0, "Corridor", "C4"), Door(4, 2, "Bathroom", "B4")],
         };
         var (store, _) = Store(room, "l-ref");
-        await PatternTargetOrchestrator.CompleteAsync(store, Choice("door_0"), CancellationToken.None);
-        var review = store.PeekReviewJson() ?? "";
-        Assert.Contains("Entrance: door connected to Corridor", review, StringComparison.Ordinal);
-        Assert.Contains("Resolved: switch, luminaire, receptacle pair, data", review, StringComparison.Ordinal);
-        Assert.DoesNotContain("unresolved_rule", review, StringComparison.Ordinal);
+        await PatternTargetOrchestrator.CompleteAsync(store, Choice("door_0", new PatternTargetEdgeBinding("pattern_2", "edge_6")), CancellationToken.None);
+        var card = Card(store);
+        Assert.Equal(PatternAdaptationStatus.Resolved, card.AdaptationStatus);
+        Assert.Equal("Entrance: door connected to Corridor", card.Reasoning![0]);
+        Assert.Contains("✓ receptacle pair → north wall", card.Reasoning);
         var devices = store.CurrentGeneration!.Rooms[0].Devices;
         var data = devices.Single(device => device.Role == "data");
         Assert.InRange(data.XMetres, 0.5, 1.5);
@@ -217,9 +374,9 @@ public sealed class PatternTargetTests
         Assert.All(pair, device =>
         {
             Assert.InRange(device.YMetres, 9.5, 10);
-            Assert.InRange(device.XMetres, 0.1, 4);
+            Assert.InRange(device.XMetres, 0.1, 8.9);
         });
-        Assert.Equal(1.2, Math.Abs(pair[0].XMetres - pair[1].XMetres), 3);
+        Assert.InRange(Math.Abs(pair[0].XMetres - pair[1].XMetres), 1.7, 1.85);
     }
 
     [Fact]
@@ -227,10 +384,80 @@ public sealed class PatternTargetTests
     {
         var room = Studio() with { Holes = [Rectangle(4, 2, 6, 4)] };
         var (store, _) = Store(room, "hole-ref");
-        await PatternTargetOrchestrator.CompleteAsync(store, Choice("door_0"), CancellationToken.None);
-        var review = store.PeekReviewJson() ?? "";
-        Assert.Contains("unresolved_rule", review, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"role\":\"luminaire\"", review, StringComparison.Ordinal);
+        await PatternTargetOrchestrator.CompleteAsync(store, Choice("door_0", new PatternTargetEdgeBinding("pattern_2", "edge_2")), CancellationToken.None);
+        var card = Card(store);
+        Assert.Equal(PatternAdaptationStatus.Partial, card.AdaptationStatus);
+        Assert.Contains("! 1 luminaire at room centre: no valid position inside the room", card.Reasoning!);
+        Assert.DoesNotContain(card.Devices!, device => device.Role == "luminaire");
+    }
+
+    [Fact]
+    public void Interior_pair_stays_inside_the_room_and_out_of_holes()
+    {
+        var source = Interior();
+        var cases = new (IReadOnlyList<PlanPoint> Loop, double X, double Y, IReadOnlyList<IReadOnlyList<PlanPoint>> Holes)[]
+        {
+            (Rectangle(0, 0, 10, 6), 5, 3, []),
+            (Rectangle(0, 0, 10, 6), 5, 3, [Rectangle(4.6, 2.6, 5.4, 3.4)]),
+            (Rectangle(0, 0, 6, 10), 3, 5, []),
+            ([new(0, 0), new(6, 0), new(6, 3), new(3, 3), new(3, 6), new(0, 6)], 2.5, 2.5, []),
+            (Rectangle(0, 0, 3, 2.4), 1.5, 1.2, []),
+            (Rectangle(0, 0, 40, 20), 20, 10, []),
+        };
+        foreach (var (loop, x, y, holes) in cases)
+        {
+            var adaptation = SemanticPatternAdapter.Adapt(source, new SemanticPatternAdapter.Target
+            {
+                Loop = loop,
+                Holes = holes,
+                CentroidX = x,
+                CentroidY = y,
+            });
+            var lights = adaptation.Placements.Where(placement => placement.Role == "luminaire").ToArray();
+            Assert.Equal(2, lights.Length);
+            Assert.All(lights, light =>
+            {
+                Assert.Equal(PatternPlacements.Interior, light.PlacementKind);
+                Assert.True(Inside(loop, light.X, light.Y));
+                Assert.True(DistanceToBoundary(loop, light.X, light.Y) >= SemanticPatternAdapter.InteriorClearance - 1e-6);
+                Assert.All(holes, hole =>
+                {
+                    Assert.False(Inside(hole, light.X, light.Y));
+                    Assert.True(DistanceToBoundary(hole, light.X, light.Y) >= SemanticPatternAdapter.InteriorClearance - 1e-6);
+                });
+            });
+            Assert.Equal(x, (lights[0].X + lights[1].X) / 2, 3);
+            Assert.Equal(y, (lights[0].Y + lights[1].Y) / 2, 3);
+            var spacing = Math.Sqrt(Math.Pow(lights[0].X - lights[1].X, 2) + Math.Pow(lights[0].Y - lights[1].Y, 2));
+            Assert.InRange(spacing, (2 * SemanticPatternAdapter.MinPairHalf) - 1e-3, (2 * SemanticPatternAdapter.MaxInteriorPairHalf) + 1e-3);
+            Assert.DoesNotContain(adaptation.Outcomes, outcome => outcome.Spec.Role == "luminaire" && !outcome.Resolved);
+        }
+
+        var corridor = SemanticPatternAdapter.Adapt(source, new SemanticPatternAdapter.Target
+        {
+            Loop = Rectangle(0, 0, 8, 0.5),
+            CentroidX = 4,
+            CentroidY = 0.25,
+        });
+        Assert.DoesNotContain(corridor.Placements, placement => placement.Role == "luminaire");
+        Assert.Contains(corridor.Outcomes, outcome => outcome.Spec.Role == "luminaire" && outcome.Failure == SemanticPatternAdapter.Failures.OutsideRoom);
+    }
+
+    [Fact]
+    public async Task Reasoning_wording_comes_from_the_role_and_never_shows_keys()
+    {
+        var (store, _) = Store(Studio(), "wording", Interior());
+        await PatternTargetOrchestrator.CompleteAsync(store, Choice("door_0", new PatternTargetEdgeBinding("pattern_3", "edge_2")), CancellationToken.None);
+        var card = Card(store);
+        Assert.Contains("✓ 2 luminaires around room centre", card.Reasoning!);
+        Assert.DoesNotContain(card.Reasoning!, line => line.Contains("luminaire pair", StringComparison.Ordinal) && line.StartsWith('✓'));
+        Assert.All(card.Reasoning!, line =>
+        {
+            Assert.DoesNotContain("pattern_", line, StringComparison.Ordinal);
+            Assert.DoesNotContain("edge_", line, StringComparison.Ordinal);
+            Assert.DoesNotContain("door_", line, StringComparison.Ordinal);
+            Assert.DoesNotContain("room_", line, StringComparison.Ordinal);
+        });
     }
 
     [Fact]
@@ -266,21 +493,22 @@ public sealed class PatternTargetTests
         Assert.Contains("DescribeSide", source, StringComparison.Ordinal);
     }
 
-    private static FakeReasoner Choice(string door)
+    private static FakeReasoner Choice(string door, params PatternTargetEdgeBinding[] bindings)
     {
         return new FakeReasoner
         {
-            Next = new PatternTargetReasoningResult(false, [new PatternTargetRoomChoice("room_0", "compatible", door, [])]),
+            Next = new PatternTargetReasoningResult(false, [new PatternTargetRoomChoice("room_0", "compatible", door, bindings)]),
         };
     }
 
-    private static (RoomPatternStore Store, PatternTargetPending Pending) Store(CandidateRoom room, string roomRef)
+    private static (RoomPatternStore Store, PatternTargetPending Pending) Store(CandidateRoom room, string roomRef, SourceRoomPattern? pattern = null)
     {
         room = room with { ElementRef = roomRef };
-        var source = Pattern();
+        var source = pattern ?? Pattern();
+        source = source with { Evidence = PatternEvidence.Describe(source) };
         var matches = RoomShapeMatcher.Match(source, [room], resolveSemantics: false);
         var review = Review();
-        var draft = PatternTargetContext.Build(source, [room], matches, review, namedRooms: true);
+        var draft = PatternTargetContext.Build(source, [room], matches, review, "studio");
         Assert.NotNull(draft);
         var generationId = "0123456789abcdef0123456789abcdef";
         review.Generation = generationId;
@@ -303,23 +531,74 @@ public sealed class PatternTargetTests
         return (store, pending);
     }
 
+    private static RoomPatternReview.Review Parsed(RoomPatternStore store)
+    {
+        var json = store.PeekReviewJson();
+        Assert.NotNull(json);
+        return JsonSerializer.Deserialize<RoomPatternReview.Review>(json!, RoomPatternReview.Options)!;
+    }
+
+    private static RoomPatternReview.RoomCard Card(RoomPatternStore store)
+    {
+        return Assert.Single(Parsed(store).Rooms!);
+    }
+
     private static SourceRoomPattern Pattern()
     {
         return new SourceRoomPattern(
             Rectangle(0, 0, 10, 6),
-            null,
+            new PlanPoint(1, 0),
             [
                 new SourceDevice("switch", 1, 0.2, "boundary", null),
                 new SourceDevice("luminaire", 5, 3, "interior", null),
-                new SourceDevice("receptacle", 4, 5.5, "boundary", null),
-                new SourceDevice("receptacle", 6, 5.5, "boundary", null),
-                new SourceDevice("data", 5, 5.5, "boundary", null),
+                new SourceDevice("receptacle", 4, 5.8, "boundary", null),
+                new SourceDevice("receptacle", 6, 5.8, "boundary", null),
+                new SourceDevice("data", 5, 5.8, "boundary", null),
             ],
             [
-                new PatternRule("switch", PatternAnchors.Entrance, 0.15, null, null, PatternRuleBasis.UserStated),
-                new PatternRule("luminaire", PatternAnchors.RoomCenter, 0, null, null, PatternRuleBasis.UserStated),
-                new PatternRule("receptacle", PatternAnchors.PairedSymmetric, 0.6, "pair", null, PatternRuleBasis.UserStated),
-                new PatternRule("data", PatternAnchors.OppositeBoundary, 0.2, null, null, PatternRuleBasis.UserStated),
+                SemanticPatternTests.Spec("switch", PatternAnchors.Entrance, offset: 0.15, basis: PatternBasis.UserStated, devices: [0]),
+                SemanticPatternTests.Spec("luminaire", PatternAnchors.RoomCenter, basis: PatternBasis.UserStated, devices: [1]),
+                SemanticPatternTests.Spec("receptacle", PatternAnchors.SourceCorrespondence, pair: true, group: "pair", devices: [2, 3]),
+                SemanticPatternTests.Spec("data", PatternAnchors.OppositeBoundary, offset: 0.2, basis: PatternBasis.UserStated, devices: [4]),
+            ]);
+    }
+
+    private static SourceRoomPattern TwoPairs()
+    {
+        return new SourceRoomPattern(
+            Rectangle(0, 0, 10, 6),
+            new PlanPoint(1, 0),
+            [
+                new SourceDevice("switch", 1, 0.2, "boundary", null),
+                new SourceDevice("receptacle", 3, 5.8, "boundary", null),
+                new SourceDevice("receptacle", 5, 5.8, "boundary", null),
+                new SourceDevice("receptacle", 9.8, 2, "boundary", null),
+                new SourceDevice("receptacle", 9.8, 4, "boundary", null),
+            ],
+            [
+                SemanticPatternTests.Spec("switch", PatternAnchors.Entrance, devices: [0]),
+                SemanticPatternTests.Spec("receptacle", PatternAnchors.SourceCorrespondence, pair: true, devices: [1, 2]),
+                SemanticPatternTests.Spec("receptacle", PatternAnchors.SourceCorrespondence, pair: true, devices: [3, 4]),
+            ]);
+    }
+
+    private static SourceRoomPattern Interior()
+    {
+        return new SourceRoomPattern(
+            Rectangle(0, 0, 10, 6),
+            new PlanPoint(1, 0),
+            [
+                new SourceDevice("switch", 1, 0.2, "boundary", null),
+                new SourceDevice("luminaire", 4, 3, "interior", null),
+                new SourceDevice("luminaire", 6, 3, "interior", null),
+                new SourceDevice("receptacle", 4, 5.8, "boundary", null),
+                new SourceDevice("receptacle", 6, 5.8, "boundary", null),
+            ],
+            [
+                SemanticPatternTests.Spec("switch", PatternAnchors.Entrance, devices: [0]),
+                SemanticPatternTests.Spec("luminaire", PatternAnchors.RoomCenter, pair: true, devices: [1, 2]),
+                SemanticPatternTests.Spec("data", PatternAnchors.OppositeBoundary),
+                SemanticPatternTests.Spec("receptacle", PatternAnchors.SourceCorrespondence, pair: true, devices: [3, 4]),
             ]);
     }
 
@@ -353,7 +632,7 @@ public sealed class PatternTargetTests
             ReadState = "matched",
             Boundary = [new() { X = 0, Y = 0 }, new() { X = 1, Y = 0 }, new() { X = 1, Y = 1 }, new() { X = 0, Y = 1 }],
             Devices = [new() { Role = "switch", Placement = "interior", X = 0.2, Y = 0.2 }],
-            Understood = ["User requested:", "1 switch associated with the entrance"],
+            Understood = ["User requested:", "1 switch · entrance"],
             Rooms = [],
         };
     }
@@ -363,9 +642,44 @@ public sealed class PatternTargetTests
         return [new PlanPoint(x0, y0), new PlanPoint(x1, y0), new PlanPoint(x1, y1), new PlanPoint(x0, y1)];
     }
 
+    private static bool Inside(IReadOnlyList<PlanPoint> loop, double x, double y)
+    {
+        var inside = false;
+        for (int i = 0, j = loop.Count - 1; i < loop.Count; j = i++)
+        {
+            if ((loop[i].Y > y) != (loop[j].Y > y)
+                && x < ((loop[j].X - loop[i].X) * (y - loop[i].Y) / (loop[j].Y - loop[i].Y)) + loop[i].X)
+            {
+                inside = !inside;
+            }
+        }
+
+        return inside;
+    }
+
+    private static double DistanceToBoundary(IReadOnlyList<PlanPoint> loop, double x, double y)
+    {
+        var best = double.MaxValue;
+        for (var index = 0; index < loop.Count; index++)
+        {
+            var start = loop[index];
+            var end = loop[(index + 1) % loop.Count];
+            var dx = end.X - start.X;
+            var dy = end.Y - start.Y;
+            var t = Math.Clamp((((x - start.X) * dx) + ((y - start.Y) * dy)) / ((dx * dx) + (dy * dy)), 0, 1);
+            var px = start.X + (t * dx) - x;
+            var py = start.Y + (t * dy) - y;
+            best = Math.Min(best, Math.Sqrt((px * px) + (py * py)));
+        }
+
+        return best;
+    }
+
     private sealed class FakeReasoner : IPatternTargetReasoner
     {
         public List<string>? Steps { get; init; }
+
+        public Action? During { get; init; }
 
         public PatternTargetReasoningResult Next { get; init; } = PatternTargetReasoningResult.None;
 
@@ -375,6 +689,7 @@ public sealed class PatternTargetTests
         {
             Steps?.Add("reasoning");
             Seen = request;
+            During?.Invoke();
             return Task.FromResult(Next);
         }
     }

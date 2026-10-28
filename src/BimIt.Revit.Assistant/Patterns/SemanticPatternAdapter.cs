@@ -2,205 +2,454 @@ namespace BimIt.Revit.Assistant.Patterns;
 
 internal static class SemanticPatternAdapter
 {
+    public const double DefaultInset = 0.15;
+
+    public const double DefaultPairHalf = 0.6;
+
+    public const double MinPairHalf = 0.3;
+
+    public const double MaxPairHalf = 1.5;
+
+    public const double MaxInteriorPairHalf = 2.5;
+
+    public const double InteriorClearance = 0.3;
+
+    private const double WallMargin = 0.15;
+
     public readonly record struct Placement(string Role, string PlacementKind, double X, double Y, string? FamilyHint);
 
     public readonly record struct EdgeSegment(PlanPoint Start, PlanPoint End);
 
-    public static bool TryPlace(
-        IReadOnlyList<PatternRule> rules,
-        IReadOnlyList<SourceDevice> devices,
-        IReadOnlyList<PlanPoint> loop,
-        IReadOnlyList<IReadOnlyList<PlanPoint>> holes,
-        double centroidX,
-        double centroidY,
-        IReadOnlyList<CandidateOpening> openings,
-        IReadOnlyList<ProjectedDevice> geometric,
-        PlanPoint? projectedEntrance,
-        out IReadOnlyList<Placement> placements)
+    public static class Failures
     {
-        return TryPlace(rules, devices, loop, holes, centroidX, centroidY, openings, geometric, projectedEntrance, null, null, out placements);
+        public const string EntranceAmbiguous = "entrance_ambiguous";
+
+        public const string NoFacingWall = "no_facing_wall";
+
+        public const string NoCorrespondingWall = "no_corresponding_wall";
+
+        public const string IncompatibleBinding = "incompatible_binding";
+
+        public const string NoObservedDevice = "no_observed_device";
+
+        public const string OutsideRoom = "outside_room";
+
+        public const string WallTooShort = "wall_too_short";
+
+        public const string UnsupportedArrangement = "unsupported_arrangement";
     }
 
-    public static bool TryPlace(
-        IReadOnlyList<PatternRule> rules,
-        IReadOnlyList<SourceDevice> devices,
-        IReadOnlyList<PlanPoint> loop,
-        IReadOnlyList<IReadOnlyList<PlanPoint>> holes,
-        double centroidX,
-        double centroidY,
-        IReadOnlyList<CandidateOpening> openings,
-        IReadOnlyList<ProjectedDevice> geometric,
-        PlanPoint? projectedEntrance,
-        PlanPoint? selectedDoor,
-        IReadOnlyDictionary<int, EdgeSegment>? boundEdges,
-        out IReadOnlyList<Placement> placements)
+    public sealed record SpecOutcome(int Index, PatternSpec Spec, IReadOnlyList<Placement> Placements, string? Failure, EdgeSegment? Edge = null)
     {
-        var placed = new List<Placement>(rules.Count);
-        var complete = true;
-        var consumed = new bool[devices.Count];
-        for (var index = 0; index < rules.Count; index++)
+        public bool Resolved => Failure is null;
+    }
+
+    public sealed record Adaptation(IReadOnlyList<SpecOutcome> Outcomes)
+    {
+        public IReadOnlyList<Placement> Placements => Outcomes.SelectMany(outcome => outcome.Placements).ToArray();
+
+        public string Status => Outcomes.All(outcome => outcome.Resolved)
+            ? PatternAdaptationStatus.Resolved
+            : Outcomes.Any(outcome => outcome.Resolved) ? PatternAdaptationStatus.Partial : PatternAdaptationStatus.Unresolved;
+    }
+
+    public sealed class Target
+    {
+        public required IReadOnlyList<PlanPoint> Loop { get; init; }
+
+        public IReadOnlyList<IReadOnlyList<PlanPoint>> Holes { get; init; } = [];
+
+        public required double CentroidX { get; init; }
+
+        public required double CentroidY { get; init; }
+
+        public IReadOnlyList<CandidateOpening> Openings { get; init; } = [];
+
+        public IReadOnlyList<ProjectedDevice> Projected { get; init; } = [];
+
+        public PlanPoint? ProjectedEntrance { get; init; }
+
+        public PlanPoint? SelectedDoor { get; init; }
+
+        public IReadOnlyDictionary<int, EdgeSegment>? Bindings { get; init; }
+
+        public IReadOnlySet<int>? RejectedBindings { get; init; }
+
+        public int Quarters { get; init; }
+
+        public bool Mirror { get; init; }
+
+        public bool OrientationTrusted { get; init; }
+    }
+
+    public static Adaptation Adapt(SourceRoomPattern source, Target target)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentNullException.ThrowIfNull(target);
+        var specs = source.Specs ?? [];
+        var evidence = source.Evidence ?? PatternEvidence.Describe(source);
+        var shared = SharedEdges(specs, target);
+        var outcomes = new List<SpecOutcome>(specs.Count);
+        for (var index = 0; index < specs.Count; index++)
         {
-            var rule = rules[index];
-            EdgeSegment? edge = boundEdges is not null && boundEdges.TryGetValue(index, out var bound) ? bound : null;
-            if (rule.Anchor == PatternAnchors.PairedSymmetric)
-            {
-                if (!TryPair(rule, loop, centroidX, centroidY, openings, projectedEntrance, selectedDoor, edge, out var first, out var second)
-                    || !Accept(first, loop, holes, out first)
-                    || !Accept(second, loop, holes, out second))
+            var spec = specs[index];
+            var facts = index < evidence.Count ? evidence[index] : PatternSpecEvidence.Empty;
+            outcomes.Add(Resolve(index, spec, facts, source, target, shared));
+        }
+
+        return new Adaptation(outcomes);
+    }
+
+    private static SpecOutcome Resolve(
+        int index,
+        PatternSpec spec,
+        PatternSpecEvidence evidence,
+        SourceRoomPattern source,
+        Target target,
+        IReadOnlyDictionary<int, (int Slot, int Total)> shared)
+    {
+        SpecOutcome Fail(string failure, EdgeSegment? edge = null) => new(index, spec, [], failure, edge);
+
+        if (!PatternArrangements.IsSupported(spec.Arrangement)
+            || spec.Count != PatternArrangements.CountFor(spec.Arrangement)
+            || PatternAnchors.PlacementFor(spec.Anchor) != spec.Placement)
+        {
+            return Fail(Failures.UnsupportedArrangement);
+        }
+
+        if (target.RejectedBindings?.Contains(index) == true)
+        {
+            return Fail(Failures.IncompatibleBinding);
+        }
+
+        var hint = Hint(source, spec, evidence);
+        var inset = spec.OffsetMetres > 0 ? spec.OffsetMetres : DefaultInset;
+        var centre = new PlanPoint(target.CentroidX, target.CentroidY);
+        var points = new List<PlanPoint>(2);
+        EdgeSegment? used = null;
+        string? failure = null;
+        switch (spec.Anchor)
+        {
+            case PatternAnchors.RoomCenter:
+                if (spec.IsPair)
                 {
-                    complete = false;
-                    continue;
+                    if (!InteriorPair(target, evidence, out var first, out var second))
+                    {
+                        failure = Failures.OutsideRoom;
+                        break;
+                    }
+
+                    points.Add(first);
+                    points.Add(second);
+                }
+                else
+                {
+                    points.Add(centre);
                 }
 
-                var pairHint = Hint(devices, consumed, rule.Role);
-                placed.Add(new Placement(rule.Role, "boundary", first.X, first.Y, pairHint));
-                placed.Add(new Placement(rule.Role, "boundary", second.X, second.Y, pairHint));
-                continue;
-            }
+                break;
 
-            if (!TryOne(rule, devices, consumed, loop, centroidX, centroidY, openings, geometric, projectedEntrance, selectedDoor, out var point, out var kind, out var hint))
+            case PatternAnchors.Entrance:
             {
-                complete = false;
-                continue;
+                if (!TryDoor(target, out var door))
+                {
+                    failure = Failures.EntranceAmbiguous;
+                    break;
+                }
+
+                if (!spec.IsPair)
+                {
+                    if (!InsetFrom(door, centre, inset, out var point))
+                    {
+                        failure = Failures.OutsideRoom;
+                        break;
+                    }
+
+                    points.Add(point);
+                    break;
+                }
+
+                if (!TryNearestEdge(target.Loop, door, out var start, out var end))
+                {
+                    failure = Failures.OutsideRoom;
+                    break;
+                }
+
+                used = new EdgeSegment(start, end);
+                failure = AlongEdge(target.Loop, start, end, AlongOf(Project(door, start, end), start, end), PairHalf(evidence, start, end), inset, points);
+                break;
             }
 
-            if (!Accept(point, loop, holes, out point))
+            case PatternAnchors.OppositeBoundary:
             {
-                complete = false;
-                continue;
+                if (!TryDoor(target, out var door))
+                {
+                    failure = Failures.EntranceAmbiguous;
+                    break;
+                }
+
+                if (!TryFacing(target.Loop, door, out var facing))
+                {
+                    failure = Failures.NoFacingWall;
+                    break;
+                }
+
+                used = new EdgeSegment(facing.Start, facing.End);
+                if (spec.IsPair)
+                {
+                    failure = AlongEdge(target.Loop, facing.Start, facing.End, AlongOf(facing.Hit, facing.Start, facing.End), PairHalf(evidence, facing.Start, facing.End), inset, points);
+                }
+                else
+                {
+                    points.Add(new PlanPoint(facing.Hit.X + (facing.Inward.X * inset), facing.Hit.Y + (facing.Inward.Y * inset)));
+                }
+
+                break;
             }
 
-            placed.Add(new Placement(rule.Role, kind, point.X, point.Y, hint));
+            case PatternAnchors.NearestBoundary:
+            {
+                if (!TryObserved(target, evidence, out var observed))
+                {
+                    failure = Failures.NoObservedDevice;
+                    break;
+                }
+
+                if (!TryNearestEdge(target.Loop, observed, out var start, out var end))
+                {
+                    failure = Failures.OutsideRoom;
+                    break;
+                }
+
+                var projected = Project(observed, start, end);
+                used = new EdgeSegment(start, end);
+                if (spec.IsPair)
+                {
+                    failure = AlongEdge(target.Loop, start, end, AlongOf(projected, start, end), PairHalf(evidence, start, end), inset, points);
+                }
+                else if (InsetFrom(projected, centre, inset, out var point))
+                {
+                    points.Add(point);
+                }
+                else
+                {
+                    failure = Failures.OutsideRoom;
+                }
+
+                break;
+            }
+
+            case PatternAnchors.Corner:
+            {
+                if (spec.IsPair)
+                {
+                    failure = Failures.UnsupportedArrangement;
+                    break;
+                }
+
+                if (!TryObserved(target, evidence, out var observed))
+                {
+                    failure = Failures.NoObservedDevice;
+                    break;
+                }
+
+                if (!TryCorner(target.Loop, observed, out var corner) || !InsetFrom(corner, centre, inset, out var point))
+                {
+                    failure = Failures.OutsideRoom;
+                    break;
+                }
+
+                points.Add(point);
+                break;
+            }
+
+            case PatternAnchors.SourceCorrespondence:
+            {
+                if (target.Bindings is null || !target.Bindings.TryGetValue(index, out var edge))
+                {
+                    failure = Failures.NoCorrespondingWall;
+                    break;
+                }
+
+                used = edge;
+                var length = Distance(edge.Start, edge.End);
+                var (slot, total) = shared.TryGetValue(index, out var share) ? share : (0, 1);
+                var along = length * (slot + 1) / (total + 1);
+                if (spec.IsPair)
+                {
+                    var half = PairHalf(evidence, edge.Start, edge.End);
+                    if (total > 1)
+                    {
+                        half = Math.Min(half, Math.Max(MinPairHalf, (length / (total + 1) / 2) - WallMargin));
+                    }
+
+                    failure = AlongEdge(target.Loop, edge.Start, edge.End, along, half, inset, points);
+                }
+                else
+                {
+                    failure = AlongEdge(target.Loop, edge.Start, edge.End, along, 0, inset, points);
+                }
+
+                break;
+            }
+
+            default:
+                failure = Failures.UnsupportedArrangement;
+                break;
         }
 
-        placements = placed;
-        return complete;
+        if (failure is not null)
+        {
+            return Fail(failure, used);
+        }
+
+        var placements = new List<Placement>(points.Count);
+        foreach (var point in points)
+        {
+            if (!Accept(point, target.Loop, target.Holes, out var accepted))
+            {
+                return Fail(Failures.OutsideRoom, used);
+            }
+
+            placements.Add(new Placement(spec.Role, spec.Placement, accepted.X, accepted.Y, hint));
+        }
+
+        return new SpecOutcome(index, spec, placements, null, used);
     }
 
-    private static bool TryOne(
-        PatternRule rule,
-        IReadOnlyList<SourceDevice> devices,
-        bool[] consumed,
-        IReadOnlyList<PlanPoint> loop,
-        double centroidX,
-        double centroidY,
-        IReadOnlyList<CandidateOpening> openings,
-        IReadOnlyList<ProjectedDevice> geometric,
-        PlanPoint? projectedEntrance,
-        PlanPoint? selectedDoor,
-        out PlanPoint point,
-        out string kind,
-        out string? hint)
+    private static Dictionary<int, (int Slot, int Total)> SharedEdges(IReadOnlyList<PatternSpec> specs, Target target)
     {
-        point = default;
-        kind = "interior";
-        hint = Hint(devices, consumed, rule.Role);
-        var inset = rule.OffsetMetres > 0 ? rule.OffsetMetres : 0.15;
-        if (rule.Anchor == PatternAnchors.RoomCenter)
+        var result = new Dictionary<int, (int Slot, int Total)>();
+        if (target.Bindings is null)
         {
-            point = new PlanPoint(centroidX, centroidY);
-            return true;
+            return result;
         }
 
-        kind = "boundary";
-        if (rule.Anchor == PatternAnchors.Entrance)
+        foreach (var group in target.Bindings
+            .Where(pair => pair.Key < specs.Count && specs[pair.Key].Anchor == PatternAnchors.SourceCorrespondence && target.RejectedBindings?.Contains(pair.Key) != true)
+            .GroupBy(pair => pair.Value))
         {
-            return TryDoor(openings, projectedEntrance, selectedDoor, out var door) && InsetFrom(door, centroidX, centroidY, inset, out point);
-        }
-
-        if (!TryDevicePoint(geometric, devices, rule.Role, out var observed))
-        {
-            return false;
-        }
-
-        if (rule.Anchor == PatternAnchors.NearestBoundary)
-        {
-            return TryNearest(loop, observed, out var edge) && InsetFrom(edge, centroidX, centroidY, inset, out point);
-        }
-
-        if (rule.Anchor == PatternAnchors.Corner)
-        {
-            return TryCorner(loop, observed, out var corner) && InsetFrom(corner, centroidX, centroidY, inset, out point);
-        }
-
-        if (rule.Anchor == PatternAnchors.OppositeBoundary)
-        {
-            if (!TryDoor(openings, projectedEntrance, selectedDoor, out var door)
-                || !TryFacing(loop, door, out var facing))
+            var members = group.Select(pair => pair.Key).OrderBy(index => index).ToArray();
+            for (var slot = 0; slot < members.Length; slot++)
             {
-                return false;
+                result[members[slot]] = (slot, members.Length);
             }
+        }
 
-            point = new PlanPoint(facing.Hit.X + (facing.Inward.X * inset), facing.Hit.Y + (facing.Inward.Y * inset));
-            return true;
+        return result;
+    }
+
+    private static bool InteriorPair(Target target, PatternSpecEvidence evidence, out PlanPoint first, out PlanPoint second)
+    {
+        first = default;
+        second = default;
+        var centre = new PlanPoint(target.CentroidX, target.CentroidY);
+        var axis = target.OrientationTrusted && evidence.Axis is PlanPoint sourceAxis
+            ? Normalize(RoomShapeMatcher.Orient(sourceAxis, target.Quarters, target.Mirror))
+            : PrincipalAxis(target.Loop);
+        var ratio = evidence.AxisSpread is double spread && spread > 0 ? Math.Clamp(spread, 0.2, 0.7) : 0.5;
+        foreach (var direction in new[] { axis, new PlanPoint(-axis.Y, axis.X) })
+        {
+            var extent = PatternEvidence.Extent(target.Loop, direction);
+            var half = Math.Clamp(ratio * extent / 2, MinPairHalf, MaxInteriorPairHalf);
+            foreach (var factor in new[] { 1.0, 0.75, 0.5 })
+            {
+                var step = half * factor;
+                if (step < MinPairHalf)
+                {
+                    break;
+                }
+
+                var a = new PlanPoint(centre.X - (direction.X * step), centre.Y - (direction.Y * step));
+                var b = new PlanPoint(centre.X + (direction.X * step), centre.Y + (direction.Y * step));
+                if (Accept(a, target.Loop, target.Holes, out _)
+                    && Accept(b, target.Loop, target.Holes, out _)
+                    && Clear(a, target) >= InteriorClearance
+                    && Clear(b, target) >= InteriorClearance)
+                {
+                    first = a;
+                    second = b;
+                    return true;
+                }
+            }
         }
 
         return false;
     }
 
-    private static bool TryPair(
-        PatternRule rule,
-        IReadOnlyList<PlanPoint> loop,
-        double centroidX,
-        double centroidY,
-        IReadOnlyList<CandidateOpening> openings,
-        PlanPoint? projectedEntrance,
-        PlanPoint? selectedDoor,
-        EdgeSegment? boundEdge,
-        out PlanPoint left,
-        out PlanPoint right)
+    private static PlanPoint PrincipalAxis(IReadOnlyList<PlanPoint> loop)
     {
-        left = default;
-        right = default;
-        PlanPoint start;
-        PlanPoint end;
-        PlanPoint centre;
-        PlanPoint inward;
-        if (boundEdge is EdgeSegment edge)
+        var best = new PlanPoint(1, 0);
+        var longest = -1.0;
+        for (var index = 0; index < loop.Count; index++)
         {
-            start = edge.Start;
-            end = edge.End;
-            centre = Mid(start, end);
-            if (!TryInward(loop, start, end, centre, out inward))
+            var start = loop[index];
+            var end = loop[(index + 1) % loop.Count];
+            var length = Distance(start, end);
+            if (length > longest + 1e-9)
             {
-                return false;
+                longest = length;
+                best = Direction(start, end);
             }
         }
-        else if (TryDoor(openings, projectedEntrance, selectedDoor, out var door) && TryFacing(loop, door, out var facing))
-        {
-            start = facing.Start;
-            end = facing.End;
-            centre = facing.Hit;
-            inward = facing.Inward;
-        }
-        else
-        {
-            return false;
-        }
 
-        var half = rule.OffsetMetres > 0 ? rule.OffsetMetres : 0.6;
-        var alongX = end.X - start.X;
-        var alongY = end.Y - start.Y;
-        var length = Math.Sqrt((alongX * alongX) + (alongY * alongY));
+        return best.X < -1e-9 || (Math.Abs(best.X) <= 1e-9 && best.Y < 0) ? new PlanPoint(-best.X, -best.Y) : best;
+    }
+
+    private static double PairHalf(PatternSpecEvidence evidence, PlanPoint start, PlanPoint end)
+    {
+        return evidence.EdgeSpread is double ratio && ratio > 0
+            ? Math.Clamp(ratio * Distance(start, end) / 2, MinPairHalf, MaxPairHalf)
+            : DefaultPairHalf;
+    }
+
+    private static string? AlongEdge(
+        IReadOnlyList<PlanPoint> loop,
+        PlanPoint start,
+        PlanPoint end,
+        double along,
+        double half,
+        double inset,
+        List<PlanPoint> points)
+    {
+        var length = Distance(start, end);
         if (length < 1e-6)
         {
-            return false;
+            return Failures.WallTooShort;
         }
 
-        alongX /= length;
-        alongY /= length;
-        var along = ((centre.X - start.X) * alongX) + ((centre.Y - start.Y) * alongY);
-        const double margin = 0.15;
-        if (length >= (2 * (half + margin)))
+        if (half > 0 && length < 2 * (half + WallMargin))
         {
-            along = Math.Clamp(along, half + margin, length - half - margin);
+            half = (length / 2) - WallMargin;
+            if (half < 0.15)
+            {
+                return Failures.WallTooShort;
+            }
         }
 
-        var middle = new PlanPoint(start.X + (alongX * along), start.Y + (alongY * along));
-        const double inset = 0.15;
-        left = new PlanPoint(middle.X - (alongX * half) + (inward.X * inset), middle.Y - (alongY * half) + (inward.Y * inset));
-        right = new PlanPoint(middle.X + (alongX * half) + (inward.X * inset), middle.Y + (alongY * half) + (inward.Y * inset));
-        return true;
+        along = Math.Clamp(along, Math.Min(half + WallMargin, length / 2), Math.Max(length - half - WallMargin, length / 2));
+        var direction = Direction(start, end);
+        var middle = new PlanPoint(start.X + (direction.X * along), start.Y + (direction.Y * along));
+        if (!TryInward(loop, start, end, middle, out var inward))
+        {
+            return Failures.OutsideRoom;
+        }
+
+        if (half <= 0)
+        {
+            points.Add(new PlanPoint(middle.X + (inward.X * inset), middle.Y + (inward.Y * inset)));
+            return null;
+        }
+
+        points.Add(new PlanPoint(middle.X - (direction.X * half) + (inward.X * inset), middle.Y - (direction.Y * half) + (inward.Y * inset)));
+        points.Add(new PlanPoint(middle.X + (direction.X * half) + (inward.X * inset), middle.Y + (direction.Y * half) + (inward.Y * inset)));
+        return null;
+    }
+
+    private static double AlongOf(PlanPoint point, PlanPoint start, PlanPoint end)
+    {
+        var direction = Direction(start, end);
+        return ((point.X - start.X) * direction.X) + ((point.Y - start.Y) * direction.Y);
     }
 
     private readonly record struct Facing(PlanPoint Hit, PlanPoint Start, PlanPoint End, PlanPoint Inward);
@@ -286,110 +535,78 @@ internal static class SemanticPatternAdapter
         return false;
     }
 
-    private static string? Hint(IReadOnlyList<SourceDevice> devices, bool[] consumed, string role)
+    private static string? Hint(SourceRoomPattern source, PatternSpec spec, PatternSpecEvidence evidence)
     {
-        for (var index = 0; index < devices.Count; index++)
+        foreach (var index in evidence.DeviceIndexes)
         {
-            if (!consumed[index] && devices[index].Role == role)
+            if (index >= 0 && index < source.Devices.Count && !string.IsNullOrWhiteSpace(source.Devices[index].FamilyHint))
             {
-                consumed[index] = true;
-                return devices[index].FamilyHint;
+                return source.Devices[index].FamilyHint;
             }
         }
 
-        return null;
+        return source.Devices.FirstOrDefault(device => device.Role == spec.Role && !string.IsNullOrWhiteSpace(device.FamilyHint))?.FamilyHint;
     }
 
-    private static bool TryDevicePoint(IReadOnlyList<ProjectedDevice> geometric, IReadOnlyList<SourceDevice> devices, string role, out PlanPoint point)
+    private static bool TryObserved(Target target, PatternSpecEvidence evidence, out PlanPoint point)
     {
-        point = default;
-        for (var index = 0; index < devices.Count && index < geometric.Count; index++)
+        var indexes = evidence.DeviceIndexes.Where(index => index >= 0 && index < target.Projected.Count).ToArray();
+        if (indexes.Length > 0)
         {
-            if (devices[index].Role == role)
-            {
-                point = new PlanPoint(geometric[index].LocalX, geometric[index].LocalY);
-                return true;
-            }
+            point = new PlanPoint(
+                indexes.Average(index => target.Projected[index].LocalX),
+                indexes.Average(index => target.Projected[index].LocalY));
+            return true;
         }
 
+        point = default;
         return false;
     }
 
-    private static bool TryDoor(IReadOnlyList<CandidateOpening> openings, PlanPoint? preferred, PlanPoint? selected, out PlanPoint door)
+    private static bool TryDoor(Target target, out PlanPoint door)
     {
-        if (selected is PlanPoint chosen)
+        if (target.SelectedDoor is PlanPoint chosen)
         {
             door = chosen;
             return true;
         }
 
-        var doors = openings.Where(opening => opening.Kind == "door").ToArray();
+        var doors = target.Openings.Where(opening => opening.Kind == "door").ToArray();
         door = default;
-        if (doors.Length == 0 || (doors.Length > 1 && preferred is null))
-        {
-            return doors.Length == 1 && Assign(doors[0], out door);
-        }
-
         if (doors.Length == 1)
         {
-            return Assign(doors[0], out door);
+            door = new PlanPoint(doors[0].X, doors[0].Y);
+            return true;
+        }
+
+        if (doors.Length == 0 || target.ProjectedEntrance is not PlanPoint preferred)
+        {
+            return false;
         }
 
         var best = double.MaxValue;
-        var found = false;
         foreach (var opening in doors)
         {
-            var dx = opening.X - preferred!.Value.X;
-            var dy = opening.Y - preferred.Value.Y;
+            var dx = opening.X - preferred.X;
+            var dy = opening.Y - preferred.Y;
             var distance = (dx * dx) + (dy * dy);
             if (distance < best)
             {
                 best = distance;
                 door = new PlanPoint(opening.X, opening.Y);
-                found = true;
             }
         }
 
-        return found;
-    }
-
-    private static bool Assign(CandidateOpening opening, out PlanPoint door)
-    {
-        door = new PlanPoint(opening.X, opening.Y);
         return true;
-    }
-
-    private static bool TryNearest(IReadOnlyList<PlanPoint> loop, PlanPoint point, out PlanPoint projected)
-    {
-        projected = loop[0];
-        var best = double.MaxValue;
-        var found = false;
-        for (var index = 0; index < loop.Count; index++)
-        {
-            var candidate = Project(point, loop[index], loop[(index + 1) % loop.Count]);
-            var dx = point.X - candidate.X;
-            var dy = point.Y - candidate.Y;
-            var distance = (dx * dx) + (dy * dy);
-            if (distance < best)
-            {
-                best = distance;
-                projected = candidate;
-                found = true;
-            }
-        }
-
-        return found;
     }
 
     private static bool TryCorner(IReadOnlyList<PlanPoint> loop, PlanPoint point, out PlanPoint corner)
     {
-        corner = loop[0];
+        corner = loop.Count > 0 ? loop[0] : default;
         var best = double.MaxValue;
         foreach (var vertex in loop)
         {
-            var dx = point.X - vertex.X;
-            var dy = point.Y - vertex.Y;
-            var distance = (dx * dx) + (dy * dy);
+            var distance = Distance(point, vertex);
             if (distance < best)
             {
                 best = distance;
@@ -410,10 +627,7 @@ internal static class SemanticPatternAdapter
         {
             var edgeStart = loop[index];
             var edgeEnd = loop[(index + 1) % loop.Count];
-            var projected = Project(point, edgeStart, edgeEnd);
-            var dx = point.X - projected.X;
-            var dy = point.Y - projected.Y;
-            var distance = (dx * dx) + (dy * dy);
+            var distance = Distance(point, Project(point, edgeStart, edgeEnd));
             if (distance < best)
             {
                 best = distance;
@@ -440,10 +654,10 @@ internal static class SemanticPatternAdapter
         return new PlanPoint(start.X + (t * dx), start.Y + (t * dy));
     }
 
-    private static bool InsetFrom(PlanPoint edge, double centroidX, double centroidY, double distance, out PlanPoint point)
+    private static bool InsetFrom(PlanPoint edge, PlanPoint centre, double distance, out PlanPoint point)
     {
-        var dx = centroidX - edge.X;
-        var dy = centroidY - edge.Y;
+        var dx = centre.X - edge.X;
+        var dy = centre.Y - edge.Y;
         var length = Math.Sqrt((dx * dx) + (dy * dy));
         if (length < 1e-6)
         {
@@ -486,7 +700,38 @@ internal static class SemanticPatternAdapter
         return inside;
     }
 
-    private static PlanPoint Mid(PlanPoint start, PlanPoint end) => new((start.X + end.X) * 0.5, (start.Y + end.Y) * 0.5);
+    private static PlanPoint Normalize(PlanPoint vector)
+    {
+        var length = Math.Sqrt((vector.X * vector.X) + (vector.Y * vector.Y));
+        return length < 1e-9 ? new PlanPoint(1, 0) : new PlanPoint(vector.X / length, vector.Y / length);
+    }
+
+    private static double Clear(PlanPoint point, Target target)
+    {
+        var best = double.MaxValue;
+        foreach (var loop in target.Holes.Prepend(target.Loop))
+        {
+            for (var index = 0; index < loop.Count; index++)
+            {
+                var start = loop[index];
+                var end = loop[(index + 1) % loop.Count];
+                var dx = end.X - start.X;
+                var dy = end.Y - start.Y;
+                var squared = (dx * dx) + (dy * dy);
+                var t = squared < 1e-18 ? 0 : Math.Clamp((((point.X - start.X) * dx) + ((point.Y - start.Y) * dy)) / squared, 0, 1);
+                best = Math.Min(best, Distance(point, new PlanPoint(start.X + (t * dx), start.Y + (t * dy))));
+            }
+        }
+
+        return best;
+    }
+
+    private static double Distance(PlanPoint start, PlanPoint end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        return Math.Sqrt((dx * dx) + (dy * dy));
+    }
 
     private static PlanPoint Direction(PlanPoint start, PlanPoint end)
     {

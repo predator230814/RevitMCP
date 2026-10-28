@@ -153,7 +153,8 @@ function renderPattern(review, prepared) {
 }
 
 function roomButton(room, index) {
-  const rejected = room.band === "rejected" || room.source === "link";
+  const incomplete = typeof room.adaptationStatus === "string" && room.adaptationStatus !== "resolved";
+  const rejected = room.band === "rejected" || room.source === "link" || incomplete;
   const checked = patternState.selected.includes(index);
   return `<div class="room-row ${index === selectedRoom ? "selected" : ""}"><label><input type="checkbox" data-target="${index}" ${rejected ? "disabled" : ""} ${checked && !rejected ? "checked" : ""} /> ${escapeHtml(room.band || "rejected")}</label><button type="button" data-room="${index}"><strong>${escapeHtml(room.label || "Room")}</strong><span>${escapeHtml(roomBand(room))}</span></button></div>`;
 }
@@ -197,7 +198,23 @@ function patternSvg(boundary, entrance, devices, showRoles, flipY) {
     return flipY ? 1 - y : y;
   };
   const points = boundary.map((point) => `${unit(point.x)},${yOf(point.y)}`).join(" ");
-  const markers = (devices || []).map((device) => `<circle cx="${unit(device.x)}" cy="${yOf(device.y)}" r="0.012"></circle>${showRoles ? `<text x="${unit(device.x) + 0.015}" y="${yOf(device.y)}">${escapeHtml(device.role || "")}</text>` : ""}`).join("");
+  const labels = [];
+  const markers = (devices || []).map((device) => {
+    const x = unit(device.x);
+    const y = yOf(device.y);
+    let label = "";
+    if (showRoles) {
+      const text = device.role || "";
+      const left = x > 0.7;
+      let labelY = y - 0.015;
+      while (labels.some((placed) => Math.abs(placed.y - labelY) < 0.035 && Math.abs(placed.x - x) < 0.2)) {
+        labelY += 0.04;
+      }
+      labels.push({ x, y: labelY });
+      label = `<text x="${left ? x - 0.02 : x + 0.02}" y="${Math.min(0.98, labelY)}"${left ? " text-anchor=\"end\"" : ""}>${escapeHtml(text)}</text>`;
+    }
+    return `<circle cx="${x}" cy="${y}" r="0.012"></circle>${label}`;
+  }).join("");
   const door = entrance ? `<rect x="${unit(entrance.x) - 0.01}" y="${yOf(entrance.y) - 0.01}" width="0.02" height="0.02"></rect>` : "";
   return `<svg viewBox="0 0 1 1" role="img" aria-label="Room pattern">${points ? `<polygon points="${points}"></polygon>` : ""}${door}${markers}</svg>`;
 }
@@ -207,14 +224,16 @@ function roomPreview(room) {
   const outline = Array.isArray(room.outline) ? room.outline : [];
   const devices = Array.isArray(room.devices) ? room.devices : [];
   const notes = Array.isArray(room.reasoning) ? room.reasoning : [];
-  const reasoning = notes.length ? `<ul>${notes.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : "";
-  return `<p><strong>${escapeHtml(room.label || "Room")}</strong> ${escapeHtml(room.level || "")}</p><p class="sub">${escapeHtml(room.band || "rejected")} · ${escapeHtml(String(room.score ?? 0))} · ${escapeHtml(adaptation)}${room.reason ? " · " + escapeHtml(room.reason) : ""}</p>${reasoning}${patternSvg(outline, null, devices, true, true)}`;
+  const reasoning = notes.length ? `<ul class="reasoning">${notes.map((line) => line === "Resolved" || line === "Unresolved" ? `<li class="heading">${escapeHtml(line)}</li>` : `<li>${escapeHtml(line)}</li>`).join("")}</ul>` : "";
+  const status = room.adaptationStatus ? ` · adaptation ${escapeHtml(room.adaptationStatus)}` : "";
+  return `<p><strong>${escapeHtml(room.label || "Room")}</strong> ${escapeHtml(room.level || "")}</p><p class="sub">geometry ${escapeHtml(room.band || "rejected")} · ${escapeHtml(String(room.score ?? 0))} · ${escapeHtml(adaptation)}${status}${room.reason ? " · " + escapeHtml(room.reason) : ""}</p>${reasoning}${patternSvg(outline, null, devices, true, true)}`;
 }
 
 function roomBand(room) {
   const mirror = room.mirrored ? " · mirrored" : "";
   const source = room.source === "link" ? ` · link${room.linkLabel ? " " + room.linkLabel : ""}` : room.source === "host" ? " · host" : "";
-  return `${room.band || "rejected"} · ${room.rotationDegrees || 0}°${mirror}${source}`;
+  const status = room.adaptationStatus ? ` · ${room.adaptationStatus}` : "";
+  return `${room.band || "rejected"} · ${room.rotationDegrees || 0}°${mirror}${source}${status}`;
 }
 
 function unit(value) {

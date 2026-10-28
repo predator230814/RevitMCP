@@ -53,6 +53,8 @@ Source interpretation
 
 The second pass is an internal Assistant capability. It is not a model tool, not a server tool, and not a write. It returns only key-based semantic correspondence. It does not return final coordinates, Revit identities, approval, or a mutation. Deterministic code checks every key against the stored target and calculates the preview. A provider failure stays on that pattern and does not mark the Assistant unavailable. Temporary room, door, edge, and rule keys exist only for that request. Door topology may include a safe other-side room label. It still excludes spatial references, unique ids, element ids, and file paths. The opposite wall is the first boundary reached from the entrance when moving into the room perpendicular to the entrance wall. A pair without a bound edge is centred on that point, and boundary placements are inset along the wall's inward normal. A Revit outline with short wall jogs therefore does not select a jog as the opposite wall.
 
+Amendment, 2026-10-27, PR #94. [ADR-0020](ADR-0020-pattern-specification-v2.md) replaces the rule vocabulary above with pattern specification v2. `paired_symmetric` is removed: a pair is an arrangement, not an anchor. The target-reasoning architecture above is unchanged. Its rule keys become pattern keys, and its edge bindings now apply only to `source_correspondence` items.
+
 Pattern Review shows a deterministic “BIM-IT understood” summary before the overlay. Host and link rooms use the same matching path. A link room can be shown and cannot be selected for prepare. The existing write still requires one boundary loop, so a host room that needed an inner loop can be reviewed and cannot be applied in this slice.
 
 ## Consequences
