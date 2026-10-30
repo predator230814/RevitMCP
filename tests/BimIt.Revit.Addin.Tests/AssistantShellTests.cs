@@ -496,7 +496,13 @@ public sealed class AssistantShellTests
         await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("Internal topology name.", StringComparison.Ordinal)));
         Assert.Contains(
             shell.Conversation.Entries,
-            entry => entry.Body.Contains("Internal topology name.", StringComparison.Ordinal) && entry.Used is null);
+            entry => entry.Body.Contains("Internal topology name.", StringComparison.Ordinal) && entry.Used == "Used: revit_get_mep_topology");
+        link.ChatResult = link.ChatResult! with { UsedTools = ["revit_apply_parameter_updates"], Body = "Write name." };
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"write name"}""");
+        await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("Write name.", StringComparison.Ordinal)));
+        Assert.Contains(
+            shell.Conversation.Entries,
+            entry => entry.Body.Contains("Write name.", StringComparison.Ordinal) && entry.Used is null);
         Assert.Equal(3, link.Workflows.Count);
         Assert.Equal(1, factory.Starts);
 
@@ -931,6 +937,15 @@ public sealed class AssistantShellTests
         var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "AssistantShell.cs"));
         Assert.Contains("\"bimit_read_skill\" => \"Read skill\"", source, StringComparison.Ordinal);
         Assert.True(AssistantIpc.IsModelToolName("bimit_read_skill"));
+
+        // Generic MCP reads appear under their own MCP names. Trusted writes never qualify.
+        Assert.Contains("name.StartsWith(\"revit_\", StringComparison.Ordinal) => name", source, StringComparison.Ordinal);
+        Assert.True(AssistantIpc.IsModelToolName("revit_read_spatial_rooms"));
+        Assert.True(AssistantIpc.IsModelToolName("revit_get_context"));
+        Assert.False(AssistantIpc.IsModelToolName("revit_apply_parameter_updates"));
+        Assert.False(AssistantIpc.IsModelToolName("revit_request_mep_device_placement_review"));
+        Assert.False(AssistantIpc.IsModelToolName("revit_preview_room_pattern_placements"));
+        Assert.False(AssistantIpc.IsModelToolName("revit_Bad-Name"));
     }
 
     private static AssistantIpcMessage SkillsView(string message)

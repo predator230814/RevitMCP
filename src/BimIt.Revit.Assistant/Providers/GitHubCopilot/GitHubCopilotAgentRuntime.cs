@@ -6,7 +6,7 @@ namespace BimIt.Revit.Assistant.Providers.GitHubCopilot;
 
 internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
 {
-    private readonly BimItAgentReadTools _tools;
+    private readonly AssistantMcpReadFacade _tools;
     private readonly MepDevicePlacementProposalTool _proposals;
     private readonly RoomPatternProposalTool _roomPatterns;
     private readonly MepDevicePlacementProposalStore _proposalStore;
@@ -29,13 +29,14 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         RoomPatternStore patternStore,
         Func<AssistantDocumentArtifact?> currentAttachment,
         string? runtimeDirectory = null,
-        BimIt.Revit.Skills.SkillRegistry? skills = null)
+        BimIt.Revit.Skills.SkillRegistry? skills = null,
+        IReadOnlyList<AssistantMcpToolDescriptor>? mcpTools = null)
     {
         _proposalStore = proposalStore ?? throw new ArgumentNullException(nameof(proposalStore));
         _patternStore = patternStore ?? throw new ArgumentNullException(nameof(patternStore));
         ArgumentNullException.ThrowIfNull(currentAttachmentId);
         ArgumentNullException.ThrowIfNull(currentAttachment);
-        _tools = new BimItAgentReadTools(session, instanceId);
+        _tools = new AssistantMcpReadFacade(session, instanceId, mcpTools);
         _proposals = new MepDevicePlacementProposalTool(session, instanceId, proposalStore, currentAttachmentId);
         _roomPatterns = new RoomPatternProposalTool(session, instanceId, patternStore, currentAttachment);
         _skills = new BimItSkillTool(() => skills);

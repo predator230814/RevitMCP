@@ -181,7 +181,7 @@ internal static class AssistantHost
         if (runtime is null)
         {
             runtime = readiness.Ready && session is not null
-                ? new GitHubCopilotAgentRuntime(session, options.InstanceId, proposals, () => CurrentAttachmentId(documents), roomPatterns, () => documents.Current, skills: skills.Registry)
+                ? new GitHubCopilotAgentRuntime(session, options.InstanceId, proposals, () => CurrentAttachmentId(documents), roomPatterns, () => documents.Current, skills: skills.Registry, mcpTools: readiness.Tools)
                 : new UnavailableAssistantAgentRuntime(readiness.Error);
         }
 

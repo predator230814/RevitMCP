@@ -494,7 +494,7 @@ public sealed class PatternTargetTests
         Assert.Empty(session.Tools!);
         Assert.False(session.EnableSkills);
         Assert.False(session.Memory!.Enabled);
-        Assert.Equal(8, AssistantModelTools.Names.Length);
+        Assert.Equal(3, AssistantModelTools.LocalNames.Length);
         Assert.DoesNotContain(session.Tools, tool => AssistantTools.IsTrustedWriteTool(tool.Name));
         Assert.DoesNotContain("bimit_propose_room_pattern", GitHubCopilotSessionBlueprint.TargetReasoningPrompt, StringComparison.Ordinal);
     }

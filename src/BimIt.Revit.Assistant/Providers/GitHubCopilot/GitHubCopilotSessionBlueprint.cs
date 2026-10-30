@@ -31,7 +31,9 @@ internal static class GitHubCopilotSessionBlueprint
         Do not claim to know the current model state without using the tools when the question depends on it.
         Treat tool results as authoritative Revit observations.
         Do not invent unavailable model information.
-        You currently have read-only BIM-IT model tools plus two local proposal tools: bimit_propose_mep_device_placements and bimit_propose_room_pattern.
+        You have the generic read-only BIM-IT Revit MCP tools, named revit_*, plus two local proposal tools: bimit_propose_mep_device_placements and bimit_propose_room_pattern.
+        BIM-IT binds every revit_* call to this Revit session and to its active document. Those identities are not tool arguments. Never ask the user for a Revit instance, a document identity, or an ElementId.
+        Element, room, and type references in revit_* results are opaque. Reuse them exactly and never invent one.
         bimit_propose_mep_device_placements stores an untrusted session-local MEP device placement proposal.
         A proposal cannot preview, approve, or modify the Revit model.
         You cannot supply Revit identities or a calibration flag.
@@ -79,27 +81,26 @@ internal static class GitHubCopilotSessionBlueprint
         };
     }
 
+    /// <summary>
+    /// The model surface: every trusted generic Revit MCP read discovered from Server metadata, plus the explicit
+    /// Assistant-local tools. No trusted write tool can appear here.
+    /// </summary>
     public static IReadOnlyList<AIFunction> CreateTools(
-        BimItAgentReadTools tools,
+        AssistantMcpReadFacade reads,
         MepDevicePlacementProposalTool proposals,
         RoomPatternProposalTool roomPatterns,
         BimItSkillTool skills)
     {
-        ArgumentNullException.ThrowIfNull(tools);
+        ArgumentNullException.ThrowIfNull(reads);
         ArgumentNullException.ThrowIfNull(proposals);
         ArgumentNullException.ThrowIfNull(roomPatterns);
         ArgumentNullException.ThrowIfNull(skills);
-        return
-        [
-            Define(tools, BimItAgentReadTools.ModelContext, "Read the current Revit session: version, active document, active view, and selection count. Takes no arguments."),
-            Define(tools, BimItAgentReadTools.Warnings, "Read warnings for the active Revit document. Takes no arguments. An empty warning list is a real result."),
-            Define(tools, BimItAgentReadTools.ActiveViewElements, "Read up to 25 elements in the active Revit view. Takes no arguments."),
-            Define(tools, BimItAgentReadTools.InspectSelection, "Inspect up to 10 elements currently selected in Revit and return their basic name, category, family, type, and level information. Takes no arguments. An empty selection is a real result."),
-            Define(tools, BimItAgentReadTools.ExploreSelectedMep, "Explore the physical MEP connectivity around the currently selected Revit elements. Includes HVAC, piping, electrical, conduit and cable tray physical connections when Revit exposes them. Takes no arguments."),
-            DefineProposal(proposals),
-            DefineRoomPattern(roomPatterns),
-            DefineSkillRead(skills),
-        ];
+        var tools = new List<AIFunction>();
+        tools.AddRange(reads.Tools.Select(tool => new CopilotMcpReadFunction(tool, reads)));
+        tools.Add(DefineProposal(proposals));
+        tools.Add(DefineRoomPattern(roomPatterns));
+        tools.Add(DefineSkillRead(skills));
+        return tools;
     }
 
     public static SessionConfig CreateSessionConfig(string workingDirectory, IReadOnlyList<AIFunction> tools)
@@ -107,21 +108,24 @@ internal static class GitHubCopilotSessionBlueprint
         ArgumentException.ThrowIfNullOrWhiteSpace(workingDirectory);
         ArgumentNullException.ThrowIfNull(tools);
         var names = tools.Select(tool => tool.Name).ToArray();
-        if (names.Length != AssistantModelTools.Names.Length
-            || names.Except(AssistantModelTools.Names, StringComparer.Ordinal).Any()
-            || AssistantModelTools.Names.Except(names, StringComparer.Ordinal).Any()
-            || names.Any(AssistantTools.IsTrustedWriteTool))
+        var reads = tools.Where(tool => !AssistantModelTools.IsLocal(tool.Name)).ToArray();
+        if (names.Distinct(StringComparer.Ordinal).Count() != names.Length
+            || AssistantModelTools.LocalNames.Except(names, StringComparer.Ordinal).Any()
+            || names.Any(AssistantTools.IsTrustedWriteTool)
+            || reads.Any(tool => tool is not CopilotMcpReadFunction))
         {
             throw new ArgumentException(
-                "The Copilot session can expose only the five BIM-IT read tools, bimit_propose_mep_device_placements, bimit_propose_room_pattern, and bimit_read_skill.",
+                "The Copilot session can expose only trusted generic Revit MCP reads, bimit_propose_mep_device_placements, bimit_propose_room_pattern, and bimit_read_skill.",
                 nameof(tools));
         }
 
         var allowed = new ToolSet();
-        foreach (var name in AssistantModelTools.Names)
+        foreach (var name in names)
         {
             allowed.AddCustom(name);
         }
+
+        var exposed = names.ToHashSet(StringComparer.Ordinal);
 
         return new SessionConfig
         {
@@ -141,7 +145,7 @@ internal static class GitHubCopilotSessionBlueprint
                 Mode = SystemMessageMode.Append,
                 Content = SystemPrompt,
             },
-            OnPermissionRequest = Decide,
+            OnPermissionRequest = (request, invocation) => Decide(request, exposed),
 #pragma warning disable GHCP001 // Empty mode keeps MCP Apps off. The property is experimental in SDK 1.0.21.
             EnableMcpApps = false,
 #pragma warning restore GHCP001
@@ -221,9 +225,9 @@ internal static class GitHubCopilotSessionBlueprint
         return Task.FromResult(GitHub.Copilot.Rpc.PermissionDecision.Reject("Target reasoning cannot grant a capability."));
     }
 
-    private static Task<GitHub.Copilot.Rpc.PermissionDecision> Decide(PermissionRequest request, PermissionInvocation invocation)
+    private static Task<GitHub.Copilot.Rpc.PermissionDecision> Decide(PermissionRequest request, IReadOnlySet<string> exposed)
     {
-        if (GitHubCopilotPermissions.IsAllowed(request))
+        if (GitHubCopilotPermissions.IsAllowed(request, exposed))
         {
             return Task.FromResult(GitHub.Copilot.Rpc.PermissionDecision.ApproveOnce());
         }
@@ -283,19 +287,4 @@ internal static class GitHubCopilotSessionBlueprint
             });
     }
 
-    private static AIFunction Define(BimItAgentReadTools tools, string name, string description)
-    {
-        return CopilotTool.DefineTool(
-            (CancellationToken cancellationToken) => tools.InvokeAsync(name, cancellationToken),
-            new CopilotToolOptions
-            {
-                SkipPermission = true,
-                Defer = CopilotToolDefer.Never,
-            },
-            new AIFunctionFactoryOptions
-            {
-                Name = name,
-                Description = description,
-            });
-    }
 }

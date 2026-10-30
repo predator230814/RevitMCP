@@ -299,8 +299,26 @@ public static class AssistantIpc
 
     public static bool GrantsApprovalAuthority => false;
 
+    /// <summary>
+    /// A name allowed in Used Tools: an Assistant-local tool, or a generic Revit MCP read. Trusted writes never qualify.
+    /// </summary>
     public static bool IsModelToolName(string? name)
     {
+        if (name is not null && name.StartsWith("revit_", StringComparison.Ordinal))
+        {
+            return name.Length <= 64
+                && name.Skip(6).All(character => character is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_')
+                && name is not ("revit_apply_parameter_updates"
+                    or "revit_preview_parameter_updates"
+                    or "revit_request_parameter_update_review"
+                    or "revit_preview_mep_device_placements"
+                    or "revit_request_mep_device_placement_review"
+                    or "revit_apply_mep_device_placements"
+                    or "revit_preview_room_pattern_placements")
+                && !name.Contains("apply", StringComparison.Ordinal)
+                && !name.Contains("preview", StringComparison.Ordinal);
+        }
+
         return name is "bimit_get_model_context"
             or "bimit_get_warnings"
             or "bimit_get_active_view_elements"

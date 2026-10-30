@@ -17,20 +17,15 @@ public sealed class AssistantProposalTests
     private const string HiddenTemplate = "tmpl-hidden";
 
     [Fact]
-    public void Model_surface_exposes_eight_tools_and_hides_raw_writes()
+    public void Model_surface_is_generic_reads_plus_local_tools_and_hides_raw_writes()
     {
         Assert.Equal(
             [
-                BimItAgentReadTools.ModelContext,
-                BimItAgentReadTools.Warnings,
-                BimItAgentReadTools.ActiveViewElements,
-                BimItAgentReadTools.InspectSelection,
-                BimItAgentReadTools.ExploreSelectedMep,
                 MepDevicePlacementProposalTool.Name,
                 RoomPatternProposalTool.Name,
                 BimItSkillTool.Name,
             ],
-            AssistantModelTools.Names);
+            AssistantModelTools.LocalNames);
         Assert.Equal(5, BimItAgentReadTools.Names.Length);
         Assert.Equal(9, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
@@ -52,21 +47,23 @@ public sealed class AssistantProposalTests
         {
             Assert.Contains(name, BimItAgentReadTools.DeniedTools);
             Assert.True(AssistantTools.IsTrustedWriteTool(name));
-            Assert.DoesNotContain(name, AssistantModelTools.Names);
+            Assert.DoesNotContain(name, AssistantModelTools.LocalNames);
             Assert.DoesNotContain(name, AssistantTools.AllowedReadTools);
             Assert.DoesNotContain(name, AssistantTools.WorkflowTools);
-            Assert.False(AssistantModelTools.IsExposed(name));
+            Assert.False(AssistantModelTools.IsLocal(name));
             Assert.False(AssistantIpc.IsModelToolName(name));
         }
 
         var directory = Directory.CreateTempSubdirectory("bimit-proposal-surface-").FullName;
         try
         {
-            var tools = GitHubCopilotSessionBlueprint.CreateTools(ReadTools(), ProposalTool(new MepDevicePlacementProposalStore()), PatternTool(), new BimItSkillTool(() => null));
-            Assert.Equal(AssistantModelTools.Names, tools.Select(tool => tool.Name).ToArray());
+            var reads = ReadTools();
+            var tools = GitHubCopilotSessionBlueprint.CreateTools(reads, ProposalTool(new MepDevicePlacementProposalStore()), PatternTool(), new BimItSkillTool(() => null));
+            var expected = reads.Tools.Select(tool => tool.Name).Concat(AssistantModelTools.LocalNames).ToArray();
+            Assert.Equal(expected, tools.Select(tool => tool.Name).ToArray());
             var session = GitHubCopilotSessionBlueprint.CreateSessionConfig(directory, tools);
             var allowed = Assert.IsAssignableFrom<IList<string>>(session.AvailableTools);
-            Assert.Equal(AssistantModelTools.Names.Select(name => "custom:" + name).ToArray(), allowed.ToArray());
+            Assert.Equal(expected.Select(name => "custom:" + name).ToArray(), allowed.ToArray());
             foreach (var name in rawWrites)
             {
                 Assert.DoesNotContain(allowed, item => item.Contains(name, StringComparison.Ordinal));
@@ -459,9 +456,9 @@ public sealed class AssistantProposalTests
         return (tool, store, session);
     }
 
-    private static BimItAgentReadTools ReadTools()
+    private static AssistantMcpReadFacade ReadTools()
     {
-        return new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId);
+        return new AssistantMcpReadFacade(new RecordingSession(_ => Error("unused", "unused")), InstanceId, ServerToolMetadata.Descriptors);
     }
 
     private static MepDevicePlacementProposalTool ProposalTool(MepDevicePlacementProposalStore store)

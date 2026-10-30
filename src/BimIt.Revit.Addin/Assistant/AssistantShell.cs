@@ -1063,6 +1063,7 @@ internal sealed class AssistantShell
                 "bimit_propose_mep_device_placements" => "Propose MEP placements",
                 "bimit_propose_room_pattern" => "Propose room pattern",
                 "bimit_read_skill" => "Read skill",
+                _ when AssistantIpc.IsModelToolName(name) && name.StartsWith("revit_", StringComparison.Ordinal) => name,
                 _ => null,
             };
             if (label is not null && !labels.Contains(label, StringComparer.Ordinal))

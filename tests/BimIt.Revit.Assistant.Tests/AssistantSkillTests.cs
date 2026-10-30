@@ -178,7 +178,7 @@ public sealed class AssistantSkillTests : IDisposable
     [Fact]
     public void Skill_read_is_a_model_tool_but_not_a_revit_tool()
     {
-        Assert.Contains(BimItSkillTool.Name, AssistantModelTools.Names);
+        Assert.Contains(BimItSkillTool.Name, AssistantModelTools.LocalNames);
         Assert.True(AssistantIpc.IsModelToolName(BimItSkillTool.Name));
         Assert.DoesNotContain(BimItSkillTool.Name, AssistantTools.AllowedReadTools);
         Assert.False(AssistantTools.IsTrustedWriteTool(BimItSkillTool.Name));

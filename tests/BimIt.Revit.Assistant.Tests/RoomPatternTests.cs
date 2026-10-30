@@ -199,22 +199,22 @@ public sealed class RoomPatternTests
     }
 
     [Fact]
-    public void Model_surface_stays_eight_tools_and_room_layouts_stay_a_read()
+    public void Local_model_tools_stay_three_and_room_layouts_stay_a_generic_read()
     {
-        Assert.Equal(8, AssistantModelTools.Names.Length);
-        Assert.Contains(RoomPatternProposalTool.Name, AssistantModelTools.Names);
-        Assert.DoesNotContain(AssistantTools.GetRoomLayouts, AssistantModelTools.Names);
+        Assert.Equal(3, AssistantModelTools.LocalNames.Length);
+        Assert.Contains(RoomPatternProposalTool.Name, AssistantModelTools.LocalNames);
+        Assert.DoesNotContain(AssistantTools.GetRoomLayouts, AssistantModelTools.LocalNames);
         Assert.Contains(AssistantTools.GetRoomLayouts, AssistantTools.AllowedReadTools);
         Assert.Contains(AssistantTools.ReadSpatialRooms, AssistantTools.AllowedReadTools);
         Assert.Contains(AssistantTools.GetMepDeviceTypes, AssistantTools.AllowedReadTools);
-        Assert.DoesNotContain(AssistantTools.GetMepDeviceTypes, AssistantModelTools.Names);
+        Assert.DoesNotContain(AssistantTools.GetMepDeviceTypes, AssistantModelTools.LocalNames);
         Assert.False(AssistantTools.IsTrustedWriteTool(AssistantTools.GetRoomLayouts));
         Assert.False(AssistantTools.IsTrustedWriteTool(AssistantTools.GetMepDeviceTypes));
         Assert.True(AssistantTools.IsTrustedWriteTool("revit_preview_room_pattern_placements"));
         Assert.False(AssistantIpc.IsModelToolName("revit_preview_room_pattern_placements"));
         Assert.False(AssistantTools.IsTrustedWriteTool(RoomPatternProposalTool.Name));
         Assert.True(AssistantIpc.IsModelToolName(RoomPatternProposalTool.Name));
-        Assert.False(AssistantIpc.IsModelToolName(AssistantTools.GetRoomLayouts));
+        Assert.True(AssistantIpc.IsModelToolName(AssistantTools.GetRoomLayouts));
         Assert.False(AssistantIpc.IsModelToolName("revit_apply_mep_device_placements"));
     }
 

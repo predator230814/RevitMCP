@@ -59,7 +59,14 @@ These are candidates for a future generic primitive or an improvement to an exis
 5. **Duplicate opening features.** Two window features at one point in 406 were returned as separate entries without explanation.
 6. **Unresolved door other side.** Some corridor doors return `other_side_status: unknown`. A complete corridor adjacency list would need that resolved.
 
+## BIM-IT Assistant with the same Skill: architecture evidence
+
+After the Claude Code run, the product owner exercised the same linked-studio question in BIM-IT Assistant, in the same Revit session. The Assistant loaded `revit-model-query`, but its model could not follow it. The Skill points to `revit_read_spatial_rooms`. The Assistant model only saw the five legacy wrappers (`bimit_get_model_context`, `bimit_get_warnings`, `bimit_get_active_view_elements`, `bimit_inspect_selection`, `bimit_explore_selected_mep`), and none of them reads linked rooms.
+
+This is a model tool-surface mismatch, not a linked-room capability gap: the same Server capability answered correctly for Claude Code. A Skill written against generic MCP tools is not portable to an agent that cannot see them. ADR-0022 was amended before acceptance. The Assistant model now sees the generic read-only Revit MCP tools under their MCP names, discovered from Server metadata, with `instance_id` and `document_id` injected by the Assistant. The shipped `SKILL.md` was not changed.
+
+The focused Assistant retest of that amendment is recorded below once it is run.
+
 ## Not covered
 
-- The BIM-IT Assistant Settings → Skills page and the Assistant's use of `bimit_read_skill` were not exercised in Revit in this run.
 - Transcripts were kept locally and are not committed.

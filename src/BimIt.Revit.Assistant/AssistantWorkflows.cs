@@ -14,7 +14,22 @@ public interface IAssistantToolSession
         CancellationToken cancellationToken);
 }
 
-public sealed record AssistantMcpReadiness(bool Ready, int ToolCount, IReadOnlyList<string> ToolNames, string? Error);
+/// <param name="Tools">Server tool metadata from tools/list: name, description, input schema, and annotations. Null when not listed.</param>
+public sealed record AssistantMcpReadiness(
+    bool Ready,
+    int ToolCount,
+    IReadOnlyList<string> ToolNames,
+    string? Error,
+    IReadOnlyList<AssistantMcpToolDescriptor>? Tools = null);
+
+/// <summary>One tool as BimIt.Revit.Server lists it. The Server is the source of truth for the schema and annotations.</summary>
+public sealed record AssistantMcpToolDescriptor(
+    string Name,
+    string? Description,
+    JsonElement InputSchema,
+    bool? ReadOnlyHint,
+    bool? DestructiveHint,
+    bool? OpenWorldHint);
 
 public sealed record AssistantToolCall(bool IsError, string? ErrorCode, string? ErrorMessage, JsonElement? Structured);
 

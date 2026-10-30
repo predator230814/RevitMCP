@@ -87,7 +87,7 @@ Every listed Skill carries `name`, `description`, `source`, `source_id`, `enable
 - The model sees only enabled `ready` Skills as name, description, and source type, in a `<bimit_skills>` block sent when that list changes. Full content is never injected by default.
 - One Assistant runtime capability, `bimit_read_skill`, reads `SKILL.md` or one validated companion file from one `ready` Skill. It revalidates the folder before returning bounded text (64,000 characters) with the source and hash. It is not a Revit MCP tool and cannot read anything else.
 - Provider instructions say: inspect Skill summaries, load a matching Skill, follow it while respecting the user's explicit request, and remember that Skills grant no write or approval authority and that writes still go through the Revit Approval pane.
-- The model now has eight tools. Server `tools/list` is unchanged at 18.
+- The model's Revit reads are the generic MCP reads under their MCP names (see the amendment below). Server `tools/list` is unchanged at 18.
 - Each Skill read records a structured `AssistantActivity` (`read_skill`, Skill name, status). A future activity surface can render "Reading skill: …" from it. It records actions and status, never reasoning.
 
 ### Settings → Skills
@@ -101,6 +101,28 @@ The Assistant WebView gains a Settings page with Skills: list, badges, status, d
 ### MCP Skills seam
 
 The registry is independent of BIM-IT Assistant. A later adapter in `BimIt.Revit.Server`, or a separate Skills MCP service, can publish the same catalog and reads through the official `io.modelcontextprotocol/skills` extension when the C# MCP SDK supports it. No private Skill protocol is added now.
+
+### Amendment before acceptance: the Assistant sees the generic MCP read surface
+
+The PR #96 live run invalidated one assumption inherited from [ADR-0014](ADR-0014-provider-neutral-assistant-agent-runtime.md): that the Assistant model can work through a tiny bespoke read surface. The shipped `revit-model-query` Skill says that rooms in loaded Revit links are read with `revit_read_spatial_rooms`. Claude Code, connected straight to `BimIt.Revit.Server`, followed it and succeeded. BIM-IT Assistant loaded the same Skill but could not follow it, because its model saw only `bimit_get_model_context`, `bimit_get_warnings`, `bimit_get_active_view_elements`, `bimit_inspect_selection`, and `bimit_explore_selected_mep`. That was a model tool-surface mismatch, not a missing linked-room capability. A Skill written against generic MCP capabilities is not portable to an agent that cannot see those capabilities.
+
+Decision: the Assistant model sees the same generic read-only Revit MCP tools an external MCP agent sees, under their MCP names.
+
+```
+external MCP client:  Skill → MCP tool
+BIM-IT Assistant:     Skill → same MCP tool name → Assistant trusted read facade → existing MCP client → BimIt.Revit.Server
+```
+
+- The read surface is discovered from the Server's `tools/list` metadata through the Assistant's existing MCP client. A tool is exposed only when its name starts with `revit_`, BIM-IT does not classify it as a trusted write, `readOnlyHint` is true, `destructiveHint` is not true, `openWorldHint` is explicitly false, its input schema is an object, and it accepts `instance_id`. Anything missing or contradictory fails closed. A name alone never qualifies a tool.
+- The Server stays the source of truth for each schema. The Assistant removes only `instance_id` and `document_id` from the properties and the required list. Every other argument and requirement is kept.
+- On each call the Assistant injects the exact bound `instance_id`. When the tool takes `document_id`, it reads `revit_get_context` for that call and injects the active `document_id`. A required document with no active document stops the call. The model cannot supply either identity. A model argument outside the provider schema is rejected before MCP.
+- The current surface is 11 reads: `revit_get_context`, `revit_query_elements`, `revit_get_elements`, `revit_describe_parameters`, `revit_get_parameter_values`, `revit_get_mep_topology`, `revit_get_warnings`, `revit_get_selection`, `revit_get_room_layouts`, `revit_get_mep_device_types`, `revit_read_spatial_rooms`. A test derives it from the real Server metadata.
+- The five `bimit_*` read wrappers are no longer model-facing. Quick actions keep their deterministic workflows.
+- Assistant-local tools stay: `bimit_propose_mep_device_placements`, `bimit_propose_room_pattern`, `bimit_read_skill`.
+- The invariant is no longer a fixed tool count. It is: all trusted generic MCP reads, plus the explicit Assistant-local untrusted tools, plus zero trusted write tools. The seven preview, review, and apply tools stay unreachable from the provider. The local controlled-write orchestration is unchanged.
+- Used Tools in the chat show generic reads by their MCP names, plus "Read skill".
+
+This amendment partially supersedes ADR-0014 for model-facing read exposure only. ADR-0014 still holds for provider neutrality, the Assistant-owned MCP client, exact Revit instance binding, write isolation, and the approval boundary. The provider is still not connected to the Server.
 
 ## Consequences
 
