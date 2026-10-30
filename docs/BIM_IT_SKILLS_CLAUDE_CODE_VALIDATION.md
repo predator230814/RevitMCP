@@ -65,7 +65,18 @@ After the Claude Code run, the product owner exercised the same linked-studio qu
 
 This is a model tool-surface mismatch, not a linked-room capability gap: the same Server capability answered correctly for Claude Code. A Skill written against generic MCP tools is not portable to an agent that cannot see them. ADR-0022 was amended before acceptance. The Assistant model now sees the generic read-only Revit MCP tools under their MCP names, discovered from Server metadata, with `instance_id` and `document_id` injected by the Assistant. The shipped `SKILL.md` was not changed.
 
-The focused Assistant retest of that amendment is recorded below once it is run.
+### Focused Assistant retest after the amendment
+
+Run by the product owner on 2026-10-30 against Release outputs from `9a7e38d`, Revit 2026.5, Snowdon Towers Sample Electrical with the Architectural link loaded. BIM-IT Assistant, New Chat, provider GitHub Copilot (model shown as `gpt-6-luna`). No schema coaching.
+
+| Prompt | Used | Result |
+|---|---|---|
+| Trouve toutes les pièces liées dont le nom contient Studio et résume-les. | `revit_get_context`, `revit_read_spatial_rooms`, Read skill | **Partial.** Correct tools, correct link, no identity asked. The answer listed 4 studios (203, 204, 304, 406), said "at least 4", and said the full tool response was too large to consult. 404 and 504 were missing. |
+| Compare Studio Unit 203 et Two Story Studio Unit 406. | `revit_get_context`, `revit_read_spatial_rooms` | **Pass.** Generic reads only. Levels, plan extents, shape, doors to corridor and outside, the duplicated window in 406, and the absence of area data, matching the direct Claude Code answer. |
+
+Settings → Skills: Disable, Enable, and Reload each worked and showed their message. Undo was empty after both prompts. No mutation.
+
+The tool-surface mismatch is fixed: the Assistant followed the unchanged Skill to `revit_read_spatial_rooms`. The remaining failure is different. Claude Code received the full result for six studios (about 10,000 characters) and listed all six. In the Assistant, the GitHub Copilot runtime applied its large tool-output handling and the model did not see the whole result. This is a provider-side result-size limit, not a missing Revit capability. The SDK 1.0.21 public custom-tool result does not expose a documented switch for it. It was not worked around during the retest.
 
 ## Not covered
 
