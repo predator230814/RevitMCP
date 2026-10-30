@@ -1,6 +1,6 @@
 # ADR-0022: Agent Skills and knowledge architecture
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-10-30
 - Product Owner: Dave
 
@@ -51,7 +51,7 @@ BIM-IT reads Skill folders itself, validates them with fixed bounds, hashes them
 
 ## Decision
 
-Option C is proposed.
+Option C is accepted. Dave, Product Owner, approved this direction. It was implemented and validated live in PR #96 on 2026-10-30, including the amendment below.
 
 ### Format
 
