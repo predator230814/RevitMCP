@@ -33,6 +33,8 @@ public enum AssistantIpcKind
     ApplyApprovedPattern,
     SearchPatternTypes,
     PatternTypesResult,
+    Skills,
+    SkillsResult,
 }
 
 public sealed record AssistantIpcMessage(
@@ -154,6 +156,8 @@ public static class AssistantIpc
                 "previewResult" => ParsePreviewResult(body),
                 "searchPatternTypes" => ParseSearchPatternTypes(body),
                 "patternTypesResult" => ParsePatternTypesResult(body),
+                "skills" => ParseSkills(body),
+                "skillsResult" => ParseSkillsResult(body),
                 _ =>AssistantIpcParse.Reject("unknown"),
             };
         }
@@ -264,6 +268,17 @@ public static class AssistantIpc
                 IsError = message.IsError,
                 Text = message.Text,
             },
+            AssistantIpcKind.Skills => new Envelope
+            {
+                Type = "skills",
+                Text = message.Text,
+            },
+            AssistantIpcKind.SkillsResult => new Envelope
+            {
+                Type = "skillsResult",
+                IsError = message.IsError,
+                Text = message.Text,
+            },
             AssistantIpcKind.DocumentResult => new Envelope
             {
                 Type = "documentResult",
@@ -292,7 +307,8 @@ public static class AssistantIpc
             or "bimit_inspect_selection"
             or "bimit_explore_selected_mep"
             or "bimit_propose_mep_device_placements"
-            or "bimit_propose_room_pattern";
+            or "bimit_propose_room_pattern"
+            or "bimit_read_skill";
     }
 
     private static AssistantIpcParse ParseHello(Envelope body)
@@ -558,6 +574,47 @@ public static class AssistantIpc
 
         return AssistantIpcParse.Accept(new AssistantIpcMessage(
             AssistantIpcKind.PatternTypesResult, null, null, null, false, null, null, null, null, null, null, null, body.Title, body.Body, isError, Text: body.Text));
+    }
+
+    private static AssistantIpcParse ParseSkills(Envelope body)
+    {
+        if (body.RequestId is not null
+            || body.Workflow is not null
+            || body.Title is not null
+            || body.Body is not null
+            || body.IsError is not null
+            || HasProvider(body)
+            || body.UsedTools is not null
+            || body.InstanceId is not null
+            || body.PatternReview is not null
+            || HasDocument(body)
+            || !AssistantSkillsIpc.TryParseRequest(body.Text, out _))
+        {
+            return AssistantIpcParse.Reject("skills");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.Skills, null, null, null, false, null, null, null, null, null, null, null, null, null, false, Text: body.Text));
+    }
+
+    private static AssistantIpcParse ParseSkillsResult(Envelope body)
+    {
+        if (body.RequestId is not null
+            || body.Workflow is not null
+            || body.Title is not null
+            || body.Body is not null
+            || HasProvider(body)
+            || body.UsedTools is not null
+            || body.InstanceId is not null
+            || body.PatternReview is not null
+            || HasDocument(body)
+            || !AssistantSkillsIpc.TryParseView(body.Text, out _))
+        {
+            return AssistantIpcParse.Reject("skills");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.SkillsResult, null, null, null, false, null, null, null, null, null, null, null, null, null, body.IsError == true, Text: body.Text));
     }
 
     private static AssistantIpcParse ParseSignal(Envelope body, AssistantIpcKind kind)

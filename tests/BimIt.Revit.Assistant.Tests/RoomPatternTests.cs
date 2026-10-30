@@ -199,9 +199,9 @@ public sealed class RoomPatternTests
     }
 
     [Fact]
-    public void Model_surface_stays_seven_tools_and_room_layouts_stay_a_read()
+    public void Model_surface_stays_eight_tools_and_room_layouts_stay_a_read()
     {
-        Assert.Equal(7, AssistantModelTools.Names.Length);
+        Assert.Equal(8, AssistantModelTools.Names.Length);
         Assert.Contains(RoomPatternProposalTool.Name, AssistantModelTools.Names);
         Assert.DoesNotContain(AssistantTools.GetRoomLayouts, AssistantModelTools.Names);
         Assert.Contains(AssistantTools.GetRoomLayouts, AssistantTools.AllowedReadTools);

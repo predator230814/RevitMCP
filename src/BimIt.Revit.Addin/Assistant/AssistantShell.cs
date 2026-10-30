@@ -16,6 +16,10 @@ internal sealed class AssistantShell
     private readonly IAssistantLink _link;
     private readonly AssistantConversation _conversation = new();
     private readonly IAssistantDocumentPicker _documents;
+    private readonly IAssistantFolderPicker _folders;
+    private JsonElement? _skills;
+    private bool _skillsBusy;
+    private string? _skillsError;
     private readonly AssistantIpcTimeouts _timeouts;
     private readonly object _gate = new();
     private Task? _startup;
@@ -47,7 +51,8 @@ internal sealed class AssistantShell
         IAssistantProcessFactory processes,
         IAssistantLink link,
         AssistantIpcTimeouts? timeouts = null,
-        IAssistantDocumentPicker? documentPicker = null)
+        IAssistantDocumentPicker? documentPicker = null,
+        IAssistantFolderPicker? folderPicker = null)
     {
         _instanceId = instanceId;
         _bridgeReady = bridgeReady;
@@ -56,6 +61,7 @@ internal sealed class AssistantShell
         _link = link;
         _timeouts = timeouts ?? AssistantIpcTimeouts.Default;
         _documents = documentPicker ?? new AssistantOpenFilePicker();
+        _folders = folderPicker ?? new AssistantOpenFolderPicker();
     }
 
     public AssistantConversation Conversation => _conversation;
@@ -162,6 +168,9 @@ internal sealed class AssistantShell
                     "The pattern apply could not be completed.",
                     token => _link.ApplyApprovedPatternAsync(token),
                     prepared: false));
+                break;
+            case AssistantPageIntent.Skills:
+                RequestSkills(parsed.Action!, parsed.Text);
                 break;
             case AssistantPageIntent.OpenDiagnostics:
                 _diagnostics = !_diagnostics;
@@ -1021,6 +1030,16 @@ internal sealed class AssistantShell
             }
         }
 
+        if (_skills is not null || _skillsBusy || _skillsError is not null)
+        {
+            snapshot["skills"] = new Dictionary<string, object?>
+            {
+                ["view"] = _skills,
+                ["busy"] = _skillsBusy,
+                ["error"] = _skillsError,
+            };
+        }
+
         return JsonSerializer.Serialize(snapshot);
     }
 
@@ -1043,6 +1062,7 @@ internal sealed class AssistantShell
                 "bimit_explore_selected_mep" => "Explore selected MEP",
                 "bimit_propose_mep_device_placements" => "Propose MEP placements",
                 "bimit_propose_room_pattern" => "Propose room pattern",
+                "bimit_read_skill" => "Read skill",
                 _ => null,
             };
             if (label is not null && !labels.Contains(label, StringComparer.Ordinal))
@@ -1150,6 +1170,85 @@ internal sealed class AssistantShell
         }
 
         await action().ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Settings → Skills relay. Skill parsing and validation stay in the Assistant process. The add-in only opens the
+    /// native folder picker and forwards the chosen path over the trusted pipe. The path never reaches the WebView.
+    /// </summary>
+    private void RequestSkills(string action, string? text)
+    {
+        var request = new AssistantSkillsIpc.Request { Action = action };
+        switch (action)
+        {
+            case "detail":
+            case "enable":
+            case "disable":
+                request.Key = text;
+                break;
+            case "removeSource":
+                request.SourceId = text;
+                break;
+            case "addSource":
+            case "import":
+                string? folder;
+                try
+                {
+                    folder = _folders.TryPickFolder(action == "import"
+                        ? "Import a Skill (choose a folder that contains SKILL.md)"
+                        : "Add a Skills folder");
+                }
+                catch (Exception)
+                {
+                    _skillsError = "The folder could not be chosen.";
+                    PostSnapshot();
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(folder))
+                {
+                    return;
+                }
+
+                request.Path = folder;
+                break;
+        }
+
+        Sequence(() => SkillsAsync(request));
+    }
+
+    private async Task SkillsAsync(AssistantSkillsIpc.Request request)
+    {
+        _skillsBusy = true;
+        _skillsError = null;
+        PostSnapshot();
+        try
+        {
+            if (_assistantState != "ready")
+            {
+                await EnsureAssistantAsync().ConfigureAwait(false);
+            }
+
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await _link.SkillsAsync(request, timeout.Token).ConfigureAwait(false);
+            if (result?.Kind == AssistantIpcKind.SkillsResult && AssistantSkillsIpc.TryParseView(result.Text, out var view))
+            {
+                _skills = view;
+            }
+            else
+            {
+                _skillsError = _assistantState == "ready" ? "Skills could not be loaded." : _statusError ?? "The Assistant is not running.";
+            }
+        }
+        catch (Exception)
+        {
+            _skillsError = "Skills could not be loaded.";
+        }
+        finally
+        {
+            _skillsBusy = false;
+            PostSnapshot();
+        }
     }
 
     private sealed record AssistantAttachmentChip(string DisplayName, string Summary);

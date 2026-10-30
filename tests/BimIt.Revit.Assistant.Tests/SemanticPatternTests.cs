@@ -615,7 +615,7 @@ public sealed class SemanticPatternTests
         Assert.DoesNotContain("paired_symmetric", GitHubCopilotSessionBlueprint.RoomPatternToolDescription, StringComparison.Ordinal);
         Assert.DoesNotContain("Describe only what you see", GitHubCopilotSessionBlueprint.SystemPrompt, StringComparison.Ordinal);
         Assert.DoesNotContain("element_ref", GitHubCopilotSessionBlueprint.RoomPatternToolDescription, StringComparison.Ordinal);
-        Assert.Equal(7, AssistantModelTools.Names.Length);
+        Assert.Equal(8, AssistantModelTools.Names.Length);
     }
 
     [Fact]

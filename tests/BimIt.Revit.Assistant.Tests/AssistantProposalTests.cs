@@ -17,7 +17,7 @@ public sealed class AssistantProposalTests
     private const string HiddenTemplate = "tmpl-hidden";
 
     [Fact]
-    public void Model_surface_exposes_seven_tools_and_hides_raw_writes()
+    public void Model_surface_exposes_eight_tools_and_hides_raw_writes()
     {
         Assert.Equal(
             [
@@ -28,6 +28,7 @@ public sealed class AssistantProposalTests
                 BimItAgentReadTools.ExploreSelectedMep,
                 MepDevicePlacementProposalTool.Name,
                 RoomPatternProposalTool.Name,
+                BimItSkillTool.Name,
             ],
             AssistantModelTools.Names);
         Assert.Equal(5, BimItAgentReadTools.Names.Length);
@@ -61,7 +62,7 @@ public sealed class AssistantProposalTests
         var directory = Directory.CreateTempSubdirectory("bimit-proposal-surface-").FullName;
         try
         {
-            var tools = GitHubCopilotSessionBlueprint.CreateTools(ReadTools(), ProposalTool(new MepDevicePlacementProposalStore()), PatternTool());
+            var tools = GitHubCopilotSessionBlueprint.CreateTools(ReadTools(), ProposalTool(new MepDevicePlacementProposalStore()), PatternTool(), new BimItSkillTool(() => null));
             Assert.Equal(AssistantModelTools.Names, tools.Select(tool => tool.Name).ToArray());
             var session = GitHubCopilotSessionBlueprint.CreateSessionConfig(directory, tools);
             var allowed = Assert.IsAssignableFrom<IList<string>>(session.AvailableTools);

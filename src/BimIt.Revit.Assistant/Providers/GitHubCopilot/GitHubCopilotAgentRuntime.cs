@@ -15,6 +15,8 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
     private readonly CancellationTokenSource _stop = new();
     private readonly string _directory;
     private readonly CopilotAttachmentDelivery _delivery = new();
+    private readonly BimItSkillTool _skills;
+    private readonly AssistantSkillDelivery _skillDelivery = new();
     private CopilotClient? _client;
     private CopilotSession? _session;
     private IDisposable? _modelEvents;
@@ -26,7 +28,8 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         Func<string?> currentAttachmentId,
         RoomPatternStore patternStore,
         Func<AssistantDocumentArtifact?> currentAttachment,
-        string? runtimeDirectory = null)
+        string? runtimeDirectory = null,
+        BimIt.Revit.Skills.SkillRegistry? skills = null)
     {
         _proposalStore = proposalStore ?? throw new ArgumentNullException(nameof(proposalStore));
         _patternStore = patternStore ?? throw new ArgumentNullException(nameof(patternStore));
@@ -35,6 +38,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         _tools = new BimItAgentReadTools(session, instanceId);
         _proposals = new MepDevicePlacementProposalTool(session, instanceId, proposalStore, currentAttachmentId);
         _roomPatterns = new RoomPatternProposalTool(session, instanceId, patternStore, currentAttachment);
+        _skills = new BimItSkillTool(() => skills);
         _directory = string.IsNullOrWhiteSpace(runtimeDirectory) ? CopilotRuntimeDirectory.Create() : runtimeDirectory;
         Directory.CreateDirectory(_directory);
         Status = AssistantProviderStatus.NotConfigured;
@@ -116,19 +120,27 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             _tools.ConsumeUsedTools();
             _proposals.ConsumeUsedTools();
             _roomPatterns.ConsumeUsedTools();
+            _skills.ConsumeUsedTools();
+            _skills.ConsumeActivities();
             if (_session is null)
             {
                 return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, ConsumeTurnTools());
             }
 
             var attachment = _delivery.ShouldDeliver(request.Attachment) ? request.Attachment : null;
+            var skillSummaries = _skillDelivery.Take(request.Skills);
             var message = await _session.SendAndWaitAsync(
-                CopilotTurnComposer.Compose(userText.Trim(), attachment),
+                CopilotTurnComposer.Compose(AssistantSkillPrompt.Compose(userText.Trim(), skillSummaries), attachment),
                 AssistantProviderTimeouts.Default.Turn,
                 budget.Token).ConfigureAwait(false);
             if (attachment is not null)
             {
                 _delivery.MarkDelivered(attachment.ArtifactId);
+            }
+
+            if (skillSummaries is not null)
+            {
+                _skillDelivery.MarkDelivered(skillSummaries);
             }
             var data = message?.Data;
             RememberModel(data?.Model);
@@ -160,7 +172,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                 }
             }
 
-            return new AssistantAgentTurn("BIM-IT Assistant", content, false, ConsumeTurnTools(), _patternStore.PeekReviewJson());
+            return new AssistantAgentTurn("BIM-IT Assistant", content, false, ConsumeTurnTools(), _patternStore.PeekReviewJson(), _skills.ConsumeActivities());
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !_stop.IsCancellationRequested)
         {
@@ -201,6 +213,11 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             }
 
             foreach (var name in _roomPatterns.ConsumeUsedTools())
+            {
+                AddUsed(names, name);
+            }
+
+            foreach (var name in _skills.ConsumeUsedTools())
             {
                 AddUsed(names, name);
             }
@@ -301,7 +318,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
     private async Task<CopilotSession> CreateSessionAsync(CancellationToken cancellationToken)
     {
         var session = await _client!.CreateSessionAsync(
-            GitHubCopilotSessionBlueprint.CreateSessionConfig(_directory, GitHubCopilotSessionBlueprint.CreateTools(_tools, _proposals, _roomPatterns)),
+            GitHubCopilotSessionBlueprint.CreateSessionConfig(_directory, GitHubCopilotSessionBlueprint.CreateTools(_tools, _proposals, _roomPatterns, _skills)),
             cancellationToken).ConfigureAwait(false);
         _modelEvents?.Dispose();
         _modelEvents = session.On<SessionModelChangeEvent>(change => RememberModel(change.Data.NewModel));
@@ -397,6 +414,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         var session = _session;
         _session = null;
         _delivery.Reset();
+        _skillDelivery.Reset();
         try
         {
             await session.DisposeAsync().ConfigureAwait(false);

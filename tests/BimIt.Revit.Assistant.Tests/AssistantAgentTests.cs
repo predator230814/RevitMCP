@@ -39,7 +39,7 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
-    public void Copilot_session_is_empty_mode_with_five_read_tools_and_two_proposal_tools()
+    public void Copilot_session_is_empty_mode_with_five_read_tools_two_proposal_tools_and_skill_read()
     {
         var directory = Directory.CreateTempSubdirectory("bimit-copilot-config-").FullName;
         try
@@ -92,6 +92,7 @@ public sealed class AssistantAgentTests
                     "custom:" + BimItAgentReadTools.ExploreSelectedMep,
                     "custom:" + MepDevicePlacementProposalTool.Name,
                     "custom:" + RoomPatternProposalTool.Name,
+                    "custom:" + BimItSkillTool.Name,
                 ],
                 allowed.ToArray());
             Assert.DoesNotContain(allowed, name => name.Contains('*') || name.StartsWith("builtin:", StringComparison.Ordinal) || name.StartsWith("mcp:", StringComparison.Ordinal));
@@ -1048,7 +1049,8 @@ public sealed class AssistantAgentTests
                 new RecordingSession(_ => Error("unused", "unused")),
                 InstanceId,
                 new RoomPatternStore(),
-                static () => null));
+                static () => null),
+            new BimItSkillTool(() => null));
     }
 
     private static AssistantProviderTimeouts FastProviderTimeouts()

@@ -17,7 +17,7 @@ public sealed class AssistantReviewApplyOrchestrationTests
     [Fact]
     public void Local_review_and_apply_are_not_model_tools()
     {
-        Assert.Equal(7, AssistantModelTools.Names.Length);
+        Assert.Equal(8, AssistantModelTools.Names.Length);
         Assert.Equal(9, AssistantTools.AllowedReadTools.Length);
         Assert.Equal(3, AssistantTools.WorkflowTools.Length);
         Assert.False(AssistantIpc.GrantsApprovalAuthority);

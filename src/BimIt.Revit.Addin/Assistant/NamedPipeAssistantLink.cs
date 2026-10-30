@@ -39,6 +39,8 @@ internal interface IAssistantLink
 
     Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken);
 
+    Task<AssistantIpcMessage?> SkillsAsync(AssistantSkillsIpc.Request request, CancellationToken cancellationToken);
+
     Task ShutdownAsync();
 }
 
@@ -238,6 +240,27 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
             null,
             false,
             Text: RoomPatternTypeSearch.SerializeRequest(role, query)), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> SkillsAsync(AssistantSkillsIpc.Request request, CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(new AssistantIpcMessage(
+            AssistantIpcKind.Skills,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Text: AssistantSkillsIpc.SerializeRequest(request)), cancellationToken);
     }
 
     public Task<AssistantIpcMessage?> ReviewPatternInRevitAsync(CancellationToken cancellationToken)

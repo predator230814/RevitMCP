@@ -16,7 +16,7 @@ public sealed class AssistantPreviewOrchestrationTests
     [Fact]
     public void Local_action_is_not_a_model_tool_and_approval_authority_stays_false()
     {
-        Assert.Equal(7, AssistantModelTools.Names.Length);
+        Assert.Equal(8, AssistantModelTools.Names.Length);
         Assert.False(AssistantModelTools.IsExposed("confirmProjectAxesPreview"));
         Assert.False(AssistantIpc.IsModelToolName("confirmProjectAxesPreview"));
         Assert.False(AssistantIpc.IsModelToolName(IMepDevicePlacementPreviewClient.ToolName));

@@ -135,7 +135,8 @@ internal static class AssistantHost
         IMepDevicePlacementReviewClient? reviewClient = null,
         IMepDevicePlacementApplyClient? applyClient = null,
         RoomPatternStore? roomPatterns = null,
-        IRoomPatternPreviewClient? patternPreviewClient = null)
+        IRoomPatternPreviewClient? patternPreviewClient = null,
+        AssistantSkills? skills = null)
     {
         McpAssistantToolSession? ownedSession = null;
         if (session is null)
@@ -176,10 +177,11 @@ internal static class AssistantHost
         reviewClient ??= session as IMepDevicePlacementReviewClient;
         applyClient ??= session as IMepDevicePlacementApplyClient;
         patternPreviewClient ??= session as IRoomPatternPreviewClient;
+        skills ??= AssistantSkills.CreateDefault();
         if (runtime is null)
         {
             runtime = readiness.Ready && session is not null
-                ? new GitHubCopilotAgentRuntime(session, options.InstanceId, proposals, () => CurrentAttachmentId(documents), roomPatterns, () => documents.Current)
+                ? new GitHubCopilotAgentRuntime(session, options.InstanceId, proposals, () => CurrentAttachmentId(documents), roomPatterns, () => documents.Current, skills: skills.Registry)
                 : new UnavailableAssistantAgentRuntime(readiness.Error);
         }
 
@@ -210,6 +212,13 @@ internal static class AssistantHost
                 if (parsed.Message.Kind == AssistantIpcKind.QueryStatus)
                 {
                     await WriteAsync(server, Status(readiness, runtime.Status), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (parsed.Message.Kind == AssistantIpcKind.Skills)
+                {
+                    // Skill management does not need MCP or the provider. Paths arrive only from the add-in's folder picker.
+                    await WriteAsync(server, skills.Handle(parsed.Message.Text), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -326,7 +335,7 @@ internal static class AssistantHost
 
                 if (parsed.Message.Kind == AssistantIpcKind.Chat)
                 {
-                    await WriteAsync(server, await ChatAsync(runtime, parsed.Message, documents.Current, timeouts, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, await ChatAsync(runtime, parsed.Message, documents.Current, skills.RefreshSummaries(), timeouts, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -415,6 +424,7 @@ internal static class AssistantHost
         IAssistantAgentRuntime runtime,
         AssistantIpcMessage message,
         AssistantDocumentArtifact? attachment,
+        IReadOnlyList<BimIt.Revit.Skills.SkillSummary> skills,
         AssistantProviderTimeouts timeouts,
         CancellationToken cancellationToken)
     {
@@ -444,7 +454,7 @@ internal static class AssistantHost
         try
         {
             var pending = RunBudgetAsync(
-                token => runtime.SendAsync(new AssistantAgentRequest(message.Text ?? "", attachment), token),
+                token => runtime.SendAsync(new AssistantAgentRequest(message.Text ?? "", attachment, skills), token),
                 timeouts.Turn,
                 cancellationToken);
             var (finished, value) = await pending.ConfigureAwait(false);

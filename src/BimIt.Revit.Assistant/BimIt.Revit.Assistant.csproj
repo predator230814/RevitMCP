@@ -16,6 +16,12 @@
     <PackageReference Include="PDFtoImage" />
     <ProjectReference Include="..\BimIt.Revit.Assistant.Ipc\BimIt.Revit.Assistant.Ipc.csproj" />
     <ProjectReference Include="..\BimIt.Revit.Contracts\BimIt.Revit.Contracts.csproj" />
+    <ProjectReference Include="..\BimIt.Revit.Skills\BimIt.Revit.Skills.csproj" />
+  </ItemGroup>
+
+  <!-- Built-in Skills ship as read-only content beside the executable. They are guidance files, never code. -->
+  <ItemGroup>
+    <Content Include="..\..\skills\built-in\**\*" LinkBase="skills" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>

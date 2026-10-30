@@ -143,7 +143,7 @@ public sealed class PageFrameTests
         Assert.Equal(0.8, device.GetProperty("y").GetDouble());
         Assert.Equal(1, review.RootElement.GetProperty("entrance").GetProperty("y").GetDouble());
         Assert.DoesNotContain("element_ref", review.RootElement.GetRawText(), StringComparison.Ordinal);
-        Assert.Equal(7, AssistantModelTools.Names.Length);
+        Assert.Equal(8, AssistantModelTools.Names.Length);
         Assert.DoesNotContain(AssistantTools.GetRoomLayouts, AssistantModelTools.Names);
         Assert.False(AssistantTools.IsTrustedWriteTool(AssistantTools.GetRoomLayouts));
         Assert.False(AssistantTools.IsTrustedWriteTool(RoomPatternProposalTool.Name));
@@ -195,7 +195,7 @@ public sealed class PageFrameTests
         Assert.Equal(0.15, page.Devices[0].Y, 6);
         Assert.Equal(0.25, page.Anchors![0].X, 6);
         Assert.Equal(0.75, page.Anchors[0].Y, 6);
-        Assert.Equal(7, AssistantModelTools.Names.Length);
+        Assert.Equal(8, AssistantModelTools.Names.Length);
     }
 
     [Fact]
@@ -258,7 +258,7 @@ public sealed class PageFrameTests
         var unresolved = Assert.Single(RoomShapeMatcher.Match(matching, [severalDoors]));
         Assert.Equal(PatternAdaptationStatus.Partial, unresolved.AdaptationStatus);
         Assert.Equal("luminaire", Assert.Single(unresolved.Devices).Role);
-        Assert.Equal(7, AssistantModelTools.Names.Length);
+        Assert.Equal(8, AssistantModelTools.Names.Length);
     }
 
     private static string Description(Type type, string property)
