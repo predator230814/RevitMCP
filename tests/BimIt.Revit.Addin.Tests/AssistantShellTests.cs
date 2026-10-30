@@ -496,7 +496,13 @@ public sealed class AssistantShellTests
         await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("Internal topology name.", StringComparison.Ordinal)));
         Assert.Contains(
             shell.Conversation.Entries,
-            entry => entry.Body.Contains("Internal topology name.", StringComparison.Ordinal) && entry.Used is null);
+            entry => entry.Body.Contains("Internal topology name.", StringComparison.Ordinal) && entry.Used == "Used: revit_get_mep_topology");
+        link.ChatResult = link.ChatResult! with { UsedTools = ["revit_apply_parameter_updates"], Body = "Write name." };
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"write name"}""");
+        await WaitFor(() => shell.Conversation.Entries.Any(entry => entry.Body.Contains("Write name.", StringComparison.Ordinal)));
+        Assert.Contains(
+            shell.Conversation.Entries,
+            entry => entry.Body.Contains("Write name.", StringComparison.Ordinal) && entry.Used is null);
         Assert.Equal(3, link.Workflows.Count);
         Assert.Equal(1, factory.Starts);
 
@@ -803,12 +809,188 @@ public sealed class AssistantShellTests
             TimeSpan.FromSeconds(2));
     }
 
+    [Fact]
+    public void Skills_page_messages_carry_actions_and_opaque_keys_but_never_paths()
+    {
+        var list = AssistantPageMessages.Parse("""{"type":"skills","action":"reload"}""");
+        Assert.True(list.Accepted);
+        Assert.Equal(AssistantPageIntent.Skills, list.Intent);
+
+        var detail = AssistantPageMessages.Parse("""{"type":"skills","action":"detail","text":"custom/my-skill"}""");
+        Assert.True(detail.Accepted);
+        Assert.Equal("custom/my-skill", detail.Text);
+        Assert.True(AssistantPageMessages.Parse("""{"type":"skills","action":"disable","text":"built-in/revit-model-query"}""").Accepted);
+        Assert.True(AssistantPageMessages.Parse("""{"type":"skills","action":"removeSource","text":"external-0123456789ab"}""").Accepted);
+        Assert.True(AssistantPageMessages.Parse("""{"type":"skills","action":"import"}""").Accepted);
+        Assert.True(AssistantPageMessages.Parse("""{"type":"skills","action":"addSource"}""").Accepted);
+        Assert.True(AssistantPageMessages.Parse("""{"type":"skills","action":"openCustomFolder"}""").Accepted);
+
+        Assert.False(AssistantPageMessages.Parse("""{"type":"skills","action":"addSource","text":"C:\\Users\\x"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"skills","action":"import","text":"\\\\server\\share"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"skills","action":"removeSource","text":"C:\\Users"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"skills","action":"detail"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"skills","action":"execute"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"skills","action":"reload","path":"C:\\x"}""").Accepted);
+    }
+
+    [Fact]
+    public async Task Add_skills_folder_uses_the_native_picker_and_keeps_the_path_out_of_the_page()
+    {
+        const string secret = @"C:\Users\someone\OneDrive - Firm\BIM-IT Skills";
+        var link = new ScriptedLink { Status = ReadyStatus(), SkillsResult = SkillsView("Added Skills folder BIM-IT Skills.") };
+        var folders = new FixedFolderPicker(secret);
+        var shell = CreateShell("instance-skills", new RecordingProcessFactory(), link, folders: folders);
+        await shell.OpenSessionAsync();
+
+        shell.ReceivePageMessage("""{"type":"skills","action":"addSource"}""");
+        await WaitFor(() => link.SkillRequests.Count == 1 && shell.SerializeSnapshot().Contains("Added Skills folder", StringComparison.Ordinal));
+
+        Assert.Equal("addSource", link.SkillRequests[0].Action);
+        Assert.Equal(secret, link.SkillRequests[0].Path);
+        Assert.Equal(1, folders.Calls);
+        var snapshot = shell.SerializeSnapshot();
+        Assert.DoesNotContain("someone", snapshot, StringComparison.Ordinal);
+        Assert.DoesNotContain("OneDrive", snapshot, StringComparison.Ordinal);
+        using var json = JsonDocument.Parse(snapshot);
+        var skills = json.RootElement.GetProperty("skills").GetProperty("view");
+        Assert.Equal("built_in", skills.GetProperty("skills")[0].GetProperty("source").GetString());
+    }
+
+    [Fact]
+    public async Task Cancelled_folder_picker_sends_nothing_and_toggles_relay_keys()
+    {
+        var link = new ScriptedLink { Status = ReadyStatus(), SkillsResult = SkillsView("Disabled revit-model-query.") };
+        var shell = CreateShell("instance-skills-2", new RecordingProcessFactory(), link, folders: new FixedFolderPicker(null));
+        await shell.OpenSessionAsync();
+
+        shell.ReceivePageMessage("""{"type":"skills","action":"import"}""");
+        shell.ReceivePageMessage("""{"type":"skills","action":"disable","text":"built-in/revit-model-query"}""");
+        shell.ReceivePageMessage("""{"type":"skills","action":"openCustomFolder"}""");
+        await WaitFor(() => link.SkillRequests.Count == 2);
+
+        Assert.Equal("disable", link.SkillRequests[0].Action);
+        Assert.Equal("built-in/revit-model-query", link.SkillRequests[0].Key);
+        Assert.Null(link.SkillRequests[0].Path);
+        Assert.Equal("openCustomFolder", link.SkillRequests[1].Action);
+        Assert.Null(link.SkillRequests[1].Path);
+    }
+
+    [Fact]
+    public async Task Invalid_skill_diagnostic_reaches_the_page_bounded()
+    {
+        var view = new AssistantSkillsIpc.View
+        {
+            Skills =
+            [
+                new AssistantSkillsIpc.SkillView
+                {
+                    Key = "custom/broken", Name = "broken", Description = "", Source = "custom", SourceId = "custom",
+                    SourceLabel = "Custom", Enabled = true, Status = "invalid", Diagnostic = "The front matter has no description.", Files = [],
+                },
+            ],
+            Sources = [],
+        };
+        var link = new ScriptedLink { Status = ReadyStatus(), SkillsResult = SkillsMessage(AssistantSkillsIpc.SerializeView(view)!) };
+        var shell = CreateShell("instance-skills-3", new RecordingProcessFactory(), link);
+        await shell.OpenSessionAsync();
+
+        shell.ReceivePageMessage("""{"type":"skills","action":"list"}""");
+        await WaitFor(() => shell.SerializeSnapshot().Contains("no description", StringComparison.Ordinal));
+
+        var tooLong = view;
+        tooLong.Skills![0].Diagnostic = new string('x', AssistantSkillsIpc.MaxDiagnosticCharacters + 1);
+        Assert.Null(AssistantSkillsIpc.SerializeView(tooLong));
+    }
+
+    [Fact]
+    public void Skills_settings_page_renders_list_badges_and_actions()
+    {
+        var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
+
+        Assert.Contains("id=\"settings-open\"", html, StringComparison.Ordinal);
+        Assert.Contains(">Skills</button>", html, StringComparison.Ordinal);
+        foreach (var id in new[] { "skills-reload", "skills-import", "skills-add-source", "skills-open-custom", "skills-list", "skill-detail", "skills-sources" })
+        {
+            Assert.Contains("id=\"" + id + "\"", html, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("built_in: \"BUILT-IN\", custom: \"CUSTOM\", external: \"EXTERNAL\"", page, StringComparison.Ordinal);
+        Assert.Contains("post({ type: \"skills\", action: \"reload\" })", page, StringComparison.Ordinal);
+        Assert.Contains("post({ type: \"skills\", action: \"import\" })", page, StringComparison.Ordinal);
+        Assert.Contains("post({ type: \"skills\", action: \"addSource\" })", page, StringComparison.Ordinal);
+        Assert.Contains("post({ type: \"skills\", action: \"openCustomFolder\" })", page, StringComparison.Ordinal);
+        Assert.Contains("action: \"removeSource\", text: button.dataset.removeSource", page, StringComparison.Ordinal);
+        Assert.Contains("button.dataset.enabled === \"true\" ? \"disable\" : \"enable\"", page, StringComparison.Ordinal);
+        Assert.Contains("action: \"detail\", text: selectedSkill", page, StringComparison.Ordinal);
+        Assert.Contains("skill-diagnostic", page, StringComparison.Ordinal);
+        Assert.Contains("Built-in Skills are read-only", page, StringComparison.Ordinal);
+        Assert.Contains("escapeHtml(detail.content)", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("innerHTML = detail.content", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("contenteditable", html + page, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("<textarea id=\"skill", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Skill_read_is_labelled_in_used_tools()
+    {
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "AssistantShell.cs"));
+        Assert.Contains("\"bimit_read_skill\" => \"Read skill\"", source, StringComparison.Ordinal);
+        Assert.True(AssistantIpc.IsModelToolName("bimit_read_skill"));
+
+        // Generic MCP reads appear under their own MCP names. Trusted writes never qualify.
+        Assert.Contains("name.StartsWith(\"revit_\", StringComparison.Ordinal) => name", source, StringComparison.Ordinal);
+        Assert.True(AssistantIpc.IsModelToolName("revit_read_spatial_rooms"));
+        Assert.True(AssistantIpc.IsModelToolName("revit_get_context"));
+        Assert.False(AssistantIpc.IsModelToolName("revit_apply_parameter_updates"));
+        Assert.False(AssistantIpc.IsModelToolName("revit_request_mep_device_placement_review"));
+        Assert.False(AssistantIpc.IsModelToolName("revit_preview_room_pattern_placements"));
+        Assert.False(AssistantIpc.IsModelToolName("revit_Bad-Name"));
+    }
+
+    private static AssistantIpcMessage SkillsView(string message)
+    {
+        var view = new AssistantSkillsIpc.View
+        {
+            Skills =
+            [
+                new AssistantSkillsIpc.SkillView
+                {
+                    Key = "built-in/revit-model-query", Name = "revit-model-query", Description = "Use when inspecting the model.",
+                    Source = "built_in", SourceId = "built-in", SourceLabel = "Built-in", Enabled = true, Status = "ready",
+                    Sha256 = new string('a', 64), Files = ["SKILL.md"],
+                },
+            ],
+            Sources = [new AssistantSkillsIpc.SourceView { Id = "external-0123456789ab", Kind = "external", Label = "BIM-IT Skills", Status = "ready", SkillCount = 0, Removable = true }],
+            Message = message,
+        };
+        return SkillsMessage(AssistantSkillsIpc.SerializeView(view)!);
+    }
+
+    private static AssistantIpcMessage SkillsMessage(string json)
+    {
+        return new AssistantIpcMessage(
+            AssistantIpcKind.SkillsResult, null, null, null, false, null, null, null, null, null, null, null, null, null, false, Text: json);
+    }
+
+    private sealed class FixedFolderPicker(string? path) : IAssistantFolderPicker
+    {
+        public int Calls { get; private set; }
+
+        public string? TryPickFolder(string title)
+        {
+            Calls++;
+            return path;
+        }
+    }
+
     private static AssistantShell CreateShell(
         string instanceId,
         RecordingProcessFactory factory,
         ScriptedLink link,
         AssistantIpcTimeouts? timeouts = null,
-        IAssistantDocumentPicker? picker = null)
+        IAssistantDocumentPicker? picker = null,
+        IAssistantFolderPicker? folders = null)
     {
         return new AssistantShell(
             () => instanceId,
@@ -817,7 +999,8 @@ public sealed class AssistantShellTests
             factory,
             link,
             timeouts,
-            picker);
+            picker,
+            folders ?? new FixedFolderPicker(null));
     }
 
     private sealed class FixedPicker(string? path) : IAssistantDocumentPicker
@@ -1074,6 +1257,16 @@ public sealed class AssistantShellTests
         public Task<AssistantIpcMessage?> QueryStatusAsync(CancellationToken cancellationToken)
         {
             return Task.FromResult(Status);
+        }
+
+        public List<AssistantSkillsIpc.Request> SkillRequests { get; } = [];
+
+        public AssistantIpcMessage? SkillsResult { get; set; }
+
+        public Task<AssistantIpcMessage?> SkillsAsync(AssistantSkillsIpc.Request request, CancellationToken cancellationToken)
+        {
+            SkillRequests.Add(request);
+            return Task.FromResult(SkillsResult);
         }
 
         public Task ShutdownAsync()

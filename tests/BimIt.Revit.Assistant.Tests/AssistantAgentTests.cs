@@ -39,7 +39,7 @@ public sealed class AssistantAgentTests
     }
 
     [Fact]
-    public void Copilot_session_is_empty_mode_with_five_read_tools_and_two_proposal_tools()
+    public void Copilot_session_is_empty_mode_with_generic_reads_two_proposal_tools_and_skill_read()
     {
         var directory = Directory.CreateTempSubdirectory("bimit-copilot-config-").FullName;
         try
@@ -54,7 +54,7 @@ public sealed class AssistantAgentTests
             Assert.Null(client.Connection);
 
             var tools = CreateSessionTools();
-            Assert.Equal(AssistantModelTools.Names, tools.Select(tool => tool.Name).ToArray());
+            Assert.Equal(ExpectedGenericReads.Concat(AssistantModelTools.LocalNames).ToArray(), tools.Select(tool => tool.Name).ToArray());
             foreach (var tool in tools)
             {
                 var schema = tool.JsonSchema.GetRawText();
@@ -84,16 +84,12 @@ public sealed class AssistantAgentTests
 
             var allowed = Assert.IsAssignableFrom<IList<string>>(session.AvailableTools);
             Assert.Equal(
-                [
-                    "custom:" + BimItAgentReadTools.ModelContext,
-                    "custom:" + BimItAgentReadTools.Warnings,
-                    "custom:" + BimItAgentReadTools.ActiveViewElements,
-                    "custom:" + BimItAgentReadTools.InspectSelection,
-                    "custom:" + BimItAgentReadTools.ExploreSelectedMep,
-                    "custom:" + MepDevicePlacementProposalTool.Name,
-                    "custom:" + RoomPatternProposalTool.Name,
-                ],
+                ExpectedGenericReads.Concat(AssistantModelTools.LocalNames).Select(name => "custom:" + name).ToArray(),
                 allowed.ToArray());
+            foreach (var name in BimItAgentReadTools.Names)
+            {
+                Assert.DoesNotContain("custom:" + name, allowed);
+            }
             Assert.DoesNotContain(allowed, name => name.Contains('*') || name.StartsWith("builtin:", StringComparison.Ordinal) || name.StartsWith("mcp:", StringComparison.Ordinal));
             Assert.Equal(SystemMessageMode.Append, session.SystemMessage!.Mode);
             Assert.Contains("read-only", session.SystemMessage.Content, StringComparison.Ordinal);
@@ -112,25 +108,26 @@ public sealed class AssistantAgentTests
     [Fact]
     public void Unexpected_permissions_fail_closed_and_the_model_tools_are_allowed()
     {
-        foreach (var name in AssistantModelTools.Names)
+        var exposed = ExpectedGenericReads.Concat(AssistantModelTools.LocalNames).ToHashSet(StringComparer.Ordinal);
+        foreach (var name in exposed)
         {
             Assert.True(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
             {
                 ToolName = name,
                 ToolDescription = name,
-            }));
+            }, exposed));
         }
 
         Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
         {
-            ToolName = "revit_get_mep_topology",
-            ToolDescription = "topology",
-        }));
+            ToolName = "revit_get_future_thing",
+            ToolDescription = "not on this session's surface",
+        }, exposed));
         Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestCustomTool
         {
             ToolName = "revit_apply_parameter_updates",
             ToolDescription = "write",
-        }));
+        }, exposed.Append("revit_apply_parameter_updates").ToHashSet(StringComparer.Ordinal)));
         foreach (var denied in new[]
         {
             "revit_preview_parameter_updates",
@@ -144,7 +141,7 @@ public sealed class AssistantAgentTests
             {
                 ToolName = denied,
                 ToolDescription = denied,
-            }));
+            }, exposed));
             Assert.Contains(denied, BimItAgentReadTools.DeniedTools);
             Assert.False(AssistantIpc.IsModelToolName(denied));
         }
@@ -157,30 +154,30 @@ public sealed class AssistantAgentTests
             Intention = "list",
             PossiblePaths = [],
             PossibleUrls = [],
-        }));
+        }, exposed));
         Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestWrite
         {
             CanOfferSessionApproval = false,
             Diff = "",
             FileName = "model.rvt",
             Intention = "edit",
-        }));
+        }, exposed));
         Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestRead
         {
             Intention = "read",
             Path = "model.rvt",
-        }));
+        }, exposed));
         Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestMcp
         {
             ReadOnly = true,
             ServerName = "bimit",
             ToolName = "revit_get_context",
             ToolTitle = "context",
-        }));
+        }, exposed));
         Assert.False(GitHubCopilotPermissions.IsAllowed(new PermissionRequestMemory
         {
             Fact = "remember",
-        }));
+        }, exposed));
 
         var blueprint = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Assistant", "Providers", "GitHubCopilot", "GitHubCopilotSessionBlueprint.cs"));
         Assert.Contains("CopilotClientMode.Empty", blueprint, StringComparison.Ordinal);
@@ -262,13 +259,8 @@ public sealed class AssistantAgentTests
         Assert.DoesNotContain(AssistantTools.GetMepTopology, AssistantTools.WorkflowTools);
         Assert.DoesNotContain(AssistantTools.GetMepTopology, BimItAgentReadTools.Names);
 
-        var schema = CreateSessionTools()
-            .Single(tool => tool.Name == BimItAgentReadTools.InspectSelection)
-            .JsonSchema.GetRawText();
-        Assert.DoesNotContain("instance_id", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("document_id", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("limit", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("element_ref", schema, StringComparison.Ordinal);
+        // ADR-0022: the wrapper is no longer model-facing. The model uses the generic revit_* reads.
+        Assert.DoesNotContain(CreateSessionTools(), tool => tool.Name == BimItAgentReadTools.InspectSelection);
 
         var populated = new RecordingSession(tool => tool == AssistantTools.GetSelection
             ? Success("""
@@ -443,21 +435,8 @@ public sealed class AssistantAgentTests
     [Fact]
     public async Task Explore_selected_mep_composes_bounded_physical_topology()
     {
-        var exploreTool = CreateSessionTools()
-            .Single(tool => tool.Name == BimItAgentReadTools.ExploreSelectedMep);
-        Assert.Equal(
-            "Explore the physical MEP connectivity around the currently selected Revit elements. Includes HVAC, piping, electrical, conduit and cable tray physical connections when Revit exposes them. Takes no arguments.",
-            exploreTool.Description);
-        var schema = exploreTool.JsonSchema.GetRawText();
-        Assert.DoesNotContain("instance_id", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("document_id", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("element_ref", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("domain", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("depth", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("limit", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("max_depth", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("max_elements", schema, StringComparison.Ordinal);
-        Assert.DoesNotContain("max_edges", schema, StringComparison.Ordinal);
+        // ADR-0022: the wrapper is no longer model-facing. The model uses the generic revit_* reads.
+        Assert.DoesNotContain(CreateSessionTools(), tool => tool.Name == BimItAgentReadTools.ExploreSelectedMep);
 
         var populated = new RecordingSession(tool => tool switch
         {
@@ -918,9 +897,9 @@ public sealed class AssistantAgentTests
         Assert.Equal(["bimit_inspect_selection"], selectionTrace.Message!.UsedTools);
         var mepTrace = AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["bimit_explore_selected_mep"]}""");
         Assert.Equal(["bimit_explore_selected_mep"], mepTrace.Message!.UsedTools);
-        Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_selection"]}""").Accepted);
-        Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_elements"]}""").Accepted);
-        Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_mep_topology"]}""").Accepted);
+        Assert.True(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_selection"]}""").Accepted);
+        Assert.True(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_elements"]}""").Accepted);
+        Assert.True(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":["revit_get_mep_topology"]}""").Accepted);
         var emptyTrace = AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"x","usedTools":[]}""");
         Assert.Empty(emptyTrace.Message!.UsedTools!);
 
@@ -1035,10 +1014,25 @@ public sealed class AssistantAgentTests
         Assert.Contains("ChildProcessLifetime.BindToThisProcess()", File.ReadAllText(Path.Combine(root, "AssistantHost.cs")), StringComparison.Ordinal);
     }
 
+    internal static readonly string[] ExpectedGenericReads =
+    [
+        "revit_describe_parameters",
+        "revit_get_context",
+        "revit_get_elements",
+        "revit_get_mep_device_types",
+        "revit_get_mep_topology",
+        "revit_get_parameter_values",
+        "revit_get_room_layouts",
+        "revit_get_selection",
+        "revit_get_warnings",
+        "revit_query_elements",
+        "revit_read_spatial_rooms",
+    ];
+
     private static IReadOnlyList<AIFunction> CreateSessionTools()
     {
         return GitHubCopilotSessionBlueprint.CreateTools(
-            new BimItAgentReadTools(new RecordingSession(_ => Error("unused", "unused")), InstanceId),
+            new AssistantMcpReadFacade(new RecordingSession(_ => Error("unused", "unused")), InstanceId, ServerToolMetadata.Descriptors),
             new MepDevicePlacementProposalTool(
                 new RecordingSession(_ => Error("unused", "unused")),
                 InstanceId,
@@ -1048,7 +1042,8 @@ public sealed class AssistantAgentTests
                 new RecordingSession(_ => Error("unused", "unused")),
                 InstanceId,
                 new RoomPatternStore(),
-                static () => null));
+                static () => null),
+            new BimItSkillTool(() => null));
     }
 
     private static AssistantProviderTimeouts FastProviderTimeouts()

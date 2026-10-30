@@ -15,6 +15,7 @@ internal sealed class McpAssistantToolSession :
 {
     private readonly string _serverExecutable;
     private McpClient? _client;
+    private IReadOnlySet<string> _trustedReads = new HashSet<string>(StringComparer.Ordinal);
 
     public McpAssistantToolSession(string serverExecutable)
     {
@@ -41,7 +42,19 @@ internal sealed class McpAssistantToolSession :
                 cancellationToken: cancellationToken).ConfigureAwait(false);
             var tools = await _client.ListToolsAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
             var names = tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray();
-            return new AssistantMcpReadiness(true, names.Length, names, null);
+            var descriptors = tools
+                .Select(tool => tool.ProtocolTool)
+                .Select(tool => new AssistantMcpToolDescriptor(
+                    tool.Name,
+                    tool.Description,
+                    tool.InputSchema.Clone(),
+                    tool.Annotations?.ReadOnlyHint,
+                    tool.Annotations?.DestructiveHint,
+                    tool.Annotations?.OpenWorldHint))
+                .OrderBy(tool => tool.Name, StringComparer.Ordinal)
+                .ToArray();
+            _trustedReads = AssistantReadToolPolicy.TrustedReadNames(descriptors);
+            return new AssistantMcpReadiness(true, names.Length, names, null, descriptors);
         }
         catch (Exception exception)
         {
@@ -59,7 +72,8 @@ internal sealed class McpAssistantToolSession :
             return new AssistantToolCall(true, "mcp_unavailable", "The MCP client is not initialized.", null);
         }
 
-        if (AssistantTools.IsTrustedWriteTool(toolName) || !AssistantTools.AllowedReadTools.Contains(toolName, StringComparer.Ordinal))
+        if (AssistantTools.IsTrustedWriteTool(toolName)
+            || (!AssistantTools.AllowedReadTools.Contains(toolName, StringComparer.Ordinal) && !_trustedReads.Contains(toolName)))
         {
             return new AssistantToolCall(true, "tool_not_allowed", "This Assistant workflow cannot call that tool.", null);
         }

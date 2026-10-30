@@ -564,21 +564,21 @@ internal sealed class MepDevicePlacementProposalTool
     }
 }
 
+/// <summary>
+/// The explicit Assistant-local model tools. They are untrusted semantic helpers, not Revit capabilities. The rest of
+/// the model surface is the trusted generic Revit MCP reads that <see cref="AssistantMcpReadFacade"/> discovers.
+/// </summary>
 internal static class AssistantModelTools
 {
-    public static readonly string[] Names =
+    public static readonly string[] LocalNames =
     [
-        BimItAgentReadTools.ModelContext,
-        BimItAgentReadTools.Warnings,
-        BimItAgentReadTools.ActiveViewElements,
-        BimItAgentReadTools.InspectSelection,
-        BimItAgentReadTools.ExploreSelectedMep,
         MepDevicePlacementProposalTool.Name,
         RoomPatternProposalTool.Name,
+        BimItSkillTool.Name,
     ];
 
-    public static bool IsExposed(string? toolName)
+    public static bool IsLocal(string? toolName)
     {
-        return toolName is not null && Names.Contains(toolName, StringComparer.Ordinal);
+        return toolName is not null && LocalNames.Contains(toolName, StringComparer.Ordinal);
     }
 }

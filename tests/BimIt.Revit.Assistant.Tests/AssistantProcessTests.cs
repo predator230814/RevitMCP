@@ -120,8 +120,15 @@ public sealed class AssistantProcessTests
         Assert.True(refused.IsError);
         Assert.Equal("tool_not_allowed", refused.ErrorCode);
 
-        var arbitrary = await session.CallAsync(
+        // Discovered from Server metadata as a trusted read, so the generic read facade can reach it.
+        var describe = await session.CallAsync(
             "revit_describe_parameters",
+            new Dictionary<string, object?> { ["instance_id"] = "x" },
+            CancellationToken.None);
+        Assert.NotEqual("tool_not_allowed", describe.ErrorCode);
+
+        var arbitrary = await session.CallAsync(
+            "revit_run_anything",
             new Dictionary<string, object?> { ["instance_id"] = "x" },
             CancellationToken.None);
         Assert.Equal("tool_not_allowed", arbitrary.ErrorCode);

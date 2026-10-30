@@ -16,10 +16,35 @@
     <div class="header-actions">
       <button id="retry" type="button" hidden>Retry</button>
       <button id="diagnostics" type="button">Diagnostics</button>
+      <button id="settings-open" type="button">Settings</button>
       <button id="new-chat" type="button">New chat</button>
     </div>
   </header>
   <section class="status" id="status" aria-label="Connection status"></section>
+  <section class="settings" id="settings" hidden aria-label="Settings">
+    <div class="settings-head">
+      <h2>Settings</h2>
+      <button id="settings-close" type="button">Back to chat</button>
+    </div>
+    <nav class="settings-nav" aria-label="Settings pages">
+      <button type="button" class="active" aria-current="page">Skills</button>
+    </nav>
+    <div class="skills-page">
+      <p class="sub">Skills are reusable guidance folders with a SKILL.md. The Assistant sees only each Skill's name and description until it loads one. Skills never grant Revit write or approval authority.</p>
+      <div class="skills-actions">
+        <button id="skills-reload" type="button">Reload</button>
+        <button id="skills-import" type="button">Import Skill</button>
+        <button id="skills-add-source" type="button">Add skills folder</button>
+        <button id="skills-open-custom" type="button">Open custom skills folder</button>
+      </div>
+      <p class="skills-message" id="skills-message" hidden></p>
+      <div class="skills-sources" id="skills-sources"></div>
+      <div class="skills-grid">
+        <ul class="skills-list" id="skills-list"></ul>
+        <section class="skill-detail" id="skill-detail" hidden></section>
+      </div>
+    </div>
+  </section>
   <main id="main">
     <section class="welcome" id="welcome">
       <h2>This Revit session.</h2>

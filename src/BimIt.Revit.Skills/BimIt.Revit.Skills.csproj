@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>BimIt.Revit.Skills</RootNamespace>
+    <AssemblyName>BimIt.Revit.Skills</AssemblyName>
+    <Description>Provider-neutral Agent Skills registry. Reads bounded guidance folders. Never executes Skill content. No Revit API, no MCP SDK, no AI provider.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="BimIt.Revit.Assistant.Tests" />
+  </ItemGroup>
+</Project>

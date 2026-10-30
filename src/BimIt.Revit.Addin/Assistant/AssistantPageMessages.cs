@@ -20,6 +20,7 @@ internal enum AssistantPageIntent
     ReviewPatternInRevit,
     ApplyApprovedPattern,
     SearchPatternTypes,
+    Skills,
 }
 
 internal readonly record struct AssistantPageParse(bool Accepted, AssistantPageIntent Intent, string? Action, string? Text, string Reason)
@@ -92,6 +93,7 @@ internal static class AssistantPageMessages
                     ? AssistantPageParse.Accept(AssistantPageIntent.ApplyApprovedPattern)
                     : AssistantPageParse.Reject("pattern-apply"),
                 "searchPatternTypes" => ParseTypeSearch(message),
+                "skills" => ParseSkills(message),
                 _ => AssistantPageParse.Reject("unknown"),
             };
         }
@@ -133,6 +135,57 @@ internal static class AssistantPageMessages
             ? AssistantPageParse.Accept(AssistantPageIntent.SearchPatternTypes, message.Action, message.Text.Trim())
             : AssistantPageParse.Reject("pattern-types");
     }
+
+    /// <summary>
+    /// Settings → Skills. The page names an action and, where needed, an opaque Skill key or source id. It can never
+    /// supply a path: addSource and import open a native folder picker in the add-in.
+    /// </summary>
+    private static AssistantPageParse ParseSkills(Envelope message)
+    {
+        var action = message.Action;
+        if (action is null || !SkillPageActions.Contains(action, StringComparer.Ordinal))
+        {
+            return AssistantPageParse.Reject("skills");
+        }
+
+        var request = new BimIt.Revit.Assistant.Ipc.AssistantSkillsIpc.Request { Action = action };
+        switch (action)
+        {
+            case "detail":
+            case "enable":
+            case "disable":
+                request.Key = message.Text;
+                break;
+            case "removeSource":
+                request.SourceId = message.Text;
+                break;
+            case "addSource":
+            case "import":
+                if (message.Text is not null)
+                {
+                    return AssistantPageParse.Reject("skills");
+                }
+
+                // The add-in supplies the path after the folder picker. Validate the shape with a placeholder.
+                request.Path = @"C:\placeholder";
+                break;
+            default:
+                if (message.Text is not null)
+                {
+                    return AssistantPageParse.Reject("skills");
+                }
+
+                break;
+        }
+
+        var json = BimIt.Revit.Assistant.Ipc.AssistantSkillsIpc.SerializeRequest(request);
+        return BimIt.Revit.Assistant.Ipc.AssistantSkillsIpc.TryParseRequest(json, out _)
+            ? AssistantPageParse.Accept(AssistantPageIntent.Skills, action, message.Text)
+            : AssistantPageParse.Reject("skills");
+    }
+
+    public static readonly string[] SkillPageActions =
+        ["list", "reload", "detail", "enable", "disable", "openCustomFolder", "addSource", "removeSource", "import"];
 
     private static AssistantPageParse ParseCommand(string? text)
     {

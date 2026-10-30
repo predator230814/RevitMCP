@@ -27,6 +27,29 @@ internal sealed class AssistantOpenFilePicker : IAssistantDocumentPicker
     }
 }
 
+internal interface IAssistantFolderPicker
+{
+    string? TryPickFolder(string title);
+}
+
+/// <summary>
+/// Native folder choice for Settings → Skills. The chosen path goes only to the Assistant process over the trusted
+/// current-user pipe. It is not posted to the WebView.
+/// </summary>
+internal sealed class AssistantOpenFolderPicker : IAssistantFolderPicker
+{
+    public string? TryPickFolder(string title)
+    {
+        var dialog = new OpenFolderDialog
+        {
+            Title = title,
+            Multiselect = false,
+            DereferenceLinks = true,
+        };
+        return dialog.ShowDialog() == true ? dialog.FolderName : null;
+    }
+}
+
 internal static class AssistantAttachmentSummary
 {
     public static string Describe(string? kind, int? pageCount, int? visualCount, bool truncated)

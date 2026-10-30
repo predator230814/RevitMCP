@@ -82,6 +82,8 @@ The production approval presentation exists: a DockablePane, a WPF host, and a b
 
 [ADR-0021](adr/ADR-0021-controlled-pattern-application-against-linked-architecture.md) is **Proposed**. The linked architecture is spatial and hosting truth. The MEP host document is the mutation target. The linked document is never transacted. A resolved linked-room pattern is previewed through `revit_preview_room_pattern_placements` on bridge protocol 21, reviewed in the existing Approval Pane, and applied through the existing MEP apply path in one host transaction. A linked wall device needs a `WorkPlaneBased` type, created on the Room-facing linked face converted with `Reference.CreateLinkReference`, or a `OneLevelBased` type, created unhosted on the host Level facing the Room. An interior device needs a host Level resolved by elevation. The mounting height of an unhosted level-based device is its Elevation from Level. Server `tools/list` stays 18. The model still has seven tools. Family loading, linked ceiling and floor hosting, and distributed arrangements stay out of scope.
 
+[ADR-0022](adr/ADR-0022-agent-skills-and-knowledge-architecture.md) is **Accepted**. It separates executable MCP Tools, knowledge, Agent Skills (reusable procedures), future Standard Packs (firm knowledge), the LLM, and the Revit Execution Kernel. Product rule: do not add a specialised Revit capability when a Skill over generic capabilities can express the workflow. A provider-neutral `BimIt.Revit.Skills` registry, referenced only by the Assistant, reads open-format Skill folders from built-in, custom, and user-configured external sources, validates them with fixed bounds, hashes them, and reports same-name Skills as a visible conflict with no source precedence. The model sees Skill metadata only and loads content through the Assistant runtime capability `bimit_read_skill`, which is not a Revit tool. Amended before acceptance: the Assistant model now sees the same generic read-only Revit MCP tools an external MCP agent sees, under their MCP names, through a read facade in the Assistant. The facade discovers trusted reads from Server tools/list annotations, fails closed, removes `instance_id` and `document_id` from the schemas, and injects the bound instance and the fresh active document. This partially supersedes ADR-0014 for model-facing reads only. The five `bimit_*` read wrappers are no longer model-facing. No trusted write reaches the provider. Server `tools/list` stays 18. The Revit add-in gains no Skill parsing or business logic. It only relays Settings → Skills messages and opens a native folder picker. See [SKILLS.md](SKILLS.md).
+
 Still unauthorized: MCP Apps, app-only tools, Streamable HTTP, MRTR, an SDK upgrade, automatic apply after approval, temporary hide/isolate classification, generic Revit API or C# execution, and any write path other than the accepted parameter-apply path and this typed MEP placement path. ADR-0016 Slice 2B does not add a Server, Bridge, or Revit capability.
 
 ## Decisions intentionally not made yet
@@ -128,13 +130,14 @@ Implemented:
 - bounded physical MEP exploration around the current selection, with no MEP quick action;
 - one local document attachment per conversation, cleared by New Chat or Remove;
 - logged-in-user Copilot authentication, with no BIM-IT token store;
-- truthful Revit/Bridge, Assistant, MCP, and AI Provider status.
+- truthful Revit/Bridge, Assistant, MCP, and AI Provider status;
+- Agent Skills from built-in, custom, and external folders, with Settings → Skills, metadata-only disclosure, and `bimit_read_skill` (ADR-0022).
 
 Not implemented:
 
 - an OpenAI, Anthropic, or local-model provider;
 - GitHub OAuth product UI;
-- skills;
+- Standard Packs and an MCP Skills extension adapter;
 - a general tool-permission UI;
 - persistent chat history;
 - write tools from chat;
@@ -144,7 +147,6 @@ Not implemented:
 - arbitrary Revit API execution;
 - a selection quick action or slash command;
 - an MEP exploration quick action or slash command;
-- Assistant skills;
 - preview, review, and apply orchestration for an Assistant MEP placement proposal; live validation of the proposal slice is pending and listed in [CURRENT_STATE.md](CURRENT_STATE.md);
 - MEP device placement, routing, or diagram-to-model creation from an attachment.
 

@@ -43,6 +43,7 @@ function render(snapshot) {
   if (status.busy) {
     timeline.insertAdjacentHTML("beforeend", `<li class="msg"><h3>Working</h3><p>Waiting for the Assistant.</p></li>`);
   }
+  renderSkills(snapshot.skills);
   renderAttachment(snapshot.attachment);
   patternTypes = snapshot.patternTypes && typeof snapshot.patternTypes === "object" ? snapshot.patternTypes : {};
   renderPattern(snapshot.patternReview, snapshot.patternPrepared === true);
@@ -58,6 +59,87 @@ function renderAttachment(attachment) {
   node.hidden = false;
   node.innerHTML = `<span class="clip" aria-hidden="true">📎</span><span class="attachment-copy"><strong>${escapeHtml(attachment.displayName)}</strong><span class="sub">${escapeHtml(attachment.summary || "")}</span></span><button id="remove-attachment" type="button" aria-label="Remove document">Remove</button>`;
   document.getElementById("remove-attachment").addEventListener("click", () => post({ type: "removeDocument" }));
+}
+
+const settings = document.getElementById("settings");
+const skillBadges = { built_in: "BUILT-IN", custom: "CUSTOM", external: "EXTERNAL" };
+let selectedSkill = "";
+
+function openSettings() {
+  settings.hidden = false;
+  document.getElementById("main").hidden = true;
+  post({ type: "skills", action: "reload" });
+}
+
+function closeSettings() {
+  settings.hidden = true;
+  document.getElementById("main").hidden = false;
+}
+
+function skillBadge(source) {
+  const label = skillBadges[source] || "UNKNOWN";
+  return `<span class="badge badge-${escapeHtml(source || "unknown")}">${label}</span>`;
+}
+
+function renderSkills(state) {
+  const list = document.getElementById("skills-list");
+  const sourcesNode = document.getElementById("skills-sources");
+  const messageNode = document.getElementById("skills-message");
+  const detailNode = document.getElementById("skill-detail");
+  const view = state && state.view && typeof state.view === "object" ? state.view : null;
+  const skills = view && Array.isArray(view.skills) ? view.skills : [];
+  const sources = view && Array.isArray(view.sources) ? view.sources : [];
+  const notes = [];
+  if (state && state.busy) {
+    notes.push("Working…");
+  }
+  if (state && state.error) {
+    notes.push(state.error);
+  }
+  if (view && view.message) {
+    notes.push(view.message);
+  }
+  if (view && view.diagnostic) {
+    notes.push(view.diagnostic);
+  }
+  messageNode.hidden = notes.length === 0;
+  messageNode.className = `skills-message${(state && state.error) || (view && view.isError) ? " search-error" : ""}`;
+  messageNode.textContent = notes.join(" · ");
+  sourcesNode.innerHTML = sources.map((source) => {
+    const remove = source.removable ? `<button type="button" data-remove-source="${escapeHtml(source.id || "")}">Remove</button>` : "";
+    const diagnostic = source.diagnostic ? ` · ${escapeHtml(source.diagnostic)}` : "";
+    return `<div class="skill-source">${skillBadge(source.kind)}<strong>${escapeHtml(source.label || "")}</strong><span class="sub">${escapeHtml(String(source.skillCount ?? 0))} skills · ${escapeHtml(source.status || "")}${diagnostic}</span>${remove}</div>`;
+  }).join("");
+  list.innerHTML = skills.length ? skills.map((skill) => {
+    const selected = skill.key === selectedSkill ? " selected" : "";
+    const toggle = skill.status === "invalid" ? "" : `<button type="button" data-toggle-skill="${escapeHtml(skill.key || "")}" data-enabled="${skill.enabled ? "true" : "false"}">${skill.enabled ? "Disable" : "Enable"}</button>`;
+    const diagnostic = skill.diagnostic ? `<p class="skill-diagnostic">${escapeHtml(skill.diagnostic)}</p>` : "";
+    return `<li class="skill-row status-${escapeHtml(skill.status || "")}${selected}"><button type="button" class="skill-open" data-skill="${escapeHtml(skill.key || "")}"><span class="skill-title"><strong>${escapeHtml(skill.name || "")}</strong>${skillBadge(skill.source)}<span class="skill-status">${escapeHtml(skill.status || "")}</span></span><span class="sub">${escapeHtml(skill.description || "")}</span></button>${diagnostic}${toggle}</li>`;
+  }).join("") : `<li class="sub">No Skills found. Import one, or add a skills folder.</li>`;
+  const detail = view && view.detail && view.detail.key === selectedSkill ? view.detail : null;
+  const entry = skills.find((skill) => skill.key === selectedSkill);
+  if (!entry) {
+    detailNode.hidden = true;
+    detailNode.innerHTML = "";
+  } else {
+    detailNode.hidden = false;
+    const files = (detail && Array.isArray(detail.files) ? detail.files : entry.files || []).filter((file) => file !== "SKILL.md");
+    const content = detail && typeof detail.content === "string" ? `<pre class="skill-markdown">${escapeHtml(detail.content)}</pre>${detail.truncated ? "<p class=\"sub\">Truncated.</p>" : ""}` : `<p class="sub">${escapeHtml(detail && detail.message ? detail.message : "Loading SKILL.md…")}</p>`;
+    const readOnly = entry.source === "built_in" ? "<p class=\"sub\">Built-in Skills are read-only and update with BIM-IT releases.</p>" : "";
+    detailNode.innerHTML = `<h3>${escapeHtml(entry.name || "")} ${skillBadge(entry.source)}</h3><p>${escapeHtml(entry.description || "")}</p><dl class="skill-meta"><dt>Source</dt><dd>${escapeHtml(entry.sourceLabel || "")}</dd><dt>Status</dt><dd>${escapeHtml(entry.status || "")}</dd><dt>SHA-256</dt><dd class="hash">${escapeHtml(entry.sha256 || "not available")}</dd><dt>Reference files</dt><dd>${files.length ? files.map((file) => escapeHtml(file)).join("<br />") : "None"}</dd></dl>${readOnly}${content}`;
+  }
+  list.querySelectorAll("[data-skill]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectedSkill = button.dataset.skill;
+      post({ type: "skills", action: "detail", text: selectedSkill });
+    });
+  });
+  list.querySelectorAll("[data-toggle-skill]").forEach((button) => {
+    button.addEventListener("click", () => post({ type: "skills", action: button.dataset.enabled === "true" ? "disable" : "enable", text: button.dataset.toggleSkill }));
+  });
+  sourcesNode.querySelectorAll("[data-remove-source]").forEach((button) => {
+    button.addEventListener("click", () => post({ type: "skills", action: "removeSource", text: button.dataset.removeSource }));
+  });
 }
 
 let selectedRoom = 0;
@@ -330,6 +412,12 @@ document.getElementById("new-chat").addEventListener("click", () => post({ type:
 retry.addEventListener("click", () => post({ type: "retryConnection" }));
 document.getElementById("diagnostics").addEventListener("click", () => post({ type: "openDiagnostics" }));
 document.getElementById("attach").addEventListener("click", () => post({ type: "attachDocument" }));
+document.getElementById("settings-open").addEventListener("click", openSettings);
+document.getElementById("settings-close").addEventListener("click", closeSettings);
+document.getElementById("skills-reload").addEventListener("click", () => post({ type: "skills", action: "reload" }));
+document.getElementById("skills-import").addEventListener("click", () => post({ type: "skills", action: "import" }));
+document.getElementById("skills-add-source").addEventListener("click", () => post({ type: "skills", action: "addSource" }));
+document.getElementById("skills-open-custom").addEventListener("click", () => post({ type: "skills", action: "openCustomFolder" }));
 document.getElementById("confirm-axes").addEventListener("click", () => post({ type: "confirmProjectAxesPreview" }));
 document.getElementById("review-placements").addEventListener("click", () => post({ type: "reviewInRevit" }));
 document.getElementById("apply-placements").addEventListener("click", () => post({ type: "applyApprovedPlacements" }));
