@@ -603,6 +603,7 @@ public sealed class SemanticPatternTests
         Assert.Contains(guidance, GitHubCopilotSessionBlueprint.RoomPatternToolDescription, StringComparison.Ordinal);
         Assert.Contains("explicitly requested by the user", guidance, StringComparison.Ordinal);
         Assert.Contains("Never invent a relationship unsupported by either the image or the user.", guidance, StringComparison.Ordinal);
+        Assert.Contains("The user's explicit scope overrides the drawing", guidance, StringComparison.Ordinal);
         Assert.Contains("does not require a source-page entrance point", guidance, StringComparison.Ordinal);
         Assert.Contains("A pair is an arrangement, not an anchor.", guidance, StringComparison.Ordinal);
         Assert.Contains("two receptacles drawn on one wall → receptacle, boundary, source_correspondence, count 2, symmetric_pair", guidance, StringComparison.Ordinal);

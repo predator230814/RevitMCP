@@ -16,6 +16,11 @@ public enum PreviewRoomPatternItemStatus
     NoWall,
     UnsupportedFace,
     Occupied,
+    LinkedRoomUnavailable,
+    LinkedBoundaryUnsupported,
+    LinkedHostRequiresWorkPlaneBased,
+    HostLevelNotFound,
+    HostLevelAmbiguous,
 }
 
 public sealed class PreviewRoomPatternPlacementsContext

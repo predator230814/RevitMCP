@@ -31,6 +31,8 @@ internal interface IAssistantLink
 
     Task<AssistantIpcMessage?> PreparePatternPreviewAsync(string configuration, CancellationToken cancellationToken);
 
+    Task<AssistantIpcMessage?> SearchPatternTypesAsync(string role, string query, CancellationToken cancellationToken);
+
     Task<AssistantIpcMessage?> ReviewPatternInRevitAsync(CancellationToken cancellationToken);
 
     Task<AssistantIpcMessage?> ApplyApprovedPatternAsync(CancellationToken cancellationToken);
@@ -215,6 +217,27 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
             null,
             false,
             Text: configuration), cancellationToken);
+    }
+
+    public Task<AssistantIpcMessage?> SearchPatternTypesAsync(string role, string query, CancellationToken cancellationToken)
+    {
+        return ExchangeAsync(new AssistantIpcMessage(
+            AssistantIpcKind.SearchPatternTypes,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Text: RoomPatternTypeSearch.SerializeRequest(role, query)), cancellationToken);
     }
 
     public Task<AssistantIpcMessage?> ReviewPatternInRevitAsync(CancellationToken cancellationToken)

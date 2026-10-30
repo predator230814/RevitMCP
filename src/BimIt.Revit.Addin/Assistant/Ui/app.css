@@ -334,6 +334,10 @@ textarea {
 .roles select, .roles input { font: inherit; box-sizing: border-box; max-width: 100%; min-width: 0; }
 .roles select { width: 100%; }
 .roles input { width: 8rem; }
+.type-search { display: flex; gap: 8px; align-items: end; min-width: 0; }
+.type-search label { flex: 1; }
+.roles .type-search input { width: 100%; }
+.pattern .sub.search-error { color: var(--error); }
 .understood { margin: 8px 0 12px; }
 .understood ul { margin: 4px 0 0; padding-left: 18px; }
 

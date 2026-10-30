@@ -36,6 +36,7 @@ internal sealed class AssistantShell
     private AssistantAttachmentChip? _attachment;
     private JsonElement? _patternReview;
     private bool _patternPrepared;
+    private readonly Dictionary<string, PatternTypeSearchState> _patternTypes = new(StringComparer.Ordinal);
     private CancellationTokenSource? _providerPoll;
     private Task _sequence = Task.CompletedTask;
 
@@ -116,6 +117,7 @@ internal sealed class AssistantShell
                 _conversation.Reset();
                 _attachment = null;
                 _patternReview = null;
+                _patternTypes.Clear();
                 _patternPrepared = false;
                 PostSnapshot();
                 Sequence(ResetProviderAsync);
@@ -143,6 +145,9 @@ internal sealed class AssistantShell
                 break;
             case AssistantPageIntent.PreparePatternPreview:
                 Sequence(() => PreparePatternPreviewAsync(parsed.Text!));
+                break;
+            case AssistantPageIntent.SearchPatternTypes:
+                Sequence(() => SearchPatternTypesAsync(parsed.Action!, parsed.Text!));
                 break;
             case AssistantPageIntent.ReviewPatternInRevit:
                 Sequence(() => PatternActionAsync(
@@ -416,6 +421,7 @@ internal sealed class AssistantShell
             if (result.PatternReview is not null && RoomPatternReview.TryParse(result.PatternReview, out var review))
             {
                 _patternReview = review;
+                _patternTypes.Clear();
                 _patternPrepared = false;
             }
 
@@ -572,6 +578,56 @@ internal sealed class AssistantShell
             prepared: true).ConfigureAwait(false);
     }
 
+    private async Task SearchPatternTypesAsync(string role, string query)
+    {
+        if (_busy || _patternReview is not JsonElement review)
+        {
+            return;
+        }
+
+        var generation = review.TryGetProperty("generation", out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
+        _busy = true;
+        _patternTypes[role] = new PatternTypeSearchState(null, "Searching loaded types…", false);
+        PostSnapshot();
+        try
+        {
+            if (_mcpState != "ready")
+            {
+                _patternTypes[role] = new PatternTypeSearchState(null, _statusError ?? "The Assistant is not ready.", true);
+                return;
+            }
+
+            using var timeout = new CancellationTokenSource(_timeouts.Workflow);
+            var result = await _link.SearchPatternTypesAsync(role, query, timeout.Token).ConfigureAwait(false);
+            if (result?.Kind != AssistantIpcKind.PatternTypesResult)
+            {
+                _patternTypes[role] = new PatternTypeSearchState(null, "The loaded types could not be searched.", true);
+                return;
+            }
+
+            if (result.IsError || !RoomPatternTypeSearch.TryParseResult(result.Text, out var found))
+            {
+                _patternTypes[role] = new PatternTypeSearchState(null, result.Body ?? "The loaded types could not be searched.", true);
+                return;
+            }
+
+            var sameGeneration = found.TryGetProperty("generation", out var foundGeneration) && foundGeneration.GetString() == generation;
+            var sameRole = found.TryGetProperty("role", out var foundRole) && foundRole.GetString() == role;
+            _patternTypes[role] = sameGeneration && sameRole
+                ? new PatternTypeSearchState(found, result.Body ?? "", false)
+                : new PatternTypeSearchState(null, "The pattern changed. Search again.", true);
+        }
+        catch (Exception)
+        {
+            _patternTypes[role] = new PatternTypeSearchState(null, "The loaded types could not be searched.", true);
+        }
+        finally
+        {
+            _busy = false;
+            PostSnapshot();
+        }
+    }
+
     private async Task PatternActionAsync(
         string title,
         string failure,
@@ -697,6 +753,7 @@ internal sealed class AssistantShell
             {
                 _attachment = null;
                 _patternReview = null;
+                _patternTypes.Clear();
                 _patternPrepared = false;
                 return;
             }
@@ -707,6 +764,7 @@ internal sealed class AssistantShell
             {
                 _attachment = null;
                 _patternReview = null;
+                _patternTypes.Clear();
                 _patternPrepared = false;
             }
             else
@@ -739,6 +797,7 @@ internal sealed class AssistantShell
                 result.DisplayName,
                 AssistantAttachmentSummary.Describe(result.DocumentKind, result.PageCount, result.VisualCount, result.Truncated == true));
             _patternReview = null;
+            _patternTypes.Clear();
             _patternPrepared = false;
             return;
         }
@@ -761,6 +820,7 @@ internal sealed class AssistantShell
         _conversation.Reset();
         _attachment = null;
         _patternReview = null;
+        _patternTypes.Clear();
         _patternPrepared = false;
         PostSnapshot();
         if (_mcpState != "ready")
@@ -947,6 +1007,18 @@ internal sealed class AssistantShell
         {
             snapshot["patternReview"] = review;
             snapshot["patternPrepared"] = _patternPrepared;
+            if (_patternTypes.Count > 0)
+            {
+                snapshot["patternTypes"] = _patternTypes.ToDictionary(
+                    pair => pair.Key,
+                    pair => (object)new Dictionary<string, object?>
+                    {
+                        ["message"] = pair.Value.Message,
+                        ["isError"] = pair.Value.IsError,
+                        ["result"] = pair.Value.Result,
+                    },
+                    StringComparer.Ordinal);
+            }
         }
 
         return JsonSerializer.Serialize(snapshot);
@@ -1178,3 +1250,5 @@ internal sealed class ProcessAssistantFactory : IAssistantProcessFactory
         public void Dispose() => process.Dispose();
     }
 }
+
+internal sealed record PatternTypeSearchState(System.Text.Json.JsonElement? Result, string Message, bool IsError);

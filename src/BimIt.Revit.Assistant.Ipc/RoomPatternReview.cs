@@ -118,7 +118,7 @@ public static class RoomPatternReview
         return review.Rooms.All(IsRoom) && (review.Roles is null || review.Roles.All(IsRoleCard)) && IsUnderstood(review.Understood);
     }
 
-    private static bool IsGeneration(string value)
+    internal static bool IsGeneration(string value)
     {
         return value.Length == 32 && value.All(static character => char.IsAsciiHexDigit(character));
     }
@@ -143,7 +143,7 @@ public static class RoomPatternReview
         return card.SuggestedOption is null || card.Options.Any(option => option.Key == card.SuggestedOption);
     }
 
-    private static bool IsOption(TypeOption option)
+    internal static bool IsOption(TypeOption option)
     {
         return IsOptionKey(option.Key)
             && IsLabel(option.FamilyName)
@@ -214,7 +214,7 @@ public static class RoomPatternReview
             or "target_reasoning_unavailable";
     }
 
-    private static bool IsRole(string? role)
+    internal static bool IsRole(string? role)
     {
         return role is "receptacle" or "switch" or "luminaire" or "smoke_detector" or "thermostat" or "data" or "other";
     }

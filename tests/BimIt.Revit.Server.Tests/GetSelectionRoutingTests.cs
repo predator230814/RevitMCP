@@ -12,7 +12,7 @@ public sealed class GetSelectionRoutingTests
     {
         Assert.False(InstanceTargetResolver.IsGetSelectionEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsGetSelectionEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsGetSelectionEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 21)));
+        Assert.False(InstanceTargetResolver.IsGetSelectionEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 22)));
     }
 
     [Fact]

@@ -293,7 +293,13 @@ internal sealed class RoomPatternProposalTool
             grounding.Review.ImageBase64 = image;
         }
 
-        var catalog = await PatternTypeCatalog.LoadAsync(_session, _instanceId, grounding.DocumentId, cancellationToken).ConfigureAwait(false);
+        var catalog = await PatternTypeCatalog.LoadAsync(
+                _session,
+                _instanceId,
+                grounding.DocumentId,
+                pattern.Devices.Select(device => device.Role),
+                cancellationToken)
+            .ConfigureAwait(false);
         var generation = PatternGenerationBuilder.Apply(grounding, pattern, catalog, _instanceId, attachment.ArtifactId, pageNumber);
         var reviewJson = RoomPatternReview.Serialize(grounding.Review);
         _store.Replace(

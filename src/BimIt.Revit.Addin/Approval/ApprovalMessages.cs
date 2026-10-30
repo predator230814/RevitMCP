@@ -184,6 +184,9 @@ internal static class ApprovalReviewJson
                 ["roomCount"] = pattern.RoomCount,
                 ["deviceCount"] = pattern.DeviceCount,
                 ["roomLabels"] = pattern.RoomLabels,
+                ["linkedRoomCount"] = pattern.LinkedRoomCount,
+                ["placementLabels"] = pattern.PlacementLabels,
+                ["linkLabels"] = pattern.LinkLabels,
                 ["lines"] = pattern.Lines,
             }, Options);
         }

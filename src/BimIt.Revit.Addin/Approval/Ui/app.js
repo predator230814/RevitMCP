@@ -103,6 +103,19 @@
     article.appendChild(heading);
     article.appendChild(textLine("Targets", String(message.roomCount || 0) + " rooms"));
     article.appendChild(textLine("Devices", String(message.deviceCount || 0)));
+    if (message.linkedRoomCount) {
+      article.appendChild(textLine("Linked rooms", String(message.linkedRoomCount) + " linked target rooms"));
+    }
+
+    var placements = message.placementLabels || [];
+    for (var placement = 0; placement < placements.length; placement++) {
+      article.appendChild(textLine("Placement", String(placements[placement])));
+    }
+
+    var links = message.linkLabels || [];
+    if (links.length) {
+      article.appendChild(textLine("Architecture link", links.join(", ")));
+    }
     var labels = message.roomLabels || [];
     if (labels.length) {
       article.appendChild(textLine("Rooms", labels.join(", ")));

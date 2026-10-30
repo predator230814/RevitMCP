@@ -22,7 +22,7 @@ public sealed class GetParameterValuesRoutingTests
         Assert.True(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 21)));
+        Assert.False(InstanceTargetResolver.IsGetParameterValuesEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 22)));
     }
 
     [Fact]
@@ -39,7 +39,7 @@ public sealed class GetParameterValuesRoutingTests
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 21)));
+        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 22)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
@@ -47,7 +47,7 @@ public sealed class GetParameterValuesRoutingTests
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 21)));
+        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 22)));
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
@@ -55,7 +55,7 @@ public sealed class GetParameterValuesRoutingTests
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 21)));
+        Assert.False(InstanceTargetResolver.IsGetElementsEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 22)));
         Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v7", "pipe-v7", protocolVersion: 7)));
         Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v8", "pipe-v8", protocolVersion: 8)));
         Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v9", "pipe-v9", protocolVersion: 9)));
@@ -63,7 +63,7 @@ public sealed class GetParameterValuesRoutingTests
         Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 21)));
+        Assert.False(InstanceTargetResolver.IsDescribeParametersEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 22)));
     }
 
     [Fact]
@@ -164,7 +164,7 @@ public sealed class GetParameterValuesRoutingTests
     public async Task Explicit_v10_id_returns_unavailable()
     {
         var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 21));
+        discovery.Instances.Add(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 22));
         var factory = UnusedFactory();
         var outcome = await CreateService(discovery, factory).ExecuteAsync("v10", TestSupport.CreateGetParameterValuesRequest(), CancellationToken.None);
 

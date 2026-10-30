@@ -402,9 +402,31 @@ public sealed class NamedPipeBridgeHost : IAsyncDisposable
             && getRoomLayouts is not null
             && getMepDeviceTypes is not null
             && previewRoomPatternPlacements is not null
-            && readSpatialRooms is not null)
+            && readSpatialRooms is not null
+            && previewRoomPatternPlacements.SupportsLinkedRooms)
         {
             versions = BridgeProtocol.SupportedVersions;
+        }
+        else if (capability is not null
+            && query is not null
+            && getElements is not null
+            && describeParameters is not null
+            && getParameterValues is not null
+            && getMepTopology is not null
+            && previewParameterUpdates is not null
+            && requestParameterUpdateReview is not null
+            && applyParameterUpdates is not null
+            && getWarnings is not null
+            && getSelection is not null
+            && previewMepDevicePlacements is not null
+            && requestMepDevicePlacementReview is not null
+            && applyMepDevicePlacements is not null
+            && getRoomLayouts is not null
+            && getMepDeviceTypes is not null
+            && previewRoomPatternPlacements is not null
+            && readSpatialRooms is not null)
+        {
+            versions = BridgeProtocol.ReadSpatialRoomsVersions;
         }
         else if (capability is not null
             && query is not null

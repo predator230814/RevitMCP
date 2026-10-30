@@ -2,6 +2,7 @@ using Autodesk.Revit.DB;
 using Autodesk.Revit.DB.Architecture;
 using BimIt.Revit.Addin.Identity;
 using BimIt.Revit.Addin.Intents;
+using BimIt.Revit.Contracts;
 
 namespace BimIt.Revit.Addin.Capabilities;
 
@@ -31,8 +32,32 @@ internal static class PatternRevitFacts
             }
 
             var rooms = new List<PatternRoomFacts>();
+            var failures = new Dictionary<string, PreviewRoomPatternItemStatus>(StringComparer.Ordinal);
+            IReadOnlyList<PatternHostLevel>? hostLevels = null;
             foreach (var roomRef in roomRefs.Distinct(StringComparer.Ordinal))
             {
+                if (SpatialRoomRefCodec.IsLink(roomRef))
+                {
+                    if (!SpatialRoomRefCodec.TryLink(roomRef, out var linkRef, out var linkedRoomRef))
+                    {
+                        failures[roomRef] = PreviewRoomPatternItemStatus.LinkedRoomUnavailable;
+                        continue;
+                    }
+
+                    hostLevels ??= RevitPatternLinkedGeometry.HostLevels(document);
+                    var snapshot = RevitPatternLinkedGeometry.ReadSnapshot(document, linkRef, linkedRoomRef);
+                    if (PatternLinkedRoomFactsBuilder.TryBuild(roomRef, linkRef, linkedRoomRef, snapshot, hostLevels, out var linked, out var failure))
+                    {
+                        rooms.Add(linked);
+                    }
+                    else
+                    {
+                        failures[roomRef] = failure;
+                    }
+
+                    continue;
+                }
+
                 if (TryRoom(document, roomRef, out var room))
                 {
                     rooms.Add(room);
@@ -54,6 +79,7 @@ internal static class PatternRevitFacts
                 DocumentMatches = true,
                 OccupancyReadSucceeded = occupancy,
                 Rooms = rooms,
+                RoomFailures = failures,
                 Types = types,
                 Occupants = occupants,
             };
@@ -229,14 +255,13 @@ internal static class PatternRevitFacts
                     }
 
                     if (element is not FamilyInstance instance
-                        || instance.Location is not LocationPoint location
-                        || location.Point is null
+                        || !RevitMountingPoint.TryRead(document, instance, out var point)
                         || string.IsNullOrEmpty(symbol.UniqueId))
                     {
                         continue;
                     }
 
-                    found.Add(new PatternOccupant(symbol.UniqueId, new MepPoint(location.Point.X, location.Point.Y, location.Point.Z)));
+                    found.Add(new PatternOccupant(symbol.UniqueId, point));
                 }
             }
             catch (Exception)

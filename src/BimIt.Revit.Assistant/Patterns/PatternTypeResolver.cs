@@ -168,3 +168,9 @@ internal sealed class LoadedProjectMepTypeResolver : IPatternTypeResolver
         return new string(chars);
     }
 }
+
+internal static class PatternTypeCompatibility
+{
+    public static bool LinkedBoundary(string? placementClassification)
+        => placementClassification is "work_plane_based" or "one_level_based";
+}

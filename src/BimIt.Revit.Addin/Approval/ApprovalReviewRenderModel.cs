@@ -40,13 +40,29 @@ internal sealed class ApprovalReviewRenderModel
 
 internal sealed class ApprovalPatternPlacementReviewModel
 {
-    public ApprovalPatternPlacementReviewModel(int roomCount, int deviceCount, IReadOnlyList<string> lines, IReadOnlyList<string> roomLabels)
+    public ApprovalPatternPlacementReviewModel(
+        int roomCount,
+        int deviceCount,
+        IReadOnlyList<string> lines,
+        IReadOnlyList<string> roomLabels,
+        int linkedRoomCount = 0,
+        IReadOnlyList<string>? placementLabels = null,
+        IReadOnlyList<string>? linkLabels = null)
     {
         RoomCount = roomCount;
         DeviceCount = deviceCount;
         Lines = lines;
         RoomLabels = roomLabels;
+        LinkedRoomCount = linkedRoomCount;
+        PlacementLabels = placementLabels ?? [];
+        LinkLabels = linkLabels ?? [];
     }
+
+    public int LinkedRoomCount { get; }
+
+    public IReadOnlyList<string> PlacementLabels { get; }
+
+    public IReadOnlyList<string> LinkLabels { get; }
 
     public int RoomCount { get; }
 
@@ -315,13 +331,46 @@ internal static class ApprovalReviewRenderer
             .Distinct(StringComparer.Ordinal)
             .Take(8)
             .ToArray();
+        var linkedRooms = intent.Rooms.Where(room => room.SourceKind == PatternRoomSourceKind.Link).ToArray();
+        var linkLabels = linkedRooms
+            .Select(room => room.Link?.LinkLabel)
+            .OfType<string>()
+            .Select(label => SpatialLinkLabel.Sanitize(label))
+            .Distinct(StringComparer.Ordinal)
+            .Take(4)
+            .ToArray();
+        var placements = intent.Items
+            .Select(item => PatternPlacementLabel(item.Strategy))
+            .Distinct(StringComparer.Ordinal)
+            .ToArray();
         model = new ApprovalReviewRenderModel(
             sessionRef,
             binding.CreatedAt,
             binding.ExpiresAt,
             Array.Empty<ApprovalReviewItemModel>(),
-            patternPlacements: new ApprovalPatternPlacementReviewModel(intent.Rooms.Count, intent.Items.Count, lines, labels));
+            patternPlacements: new ApprovalPatternPlacementReviewModel(
+                intent.Rooms.Count,
+                intent.Items.Count,
+                lines,
+                labels,
+                linkedRooms.Length,
+                placements,
+                linkLabels));
         return true;
+    }
+
+    internal static string PatternPlacementLabel(PatternPlacementStrategyKind strategy)
+    {
+        return strategy switch
+        {
+            PatternPlacementStrategyKind.InteriorLevel => "Level-based interior placement",
+            PatternPlacementStrategyKind.InteriorLevelWorkPlane => "WorkPlaneBased level-plane placement",
+            PatternPlacementStrategyKind.BoundaryWallHosted => "Wall-hosted placement",
+            PatternPlacementStrategyKind.BoundaryWallFace => "WorkPlaneBased wall-face placement",
+            PatternPlacementStrategyKind.BoundaryLinkedWallFace => "WorkPlaneBased linked wall-face placement",
+            PatternPlacementStrategyKind.BoundaryLevel => "Level-based unhosted wall placement",
+            _ => "Placement",
+        };
     }
 
     private static int Millimetres(double feet)

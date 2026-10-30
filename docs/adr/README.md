@@ -24,6 +24,7 @@ Accepted ADRs:
 - [ADR-0018](ADR-0018-pattern-family-resolution-and-controlled-application.md) — Pattern family resolution and controlled application. Accepted. Resolves loaded family types, previews pattern placements, and applies them through the existing approval.
 - [ADR-0019](ADR-0019-linked-spatial-context-and-semantic-adaptation.md) — Linked spatial context and semantic pattern adaptation. Accepted. Reads host and linked rooms, keeps inner boundary loops, and adapts a stated pattern in review. No new write.
 - [ADR-0020](ADR-0020-pattern-specification-v2.md) — Pattern specification v2. Accepted. Separates role, placement, anchor, count, and arrangement; removes `paired_symmetric`; adds per-room adaptation status. Ends at Pattern Review. No new write.
+- [ADR-0021](ADR-0021-controlled-pattern-application-against-linked-architecture.md) — Controlled pattern application against linked architecture. Proposed. Places a resolved linked-room pattern in the MEP host through the existing approval and apply path. Linked wall devices host on a converted link face. Bridge protocol 21.
 
 RevitMCP was renamed to BIM-IT Revit MCP. ADR-0001 through ADR-0011 keep the name used when they were accepted. See ADR-0012.
 

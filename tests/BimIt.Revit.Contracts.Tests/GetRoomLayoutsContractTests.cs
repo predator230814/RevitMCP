@@ -91,16 +91,16 @@ public sealed class GetRoomLayoutsContractTests
     public void Protocol_17_adds_room_layouts_and_preserves_earlier_capabilities()
     {
         Assert.Equal(17, BridgeProtocol.GetRoomLayoutsVersion);
-        Assert.Equal(20, BridgeProtocol.CurrentVersion);
+        Assert.Equal(21, BridgeProtocol.CurrentVersion);
         Assert.True(BridgeProtocol.SupportsGetRoomLayouts(17));
         Assert.True(BridgeProtocol.SupportsGetRoomLayouts(18));
         Assert.True(BridgeProtocol.SupportsGetRoomLayouts(19));
         Assert.False(BridgeProtocol.SupportsGetRoomLayouts(16));
-        Assert.True(BridgeProtocol.SupportsGetRoomLayouts(20)); Assert.False(BridgeProtocol.SupportsGetRoomLayouts(21));
+        Assert.True(BridgeProtocol.SupportsGetRoomLayouts(20)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(21)); Assert.False(BridgeProtocol.SupportsGetRoomLayouts(22));
         Assert.True(BridgeProtocol.SupportsApplyMepDevicePlacements(17));
         Assert.True(BridgeProtocol.SupportsGetSelection(17));
         Assert.True(BridgeProtocol.SupportsGetContext(18));
-        Assert.True(BridgeProtocol.SupportsGetContext(20)); Assert.False(BridgeProtocol.SupportsGetContext(21));
-        Assert.Equal(20, BridgeProtocol.SupportedVersions[0]);
+        Assert.True(BridgeProtocol.SupportsGetContext(20)); Assert.True(BridgeProtocol.SupportsGetContext(21)); Assert.False(BridgeProtocol.SupportsGetContext(22));
+        Assert.Equal(21, BridgeProtocol.SupportedVersions[0]);
     }
 }

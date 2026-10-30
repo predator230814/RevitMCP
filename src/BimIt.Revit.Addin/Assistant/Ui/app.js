@@ -44,6 +44,7 @@ function render(snapshot) {
     timeline.insertAdjacentHTML("beforeend", `<li class="msg"><h3>Working</h3><p>Waiting for the Assistant.</p></li>`);
   }
   renderAttachment(snapshot.attachment);
+  patternTypes = snapshot.patternTypes && typeof snapshot.patternTypes === "object" ? snapshot.patternTypes : {};
   renderPattern(snapshot.patternReview, snapshot.patternPrepared === true);
 }
 
@@ -60,6 +61,8 @@ function renderAttachment(attachment) {
 }
 
 let selectedRoom = 0;
+let patternTypes = {};
+const patternQueries = {};
 let patternState = { generation: "", selected: [], options: {}, heights: {}, dirty: true };
 
 function renderPattern(review, prepared) {
@@ -127,6 +130,18 @@ function renderPattern(review, prepared) {
       renderPattern(review, prepared);
     });
   });
+  node.querySelectorAll("[data-type-search]").forEach((form) => {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const role = form.dataset.typeSearch;
+      const input = form.querySelector("input");
+      const query = input ? input.value.trim() : "";
+      patternQueries[role] = query;
+      if (query) {
+        post({ type: "searchPatternTypes", action: role, text: query });
+      }
+    });
+  });
   node.querySelectorAll("[data-height]").forEach((input) => {
     input.addEventListener("change", () => {
       patternState.heights[input.dataset.height] = input.value;
@@ -154,7 +169,7 @@ function renderPattern(review, prepared) {
 
 function roomButton(room, index) {
   const incomplete = typeof room.adaptationStatus === "string" && room.adaptationStatus !== "resolved";
-  const rejected = room.band === "rejected" || room.source === "link" || incomplete;
+  const rejected = room.band === "rejected" || incomplete;
   const checked = patternState.selected.includes(index);
   return `<div class="room-row ${index === selectedRoom ? "selected" : ""}"><label><input type="checkbox" data-target="${index}" ${rejected ? "disabled" : ""} ${checked && !rejected ? "checked" : ""} /> ${escapeHtml(room.band || "rejected")}</label><button type="button" data-room="${index}"><strong>${escapeHtml(room.label || "Room")}</strong><span>${escapeHtml(roomBand(room))}</span></button></div>`;
 }
@@ -164,21 +179,67 @@ function roleConfig(review) {
   if (!roles.length) {
     return "<p class=\"sub\">No loaded type choices are available yet.</p>";
   }
+  const linkedWalls = linkedBoundaryRoles(review);
   return `<div class="roles">${roles.map((role) => {
-    const options = Array.isArray(role.options) ? role.options : [];
+    const options = roleOptions(role);
+    const search = patternTypes[role.role] || null;
     const selected = patternState.options[role.role] || "";
     const height = patternState.heights[role.role] ?? "";
-    const choices = [`<option value="">Choose a loaded type</option>`].concat(options.map((option) => `<option value="${escapeHtml(option.key || "")}" ${option.key === selected ? "selected" : ""}>${escapeHtml(option.familyName || "")} / ${escapeHtml(option.typeName || "")} · ${escapeHtml(option.placementClassification || "")}</option>`));
-    return `<section><h3>${escapeHtml(role.role || "")}</h3><p class="sub">${role.familyHint ? "Hint: " + escapeHtml(role.familyHint) : "No family hint"}${role.ambiguous ? " · choose one" : ""}</p><label>Loaded type <select data-option="${escapeHtml(role.role || "")}">${choices.join("")}</select></label><label>Mounting height (mm) <input data-height="${escapeHtml(role.role || "")}" type="number" min="0" max="6000" step="1" value="${escapeHtml(height)}" /></label></section>`;
+    const linked = linkedWalls.has(role.role);
+    const omitted = selected === "omit";
+    const choices = [`<option value="">Choose a loaded type</option>`, `<option value="omit" ${omitted ? "selected" : ""}>Omit this role (place nothing)</option>`].concat(options.map((option) => {
+      const blocked = linked && option.placementClassification === "one_level_based_hosted";
+      return `<option value="${escapeHtml(option.key || "")}" ${option.key === selected ? "selected" : ""} ${blocked ? "disabled" : ""}>${escapeHtml(option.familyName || "")} / ${escapeHtml(option.typeName || "")} · ${escapeHtml(option.placementClassification || "")}${blocked ? " · host walls only" : ""}</option>`;
+    }));
+    const chosen = options.find((option) => option.key === selected);
+    const warning = linked && chosen && chosen.placementClassification === "one_level_based_hosted" ? " · linked walls need a work-plane-based or level-based type" : "";
+    return `<section><h3>${escapeHtml(role.role || "")}</h3><p class="sub">${role.familyHint ? "Hint: " + escapeHtml(role.familyHint) : "No family hint"}${role.ambiguous ? " · choose one" : ""}${escapeHtml(warning)}</p><form class="type-search" data-type-search="${escapeHtml(role.role || "")}"><label>Search loaded types <input type="search" maxlength="80" placeholder="Family or type name" value="${escapeHtml(patternQueries[role.role] || "")}" /></label><button type="submit">Search</button></form>${search && search.message ? `<p class="sub${search.isError ? " search-error" : ""}">${escapeHtml(search.message)}</p>` : ""}<label>Loaded type <select data-option="${escapeHtml(role.role || "")}">${choices.join("")}</select></label><label>Mounting height (mm) <input data-height="${escapeHtml(role.role || "")}" type="number" min="0" max="6000" step="1" value="${omitted ? "" : escapeHtml(height)}" ${omitted ? "disabled" : ""} /></label></section>`;
   }).join("")}</div>`;
+}
+
+function roleOptions(role) {
+  const merged = [];
+  const seen = new Set();
+  const add = (option) => {
+    if (option && typeof option.key === "string" && !seen.has(option.key)) {
+      seen.add(option.key);
+      merged.push(option);
+    }
+  };
+  (Array.isArray(role.options) ? role.options : []).forEach(add);
+  const search = patternTypes[role.role];
+  const found = search && search.result && Array.isArray(search.result.options) ? search.result.options : [];
+  found.forEach(add);
+  return merged;
+}
+
+function linkedBoundaryRoles(review) {
+  const rooms = Array.isArray(review.rooms) ? review.rooms : [];
+  const roles = new Set();
+  patternState.selected.forEach((index) => {
+    const room = rooms[index];
+    if (!room || room.source !== "link" || !Array.isArray(room.devices)) {
+      return;
+    }
+    room.devices.forEach((device) => {
+      if (device && device.placement === "boundary" && device.role) {
+        roles.add(device.role);
+      }
+    });
+  });
+  return roles;
 }
 
 function patternConfiguration() {
   const roles = (patternState.roleNames || []).map((role) => {
     const height = patternState.heights[role];
+    const option = patternState.options[role] || "";
+    if (option === "omit") {
+      return { role, option };
+    }
     return {
       role,
-      option: patternState.options[role] || "",
+      option,
       height_mm: height === undefined || height === "" ? null : Number(height)
     };
   });
