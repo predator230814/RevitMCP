@@ -192,6 +192,9 @@ internal static partial class AssistantReadToolPolicy
 /// </summary>
 internal sealed class AssistantMcpReadFacade
 {
+    /// <summary>The largest Server result passed to the model in full. Above it the call returns result_too_large.</summary>
+    public const int MaxResultCharacters = 120_000;
+
     private readonly IAssistantToolSession _session;
     private readonly string _instanceId;
     private readonly Dictionary<string, AssistantReadTool> _tools = new(StringComparer.Ordinal);
@@ -314,10 +317,19 @@ internal sealed class AssistantMcpReadFacade
             return Fail("malformed", "The " + name + " result could not be read.");
         }
 
+        var raw = structured.GetRawText();
+        if (raw.Length > MaxResultCharacters)
+        {
+            // Never hand the model a silently partial result. Ask for a narrower call instead.
+            return Fail(
+                "result_too_large",
+                "The " + name + " result is too large to return in full (" + raw.Length + " characters). Call it again with a smaller limit or a narrower filter.");
+        }
+
         return new Dictionary<string, object?>
         {
             ["ok"] = true,
-            ["result"] = JsonNode.Parse(structured.GetRawText()),
+            ["result"] = JsonNode.Parse(raw),
         };
     }
 

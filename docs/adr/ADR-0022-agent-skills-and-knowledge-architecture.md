@@ -121,6 +121,7 @@ BIM-IT Assistant:     Skill → same MCP tool name → Assistant trusted read fa
 - Assistant-local tools stay: `bimit_propose_mep_device_placements`, `bimit_propose_room_pattern`, `bimit_read_skill`.
 - The invariant is no longer a fixed tool count. It is: all trusted generic MCP reads, plus the explicit Assistant-local untrusted tools, plus zero trusted write tools. The seven preview, review, and apply tools stay unreachable from the provider. The local controlled-write orchestration is unchanged.
 - Used Tools in the chat show generic reads by their MCP names, plus "Read skill".
+- A read result reaches the model whole or not at all. The Copilot adapter disables the runtime's large-output temp-file spill, which the model cannot read without file tools. The facade returns `result_too_large` above 120,000 characters so the model narrows the call.
 
 This amendment partially supersedes ADR-0014 for model-facing read exposure only. ADR-0014 still holds for provider neutrality, the Assistant-owned MCP client, exact Revit instance binding, write isolation, and the approval boundary. The provider is still not connected to the Server.
 

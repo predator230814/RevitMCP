@@ -76,7 +76,9 @@ Run by the product owner on 2026-10-30 against Release outputs from `9a7e38d`, R
 
 Settings → Skills: Disable, Enable, and Reload each worked and showed their message. Undo was empty after both prompts. No mutation.
 
-The tool-surface mismatch is fixed: the Assistant followed the unchanged Skill to `revit_read_spatial_rooms`. The remaining failure is different. Claude Code received the full result for six studios (about 10,000 characters) and listed all six. In the Assistant, the GitHub Copilot runtime applied its large tool-output handling and the model did not see the whole result. This is a provider-side result-size limit, not a missing Revit capability. The SDK 1.0.21 public custom-tool result does not expose a documented switch for it. It was not worked around during the retest.
+The tool-surface mismatch is fixed: the Assistant followed the unchanged Skill to `revit_read_spatial_rooms`. The remaining failure is different. Claude Code received the full result for six studios (about 10,000 characters) and listed all six. In the Assistant, the GitHub Copilot runtime applied its large tool-output handling and the model did not see the whole result. This is a provider-side result-size limit, not a missing Revit capability. It was not worked around during the retest.
+
+Cause and fix: `SessionConfigBase.LargeOutput` in SDK 1.0.21 writes a tool result above the runtime threshold to a temp file and gives the model only a reference. The Assistant session has no file tools, so the model saw a partial answer. The Copilot adapter now sets `LargeOutput = { Enabled = false }`. Results stay bounded by the Server, and the read facade refuses any result above 120,000 characters with `result_too_large` and a request to narrow the call, never a silent cut. No Server, Bridge, or add-in change. The linked-studio prompt must be retested against this build.
 
 ## Not covered
 

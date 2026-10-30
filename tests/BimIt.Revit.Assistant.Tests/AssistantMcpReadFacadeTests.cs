@@ -195,6 +195,38 @@ public sealed class AssistantMcpReadFacadeTests
     }
 
     [Fact]
+    public async Task A_ten_thousand_character_result_reaches_the_model_whole()
+    {
+        var rooms = string.Join(",", Enumerable.Range(0, 6).Select(index => "{\"name\":\"Studio " + index + "\",\"boundary\":\"" + new string('x', 1_700) + "\"}"));
+        var session = new ScriptedSession { Document = "doc-electrical", Result = "{\"items\":[" + rooms + "],\"truncated\":false}" };
+        var facade = Facade(session, ServerToolMetadata.Descriptors);
+
+        var result = await facade.InvokeAsync("revit_read_spatial_rooms", Args("""{"name_contains":"Studio"}"""), CancellationToken.None);
+
+        Assert.True((bool)result["ok"]!);
+        var items = ((System.Text.Json.Nodes.JsonNode)result["result"]!)["items"]!.AsArray();
+        Assert.Equal(6, items.Count);
+    }
+
+    [Fact]
+    public async Task An_oversized_result_is_refused_explicitly_not_cut()
+    {
+        var session = new ScriptedSession
+        {
+            Document = "doc-electrical",
+            Result = "{\"items\":[\"" + new string('x', AssistantMcpReadFacade.MaxResultCharacters) + "\"],\"truncated\":false}",
+        };
+        var facade = Facade(session, ServerToolMetadata.Descriptors);
+
+        var result = await facade.InvokeAsync("revit_read_spatial_rooms", Args("""{"limit":100}"""), CancellationToken.None);
+
+        Assert.False((bool)result["ok"]!);
+        Assert.Equal("result_too_large", result["code"]);
+        Assert.Contains("smaller limit", (string)result["message"]!, StringComparison.Ordinal);
+        Assert.False(result.ContainsKey("result"));
+    }
+
+    [Fact]
     public async Task A_tool_removed_from_the_server_is_not_exposed_and_cannot_be_called()
     {
         var withoutRooms = ServerToolMetadata.Descriptors.Where(tool => tool.Name != "revit_read_spatial_rooms").ToArray();
@@ -255,7 +287,11 @@ public sealed class AssistantMcpReadFacadeTests
                 new MepDevicePlacementProposalTool(session, InstanceId, new MepDevicePlacementProposalStore(), static () => null),
                 new RoomPatternProposalTool(session, InstanceId, new RoomPatternStore(), static () => null),
                 new BimItSkillTool(() => null)).ToList();
-            GitHubCopilotSessionBlueprint.CreateSessionConfig(directory, tools);
+            var config = GitHubCopilotSessionBlueprint.CreateSessionConfig(directory, tools);
+
+            // The model has no file tools, so a spilled temp-file reference would leave it with a partial answer.
+            Assert.NotNull(config.LargeOutput);
+            Assert.False(config.LargeOutput!.Enabled);
 
             var forged = AIFunctionFactory.Create(() => "x", "revit_apply_parameter_updates");
             Assert.Throws<ArgumentException>(() => GitHubCopilotSessionBlueprint.CreateSessionConfig(directory, [.. tools, forged]));
@@ -319,7 +355,9 @@ public sealed class AssistantMcpReadFacadeTests
                 return Task.FromResult(new AssistantToolCall(true, code, message, null));
             }
 
-            return Task.FromResult(new AssistantToolCall(false, null, null, Json("{\"items\":[],\"truncated\":false}")));
+            return Task.FromResult(new AssistantToolCall(false, null, null, Json(Result)));
         }
+
+        public string Result { get; set; } = "{\"items\":[],\"truncated\":false}";
     }
 }

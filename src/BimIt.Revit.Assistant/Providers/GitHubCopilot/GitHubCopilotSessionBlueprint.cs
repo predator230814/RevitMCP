@@ -146,6 +146,10 @@ internal static class GitHubCopilotSessionBlueprint
                 Content = SystemPrompt,
             },
             OnPermissionRequest = (request, invocation) => Decide(request, exposed),
+            // The runtime would spill a large tool result to a temp file and hand the model only a reference. This
+            // session has no file tools, so the model would see a partial answer. BIM-IT results are bounded instead:
+            // the read facade returns result_too_large above AssistantMcpReadFacade.MaxResultCharacters.
+            LargeOutput = new LargeToolOutputConfig { Enabled = false },
 #pragma warning disable GHCP001 // Empty mode keeps MCP Apps off. The property is experimental in SDK 1.0.21.
             EnableMcpApps = false,
 #pragma warning restore GHCP001
