@@ -2,7 +2,27 @@ using BimIt.Revit.Contracts;
 
 namespace BimIt.Revit.Addin.Intents;
 
-internal readonly record struct PatternWallHit(PatternWallFacts Wall, double InsideX, double InsideY);
+internal readonly record struct PatternWallHit(
+    PatternWallFacts Wall,
+    double InsideX,
+    double InsideY,
+    PatternPlanPoint EdgeStart,
+    PatternPlanPoint EdgeEnd)
+{
+    public PatternPlanPoint OnEdge(double x, double y)
+    {
+        var dx = EdgeEnd.X - EdgeStart.X;
+        var dy = EdgeEnd.Y - EdgeStart.Y;
+        var lengthSquared = (dx * dx) + (dy * dy);
+        if (lengthSquared <= 1e-12)
+        {
+            return EdgeStart;
+        }
+
+        var t = (((x - EdgeStart.X) * dx) + ((y - EdgeStart.Y) * dy)) / lengthSquared;
+        return new PatternPlanPoint(EdgeStart.X + (t * dx), EdgeStart.Y + (t * dy));
+    }
+}
 
 internal static class PatternBoundaryResolver
 {
@@ -13,7 +33,8 @@ internal static class PatternBoundaryResolver
         IReadOnlyList<PatternWallFacts> walls,
         double toleranceFeet,
         out PatternWallHit hit,
-        out PreviewRoomPatternItemStatus failure)
+        out PreviewRoomPatternItemStatus failure,
+        bool wallBackedOnly = false)
     {
         hit = default;
         failure = PreviewRoomPatternItemStatus.NoWall;
@@ -23,6 +44,11 @@ internal static class PatternBoundaryResolver
         }
 
         var edges = NearEdges(x, y, loop, toleranceFeet);
+        if (wallBackedOnly)
+        {
+            edges = edges.Where(edge => walls.Any(wall => Overlaps(edge, wall, toleranceFeet))).ToList();
+        }
+
         if (edges.Count == 0)
         {
             failure = PreviewRoomPatternItemStatus.NoWall;
@@ -67,8 +93,41 @@ internal static class PatternBoundaryResolver
 
         var chosen = matches[0];
         var inside = InsideNormal(loop, chosen);
-        hit = new PatternWallHit(chosen, inside.X, inside.Y);
+        hit = new PatternWallHit(chosen, inside.X, inside.Y, edge.A, edge.B);
         return true;
+    }
+
+    public static bool Contains(
+        double x,
+        double y,
+        IReadOnlyList<PatternPlanPoint> outer,
+        IReadOnlyList<IReadOnlyList<PatternPlanPoint>> holes,
+        double toleranceFeet)
+    {
+        return Contains(x, y, outer, toleranceFeet) && holes.All(hole => !StrictlyInside(x, y, hole));
+    }
+
+    public static bool StrictlyInside(double x, double y, IReadOnlyList<PatternPlanPoint> loop)
+    {
+        if (loop.Count < 3)
+        {
+            return false;
+        }
+
+        var inside = false;
+        for (var index = 0; index < loop.Count; index++)
+        {
+            var a = loop[index];
+            var b = loop[(index + 1) % loop.Count];
+            var crosses = (a.Y > y) != (b.Y > y)
+                && x < ((b.X - a.X) * (y - a.Y) / ((b.Y - a.Y) == 0 ? 1e-12 : (b.Y - a.Y))) + a.X;
+            if (crosses)
+            {
+                inside = !inside;
+            }
+        }
+
+        return inside;
     }
 
     public static bool Contains(double x, double y, IReadOnlyList<PatternPlanPoint> loop, double toleranceFeet)

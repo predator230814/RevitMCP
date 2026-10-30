@@ -97,13 +97,13 @@ public sealed class GetSelectionBridgeTests
         Assert.True(BridgeProtocol.SupportsApplyMepDevicePlacements(17));
         Assert.True(BridgeProtocol.SupportsGetSelection(17));
         Assert.False(BridgeProtocol.SupportsGetRoomLayouts(16));
-        Assert.True(BridgeProtocol.SupportsGetSelection(20)); Assert.False(BridgeProtocol.SupportsGetSelection(21));
+        Assert.True(BridgeProtocol.SupportsGetSelection(20)); Assert.True(BridgeProtocol.SupportsGetSelection(21)); Assert.False(BridgeProtocol.SupportsGetSelection(22));
     }
 
     [Theory]
     [InlineData(1)]
     [InlineData(12)]
-    [InlineData(21)]
+    [InlineData(22)]
     public async Task Get_selection_is_rejected_outside_v13(int version)
     {
         var service = new FakeGetSelectionService();

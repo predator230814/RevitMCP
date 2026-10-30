@@ -29,8 +29,13 @@ public sealed class CapabilityInfrastructureTests
             }
             else if (name == "RevitPatternMepPlacementMutation.cs")
             {
-                Assert.Contains("new Transaction", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("new Transaction", text, StringComparison.Ordinal);
                 Assert.Contains("BIM-IT Apply Room Pattern", text, StringComparison.Ordinal);
+            }
+            else if (name == "RevitPatternPlacementSession.cs")
+            {
+                Assert.Equal(1, text.Split("new Transaction").Length - 1);
+                Assert.Contains("RevitPatternMepPlacementMutation.TransactionName", text, StringComparison.Ordinal);
             }
             else
             {

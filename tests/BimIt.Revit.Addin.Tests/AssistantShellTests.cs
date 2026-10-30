@@ -142,6 +142,56 @@ public sealed class AssistantShellTests
     }
 
     [Fact]
+    public void Type_search_is_a_bounded_local_page_intent()
+    {
+        var parsed = AssistantPageMessages.Parse("""{"type":"searchPatternTypes","action":"receptacle","text":" Tt_INS "}""");
+        Assert.True(parsed.Accepted);
+        Assert.Equal(AssistantPageIntent.SearchPatternTypes, parsed.Intent);
+        Assert.Equal("receptacle", parsed.Action);
+        Assert.Equal("Tt_INS", parsed.Text);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"searchPatternTypes","action":"pump","text":"Tt"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"searchPatternTypes","action":"receptacle","text":"  "}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"searchPatternTypes","action":"receptacle"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse($$"""{"type":"searchPatternTypes","action":"receptacle","text":"{{new string('a', 81)}}"}""").Accepted);
+
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
+        Assert.Contains("post({ type: \"searchPatternTypes\", action: role, text: query })", page, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Type_search_ipc_carries_only_option_keys_and_labels()
+    {
+        var request = RoomPatternTypeSearch.SerializeRequest("receptacle", "Tt");
+        var search = AssistantIpc.Parse(AssistantIpc.Serialize(new AssistantIpcMessage(
+            AssistantIpcKind.SearchPatternTypes, null, null, null, false, null, null, null, null, null, null, null, null, null, false, Text: request)));
+        Assert.True(search.Accepted);
+        Assert.Equal(AssistantIpcKind.SearchPatternTypes, search.Message!.Kind);
+
+        var result = RoomPatternTypeSearch.SerializeResult(new RoomPatternTypeSearch.Result
+        {
+            Generation = "0123456789abcdef0123456789abcdef",
+            Role = "receptacle",
+            Query = "Tt",
+            Options =
+            [
+                new RoomPatternReview.TypeOption { Key = "t81", FamilyName = "Tt_INS_Prise", TypeName = "15A", CategoryName = "Electrical Fixtures", PlacementClassification = "one_level_based" },
+            ],
+        });
+        Assert.NotNull(result);
+        var reply = AssistantIpc.Parse(AssistantIpc.Serialize(new AssistantIpcMessage(
+            AssistantIpcKind.PatternTypesResult, null, null, null, false, null, null, null, null, null, null, null, "Type search", "1 loaded type matches \"Tt\".", false, Text: result)));
+        Assert.True(reply.Accepted);
+
+        var leaked = result!.Replace("t81", "type-face-unique", StringComparison.Ordinal);
+        Assert.False(RoomPatternTypeSearch.TryParseResult(leaked, out _));
+        Assert.False(RoomPatternTypeSearch.TryParseResult(result.Replace("\"options\"", "\"familyTypeRef\":\"x\",\"options\"", StringComparison.Ordinal), out _));
+        var errorWithResult = AssistantIpc.Parse(AssistantIpc.Serialize(new AssistantIpcMessage(
+            AssistantIpcKind.PatternTypesResult, null, null, null, false, null, null, null, null, null, null, null, "Type search", "failed", true, Text: result)));
+        Assert.False(errorWithResult.Accepted);
+        Assert.False(RoomPatternTypeSearch.TryParseRequest("{\"role\":\"receptacle\",\"query\":\"Tt\",\"extra\":1}", out _, out _));
+    }
+
+    [Fact]
     public async Task Confirm_project_axes_preview_is_a_local_page_action()
     {
         var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
@@ -999,6 +1049,16 @@ public sealed class AssistantShellTests
         public Task<AssistantIpcMessage?> PreparePatternPreviewAsync(string configuration, CancellationToken cancellationToken)
         {
             return Task.FromResult(PreviewResult);
+        }
+
+        public List<(string Role, string Query)> TypeSearches { get; } = [];
+
+        public AssistantIpcMessage? TypeSearchResult { get; set; }
+
+        public Task<AssistantIpcMessage?> SearchPatternTypesAsync(string role, string query, CancellationToken cancellationToken)
+        {
+            TypeSearches.Add((role, query));
+            return Task.FromResult(TypeSearchResult);
         }
 
         public Task<AssistantIpcMessage?> ReviewPatternInRevitAsync(CancellationToken cancellationToken)

@@ -24,6 +24,23 @@ public sealed class SpatialRoomRefTests
     }
 
     [Fact]
+    public void Link_ref_decodes_only_inside_bim_it_and_rejects_fabrications()
+    {
+        var link = SpatialRoomRefCodec.Link("8a5b7c3e-1111-2222-3333-444444444444-0002f1a2", "9f0e1d2c-5555-6666-7777-888888888888-0004b3c4");
+        Assert.True(SpatialRoomRefCodec.TryLink(link, out var linkId, out var roomId));
+        Assert.Equal("8a5b7c3e-1111-2222-3333-444444444444-0002f1a2", linkId);
+        Assert.Equal("9f0e1d2c-5555-6666-7777-888888888888-0004b3c4", roomId);
+        Assert.False(SpatialRoomRefCodec.TryLink(null, out _, out _));
+        Assert.False(SpatialRoomRefCodec.TryLink("sr1.l.", out _, out _));
+        Assert.False(SpatialRoomRefCodec.TryLink("sr1.l.link.", out _, out _));
+        Assert.False(SpatialRoomRefCodec.TryLink("sr1.l..room", out _, out _));
+        Assert.False(SpatialRoomRefCodec.TryLink("sr1.l.link.room.extra", out _, out _));
+        Assert.False(SpatialRoomRefCodec.TryLink(@"sr1.l.C:\model.room", out _, out _));
+        Assert.False(SpatialRoomRefCodec.TryLink("sr1.l." + new string('a', 61) + ".room", out _, out _));
+        Assert.False(SpatialRoomRefCodec.TryLink(SpatialRoomRefCodec.Host("room"), out _, out _));
+    }
+
+    [Fact]
     public void Link_label_keeps_a_display_name_and_drops_the_path()
     {
         Assert.Equal("Snowdon Towers", SpatialLinkLabel.Sanitize(@"C:\Models\Snowdon Towers.rvt"));

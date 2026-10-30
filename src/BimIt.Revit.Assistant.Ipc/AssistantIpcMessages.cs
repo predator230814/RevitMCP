@@ -31,6 +31,8 @@ public enum AssistantIpcKind
     PreparePatternPreview,
     ReviewPatternInRevit,
     ApplyApprovedPattern,
+    SearchPatternTypes,
+    PatternTypesResult,
 }
 
 public sealed record AssistantIpcMessage(
@@ -150,7 +152,9 @@ public static class AssistantIpc
                 "reviewPatternInRevit" => ParseSignal(body, AssistantIpcKind.ReviewPatternInRevit),
                 "applyApprovedPattern" => ParseSignal(body, AssistantIpcKind.ApplyApprovedPattern),
                 "previewResult" => ParsePreviewResult(body),
-                _ => AssistantIpcParse.Reject("unknown"),
+                "searchPatternTypes" => ParseSearchPatternTypes(body),
+                "patternTypesResult" => ParsePatternTypesResult(body),
+                _ =>AssistantIpcParse.Reject("unknown"),
             };
         }
         catch (JsonException)
@@ -246,6 +250,19 @@ public static class AssistantIpc
                 Title = message.Title,
                 Body = message.Body,
                 IsError = message.IsError,
+            },
+            AssistantIpcKind.SearchPatternTypes => new Envelope
+            {
+                Type = "searchPatternTypes",
+                Text = message.Text,
+            },
+            AssistantIpcKind.PatternTypesResult => new Envelope
+            {
+                Type = "patternTypesResult",
+                Title = message.Title,
+                Body = message.Body,
+                IsError = message.IsError,
+                Text = message.Text,
             },
             AssistantIpcKind.DocumentResult => new Envelope
             {
@@ -495,6 +512,52 @@ public static class AssistantIpc
             null,
             false,
             Text: body.Text));
+    }
+
+    private static AssistantIpcParse ParseSearchPatternTypes(Envelope body)
+    {
+        if (body.RequestId is not null
+            || body.Workflow is not null
+            || body.Title is not null
+            || body.Body is not null
+            || HasProvider(body)
+            || body.UsedTools is not null
+            || body.InstanceId is not null
+            || body.PatternReview is not null
+            || HasDocument(body)
+            || !RoomPatternTypeSearch.TryParseRequest(body.Text, out _, out _))
+        {
+            return AssistantIpcParse.Reject("pattern-types");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.SearchPatternTypes, null, null, null, false, null, null, null, null, null, null, null, null, null, false, Text: body.Text));
+    }
+
+    private static AssistantIpcParse ParsePatternTypesResult(Envelope body)
+    {
+        if (string.IsNullOrWhiteSpace(body.Title)
+            || body.Body is null
+            || body.Title.Length > 200
+            || body.Body.Length > MaxTextLength
+            || body.RequestId is not null
+            || body.Workflow is not null
+            || HasProvider(body)
+            || body.UsedTools is not null
+            || body.InstanceId is not null
+            || HasDocument(body))
+        {
+            return AssistantIpcParse.Reject("pattern-types");
+        }
+
+        var isError = body.IsError == true;
+        if (isError ? body.Text is not null : !RoomPatternTypeSearch.TryParseResult(body.Text, out _))
+        {
+            return AssistantIpcParse.Reject("pattern-types");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.PatternTypesResult, null, null, null, false, null, null, null, null, null, null, null, body.Title, body.Body, isError, Text: body.Text));
     }
 
     private static AssistantIpcParse ParseSignal(Envelope body, AssistantIpcKind kind)

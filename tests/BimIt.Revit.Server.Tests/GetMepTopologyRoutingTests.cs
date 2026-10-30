@@ -22,7 +22,7 @@ public sealed class GetMepTopologyRoutingTests
         Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 21)));
+        Assert.False(InstanceTargetResolver.IsGetMepTopologyEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 22)));
     }
 
     [Fact]
@@ -52,7 +52,7 @@ public sealed class GetMepTopologyRoutingTests
         Assert.True(InstanceTargetResolver.IsGetParameterValuesEligible(v8));
         Assert.True(InstanceTargetResolver.IsGetMepTopologyEligible(v8));
 
-        var v9 = TestSupport.Ready("v10", "pipe-v10", protocolVersion: 21);
+        var v9 = TestSupport.Ready("v10", "pipe-v10", protocolVersion: 22);
         Assert.False(InstanceTargetResolver.IsGetContextEligible(v9));
         Assert.False(InstanceTargetResolver.IsQueryElementsEligible(v9));
         Assert.False(InstanceTargetResolver.IsGetElementsEligible(v9));
@@ -159,7 +159,7 @@ public sealed class GetMepTopologyRoutingTests
     public async Task Explicit_v10_id_returns_unavailable()
     {
         var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 21));
+        discovery.Instances.Add(TestSupport.Ready("v10", "pipe-v10", protocolVersion: 22));
         var factory = UnusedFactory();
         var outcome = await CreateService(discovery, factory).ExecuteAsync("v10", TestSupport.CreateGetMepTopologyRequest(), CancellationToken.None);
 

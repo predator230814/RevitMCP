@@ -24,7 +24,7 @@ internal static class PatternConfigurationParser
         out string failure)
     {
         configuration = null!;
-        failure = "Choose target rooms, a loaded type, and a mounting height for every role.";
+        failure = "Choose target rooms, then a loaded type and a mounting height for every role, or omit the role.";
         if (string.IsNullOrWhiteSpace(json))
         {
             return false;
@@ -78,15 +78,25 @@ internal static class PatternConfigurationParser
                     || roleProperty.GetString() is not string roleName
                     || !role.TryGetProperty("option", out var optionProperty)
                     || optionProperty.ValueKind != JsonValueKind.String
-                    || optionProperty.GetString() is not string optionKey
-                    || !role.TryGetProperty("height_mm", out var heightProperty)
-                    || heightProperty.ValueKind != JsonValueKind.Number
-                    || !heightProperty.TryGetInt32(out var height))
+                    || optionProperty.GetString() is not string optionKey)
                 {
                     return false;
                 }
 
                 if (!options.TryAdd(roleName, optionKey))
+                {
+                    return false;
+                }
+
+                // An omitted role places nothing, so it needs no mounting height.
+                if (optionKey == PatternLocalConfiguration.OmitOption)
+                {
+                    continue;
+                }
+
+                if (!role.TryGetProperty("height_mm", out var heightProperty)
+                    || heightProperty.ValueKind != JsonValueKind.Number
+                    || !heightProperty.TryGetInt32(out var height))
                 {
                     return false;
                 }
@@ -104,7 +114,11 @@ internal static class PatternConfigurationParser
             {
                 failure = configuration.HeightMillimetres.Values.Any(height => height is < 0 or > 6000)
                     ? "Mounting height must be from 0 to 6000 mm."
-                    : "Choose one to eight matching rooms and a loaded type for every role.";
+                    : configuration.LinkedBoundaryConflict(generation)
+                        ? "A wall device in a linked room needs a work-plane-based or level-based type, not a wall-hosted one."
+                        : configuration.RaisedInteriorWorkPlane(generation)
+                            ? "A work-plane-based interior type stays on the Level plane. Set its mounting height to 0 or choose a level-based type."
+                            : "Choose one to eight matching rooms and a loaded type for every role, or omit a role. At least one role must be placed.";
                 return false;
             }
 
@@ -122,7 +136,7 @@ internal static class PatternPlacementRequestBuilder
         foreach (var index in configuration.SelectedRooms.OrderBy(value => value))
         {
             var room = generation.Rooms.First(item => item.Index == index);
-            foreach (var device in room.Devices)
+            foreach (var device in room.Devices.Where(device => !configuration.Omits(device.Role)))
             {
                 var option = generation.Options[configuration.RoleOptions[device.Role]];
                 placements.Add(new PreviewRoomPatternPlacement
@@ -198,10 +212,6 @@ internal sealed class RoomPatternPlacementOrchestrator
         }
 
         var request = PatternPlacementRequestBuilder.Build(generation, configuration);
-        if (request.Placements?.Any(placement => SpatialRoomRefCodec.IsLink(placement.RoomRef)) == true)
-        {
-            return Fail(PreviewTitle, "Linked rooms stay in review. This pattern does not place devices into a linked room.");
-        }
         AssistantToolCall call;
         try
         {
@@ -391,6 +401,11 @@ internal sealed class RoomPatternPlacementOrchestrator
             PreviewRoomPatternItemStatus.RoomNotFound => "A target room is no longer available.",
             PreviewRoomPatternItemStatus.TypeNotFound => "A selected type is no longer loaded.",
             PreviewRoomPatternItemStatus.DocumentMismatch => "The active document changed.",
+            PreviewRoomPatternItemStatus.LinkedRoomUnavailable => "A linked room or its architecture link is no longer available.",
+            PreviewRoomPatternItemStatus.LinkedBoundaryUnsupported => "A linked room boundary is not supported for placement.",
+            PreviewRoomPatternItemStatus.LinkedHostRequiresWorkPlaneBased => "A wall device in a linked room needs a work-plane-based or level-based type, not a wall-hosted one.",
+            PreviewRoomPatternItemStatus.HostLevelNotFound => "No host level matches the linked room level.",
+            PreviewRoomPatternItemStatus.HostLevelAmbiguous => "Several host levels match the linked room level.",
             _ => "The pattern preview is not ready. No Revit elements were changed.",
         };
     }

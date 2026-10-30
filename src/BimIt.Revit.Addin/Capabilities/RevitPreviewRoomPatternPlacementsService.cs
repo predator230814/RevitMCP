@@ -32,6 +32,8 @@ internal sealed class RevitPreviewRoomPatternPlacementsService : IRevitPreviewRo
         _intents = intents;
     }
 
+    public bool SupportsLinkedRooms => true;
+
     public async Task<PreviewRoomPatternPlacementsResult> PreviewRoomPatternPlacementsAsync(
         PreviewRoomPatternPlacementsRequest request,
         CancellationToken cancellationToken)
@@ -95,6 +97,23 @@ internal sealed class RevitPreviewRoomPatternPlacementsService : IRevitPreviewRo
         }
 
         var ready = PatternPlacementComposer.TryCompose(drafts, facts, out var intent, out var statuses);
+        if (ready && intent is not null)
+        {
+            var unresolved = RevitPatternLinkedGeometry.UnresolvedFaces(document, intent);
+            if (unresolved.Count > 0)
+            {
+                var marked = statuses.ToArray();
+                foreach (var position in unresolved)
+                {
+                    marked[position - 1] = PreviewRoomPatternItemStatus.UnsupportedFace;
+                }
+
+                statuses = marked;
+                ready = false;
+                intent = null;
+            }
+        }
+
         string? intentRef = null;
         string? fingerprint = null;
         DateTimeOffset? expires = null;

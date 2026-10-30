@@ -13,7 +13,7 @@ public sealed class PatternPlacementComposerTests
         Assert.Equal(PatternPlacementStrategyKind.InteriorLevel, level.Strategy);
         Assert.Null(level.Host);
 
-        var plane = Compose("interior", "work_plane_based", (5, 4), FaceResolved: false);
+        var plane = Compose("interior", "work_plane_based", (5, 4), FaceResolved: false, heightFeet: 0);
         Assert.Equal(PatternPlacementStrategyKind.InteriorLevelWorkPlane, plane.Strategy);
         Assert.Null(plane.Host);
     }
@@ -29,12 +29,22 @@ public sealed class PatternPlacementComposerTests
         var face = Compose("boundary", "work_plane_based", (5, 0.1), FaceResolved: true);
         Assert.Equal(PatternPlacementStrategyKind.BoundaryWallFace, face.Strategy);
         Assert.Equal("wall-south", face.Host!.WallRef);
+
+        var level = Compose("boundary", "one_level_based", (5, 0.1), FaceResolved: false);
+        Assert.Equal(PatternPlacementStrategyKind.BoundaryLevel, level.Strategy);
+        Assert.Equal("wall-south", level.Host!.WallRef);
+        Assert.Null(level.Host.LinkInstanceRef);
+        Assert.Equal(5, level.Target.X, 9);
+        Assert.Equal(0, level.Target.Y, 9);
+        Assert.Equal(new PatternPlanPoint(5, 0.1), level.Requested);
+        Assert.True(level.ReferenceDirection.Y > 0.99);
     }
 
     [Fact]
     public void Unsupported_ambiguous_curved_and_missing_walls_fail_closed()
     {
         Assert.Equal(PreviewRoomPatternItemStatus.UnsupportedPlacement, Status("interior", "one_level_based_hosted", (5, 4), FaceResolved: true));
+        Assert.Equal(PreviewRoomPatternItemStatus.UnsupportedPlacement, Status("interior", "work_plane_based", (5, 4), FaceResolved: false));
         Assert.Equal(PreviewRoomPatternItemStatus.UnsupportedFace, Status("boundary", "work_plane_based", (5, 0.1), FaceResolved: false));
         Assert.Equal(PreviewRoomPatternItemStatus.AmbiguousWall, Status("boundary", "one_level_based_hosted", (0.05, 0.05), FaceResolved: true));
         Assert.Equal(PreviewRoomPatternItemStatus.CurvedWall, Status("boundary", "one_level_based_hosted", (5, 0.1), FaceResolved: false, straight: false));
@@ -51,20 +61,48 @@ public sealed class PatternPlacementComposerTests
     }
 
     [Fact]
+    public void Level_based_mounting_height_is_the_elevation_from_level_everywhere()
+    {
+        var capabilities = Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Capabilities");
+        var mounting = File.ReadAllText(Path.Combine(capabilities, "RevitMountingPoint.cs"));
+        var session = File.ReadAllText(Path.Combine(capabilities, "RevitPatternPlacementSession.cs"));
+        var facts = File.ReadAllText(Path.Combine(capabilities, "PatternRevitFacts.cs"));
+        Assert.Contains("BuiltInParameter.INSTANCE_ELEVATION_PARAM", mounting, StringComparison.Ordinal);
+        Assert.Contains("FamilyPlacementType.OneLevelBased", mounting, StringComparison.Ordinal);
+        Assert.Contains("RevitMountingPoint.TryRead(document, instance, out var point)", facts, StringComparison.Ordinal);
+        Assert.Contains("RevitMountingPoint.TryRead(_document, created, out var mounted)", session, StringComparison.Ordinal);
+        Assert.Equal(2, Count(session, "Mount(created, level, item.Target);"));
+        Assert.Contains("RevitMountingPoint.TrySetHeight(_document, created, target.Z - level.Elevation)", session, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Preview_service_has_no_transaction_and_apply_uses_one()
     {
-        var preview = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Capabilities", "RevitPreviewRoomPatternPlacementsService.cs"));
-        var mutation = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Capabilities", "RevitPatternMepPlacementMutation.cs"));
+        var capabilities = Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Capabilities");
+        var preview = File.ReadAllText(Path.Combine(capabilities, "RevitPreviewRoomPatternPlacementsService.cs"));
+        var mutation = File.ReadAllText(Path.Combine(capabilities, "RevitPatternMepPlacementMutation.cs"));
+        var session = File.ReadAllText(Path.Combine(capabilities, "RevitPatternPlacementSession.cs"));
+        var batch = File.ReadAllText(Path.Combine(capabilities, "PatternPlacementBatch.cs"));
+        var linked = File.ReadAllText(Path.Combine(capabilities, "RevitPatternLinkedGeometry.cs"));
         Assert.DoesNotContain("new Transaction", preview, StringComparison.Ordinal);
-        Assert.Contains("new Transaction", mutation, StringComparison.Ordinal);
-        Assert.Equal(1, Count(mutation, "new Transaction"));
-        var verify = mutation.IndexOf("!Verify(", StringComparison.Ordinal);
-        var commit = mutation.IndexOf("transaction.Commit()", StringComparison.Ordinal);
-        var face = mutation.IndexOf("FaceIntoRoom(", StringComparison.Ordinal);
+        Assert.Contains("public bool SupportsLinkedRooms => true;", preview, StringComparison.Ordinal);
+        Assert.Contains("RevitPatternLinkedGeometry.UnresolvedFaces(document, intent)", preview, StringComparison.Ordinal);
+        Assert.DoesNotContain("new Transaction", mutation, StringComparison.Ordinal);
+        Assert.DoesNotContain("new Transaction", linked, StringComparison.Ordinal);
+        Assert.DoesNotContain("Autodesk.Revit", batch, StringComparison.Ordinal);
+        Assert.Equal(1, Count(session, "new Transaction"));
+        Assert.Equal(1, Count(session, "_document.Regenerate()"));
+        Assert.Contains("CreateLinkReference(instance)", linked, StringComparison.Ordinal);
+        var stale = mutation.IndexOf("!Current(", StringComparison.Ordinal);
+        var execute = mutation.IndexOf("PatternPlacementBatch.Execute", StringComparison.Ordinal);
+        Assert.True(stale >= 0 && stale < execute);
+        var face = batch.IndexOf("session.TryFaceIntoRoom(", StringComparison.Ordinal);
+        var verify = batch.IndexOf("!Verify(", StringComparison.Ordinal);
+        var commit = batch.IndexOf("session.Commit()", StringComparison.Ordinal);
         Assert.True(face >= 0);
         Assert.True(face < verify);
         Assert.True(verify < commit);
-        Assert.Equal(2, Count(mutation, "document.Regenerate()"));
+        Assert.Equal(2, Count(batch, "session.Regenerate()"));
     }
 
     [Fact]
@@ -107,10 +145,11 @@ public sealed class PatternPlacementComposerTests
         bool occupied = false,
         bool documentMatches = true,
         string category = "OST_ElectricalFixtures",
-        string roomRef = "room-1")
+        string roomRef = "room-1",
+        double heightFeet = 1)
     {
         Assert.True(PatternPlacementComposer.TryCompose(
-            [Draft(placement, point, roomRef)],
+            [Draft(placement, point, roomRef, heightFeet)],
             Facts(classification, FaceResolved, straight, includeWall, occupied, documentMatches, category),
             out var intent,
             out _));
@@ -127,17 +166,18 @@ public sealed class PatternPlacementComposerTests
         bool occupied = false,
         bool documentMatches = true,
         string category = "OST_ElectricalFixtures",
-        string roomRef = "room-1")
+        string roomRef = "room-1",
+        double heightFeet = 1)
     {
         Assert.False(PatternPlacementComposer.TryCompose(
-            [Draft(placement, point, roomRef)],
+            [Draft(placement, point, roomRef, heightFeet)],
             Facts(classification, FaceResolved, straight, includeWall, occupied, documentMatches, category),
             out _,
             out var statuses));
         return statuses[0];
     }
 
-    private static PatternPlacementDraft Draft(string placement, (double X, double Y) point, string roomRef)
+    private static PatternPlacementDraft Draft(string placement, (double X, double Y) point, string roomRef, double heightFeet)
     {
         return new PatternPlacementDraft
         {
@@ -147,7 +187,7 @@ public sealed class PatternPlacementComposerTests
             PlacementKind = placement,
             XFeet = point.X,
             YFeet = point.Y,
-            MountingHeightFeet = 1,
+            MountingHeightFeet = heightFeet,
             QuarterTurns = 1,
         };
     }

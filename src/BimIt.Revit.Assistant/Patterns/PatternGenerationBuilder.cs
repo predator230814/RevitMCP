@@ -8,10 +8,13 @@ internal static class PatternTypeCatalog
 {
     public const string ToolName = "revit_get_mep_device_types";
 
+    public const int MaxPerRequest = 80;
+
     public static async Task<IReadOnlyList<LoadedMepTypeOption>> LoadAsync(
         IAssistantToolSession session,
         string instanceId,
         string? documentId,
+        IEnumerable<string> roles,
         CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(documentId))
@@ -19,18 +22,56 @@ internal static class PatternTypeCatalog
             return [];
         }
 
+        var options = new List<LoadedMepTypeOption>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var categories in CategoryGroups(roles))
+        {
+            await LoadGroupAsync(session, instanceId, documentId, categories, options, seen, cancellationToken).ConfigureAwait(false);
+        }
+
+        return options;
+    }
+
+    internal static IReadOnlyList<IReadOnlyList<string>?> CategoryGroups(IEnumerable<string> roles)
+    {
+        var groups = new List<IReadOnlyList<string>?>();
+        foreach (var role in roles.Distinct(StringComparer.Ordinal).OrderBy(role => role, StringComparer.Ordinal))
+        {
+            var preferred = PatternDeviceRoles.PreferredCategories(role);
+            IReadOnlyList<string>? group = preferred.Count == 0 ? null : preferred.OrderBy(token => token, StringComparer.Ordinal).ToArray();
+            if (!groups.Any(existing => existing is null ? group is null : group is not null && existing.SequenceEqual(group)))
+            {
+                groups.Add(group);
+            }
+        }
+
+        return groups;
+    }
+
+    private static async Task LoadGroupAsync(
+        IAssistantToolSession session,
+        string instanceId,
+        string documentId,
+        IReadOnlyList<string>? categories,
+        List<LoadedMepTypeOption> options,
+        HashSet<string> seen,
+        CancellationToken cancellationToken)
+    {
+        var arguments = new Dictionary<string, object?>
+        {
+            ["instance_id"] = instanceId,
+            ["document_id"] = documentId,
+            ["limit"] = MaxPerRequest,
+        };
+        if (categories is not null)
+        {
+            arguments["category_tokens"] = categories;
+        }
+
         AssistantToolCall call;
         try
         {
-            call = await session.CallAsync(
-                ToolName,
-                new Dictionary<string, object?>
-                {
-                    ["instance_id"] = instanceId,
-                    ["document_id"] = documentId,
-                    ["limit"] = 80,
-                },
-                cancellationToken).ConfigureAwait(false);
+            call = await session.CallAsync(ToolName, arguments, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
         {
@@ -38,12 +79,80 @@ internal static class PatternTypeCatalog
         }
         catch (Exception)
         {
-            return [];
+            return;
         }
 
+        if (!TryRead(call, out var items, out _))
+        {
+            return;
+        }
+
+        var added = 0;
+        foreach (var item in items)
+        {
+            if (!seen.Add(item.FamilyTypeRef))
+            {
+                continue;
+            }
+
+            added++;
+            options.Add(item.ToOption("t" + options.Count.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+            if (added >= MaxPerRequest)
+            {
+                break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Searches the loaded types of the role's categories by family or type name, as the person types it in
+    /// Pattern Review. The catalog request is bounded, so a large library is reached by search, not by one list.
+    /// </summary>
+    public static async Task<(bool Ok, IReadOnlyList<LoadedMepTypeItem> Items, bool Truncated)> SearchAsync(
+        IAssistantToolSession session,
+        string instanceId,
+        string documentId,
+        string role,
+        string query,
+        CancellationToken cancellationToken)
+    {
+        var arguments = new Dictionary<string, object?>
+        {
+            ["instance_id"] = instanceId,
+            ["document_id"] = documentId,
+            ["search"] = query,
+            ["limit"] = MaxPerRequest,
+        };
+        var categories = PatternDeviceRoles.PreferredCategories(role);
+        if (categories.Count > 0)
+        {
+            arguments["category_tokens"] = categories.OrderBy(token => token, StringComparer.Ordinal).ToArray();
+        }
+
+        AssistantToolCall call;
+        try
+        {
+            call = await session.CallAsync(ToolName, arguments, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return (false, [], false);
+        }
+
+        return TryRead(call, out var items, out var truncated) ? (true, items, truncated) : (false, [], false);
+    }
+
+    private static bool TryRead(AssistantToolCall call, out IReadOnlyList<LoadedMepTypeItem> items, out bool truncated)
+    {
+        items = [];
+        truncated = false;
         if (call.IsError || call.Structured is not System.Text.Json.JsonElement structured)
         {
-            return [];
+            return false;
         }
 
         GetMepDeviceTypesResult? result;
@@ -53,28 +162,29 @@ internal static class PatternTypeCatalog
         }
         catch (System.Text.Json.JsonException)
         {
-            return [];
+            return false;
         }
 
         if (result?.Items is null)
         {
-            return [];
+            return false;
         }
 
-        var options = new List<LoadedMepTypeOption>();
+        var read = new List<LoadedMepTypeItem>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in result.Items)
         {
             if (item is null
                 || string.IsNullOrWhiteSpace(item.FamilyTypeRef)
                 || string.IsNullOrWhiteSpace(item.CategoryToken)
                 || string.IsNullOrWhiteSpace(item.FamilyName)
-                || string.IsNullOrWhiteSpace(item.TypeName))
+                || string.IsNullOrWhiteSpace(item.TypeName)
+                || !seen.Add(item.FamilyTypeRef))
             {
                 continue;
             }
 
-            options.Add(new LoadedMepTypeOption(
-                "t" + options.Count.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            read.Add(new LoadedMepTypeItem(
                 item.FamilyTypeRef,
                 item.CategoryToken,
                 item.CategoryName ?? item.CategoryToken,
@@ -82,14 +192,26 @@ internal static class PatternTypeCatalog
                 item.TypeName,
                 item.PlacementClassification ?? string.Empty,
                 item.Active));
-            if (options.Count >= 80)
-            {
-                break;
-            }
         }
 
-        return options;
+        items = read;
+        truncated = result.Truncated;
+        return true;
     }
+}
+
+/// <summary>One loaded type read from Revit, before it receives a local option key.</summary>
+internal sealed record LoadedMepTypeItem(
+    string FamilyTypeRef,
+    string CategoryToken,
+    string CategoryName,
+    string FamilyName,
+    string TypeName,
+    string PlacementClassification,
+    bool Active)
+{
+    public LoadedMepTypeOption ToOption(string optionKey)
+        => new(optionKey, FamilyTypeRef, CategoryToken, CategoryName, FamilyName, TypeName, PlacementClassification, Active);
 }
 
 internal static class PatternGenerationBuilder

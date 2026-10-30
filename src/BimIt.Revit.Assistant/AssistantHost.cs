@@ -270,6 +270,13 @@ internal static class AssistantHost
                     continue;
                 }
 
+                if (parsed.Message.Kind == AssistantIpcKind.SearchPatternTypes)
+                {
+                    var outcome = await SearchPatternTypesAsync(session, roomPatterns, parsed.Message.Text, options.InstanceId, readiness.Ready, cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, PatternTypesResult(outcome), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
                 if (parsed.Message.Kind == AssistantIpcKind.ReviewPatternInRevit)
                 {
                     var outcome = await ReviewPatternAsync(patternPreviewClient, reviewClient, applyClient, roomPatterns, options.InstanceId, readiness.Ready, cancellationToken).ConfigureAwait(false);
@@ -854,6 +861,54 @@ internal static class AssistantHost
         {
             return new MepDevicePlacementPreviewOutcome(true, RoomPatternPlacementOrchestrator.ApplyTitle, "The pattern apply could not be completed.");
         }
+    }
+
+    private static async Task<RoomPatternTypeSearchOutcome> SearchPatternTypesAsync(
+        IAssistantToolSession? session,
+        RoomPatternStore patterns,
+        string? request,
+        string instanceId,
+        bool ready,
+        CancellationToken cancellationToken)
+    {
+        if (!ready || session is null)
+        {
+            return new RoomPatternTypeSearchOutcome(RoomPatternTypeSearchService.Title, "The Assistant MCP client is not ready.", true, null);
+        }
+
+        try
+        {
+            return await new RoomPatternTypeSearchService(session, patterns, instanceId).SearchAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception)
+        {
+            return new RoomPatternTypeSearchOutcome(RoomPatternTypeSearchService.Title, "The loaded types could not be read from Revit.", true, null);
+        }
+    }
+
+    private static AssistantIpcMessage PatternTypesResult(RoomPatternTypeSearchOutcome outcome)
+    {
+        return new AssistantIpcMessage(
+            AssistantIpcKind.PatternTypesResult,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            outcome.Title,
+            outcome.Body,
+            outcome.IsError,
+            Text: outcome.IsError ? null : outcome.ResultJson);
     }
 
     private static AssistantIpcMessage PreviewResult(MepDevicePlacementPreviewOutcome outcome)

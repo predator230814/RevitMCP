@@ -66,6 +66,14 @@ internal sealed class PreviewRoomPatternPlacementsApplicationService
                 return PreviewRoomPatternPlacementsOutcome.Failure(McpToolErrorCodes.InstanceUnavailable, ToolErrorMessages.InstanceUnavailable);
             }
 
+            if (!BridgeProtocol.SupportsLinkedRoomPatternPreview(handshake.SelectedProtocolVersion)
+                && request.Placements?.Any(placement => SpatialRoomRefCodec.IsLink(placement?.RoomRef)) == true)
+            {
+                return PreviewRoomPatternPlacementsOutcome.Failure(
+                    CapabilityErrorCodes.InvalidRoomPatternPlacement,
+                    "This Revit session cannot preview placements in a linked room.");
+            }
+
             var result = await client.PreviewRoomPatternPlacementsAsync(request, _timeouts.CapabilityTimeout, cancellationToken).ConfigureAwait(false);
             return PreviewRoomPatternPlacementsOutcome.Success(result);
         }

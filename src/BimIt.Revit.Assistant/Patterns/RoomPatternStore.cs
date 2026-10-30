@@ -1,3 +1,4 @@
+using BimIt.Revit.Contracts;
 using BimIt.Revit.Assistant.Ipc;
 
 namespace BimIt.Revit.Assistant.Patterns;
@@ -92,6 +93,71 @@ internal sealed class RoomPatternStore
             return true;
         }
     }
+
+    /// <summary>
+    /// Adds loaded types found by a Pattern Review search to the current generation. A type already offered keeps
+    /// its key. Existing keys, the configuration, and a prepared preview stay valid.
+    /// </summary>
+    public bool TryAddOptions(
+        string generationId,
+        IReadOnlyList<LoadedMepTypeItem> items,
+        out IReadOnlyList<LoadedMepTypeOption> added)
+    {
+        ArgumentNullException.ThrowIfNull(items);
+        lock (_gate)
+        {
+            added = [];
+            if (_generation is null || _terminal is not null || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal))
+            {
+                return false;
+            }
+
+            var options = new Dictionary<string, LoadedMepTypeOption>(_generation.Options, StringComparer.Ordinal);
+            var byType = options.Values.ToDictionary(option => option.FamilyTypeRef, StringComparer.Ordinal);
+            var next = options.Keys
+                .Select(key => int.TryParse(key.AsSpan(1), System.Globalization.NumberStyles.None, System.Globalization.CultureInfo.InvariantCulture, out var index) ? index + 1 : 0)
+                .DefaultIfEmpty(0)
+                .Max();
+            var found = new List<LoadedMepTypeOption>();
+            foreach (var item in items)
+            {
+                if (!byType.TryGetValue(item.FamilyTypeRef, out var option))
+                {
+                    if (next > MaxOptionIndex)
+                    {
+                        break;
+                    }
+
+                    option = item.ToOption("t" + next.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    next++;
+                    options[option.OptionKey] = option;
+                    byType[option.FamilyTypeRef] = option;
+                }
+
+                if (!found.Contains(option))
+                {
+                    found.Add(option);
+                }
+            }
+
+            _generation = new RoomPatternGeneration
+            {
+                GenerationId = _generation.GenerationId,
+                InstanceId = _generation.InstanceId,
+                DocumentId = _generation.DocumentId,
+                ArtifactId = _generation.ArtifactId,
+                PageNumber = _generation.PageNumber,
+                Source = _generation.Source,
+                Rooms = _generation.Rooms,
+                Options = options,
+            };
+            added = found;
+            return true;
+        }
+    }
+
+    /// <summary>Option keys are <c>t0</c> to <c>t999</c> in the Pattern Review contract.</summary>
+    public const int MaxOptionIndex = 999;
 
     public bool TryCurrentPreparation(out RoomPatternGeneration generation, out PatternLocalConfiguration configuration, out string failure)
     {
@@ -407,6 +473,9 @@ internal sealed class HiddenPatternDevice
 
 internal sealed class PatternLocalConfiguration
 {
+    // The person may leave a role out of the placement. It is never a type option key (t0–t999).
+    public const string OmitOption = "omit";
+
     public required IReadOnlyList<int> SelectedRooms { get; init; }
 
     public required IReadOnlyDictionary<string, string> RoleOptions { get; init; }
@@ -443,13 +512,19 @@ internal sealed class PatternLocalConfiguration
             }
         }
 
-        var roles = SelectedRoles(generation);
-        if (roles.Count == 0 || roles.Any(role => !RoleOptions.ContainsKey(role) || !HeightMillimetres.ContainsKey(role)))
+        var roles = SelectedRoles(generation, SelectedRooms);
+        if (roles.Count == 0 || roles.Any(role => !RoleOptions.ContainsKey(role)))
         {
             return false;
         }
 
-        foreach (var role in roles)
+        var placed = roles.Where(role => !Omits(role)).ToArray();
+        if (placed.Length == 0 || placed.Any(role => !HeightMillimetres.ContainsKey(role)))
+        {
+            return false;
+        }
+
+        foreach (var role in placed)
         {
             if (!generation.Options.ContainsKey(RoleOptions[role]))
             {
@@ -462,8 +537,45 @@ internal sealed class PatternLocalConfiguration
             }
         }
 
-        var count = generation.Rooms.Where(room => SelectedRooms.Contains(room.Index)).Sum(room => room.Devices.Count);
+        if (LinkedBoundaryConflict(generation) || RaisedInteriorWorkPlane(generation))
+        {
+            return false;
+        }
+
+        var count = generation.Rooms
+            .Where(room => SelectedRooms.Contains(room.Index))
+            .Sum(room => room.Devices.Count(device => !Omits(device.Role)));
         return count is >= 1 and <= 80;
+    }
+
+    public bool Omits(string role)
+    {
+        return RoleOptions.TryGetValue(role, out var key) && key == OmitOption;
+    }
+
+    public bool LinkedBoundaryConflict(RoomPatternGeneration generation)
+    {
+        return generation.Rooms
+            .Where(room => SelectedRooms.Contains(room.Index) && SpatialRoomRefCodec.IsLink(room.RoomRef))
+            .SelectMany(room => room.Devices)
+            .Where(device => device.PlacementKind == "boundary")
+            .Any(device => RoleOptions.TryGetValue(device.Role, out var key)
+                && generation.Options.TryGetValue(key, out var option)
+                && !PatternTypeCompatibility.LinkedBoundary(option.PlacementClassification));
+    }
+
+    // A work-plane-based interior device is hosted by the Level plane and cannot be raised above it.
+    public bool RaisedInteriorWorkPlane(RoomPatternGeneration generation)
+    {
+        return generation.Rooms
+            .Where(room => SelectedRooms.Contains(room.Index))
+            .SelectMany(room => room.Devices)
+            .Where(device => device.PlacementKind == "interior")
+            .Any(device => RoleOptions.TryGetValue(device.Role, out var key)
+                && generation.Options.TryGetValue(key, out var option)
+                && option.PlacementClassification == "work_plane_based"
+                && HeightMillimetres.TryGetValue(device.Role, out var height)
+                && height != 0);
     }
 
     public bool Same(PatternLocalConfiguration other)

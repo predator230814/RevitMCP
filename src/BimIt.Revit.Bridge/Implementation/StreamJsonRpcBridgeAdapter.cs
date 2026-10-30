@@ -690,6 +690,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         try
         {
             ArgumentNullException.ThrowIfNull(request);
+            EnsureLinkedRoomsMatchSelectedProtocol(request);
             return await _previewRoomPatternPlacements.PreviewRoomPatternPlacementsAsync(request, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -760,6 +761,21 @@ internal sealed class StreamJsonRpcBridgeAdapter
         throw new BridgeException(
             CapabilityErrorCodes.InvalidQuery,
             "The query request is invalid.");
+    }
+
+    private void EnsureLinkedRoomsMatchSelectedProtocol(PreviewRoomPatternPlacementsRequest request)
+    {
+        var selected = Volatile.Read(ref _selectedProtocolVersion);
+        if (BridgeProtocol.SupportsLinkedRoomPatternPreview(selected)
+            || request.Placements is null
+            || !request.Placements.Any(placement => SpatialRoomRefCodec.IsLink(placement?.RoomRef)))
+        {
+            return;
+        }
+
+        throw new BridgeException(
+            CapabilityErrorCodes.InvalidRoomPatternPlacement,
+            "The room pattern placement preview is invalid.");
     }
 
     private void EnsureCapabilityAllowed(Func<int, bool> isSupported, string incompatibleMessage)

@@ -19,6 +19,7 @@ internal enum AssistantPageIntent
     PreparePatternPreview,
     ReviewPatternInRevit,
     ApplyApprovedPattern,
+    SearchPatternTypes,
 }
 
 internal readonly record struct AssistantPageParse(bool Accepted, AssistantPageIntent Intent, string? Action, string? Text, string Reason)
@@ -90,6 +91,7 @@ internal static class AssistantPageMessages
                 "applyApprovedPattern" => message.Text is null && message.Action is null
                     ? AssistantPageParse.Accept(AssistantPageIntent.ApplyApprovedPattern)
                     : AssistantPageParse.Reject("pattern-apply"),
+                "searchPatternTypes" => ParseTypeSearch(message),
                 _ => AssistantPageParse.Reject("unknown"),
             };
         }
@@ -117,6 +119,19 @@ internal static class AssistantPageMessages
         }
 
         return AssistantPageParse.Accept(AssistantPageIntent.PreparePatternPreview, text: message.Text);
+    }
+
+    private static AssistantPageParse ParseTypeSearch(Envelope message)
+    {
+        if (message.Action is null || message.Text is null)
+        {
+            return AssistantPageParse.Reject("pattern-types");
+        }
+
+        var request = BimIt.Revit.Assistant.Ipc.RoomPatternTypeSearch.SerializeRequest(message.Action, message.Text);
+        return BimIt.Revit.Assistant.Ipc.RoomPatternTypeSearch.TryParseRequest(request, out _, out _)
+            ? AssistantPageParse.Accept(AssistantPageIntent.SearchPatternTypes, message.Action, message.Text.Trim())
+            : AssistantPageParse.Reject("pattern-types");
     }
 
     private static AssistantPageParse ParseCommand(string? text)
