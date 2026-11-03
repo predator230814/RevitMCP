@@ -1,6 +1,6 @@
 # ADR-0023: Declarative Revit read-query architecture
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-03
 - Product Owner: Dave
 
@@ -78,7 +78,7 @@ Widen `revit_get_mep_device_types` and add similar per-question tools.
 
 ## Decision
 
-Option C is proposed.
+Option C is accepted. The Product Owner and Tech Lead approved this architecture direction after review. This ADR records architecture only; nothing here is implemented yet.
 
 ### 1. No arbitrary code execution in the production Revit capability layer
 
@@ -125,7 +125,7 @@ Existing tools stay. The first slice does **not** modify or migrate `revit_get_m
 
 ### 5. First source and tool: `revit_query_family_types`
 
-The first implementation slice is one tool, **`revit_query_family_types`**, over one source: **all loadable `FamilySymbol` content in the active project document.** It is not limited to the MEP-placement allowlist and does not discard a type because BIM-IT cannot place it. Optional category filters may narrow the result. System `ElementType`s (conduit, cable tray, wire, and similar) remain future work.
+The first implementation slice is one tool, **`revit_query_family_types`**, over one source: **all `FamilySymbol` types in the active project document.** This includes loadable and in-place families when Revit exposes them as `FamilySymbol`s; `family_is_in_place` tells them apart. It is not limited to the MEP-placement allowlist and does not discard a type because BIM-IT cannot place it. Optional category filters may narrow the result. System `ElementType`s (conduit, cable tray, wire, and similar) remain future work.
 
 The tool accepts only bounded filters, a page size, and an opaque cursor (section 4). It does not offer a separate family-level aggregation mode. Rows of types per family can be added later on demonstrated need.
 
@@ -135,7 +135,7 @@ The tool accepts only bounded filters, a page size, and an opaque cursor (sectio
 - family name and type name;
 - an opaque `type_ref` and an opaque `family_ref` under ADR-0006. The family name is human-readable and is not a cross-call identity;
 - family placement metadata (`FamilyPlacementType`, mapped to a stable token);
-- in-place versus loadable, where Revit exposes it (`Family.IsInPlace`);
+- `family_is_in_place` (`Family.IsInPlace`), which distinguishes in-place families from loadable ones, where Revit exposes it;
 - `placed_instance_count`;
 - used versus loaded but unused, derived from that count.
 
@@ -159,7 +159,7 @@ Out of scope for the first slice: instances as rows, system families, linked doc
 Any source that can exceed one response pages. Invariants:
 
 - **Deterministic, server-defined ordering.** Every source defines a total order on a key that does not depend on collector iteration order. For family types: category token, then family name, then type name, then a stable identity tie-breaker. Callers cannot change it in v1. The same request against an unchanged document returns the same sequence.
-- **Bounded page size.** First-slice proposal: default 100, maximum 200. The client may ask for less than the maximum, never more. The implementation also enforces a serialized result budget compatible with the BIM-IT Assistant read-result bound (currently 120,000 characters). Further constants live in the capability spec.
+- **Bounded page size.** Decided: default page size 100, maximum page size 200. The client may ask for less than the maximum, never more. The serialized result must also stay within the Assistant-compatible read-result budget (currently 120,000 characters). The scan and time execution budget is not decided here (see the open questions).
 - **Opaque server-minted cursor.** A page that is not the last returns a cursor. Clients pass it back unchanged with an otherwise identical request. Clients must never construct, parse, or edit a cursor.
 - **Counts.** The query-level summary (section 5) is exact. A result never reports an estimate as a count.
 - **Explicit end.** The final page says so explicitly (for example `complete: true` with no cursor). Absence of a cursor alone is not the signal, and `truncated` alone is not enough.
@@ -253,13 +253,15 @@ The gate passes only if an isolated MCP client reaches the full inventory:
 
 These do not block accepting the architecture. They are implementation questions for the capability spec.
 
-1. **Category filter shape.** How are category filters expressed: stable category tokens only, or tokens plus display names? What happens for an unknown or non-loadable category?
+1. **Category filter shape.** How are category filters expressed: stable category tokens only, or tokens plus display names? What happens for an unknown category?
 2. **Execution budget.** What scan or time budget bounds a single page and the summary, and how is the summary computed without making every page as expensive as a full scan? Is it computed once per traversal and carried in the cursor, or recomputed per page?
 3. **Revision source.** Which Revit signal or add-in mechanism advances the document query revision (document-changed events, or another source), and does a workshared sync advance it?
 4. **Name filters.** Does v1 filter by family or type name (exact or contains), or only by category?
 5. **Bridge version number.** Which protocol version is allocated for the first slice.
 
-Decided and no longer open: change detection between pages, instance-count semantics, family identity, category scope, page size and budgets, the first tool, the relationship to existing tools, and the Bridge gate. See sections 4 to 6, 8, and 9.
+Decided: change detection between pages, instance-count semantics, family identity, the scope of the source (all `FamilySymbol` types in the active project document), the first tool, the relationship to existing tools, the Bridge gate, the default page size (100), the maximum page size (200), and the requirement that a serialized result stay within the Assistant-compatible result budget. See sections 4 to 6, 8, and 9.
+
+Still open: the scan and time execution budget, and how the query-level summary computation is bounded, cached, or recomputed (question 2).
 
 ## References
 
