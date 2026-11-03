@@ -1,6 +1,6 @@
 # CAP-0014: `revit_query_family_types`
 
-- Status: Proposed
+- Status: Accepted
 - Operation class: Read
 - Date: 2026-11-03
 - Architecture: Accepted [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md)
@@ -8,7 +8,7 @@
 
 ## Authorization
 
-This specification is **Proposed**. It is the first implementation slice of Accepted ADR-0023. It needs Tech Lead and Product Owner review before it is Accepted. Nothing here is implemented. Contracts, the Addin service, Bridge protocol v22, and the MCP tool are all future work.
+This specification is **Accepted**. Product Owner and Tech Lead approved the capability contract after review. It is the first implementation slice of Accepted ADR-0023. Nothing here is implemented. Contracts, the Addin service, Bridge protocol v22, and the MCP tool are all future work.
 
 Where this specification and ADR-0023 differ, ADR-0023 wins and this document is corrected.
 
@@ -40,7 +40,7 @@ It is **not**:
 Read-only.
 
 - The capability opens no `Transaction`, `SubTransaction`, or `TransactionGroup`, and calls no Revit API that modifies the document.
-- No model-supplied Python, C#, Dynamo, expression, or Revit API source is accepted or executed. The request cannot carry code, member names, type names, or reflection targets.
+- No model-supplied Python, C#, Dynamo, expression, or Revit API source is accepted or executed. The request cannot carry code, expressions, or .NET, runtime, or Revit API type or member names that would select executable API members, reflection targets, or runtime behavior. Family names, Revit `FamilySymbol` type names (`type_name_contains`), and category tokens are ordinary BIM data and are valid closed filter values.
 - All live Revit API access runs through the existing valid Revit execution context (EXEC-0001).
 - The implementation is trusted compiled BIM-IT code. Read-only safety comes from the closed request vocabulary plus that trusted implementation, as ADR-0023 section 8 states. It does not come from MCP annotations or from a process sandbox.
 
@@ -379,7 +379,9 @@ Caching and snapshot optimization are explicitly deferred until live measurement
 
 ### Timeout
 
-The existing capability execution timeout bounds execution time. This specification adds no fixed element-scan limit.
+v1 uses the existing capability execution timeout unchanged. The repository value is 15 seconds (`ServerTimeouts.CapabilityTimeout`). No capability-specific timeout is introduced, and this specification adds no fixed element-scan limit.
+
+The live benchmark records elapsed time per page. If representative queries cannot complete within the existing timeout, optimization versus a future timeout change is decided from that evidence.
 
 If execution exceeds the accepted timeout, the call fails with `REVIT_EXECUTION_TIMEOUT`. No partial result is returned, and no result is represented as complete. Under EXEC-0001, work that has already started inside Revit is allowed to finish, and its result is discarded. A timeout does not prove that Revit is dead.
 
@@ -388,7 +390,7 @@ If execution exceeds the accepted timeout, the call fails with `REVIT_EXECUTION_
 The tool respects two bounds:
 
 - `page_size <= 200`;
-- the serialized structured result stays within the BIM-IT Assistant read-result budget, currently 120,000 characters of serialized JSON (`AssistantMcpReadFacade.MaxResultCharacters`). The implementation must reference that value from one shared constant or keep a test that fails when the two diverge.
+- the serialized structured result stays within a 120,000-character compatibility target, which equals the BIM-IT Assistant read-result budget (`AssistantMcpReadFacade.MaxResultCharacters`). The Addin and Contracts must not reference the Assistant assembly, and no reverse dependency from core or Revit code to `BimIt.Revit.Assistant` is allowed. The implementation uses either a provider-neutral shared limit that is accessible without depending on `BimIt.Revit.Assistant`, or explicit parity tests proving that the capability budget and the Assistant facade budget remain compatible.
 
 If a page of `page_size` rows would exceed the budget, the capability returns a **shorter page**: the longest prefix of the page's rows, in the total order, that fits. This is correct pagination because `page_size` is a maximum and only `complete` ends a traversal:
 
@@ -600,13 +602,15 @@ Live validation does not replace the automated tests, and is not a merge verdict
 - caching or retained inventory snapshots;
 - any write, preview, or approval.
 
-## Questions for Product Owner and Tech Lead
+## Decisions recorded at acceptance
 
-These choices were made here to keep the specification implementable. They need confirmation, and none changes ADR-0023:
+Product Owner and Tech Lead approved the contract and decided the three questions raised in review:
 
-1. **Execution timeout value.** The existing timeout applies. Whether it is long enough for an unfiltered whole-model scan on a large project is unknown until the live gate records per-page times. If it is not, either the timeout for this capability or the optimization deferred above must be decided then.
-2. **Error name.** `INVALID_FAMILY_TYPE_QUERY` is a new per-capability code. The alternative is reusing `INVALID_QUERY`.
-3. **Shorter page on budget overflow.** The capability returns a shorter page, not an error. This relies on `page_size` being a maximum.
+1. **Execution timeout.** v1 accepts the existing 15-second capability timeout (`ServerTimeouts.CapabilityTimeout`) unchanged. No capability-specific timeout is introduced. The live benchmark records elapsed time per page. If representative queries cannot complete within the existing timeout, optimization versus a future timeout change is decided from that evidence.
+2. **Error name.** `INVALID_FAMILY_TYPE_QUERY` is the accepted v1 validation error. The repository already uses capability-specific invalid-request codes, and `INVALID_QUERY` stays scoped to `revit_query_elements`.
+3. **Shorter page on budget overflow.** Accepted. `page_size` is a maximum. If a page would exceed the structured-result budget, the capability returns the longest ordered prefix that fits, with `complete: false`, a correct `next_cursor`, no row skipped or repeated, and an unchanged summary. `RESULT_TOO_LARGE` applies only when one row plus the required envelope and summary cannot fit.
+
+No question remains open for this specification.
 
 ## References
 
