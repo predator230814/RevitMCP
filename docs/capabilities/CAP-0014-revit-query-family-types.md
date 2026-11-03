@@ -200,7 +200,7 @@ Closed object. `additionalProperties` is false at every level.
     "placed_type_count": 0,
     "placed_instance_count": 0,
     "used_family_count": 0,
-    "loaded_unused_family_count": 0
+    "unused_family_count": 0
   },
   "returned_count": 0,
   "complete": true,
@@ -279,16 +279,16 @@ Every page returns the same exact `summary` over the **entire matched set**, not
 | `placed_type_count` | matched symbols with `placed_instance_count > 0` |
 | `placed_instance_count` | sum of `placed_instance_count` over all matched symbols |
 | `used_family_count` | matched families with at least one matched symbol that has `placed_instance_count > 0` |
-| `loaded_unused_family_count` | matched families for which **every matched** symbol has `placed_instance_count == 0` under the counting semantics above |
+| `unused_family_count` | number of distinct matched families for which **every matched** symbol has `placed_instance_count == 0` under the counting semantics above |
 
 Family-level counts are computed over the matched set. They are internally consistent with the rows and filters:
 
-- `used_family_count + loaded_unused_family_count == distinct_family_count`;
+- `used_family_count + unused_family_count == distinct_family_count`;
 - `placed_type_count <= matched_type_count`;
 - `placed_instance_count` equals the sum of the rows' `placed_instance_count` across a completed traversal;
 - the sum of `returned_count` over a completed traversal equals `matched_type_count`.
 
-Family classification is relative to the matched set. With `usage: "unused"` or a name filter, a family can have placed types outside the matched set and still count as `loaded_unused` when every matched symbol is unplaced. For an unfiltered family classification, use `usage: "all"` with no name filters, optionally narrowed by `category_tokens`.
+Family classification is relative to the matched set. With `usage: "unused"` or a name filter, a family can have placed types outside the matched set and still count in `unused_family_count` when every matched symbol is unplaced. For an unfiltered family classification, use `usage: "all"` with no name filters, optionally narrowed by `category_tokens`.
 
 An empty match returns all six values 0.
 
@@ -567,7 +567,7 @@ must reproduce the ADR-0023 baseline in its `summary`:
 | `placed_type_count` | 254 |
 | `placed_instance_count` | 8,278 |
 | `used_family_count` | 87 |
-| `loaded_unused_family_count` | 109 |
+| `unused_family_count` | 109 |
 
 The numbers are evidence from one reference project at one point in time, not product constants. If the model changed after the baseline, the baseline is re-measured on the same document state first, by a method independent of BIM-IT, and the document state is recorded. Any difference is explained against the counting semantics in this specification. The baseline counted instances by category. This capability counts them by `FamilySymbol`, and equality is expected.
 

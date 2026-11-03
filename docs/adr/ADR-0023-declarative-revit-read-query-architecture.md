@@ -137,7 +137,7 @@ The tool accepts only bounded filters, a page size, and an opaque cursor (sectio
 - family placement metadata (`FamilyPlacementType`, mapped to a stable token);
 - `family_is_in_place` (`Family.IsInPlace`), which distinguishes in-place families from loadable ones, where Revit exposes it;
 - `placed_instance_count`;
-- used versus loaded but unused, derived from that count.
+- used versus unused, derived from that count.
 
 **Query-level summary.** Every result also carries a summary of the whole matched set, not only the current page, enough to reproduce the electrical benchmark:
 
@@ -146,7 +146,7 @@ The tool accepts only bounded filters, a page size, and an opaque cursor (sectio
 - placed type count;
 - placed instance count;
 - used family count;
-- loaded-but-unused family count.
+- unused family count (matched families whose matched types all have zero placed instances).
 
 **Instance-count semantics (v1).** `placed_instance_count` is the number of matching instances in the active host project document, under the documented inventory semantics. It includes instances inside groups and design options when they exist as document elements. It includes nested shared family instances when Revit exposes them as matching project-document instances. Linked documents are excluded. These rules are written into the capability spec so that the benchmark is reproducible.
 
@@ -220,7 +220,7 @@ A future live gate on the same reference electrical project. For the nine benchm
 | Placed types | 254 |
 | Placed instances | 8,278 |
 | Used families | 87 |
-| Loaded but unused families | 109 |
+| Unused families | 109 |
 
 These numbers are evidence from one reference project at one point in time, not product constants. The model may have changed since. The gate compares against a baseline re-measured on the same document state, and the counting semantics in section 5 must match.
 
