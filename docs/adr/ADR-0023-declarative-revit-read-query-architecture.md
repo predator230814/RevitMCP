@@ -137,7 +137,7 @@ The tool accepts only bounded filters, a page size, and an opaque cursor (sectio
 - family placement metadata (`FamilyPlacementType`, mapped to a stable token);
 - `family_is_in_place` (`Family.IsInPlace`), which distinguishes in-place families from loadable ones, where Revit exposes it;
 - `placed_instance_count`;
-- used versus loaded but unused, derived from that count.
+- used versus unused, derived from that count.
 
 **Query-level summary.** Every result also carries a summary of the whole matched set, not only the current page, enough to reproduce the electrical benchmark:
 
@@ -146,7 +146,7 @@ The tool accepts only bounded filters, a page size, and an opaque cursor (sectio
 - placed type count;
 - placed instance count;
 - used family count;
-- loaded-but-unused family count.
+- unused family count (matched families whose matched types all have zero placed instances).
 
 **Instance-count semantics (v1).** `placed_instance_count` is the number of matching instances in the active host project document, under the documented inventory semantics. It includes instances inside groups and design options when they exist as document elements. It includes nested shared family instances when Revit exposes them as matching project-document instances. Linked documents are excluded. These rules are written into the capability spec so that the benchmark is reproducible.
 
@@ -183,7 +183,7 @@ Every kernel-backed tool declares an MCP output schema and returns structured co
 
 BIM-IT does not claim a .NET sandbox. Compiled kernel code runs inside the Revit process with the permissions of the Revit user, like the rest of the add-in. Safety comes from a closed request vocabulary and a trusted implementation. It does not come from a process sandbox, from MCP annotations, or from static tests that could prove compiled C# incapable of opening a transaction or touching the machine. The security invariant is:
 
-- **Requests cannot express operations.** A model or client request cannot express, inject, or select a filesystem, network, process, reflection, or arbitrary-code operation. It selects a source and supplies filter values, a page size, and a cursor. It never carries code, expressions, member names, type names, or reflection targets. Unknown sources, filter keys, or fields are rejected, never ignored.
+- **Requests cannot express operations.** A model or client request cannot express, inject, or select a filesystem, network, process, reflection, or arbitrary-code operation. It selects a source and supplies filter values, a page size, and a cursor. It never carries code, expressions, or .NET, runtime, or Revit API type or member names that would select executable API members, reflection targets, or runtime behavior. Ordinary BIM data values, such as family names, Revit `FamilySymbol` type names, and category tokens, remain valid closed filter values. Unknown sources, filter keys, or fields are rejected, never ignored.
 - **No model-supplied code runs.** No Python, C#, Dynamo, or Revit API source from a model or client is ever executed (section 1).
 - **Kernel implementations are trusted compiled BIM-IT code**, reviewed and tested, and written to contain no such behavior. They receive the document for reading, open no `Transaction`, and call no API that modifies the document. This is a rule for the reviewer and the code owner. Review and tests demonstrate that the shipped operations behave as specified. They do not make a hypothetical malicious operation impossible.
 - **Read-only comes from the closed capability design** (a read source with no write path) **plus that trusted implementation.** `readOnlyHint` and the absence of `destructiveHint` describe the design for clients. They do not create it.
@@ -220,7 +220,7 @@ A future live gate on the same reference electrical project. For the nine benchm
 | Placed types | 254 |
 | Placed instances | 8,278 |
 | Used families | 87 |
-| Loaded but unused families | 109 |
+| Unused families | 109 |
 
 These numbers are evidence from one reference project at one point in time, not product constants. The model may have changed since. The gate compares against a baseline re-measured on the same document state, and the counting semantics in section 5 must match.
 
