@@ -190,6 +190,18 @@ No MCP write tool was used to change the model.
 
 The add-in's document query revision did not advance after the edits. That is why the minted cursor stayed byte-identical. The revision is advanced by the add-in's `DocumentChanged`, `DocumentSynchronizedWithCentral` and `DocumentReloadedLatest` subscription in `RevitDocumentQueryChangeEventSource`. This run did not determine whether the subscription is missing in production, whether it fires but fails to resolve the event's document to its `document_id`, or something else. No product code was changed.
 
+#### Diagnosis after the live run
+
+These notes were added after the run and do not change the observed results above.
+
+- **Root cause:** the add-in subscribed to `DocumentChanged` on the startup `ControlledApplication` it had stored, from the Idling bootstrap after `OnStartup` returned. In Revit 2026.5 that late handler received no events, so the document query revision never advanced.
+- **Evidence:** a read-only reflection inspection of the running add-in in the same Revit session.
+  - The subscription object was alive, and the document mapped to the queried `document_id`, but the revision was still 0 after the two committed edits.
+  - Identity lookup resolved every host-document wrapper, and the query service read the same revision service.
+  - After the same compiled handler was also attached to `Application.DocumentChanged`, the revision then advanced on edits.
+- **Correction:** commit `2059b9b` registers the Revit handlers while `OnStartup` runs and relays them to the dispatcher lifetime. The cursor format, schema, Bridge protocol and summaries are unchanged.
+- **Still required:** stale-cursor live revalidation. This record stays FAIL until a new Revit run observes `STALE_CURSOR`.
+
 ### Safety observations
 
 - No MCP write, preview, review or apply tool was called. No approval UI was requested.
