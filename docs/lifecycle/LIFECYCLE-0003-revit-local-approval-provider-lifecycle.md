@@ -283,6 +283,8 @@ The implementation may combine those steps under one bounded in-process synchron
 
 If no existing RevitMCP `document_id` mapping exists, do not create one during cleanup. Do not invent approval or intent cleanup for a missing id. Parameter-ref and document-identity forget stay as LIFECYCLE-0002 already requires.
 
+Steps 4 and 5 use state detached during `DocumentClosing`, as LIFECYCLE-0002 describes, because the `Document` is no longer valid at `DocumentClosed`. Steps 1 to 3 use the `document_id` captured then.
+
 ## 16. Expiry cleanup
 
 An expired intent means expired approval and session authority.

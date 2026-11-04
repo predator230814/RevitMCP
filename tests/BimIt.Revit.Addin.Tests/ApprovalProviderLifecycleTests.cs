@@ -124,15 +124,16 @@ public sealed class ApprovalProviderLifecycleTests
         var created = store.TryCreate(Draft("doc-a"));
         var provider = new RevitLocalApprovalProviderStateMachine(store);
         var started = provider.BeginReview(created.IntentRef, "doc-a");
-        var cleanup = new DocumentCloseIdentityCleanup<object>(_ =>
-            RevitExecutionDispatcherLifetime.ApplySuccessfulDocumentClose(
+        var cleanup = new DocumentCloseIdentityCleanup<object>(_ => new DetachedDocumentState(
+            forget: () => RevitExecutionDispatcherLifetime.ApplySuccessfulDocumentClose(
                 true,
                 "doc-a",
                 provider.ForgetDocument,
                 _ => 0,
                 store.ForgetDocument,
                 () => false,
-                () => false));
+                () => false),
+            restore: static () => { }));
         var document = new object();
 
         cleanup.OnClosing(1, document);

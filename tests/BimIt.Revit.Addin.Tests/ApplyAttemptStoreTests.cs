@@ -220,8 +220,8 @@ public sealed class ApplyAttemptStoreTests
         Assert.Equal(ApplyEstablishStatus.Owner, store.TryEstablishExclusive("intent-a", Binding(), out _));
         Assert.Equal(ApplyEstablishStatus.Owner, store.TryEstablishExclusive("intent-b", kept, out _));
         var seen = new List<string>();
-        var cleanup = new DocumentCloseIdentityCleanup<object>(_ =>
-            RevitExecutionDispatcherLifetime.ApplySuccessfulDocumentClose(
+        var cleanup = new DocumentCloseIdentityCleanup<object>(_ => new DetachedDocumentState(
+            forget: () => RevitExecutionDispatcherLifetime.ApplySuccessfulDocumentClose(
                 true,
                 "doc-a",
                 _ => 0,
@@ -232,7 +232,8 @@ public sealed class ApplyAttemptStoreTests
                 },
                 _ => 0,
                 () => false,
-                () => false));
+                () => false),
+            restore: static () => { }));
         var document = new object();
 
         cleanup.OnClosing(1, document);

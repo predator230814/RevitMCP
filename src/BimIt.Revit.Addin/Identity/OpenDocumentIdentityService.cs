@@ -8,8 +8,8 @@ namespace BimIt.Revit.Addin.Identity;
 /// <c>Equals</c>/<c>GetHashCode</c>, not managed reference identity. Call only
 /// from valid Revit API execution context. Does not read title, path, cloud
 /// identity, username, or process id, and does not write into the model.
-/// Successful document close forgets the mapping through two-phase
-/// Closing/Closed correlation; cancelled or failed closes keep the id.
+/// Document close detaches the mapping during Closing, while the document is still valid.
+/// A successful close then drops it; a cancelled or failed close restores the same id.
 /// </summary>
 internal sealed class OpenDocumentIdentityService
 {
@@ -27,9 +27,15 @@ internal sealed class OpenDocumentIdentityService
         return _map.TryGet(document, out documentId);
     }
 
-    public bool Forget(Document document)
+    public bool TryDetach(Document document, out string documentId)
     {
         ArgumentNullException.ThrowIfNull(document);
-        return _map.Remove(document);
+        return _map.TryDetach(document, out documentId);
+    }
+
+    public void Restore(Document document, string documentId)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        _map.Restore(document, documentId);
     }
 }

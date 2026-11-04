@@ -216,7 +216,7 @@ Preserve EXEC-0001.
 
 Reuse the existing successful `DocumentClosing` / `DocumentClosed` correlation. `DocumentClosing` `DocumentId` is only an event-pair key. It is not a RevitMCP `document_id`.
 
-On successful close, remove apply-attempt state for the existing `document_id` without creating a document id. Do not change the LIFECYCLE-0003 order among provider state, intent state, parameter-ref state, and document identity. Document identity is still forgotten last. After that close, no terminal outcome for that document remains.
+On successful close, remove apply-attempt state for the existing `document_id`, captured during `DocumentClosing` as LIFECYCLE-0002 describes, without creating a document id. Do not change the LIFECYCLE-0003 order among provider state, intent state, parameter-ref state, and document identity. Document identity is still forgotten last. After that close, no terminal outcome for that document remains.
 
 Cancelled and failed closes preserve apply-attempt state.
 

@@ -109,7 +109,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     {
         if (closeEvents is not null)
         {
-            _closeCleanup = closeEvents.Subscribe(new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(ForgetDocument));
+            _closeCleanup = closeEvents.Subscribe(new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(DetachDocument));
         }
 
         TrySubscribeActiveDocument(activeDocumentEvents);
@@ -186,24 +186,38 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         _parameterRefs = new OpenDocumentParameterIdentityService();
     }
 
-    private bool ForgetDocument(Autodesk.Revit.DB.Document document)
+    private DetachedDocumentState DetachDocument(Autodesk.Revit.DB.Document document)
     {
-        var hasExistingDocumentId = _identity.TryGet(document, out var documentId);
-        return ApplySuccessfulDocumentClose(
-            hasExistingDocumentId,
-            documentId,
-            _approval.ForgetDocument,
-            _applyAttempts.ForgetDocument,
-            _intentStore.ForgetDocument,
-            () => _parameterRefs.Forget(document),
-            () =>
-            {
-                if (documentId is not null)
+        var hasExistingDocumentId = _identity.TryDetach(document, out var documentId);
+        var hasParameterRefs = _parameterRefs.TryDetach(document, out var parameterRefs);
+        return new DetachedDocumentState(
+            forget: () => ApplySuccessfulDocumentClose(
+                hasExistingDocumentId,
+                documentId,
+                _approval.ForgetDocument,
+                _applyAttempts.ForgetDocument,
+                _intentStore.ForgetDocument,
+                () => hasParameterRefs,
+                () =>
                 {
-                    _revisions.Forget(documentId);
+                    if (hasExistingDocumentId)
+                    {
+                        _revisions.Forget(documentId);
+                    }
+
+                    return hasExistingDocumentId;
+                }),
+            restore: () =>
+            {
+                if (hasExistingDocumentId)
+                {
+                    _identity.Restore(document, documentId);
                 }
 
-                return _identity.Forget(document);
+                if (hasParameterRefs)
+                {
+                    _parameterRefs.Restore(document, parameterRefs!);
+                }
             });
     }
 

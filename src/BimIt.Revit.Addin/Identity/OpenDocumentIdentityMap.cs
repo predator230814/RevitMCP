@@ -51,5 +51,25 @@ internal sealed class OpenDocumentIdentityMap<TKey>
         return _ids.Remove(key);
     }
 
+    public bool TryDetach(TKey key, out string documentId)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        if (_ids.Remove(key, out var existing))
+        {
+            documentId = existing;
+            return true;
+        }
+
+        documentId = string.Empty;
+        return false;
+    }
+
+    public void Restore(TKey key, string documentId)
+    {
+        ArgumentNullException.ThrowIfNull(key);
+        ArgumentException.ThrowIfNullOrEmpty(documentId);
+        _ids[key] = documentId;
+    }
+
     private static string CreateOpaqueId() => Guid.NewGuid().ToString("D");
 }

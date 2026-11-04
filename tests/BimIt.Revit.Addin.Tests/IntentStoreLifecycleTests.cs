@@ -176,18 +176,20 @@ public sealed class IntentStoreLifecycleTests
     {
         var store = Store(Bytes(9));
         var created = store.TryCreate(Draft("doc-a"));
-        var cleanup = new DocumentCloseIdentityCleanup<object>(_ =>
-        {
-            var provider = new BimIt.Revit.Addin.Approval.RevitLocalApprovalProviderStateMachine(store);
-            return RevitExecutionDispatcherLifetime.ApplySuccessfulDocumentClose(
-                true,
-                "doc-a",
-                provider.ForgetDocument,
-                _ => 0,
-                store.ForgetDocument,
-                () => false,
-                () => false);
-        });
+        var cleanup = new DocumentCloseIdentityCleanup<object>(_ => new DetachedDocumentState(
+            forget: () =>
+            {
+                var provider = new BimIt.Revit.Addin.Approval.RevitLocalApprovalProviderStateMachine(store);
+                RevitExecutionDispatcherLifetime.ApplySuccessfulDocumentClose(
+                    true,
+                    "doc-a",
+                    provider.ForgetDocument,
+                    _ => 0,
+                    store.ForgetDocument,
+                    () => false,
+                    () => false);
+            },
+            restore: static () => { }));
         var document = new object();
 
         cleanup.OnClosing(1, document);
@@ -207,23 +209,31 @@ public sealed class IntentStoreLifecycleTests
     }
 
     [Fact]
-    public void Production_close_wiring_uses_noncreating_tryget_before_identity_forget()
+    public void Production_close_wiring_detaches_while_closing_and_forgets_by_document_id()
     {
         var adapters = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", "Lifecycle", "RevitLifecycleAdapters.cs"));
         var coordinator = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", "Lifecycle", "AddinLifecycleCoordinator.cs"));
 
         Assert.Equal(1, CountOccurrences(adapters, "new EphemeralWriteIntentStore()"));
         Assert.Contains("new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents, QueryChangeEvents)", adapters, StringComparison.Ordinal);
-        Assert.Contains("new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(ForgetDocument)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(DetachDocument)", adapters, StringComparison.Ordinal);
 
-        var forget = Slice(adapters, "private bool ForgetDocument(", "internal static bool ApplySuccessfulDocumentClose");
-        var tryGet = forget.IndexOf("_identity.TryGet(document, out var documentId)", StringComparison.Ordinal);
-        var parameterForget = forget.IndexOf("() => _parameterRefs.Forget(document)", StringComparison.Ordinal);
-        var revisionForget = forget.IndexOf("_revisions.Forget(documentId)", StringComparison.Ordinal);
-        var identityForget = forget.IndexOf("_identity.Forget(document)", StringComparison.Ordinal);
-        Assert.True(tryGet >= 0 && tryGet < parameterForget && parameterForget < revisionForget && revisionForget < identityForget);
-        Assert.DoesNotContain(".GetId(", forget, StringComparison.Ordinal);
-        Assert.DoesNotContain("GetOrAssign(", forget, StringComparison.Ordinal);
+        // Live Revit 2026.5: the Document is invalid by DocumentClosed, so only the DocumentClosing
+        // detach may use it. The successful-close forget runs on the captured document_id alone.
+        var closing = Slice(adapters, "private DetachedDocumentState DetachDocument(", "internal static bool ApplySuccessfulDocumentClose");
+        var identityDetach = closing.IndexOf("_identity.TryDetach(document, out var documentId)", StringComparison.Ordinal);
+        var parameterDetach = closing.IndexOf("_parameterRefs.TryDetach(document, out var parameterRefs)", StringComparison.Ordinal);
+        var forgetStart = closing.IndexOf("forget: () => ApplySuccessfulDocumentClose(", StringComparison.Ordinal);
+        var restoreStart = closing.IndexOf("restore: () =>", StringComparison.Ordinal);
+        Assert.True(identityDetach >= 0 && identityDetach < parameterDetach && parameterDetach < forgetStart && forgetStart < restoreStart);
+        var forget = closing[forgetStart..restoreStart];
+        Assert.Contains("_revisions.Forget(documentId)", forget, StringComparison.Ordinal);
+        Assert.DoesNotMatch(@"\bdocument\b", forget);
+        var restore = closing[restoreStart..];
+        Assert.Contains("_identity.Restore(document, documentId)", restore, StringComparison.Ordinal);
+        Assert.Contains("_parameterRefs.Restore(document, parameterRefs", restore, StringComparison.Ordinal);
+        Assert.DoesNotContain(".GetId(", closing, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetOrAssign(", closing, StringComparison.Ordinal);
 
         var apply = Slice(adapters, "internal static bool ApplySuccessfulDocumentClose", "public void Stop()");
         var providerForget = apply.IndexOf("forgetProvider(documentId)", StringComparison.Ordinal);
