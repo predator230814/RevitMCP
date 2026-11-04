@@ -215,16 +215,23 @@ Preserve CAP-0007 and EXEC-0001.
 
 Reuse the existing two-phase `DocumentClosing` / `DocumentClosed` correlation. `DocumentClosing` `DocumentId` is only a temporary event-pair key. It is not a RevitMCP `document_id`, and cleanup must not treat it as document identity.
 
-On successful `DocumentClosed` only:
+In live Revit 2026.5 the `Document` is no longer valid when `DocumentClosed` runs: its `GetHashCode` throws, so a Document-keyed lookup at that point fails. Every Document-keyed step therefore happens during `DocumentClosing`, while the document is still valid.
 
-1. call `OpenDocumentIdentityService.TryGet(document, out documentId)`, or the equivalent non-creating lookup;
-2. do not call `GetId` or `GetOrAssign` during close cleanup;
-3. if no mapping exists, skip intent forget;
-4. if a mapping exists, capture that existing `document_id` before forgetting the identity mapping, then forget intents for that id;
-5. forget the document's parameter-ref map;
-6. forget the document identity last.
+On `DocumentClosing`:
 
-Cancelled and failed closes leave the pending correlation without calling forget. Intents, parameter refs, and `document_id` for that still-open document stay.
+1. detach the identity mapping with a non-creating lookup (`OpenDocumentIdentityService.TryDetach`) and capture the existing `document_id`;
+2. detach the document's parameter-ref map;
+3. do not call `GetId` or `GetOrAssign` during close cleanup;
+4. keep the detached state under the temporary event-pair key.
+
+On successful `DocumentClosed` only, using the captured `document_id` and never the closed `Document`:
+
+1. if no mapping existed, skip intent forget;
+2. if a mapping existed, forget intents for that id;
+3. drop the detached parameter-ref map;
+4. drop the detached document identity last.
+
+Cancelled and failed closes restore the detached identity, with the same `document_id`, and the detached parameter-ref map, and forget nothing. Intents, parameter refs, and `document_id` for that still-open document stay.
 
 Shutdown clears intent state before process-owned bridge and dispatcher resources are fully released. Entering LIFECYCLE-0001 stopping closes the store and removes every entry. A later `TryCreate` in that process fails and stores nothing, including a preview that was already running. Restart does not reload the cleared entries.
 

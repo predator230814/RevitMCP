@@ -34,10 +34,17 @@ internal sealed class OpenDocumentParameterIdentityService
         return false;
     }
 
-    public bool Forget(Document document)
+    public bool TryDetach(Document document, out ParameterIdentityMap? parameterRefs)
     {
         ArgumentNullException.ThrowIfNull(document);
-        return _maps.Remove(document);
+        return _maps.Remove(document, out parameterRefs);
+    }
+
+    public void Restore(Document document, ParameterIdentityMap parameterRefs)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        ArgumentNullException.ThrowIfNull(parameterRefs);
+        _maps[document] = parameterRefs;
     }
 
     private ParameterIdentityMap GetMap(Document document)
