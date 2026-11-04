@@ -200,7 +200,7 @@ These notes were added after the run and do not change the observed results abov
   - Identity lookup resolved every host-document wrapper, and the query service read the same revision service.
   - After the same compiled handler was also attached to `Application.DocumentChanged`, the revision then advanced on edits.
 - **Correction:** commit `2059b9b` registers the Revit handlers while `OnStartup` runs and relays them to the dispatcher lifetime. The cursor format, schema, Bridge protocol and summaries are unchanged.
-- **Still required:** stale-cursor live revalidation. This record stays FAIL until a new Revit run observes `STALE_CURSOR`.
+- **Resolved:** the stale-cursor live revalidation below, against head `fef594b`, observed `STALE_CURSOR` after a committed edit. The overall status is PASS.
 
 ### Stale cursor revalidation: PASS
 
