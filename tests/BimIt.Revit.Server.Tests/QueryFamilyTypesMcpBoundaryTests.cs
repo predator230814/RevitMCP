@@ -11,7 +11,7 @@ public sealed class QueryFamilyTypesMcpBoundaryTests
     [Fact]
     public void Tool_metadata_is_read_only_and_closed_world()
     {
-        var tool = QueryFamilyTypesToolRegistration.Create(new QueryFamilyTypesMcpTools(Service())).ProtocolTool;
+        var tool = QueryFamilyTypesToolRegistration.Create(new QueryFamilyTypesMcpTools(Service(Client("id-v22", "pipe-v22", 22), "id-v22", "pipe-v22", 22))).ProtocolTool;
         Assert.Equal("revit_query_family_types", tool.Name);
         Assert.Equal(QueryFamilyTypesToolMetadata.Title, tool.Title);
         Assert.Contains("FamilySymbol", tool.Description, StringComparison.Ordinal);
@@ -26,7 +26,7 @@ public sealed class QueryFamilyTypesMcpBoundaryTests
     [Fact]
     public void Input_and_output_schemas_are_strict()
     {
-        var tool = QueryFamilyTypesToolRegistration.Create(new QueryFamilyTypesMcpTools(Service())).ProtocolTool;
+        var tool = QueryFamilyTypesToolRegistration.Create(new QueryFamilyTypesMcpTools(Service(Client("id-v22", "pipe-v22", 22), "id-v22", "pipe-v22", 22))).ProtocolTool;
         var input = tool.InputSchema;
         Assert.False(input.GetProperty("additionalProperties").GetBoolean());
         Assert.Equal(new[] { "document_id" }, input.GetProperty("required").EnumerateArray().Select(value => value.GetString()).ToArray());
@@ -36,7 +36,9 @@ public sealed class QueryFamilyTypesMcpBoundaryTests
         var tokens = input.GetProperty("properties").GetProperty("category_tokens");
         Assert.Equal(1, tokens.GetProperty("minItems").GetInt32());
         Assert.Equal(20, tokens.GetProperty("maxItems").GetInt32());
-        Assert.Equal(new[] { "all", "placed", "unused" }, input.GetProperty("properties").GetProperty("usage").GetProperty("enum").EnumerateArray().Select(value => value.GetString()).ToArray());
+        var usage = input.GetProperty("properties").GetProperty("usage").GetProperty("enum").EnumerateArray().ToArray();
+        Assert.Equal(new[] { "all", "placed", "unused" }, usage.Take(3).Select(value => value.GetString()).ToArray());
+        Assert.Equal(JsonValueKind.Null, usage[3].ValueKind);
         Assert.Equal(1, input.GetProperty("properties").GetProperty("page_size").GetProperty("minimum").GetInt32());
         Assert.Equal(200, input.GetProperty("properties").GetProperty("page_size").GetProperty("maximum").GetInt32());
         Assert.Equal(2048, input.GetProperty("properties").GetProperty("cursor").GetProperty("maxLength").GetInt32());
@@ -98,10 +100,68 @@ public sealed class QueryFamilyTypesMcpBoundaryTests
     }
 
     [Fact]
-    public async Task Protocol_v21_is_incompatible_and_does_not_call_another_capability()
+    public async Task Null_usage_is_accepted_and_matches_omitted_usage()
     {
-        var client = Client(21);
-        var outcome = await Service(client).ExecuteAsync(null, Request(), CancellationToken.None);
+        var omitted = Client("id-v22", "pipe-v22", 22);
+        var nulled = Client("id-v22", "pipe-v22", 22);
+        var tool = QueryFamilyTypesToolRegistration.Create(new QueryFamilyTypesMcpTools(Service(omitted, "id-v22", "pipe-v22", 22)));
+        var omittedResult = await McpToolInvoke.InvokeAsync(tool, Arguments(includeUsage: false, usage: null));
+        Assert.False(omittedResult.IsError);
+        Assert.Null(omitted.LastQueryFamilyTypesRequest!.Usage);
+
+        tool = QueryFamilyTypesToolRegistration.Create(new QueryFamilyTypesMcpTools(Service(nulled, "id-v22", "pipe-v22", 22)));
+        var nullResult = await McpToolInvoke.InvokeAsync(tool, Arguments(includeUsage: true, usage: null));
+        Assert.False(nullResult.IsError);
+        Assert.Null(nulled.LastQueryFamilyTypesRequest!.Usage);
+        Assert.Equal(omitted.LastQueryFamilyTypesRequest.DocumentId, nulled.LastQueryFamilyTypesRequest.DocumentId);
+
+        var rejected = Client("id-v22", "pipe-v22", 22);
+        tool = QueryFamilyTypesToolRegistration.Create(new QueryFamilyTypesMcpTools(Service(rejected, "id-v22", "pipe-v22", 22)));
+        var invalid = await McpToolInvoke.InvokeAsync(tool, Arguments(includeUsage: true, usage: "other"));
+        Assert.True(invalid.IsError);
+        Assert.Equal(0, rejected.QueryFamilyTypesCalls);
+    }
+
+    [Fact]
+    public async Task Omitted_instance_id_selects_the_single_v22_host()
+    {
+        var client = Client("id-v22", "pipe-v22", 22);
+        var outcome = await Service(client, "id-v22", "pipe-v22", 22).ExecuteAsync(null, Request(), CancellationToken.None);
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(1, client.QueryFamilyTypesCalls);
+    }
+
+    [Fact]
+    public async Task Omitted_instance_id_selects_v22_when_a_v21_host_is_also_ready()
+    {
+        var v22 = Client("id-v22", "pipe-v22", 22);
+        var v21 = Client("id-v21", "pipe-v21", 21);
+        var outcome = await Service(new Dictionary<string, RecordingBridgeClient>(StringComparer.Ordinal)
+        {
+            ["pipe-v22"] = v22,
+            ["pipe-v21"] = v21
+        }, ("id-v22", "pipe-v22", 22), ("id-v21", "pipe-v21", 21)).ExecuteAsync(null, Request(), CancellationToken.None);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(1, v22.QueryFamilyTypesCalls);
+        Assert.Equal(0, v21.QueryFamilyTypesCalls);
+        Assert.Equal(0, v21.GetMepDeviceTypesCalls);
+        Assert.Equal(0, v21.QueryElementsCalls);
+    }
+
+    [Fact]
+    public async Task Two_v22_hosts_require_an_instance_id()
+    {
+        var outcome = await Service(new Dictionary<string, RecordingBridgeClient>(StringComparer.Ordinal), ("id-a", "pipe-a", 22), ("id-b", "pipe-b", 22))
+            .ExecuteAsync(null, Request(), CancellationToken.None);
+        Assert.Equal(McpToolErrorCodes.InstanceRequired, outcome.ErrorCode);
+    }
+
+    [Fact]
+    public async Task Explicit_v21_is_incompatible_and_does_not_call_another_capability()
+    {
+        var client = Client("id-v21", "pipe-v21", 21);
+        var outcome = await Service(client, "id-v21", "pipe-v21", 21).ExecuteAsync("id-v21", Request(), CancellationToken.None);
         Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, outcome.ErrorCode);
         Assert.Equal(0, client.QueryFamilyTypesCalls);
         Assert.Equal(0, client.GetMepDeviceTypesCalls);
@@ -109,43 +169,67 @@ public sealed class QueryFamilyTypesMcpBoundaryTests
     }
 
     [Fact]
-    public async Task Protocol_v22_invokes_the_family_type_rpc()
+    public async Task Explicit_v22_invokes_the_family_type_rpc()
     {
-        var client = Client(22);
-        var outcome = await Service(client).ExecuteAsync(null, Request(), CancellationToken.None);
+        var client = Client("id-v22", "pipe-v22", 22);
+        var outcome = await Service(client, "id-v22", "pipe-v22", 22).ExecuteAsync("id-v22", Request(), CancellationToken.None);
         Assert.True(outcome.IsSuccess);
         Assert.Equal(1, client.QueryFamilyTypesCalls);
-        Assert.Equal(0, client.GetMepDeviceTypesCalls);
-        Assert.Equal(0, client.QueryElementsCalls);
         Assert.Equal("doc", client.LastQueryFamilyTypesRequest!.DocumentId);
     }
 
-    private static QueryFamilyTypesApplicationService Service(RecordingBridgeClient? client = null)
+    [Fact]
+    public async Task No_v22_host_does_not_substitute_another_capability()
     {
-        var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready("id", "pipe", protocolVersion: client?.HandshakeRequest is null ? 22 : 22));
+        var client = Client("id-v21", "pipe-v21", 21);
         var factory = new RecordingBridgeClientFactory
         {
-            Connect = (_, _, _) => Task.FromResult(client ?? Client(22))
+            Connect = (_, _, _) => Task.FromResult(client)
         };
-        if (client is not null)
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("id-v21", "pipe-v21", protocolVersion: 21));
+        var outcome = await new QueryFamilyTypesApplicationService(discovery, factory, new ServerTimeouts())
+            .ExecuteAsync(null, Request(), CancellationToken.None);
+        Assert.Equal(McpToolErrorCodes.NoRevitInstance, outcome.ErrorCode);
+        Assert.Empty(factory.RequestedPipes);
+        Assert.Equal(0, client.QueryFamilyTypesCalls);
+        Assert.Equal(0, client.GetMepDeviceTypesCalls);
+        Assert.Equal(0, client.QueryElementsCalls);
+    }
+
+    private static QueryFamilyTypesApplicationService Service(RecordingBridgeClient client, string instanceId, string pipe, int protocolVersion)
+    {
+        return Service(
+            new Dictionary<string, RecordingBridgeClient>(StringComparer.Ordinal) { [pipe] = client },
+            (instanceId, pipe, protocolVersion));
+    }
+
+    private static QueryFamilyTypesApplicationService Service(
+        IReadOnlyDictionary<string, RecordingBridgeClient> clients,
+        params (string InstanceId, string Pipe, int ProtocolVersion)[] instances)
+    {
+        var discovery = new FakeDiscovery();
+        foreach (var instance in instances)
         {
-            discovery.Instances.Clear();
-            discovery.Instances.Add(TestSupport.Ready("id", "pipe", protocolVersion: 21));
+            discovery.Instances.Add(TestSupport.Ready(instance.InstanceId, instance.Pipe, protocolVersion: instance.ProtocolVersion));
         }
 
+        var factory = new RecordingBridgeClientFactory
+        {
+            Connect = (pipe, _, _) => Task.FromResult(clients[pipe])
+        };
         return new QueryFamilyTypesApplicationService(discovery, factory, new ServerTimeouts());
     }
 
-    private static RecordingBridgeClient Client(int version)
+    private static RecordingBridgeClient Client(string instanceId, string pipe, int version)
     {
-        var registration = TestSupport.CreateRegistration("id", "pipe");
+        var registration = TestSupport.CreateRegistration(instanceId, pipe);
         return new RecordingBridgeClient
         {
             Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: version)),
             QueryFamilyTypes = (_, _, _) => Task.FromResult(new QueryFamilyTypesResult
             {
-                Context = new QueryFamilyTypesContext { InstanceId = "id", DocumentId = "doc" },
+                Context = new QueryFamilyTypesContext { InstanceId = instanceId, DocumentId = "doc" },
                 Summary = new QueryFamilyTypesSummary
                 {
                     MatchedTypeCount = 0,
@@ -161,6 +245,26 @@ public sealed class QueryFamilyTypesMcpBoundaryTests
                 Types = []
             })
         };
+    }
+
+    private static Dictionary<string, JsonElement> Arguments(bool includeUsage, string? usage)
+    {
+        var arguments = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        {
+            ["document_id"] = Json("\"doc\"")
+        };
+        if (includeUsage)
+        {
+            arguments["usage"] = usage is null ? Json("null") : Json(JsonSerializer.Serialize(usage));
+        }
+
+        return arguments;
+    }
+
+    private static JsonElement Json(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        return document.RootElement.Clone();
     }
 
     private static QueryFamilyTypesRequest Request()

@@ -510,21 +510,26 @@ internal static class PlacedInstanceCounts
     }
 }
 
+internal readonly record struct FamilyTypeQueryPreparation(
+    string InstanceId,
+    string DocumentId,
+    byte[] Fingerprint,
+    long Revision,
+    int Offset);
+
 internal static class FamilyTypeInventoryQuery
 {
-    public static QueryFamilyTypesResult Execute(
+    public static FamilyTypeQueryPreparation Prepare(
         ValidatedFamilyTypeQuery query,
         string instanceId,
         string? activeDocumentId,
         bool hasActiveDocument,
         bool isFamilyDocument,
         long revision,
-        IReadOnlyList<FamilyTypeCandidate> candidates,
         IBuiltInCategoryCatalog categories,
         FamilyTypeCursorCodec cursors)
     {
         ArgumentNullException.ThrowIfNull(instanceId);
-        ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(categories);
         ArgumentNullException.ThrowIfNull(cursors);
         if (!hasActiveDocument)
@@ -545,14 +550,6 @@ internal static class FamilyTypeInventoryQuery
         }
 
         FamilyTypeQueryValidator.EnsureDefinedCategories(query.CategoryTokens, categories);
-        foreach (var candidate in candidates)
-        {
-            if (string.IsNullOrEmpty(candidate.FamilyRef) || string.IsNullOrEmpty(candidate.TypeRef))
-            {
-                throw new BridgeException(CapabilityErrorCodes.ExecutionFailed, "The family type query could not be read.");
-            }
-        }
-
         var fingerprint = FamilyTypeQueryFingerprint.Compute(query);
         var offset = 0;
         if (query.Cursor is not null)
@@ -575,6 +572,61 @@ internal static class FamilyTypeInventoryQuery
             offset = payload.Offset;
         }
 
+        return new FamilyTypeQueryPreparation(instanceId, query.DocumentId, fingerprint, revision, offset);
+    }
+
+    public static QueryFamilyTypesResult Execute(
+        ValidatedFamilyTypeQuery query,
+        string instanceId,
+        string? activeDocumentId,
+        bool hasActiveDocument,
+        bool isFamilyDocument,
+        long revision,
+        Func<IReadOnlyList<FamilyTypeCandidate>> readInventory,
+        IBuiltInCategoryCatalog categories,
+        FamilyTypeCursorCodec cursors)
+    {
+        ArgumentNullException.ThrowIfNull(readInventory);
+        var preparation = Prepare(query, instanceId, activeDocumentId, hasActiveDocument, isFamilyDocument, revision, categories, cursors);
+        return Complete(preparation, query, readInventory(), cursors);
+    }
+
+    public static QueryFamilyTypesResult Execute(
+        ValidatedFamilyTypeQuery query,
+        string instanceId,
+        string? activeDocumentId,
+        bool hasActiveDocument,
+        bool isFamilyDocument,
+        long revision,
+        IReadOnlyList<FamilyTypeCandidate> candidates,
+        IBuiltInCategoryCatalog categories,
+        FamilyTypeCursorCodec cursors)
+    {
+        var preparation = Prepare(query, instanceId, activeDocumentId, hasActiveDocument, isFamilyDocument, revision, categories, cursors);
+        ArgumentNullException.ThrowIfNull(candidates);
+        return Complete(preparation, query, candidates, cursors);
+    }
+
+    public static QueryFamilyTypesResult Complete(
+        FamilyTypeQueryPreparation preparation,
+        ValidatedFamilyTypeQuery query,
+        IReadOnlyList<FamilyTypeCandidate> candidates,
+        FamilyTypeCursorCodec cursors)
+    {
+        ArgumentNullException.ThrowIfNull(candidates);
+        ArgumentNullException.ThrowIfNull(cursors);
+        foreach (var candidate in candidates)
+        {
+            if (string.IsNullOrEmpty(candidate.FamilyRef) || string.IsNullOrEmpty(candidate.TypeRef))
+            {
+                throw new BridgeException(CapabilityErrorCodes.ExecutionFailed, "The family type query could not be read.");
+            }
+        }
+
+        var offset = preparation.Offset;
+        var fingerprint = preparation.Fingerprint;
+        var revision = preparation.Revision;
+        var instanceId = preparation.InstanceId;
         var matched = candidates.Where(candidate => Matches(candidate, query)).ToList();
         matched.Sort(static (left, right) =>
         {

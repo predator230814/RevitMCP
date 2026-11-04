@@ -21,7 +21,7 @@ internal static class QueryFamilyTypesJsonSchemas
             },
             "family_name_contains": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
             "type_name_contains": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
-            "usage": { "type": ["string", "null"], "enum": ["all", "placed", "unused"] },
+            "usage": { "type": ["string", "null"], "enum": ["all", "placed", "unused", null] },
             "page_size": { "type": ["integer", "null"], "minimum": 1, "maximum": 200 },
             "cursor": { "type": ["string", "null"], "minLength": 1, "maxLength": 2048 }
           }

@@ -32,7 +32,23 @@ Conditions from CAP-0014:
 - the benchmark project is the active host project document;
 - no second document is active;
 - the call is `revit_query_family_types` with `document_id` from `revit_get_context`;
-- no category, name, or usage filter on the benchmark query;
+- `category_tokens` is exactly these nine tokens:
+
+```text
+OST_ElectricalFixtures
+OST_ElectricalEquipment
+OST_LightingFixtures
+OST_LightingDevices
+OST_DataDevices
+OST_CommunicationDevices
+OST_FireAlarmDevices
+OST_SecurityDevices
+OST_NurseCallDevices
+```
+
+- no `family_name_contains` filter;
+- no `type_name_contains` filter;
+- `usage` is `all` or omitted;
 - follow `next_cursor` until `complete` is true;
 - record the query-level summary from the first page and confirm later pages repeat that same summary;
 - confirm the concatenated type rows contain 1,205 rows, no skipped row, and no repeated `type_ref`;
@@ -44,7 +60,7 @@ Conditions from CAP-0014:
 - [ ] Revit version and build recorded
 - [ ] Commit SHA recorded
 - [ ] Active document identity recorded
-- [ ] Unfiltered summary matches the reference numbers
+- [ ] Summary for the nine benchmark categories matches the reference numbers
 - [ ] Full cursor walk returns every type once
 - [ ] A model change after the first page returns `STALE_CURSOR`
 - [ ] Restart without a cursor succeeds after that change

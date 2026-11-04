@@ -85,17 +85,17 @@ internal sealed class RevitQueryFamilyTypesService : IRevitQueryFamilyTypesServi
         }
 
         var revision = _revisions.Current(documentId);
-        var candidates = ReadCandidates(document);
-        return FamilyTypeInventoryQuery.Execute(
+        var preparation = FamilyTypeInventoryQuery.Prepare(
             query,
             _metadata.InstanceId,
             documentId,
             hasActiveDocument: true,
             isFamilyDocument: false,
             revision,
-            candidates,
             _categories,
             _cursors);
+        var candidates = ReadCandidates(document);
+        return FamilyTypeInventoryQuery.Complete(preparation, query, candidates, _cursors);
     }
 
     private static List<FamilyTypeCandidate> ReadCandidates(Document document)

@@ -273,12 +273,35 @@ public sealed class QueryFamilyTypesTests
     }
 
     [Fact]
+    public void Invalid_and_stale_queries_do_not_enumerate_inventory()
+    {
+        var rows = new[] { Row("a", "f", typeName: "A"), Row("b", "f", typeName: "B") };
+        var page = Execute(Request(pageSize: 1), rows);
+        Assert.Equal(1, CountReads(Request(pageSize: 1, cursor: page.NextCursor), rows));
+
+        Assert.Equal(0, CountReads(Request(pageSize: 1, cursor: "not a cursor"), rows));
+        Assert.Equal(0, CountReads(Request(pageSize: 1, cursor: page.NextCursor, familyName: "Nope"), rows));
+        Assert.Equal(0, CountReads(Request(pageSize: 1, cursor: page.NextCursor), rows, revision: 9));
+        Assert.Equal(0, CountReads(Request(tokens: ["NOT_A_CATEGORY"]), rows));
+        Assert.Equal(0, CountReads(Request(documentId: "other"), rows));
+        Assert.Equal(0, CountReads(Request(), rows, isFamilyDocument: true));
+        Assert.Equal(CapabilityErrorCodes.InvalidCursor, ReadError(Request(cursor: "not a cursor"), rows).ErrorCode);
+        Assert.Equal(CapabilityErrorCodes.StaleCursor, ReadError(Request(pageSize: 1, cursor: page.NextCursor), rows, revision: 9).ErrorCode);
+        Assert.Equal(CapabilityErrorCodes.InvalidFamilyTypeQuery, ReadError(Request(tokens: ["NOT_A_CATEGORY"]), rows).ErrorCode);
+        Assert.Equal(CapabilityErrorCodes.DocumentContextChanged, ReadError(Request(documentId: "other"), rows).ErrorCode);
+        Assert.Equal(CapabilityErrorCodes.UnsupportedDocumentKind, ReadError(Request(), rows, isFamilyDocument: true).ErrorCode);
+    }
+
+    [Fact]
     public void Collector_and_revision_events_match_the_read_contract()
     {
         var root = RepoRoot();
         var service = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Addin", "Capabilities", "RevitQueryFamilyTypesService.cs"));
         Assert.Contains("FamilyTypeQueryValidator.Validate(request)", service, StringComparison.Ordinal);
         Assert.Contains("EnqueueAsync", service, StringComparison.Ordinal);
+        var prepare = service.IndexOf("FamilyTypeInventoryQuery.Prepare(", StringComparison.Ordinal);
+        var read = service.IndexOf("ReadCandidates(document)", StringComparison.Ordinal);
+        Assert.True(prepare >= 0 && prepare < read);
         Assert.Equal(1, Count(service, "OfClass(typeof(FamilySymbol))"));
         Assert.Equal(1, Count(service, "WhereElementIsNotElementType()"));
         Assert.Contains("GetTypeId()", service, StringComparison.Ordinal);
@@ -294,6 +317,55 @@ public sealed class QueryFamilyTypesTests
         Assert.Contains("DocumentChanged", events, StringComparison.Ordinal);
         Assert.Contains("DocumentSynchronizedWithCentral", events, StringComparison.Ordinal);
         Assert.Contains("DocumentReloadedLatest", events, StringComparison.Ordinal);
+    }
+
+    private int CountReads(
+        QueryFamilyTypesRequest request,
+        IReadOnlyList<FamilyTypeCandidate> rows,
+        long revision = 0,
+        bool isFamilyDocument = false)
+    {
+        var reads = 0;
+        try
+        {
+            FamilyTypeInventoryQuery.Execute(
+                FamilyTypeQueryValidator.Validate(request),
+                "instance",
+                "doc",
+                hasActiveDocument: true,
+                isFamilyDocument,
+                revision,
+                () =>
+                {
+                    reads++;
+                    return rows;
+                },
+                _categories,
+                _cursors);
+        }
+        catch (BridgeException)
+        {
+        }
+
+        return reads;
+    }
+
+    private BridgeException ReadError(
+        QueryFamilyTypesRequest request,
+        IReadOnlyList<FamilyTypeCandidate> rows,
+        long revision = 0,
+        bool isFamilyDocument = false)
+    {
+        return Assert.Throws<BridgeException>(() => FamilyTypeInventoryQuery.Execute(
+            FamilyTypeQueryValidator.Validate(request),
+            "instance",
+            "doc",
+            hasActiveDocument: true,
+            isFamilyDocument,
+            revision,
+            () => rows,
+            _categories,
+            _cursors));
     }
 
     private QueryFamilyTypesResult Execute(
