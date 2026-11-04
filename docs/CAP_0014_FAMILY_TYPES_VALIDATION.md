@@ -1,20 +1,20 @@
 # CAP-0014 family-type inventory validation
 
-- Status: FAIL
+- Status: PASS
 - Capability: [CAP-0014](capabilities/CAP-0014-revit-query-family-types.md)
 - Bridge: [BRIDGE-0018](bridge/BRIDGE-0018-query-family-types-capability-rpc.md)
 - Automated tests do not update the reference numbers below.
 
-Live validation ran on 2026-11-03 against PR #100 head `7b9efd6e6456eadc1291fe8645a6c73e111b3ebc`.
+Live validation first ran on 2026-11-03 against PR #100 head `7b9efd6e6456eadc1291fe8645a6c73e111b3ebc`. The stale-cursor check was then rerun against head `fef594b85b30031298993cf8621ba6753a93296f`, which contains fix `2059b9b`.
 
 | Part | Result |
 |---|---|
-| Primary inventory benchmark | PASS |
-| Semantic spot checks | PASS |
-| Stale cursor after a human model edit | FAIL |
+| Primary inventory benchmark | PASS (head `7b9efd6`) |
+| Semantic spot checks | PASS (head `7b9efd6`) |
+| Stale cursor after a human model edit | FAIL at `7b9efd6`, then PASS at `fef594b` |
 | v21-only host returns `BRIDGE_PROTOCOL_INCOMPATIBLE` | NOT RUN |
 
-The status is FAIL because a required CAP-0014 behavior failed live. After a committed human edit, an old cursor did not return `STALE_CURSOR`. The inventory itself was complete and matched the reference.
+The first run failed one required behavior: after a committed human edit, an old cursor did not return `STALE_CURSOR`. The inventory itself was complete and matched the reference. After the fix, a new live run observed `STALE_CURSOR`, so the status is PASS. The v21-only host check was not run live; it is covered only by automated tests.
 
 ## Reference model
 
@@ -202,6 +202,27 @@ These notes were added after the run and do not change the observed results abov
 - **Correction:** commit `2059b9b` registers the Revit handlers while `OnStartup` runs and relays them to the dispatcher lifetime. The cursor format, schema, Bridge protocol and summaries are unchanged.
 - **Still required:** stale-cursor live revalidation. This record stays FAIL until a new Revit run observes `STALE_CURSOR`.
 
+### Stale cursor revalidation: PASS
+
+This run followed the fix, on 2026-11-03 against head `fef594b85b30031298993cf8621ba6753a93296f`.
+
+- **Setup:**
+  - All Revit sessions were closed.
+  - The Release 2026 add-in and the server were rebuilt at that head; the built add-in contains `DocumentQueryChangeRelay`.
+  - Revit 2026.5 (`26.5.0.55`) was restarted after the build and reopened `525413_E_EG_DAVE.OTIS`.
+- **Client:** the same isolated BIM-IT-only client as above; `tools/list` returned 19 tools.
+- **Ids:** new instance `b38cd060-5fa6-41dd-8069-4a74e981149f`, new `document_id` `a597b518-a1d3-41e5-a450-6577373b0a44`. Both are process-lifetime ids, so they changed with the restart.
+
+| Step | Expected | Observed |
+|---|---|---|
+| Page 1 with `page_size: 5`; keep `next_cursor` | success | success, 5 rows, summary 1205 / 196 / 254 / 8278 / 87 / 109 |
+| Control: reuse that cursor in a fresh client process, before any edit | page 2 | page 2 (5 rows starting at `Tt_ACO_Equipement_Divers`) |
+| Dave makes one harmless committed edit in the active document | | |
+| Reuse the same cursor | `STALE_CURSOR` | `STALE_CURSOR`: "The family type query cursor is stale. Restart the query without a cursor." |
+| Restart the same query without a cursor | success | success, page 1; the new `next_cursor` differs from the old one |
+
+No MCP write tool was used.
+
 ### Safety observations
 
 - No MCP write, preview, review or apply tool was called. No approval UI was requested.
@@ -232,7 +253,7 @@ BIM-IT produced the same inventory with no failed calls and no generated code. T
 - [x] Active document identity recorded
 - [x] Summary for the nine benchmark categories matches the reference numbers
 - [x] Full cursor walk returns every type once
-- [ ] A model change after the first page returns `STALE_CURSOR` — FAIL, the old cursor was accepted after two committed human edits
+- [x] A model change after the first page returns `STALE_CURSOR` — failed at `7b9efd6`, passed at `fef594b` after fix `2059b9b`
 - [x] Restart without a cursor succeeds after that change
 - [x] `OST_Walls` is accepted even though it is outside the MEP placement allowlist
 - [ ] No transaction, link traversal, or parameter read is observed — partly: no link traversal and no write tool observed; MCP cannot observe transactions
