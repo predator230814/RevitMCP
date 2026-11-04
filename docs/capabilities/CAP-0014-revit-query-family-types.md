@@ -8,7 +8,7 @@
 
 ## Authorization
 
-This specification is **Accepted**. Product Owner and Tech Lead approved the capability contract after review. It is the first implementation slice of Accepted ADR-0023. The Contracts, Addin read, Bridge protocol v22, and MCP tool are implemented. Live Revit validation has not been run.
+This specification is **Accepted**. Product Owner and Tech Lead approved the capability contract after review. It is the first implementation slice of Accepted ADR-0023. The Contracts, Addin read, Bridge protocol v22, and MCP tool are implemented. Live Revit validation passed; the records are [CAP_0014_FAMILY_TYPES_VALIDATION.md](../CAP_0014_FAMILY_TYPES_VALIDATION.md) and [ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md](../ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md).
 
 Where this specification and ADR-0023 differ, ADR-0023 wins and this document is corrected.
 

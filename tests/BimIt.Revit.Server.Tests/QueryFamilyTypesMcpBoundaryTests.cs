@@ -56,6 +56,50 @@ public sealed class QueryFamilyTypesMcpBoundaryTests
     }
 
     [Fact]
+    public void Tool_and_schema_descriptions_state_the_summary_and_counting_semantics()
+    {
+        var tool = QueryFamilyTypesToolRegistration.Create(new QueryFamilyTypesMcpTools(Service(Client("id-v22", "pipe-v22", 22), "id-v22", "pipe-v22", 22))).ProtocolTool;
+        var description = tool.Description!;
+        AssertMentions(description, "entire matched set", "not the current page", "usage=all", "no name filters", "category_tokens", "linked-document", "complete");
+
+        var usage = Property(tool.InputSchema, "usage");
+        AssertMentions(Describe(usage), "usage=all", "unfiltered");
+
+        var output = tool.OutputSchema!.Value;
+        var summary = Property(output, "summary");
+        AssertMentions(Describe(summary), "entire matched set", "not totals of the current page", "relative to the matched set");
+
+        var summaryFields = summary.GetProperty("properties");
+        AssertMentions(Describe(summaryFields.GetProperty("unused_family_count")), "all unplaced", "usage=all", "no name filters");
+        AssertMentions(Describe(summaryFields.GetProperty("placed_instance_count")), "host project", "linked-document", "excluded", "groups", "design options", "nested shared");
+
+        var row = output.GetProperty("properties").GetProperty("types").GetProperty("items").GetProperty("properties");
+        AssertMentions(Describe(row.GetProperty("placed_instance_count")), "host project", "linked-document", "groups", "design options", "nested shared");
+
+        AssertMentions(Describe(Property(output, "complete")), "authoritative", "next_cursor");
+        AssertMentions(Describe(Property(output, "next_cursor")), "opaque");
+    }
+
+    private static JsonElement Property(JsonElement schema, string name)
+    {
+        return schema.GetProperty("properties").GetProperty(name);
+    }
+
+    private static string Describe(JsonElement schemaNode)
+    {
+        Assert.True(schemaNode.TryGetProperty("description", out var description), "missing schema description");
+        return description.GetString()!;
+    }
+
+    private static void AssertMentions(string text, params string[] fragments)
+    {
+        foreach (var fragment in fragments)
+        {
+            Assert.Contains(fragment, text, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    [Fact]
     public void Mcp_serialization_matches_the_shared_result_budget()
     {
         var result = new QueryFamilyTypesResult
