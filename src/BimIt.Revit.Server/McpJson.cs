@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.Json.Serialization.Metadata;
 using BimIt.Revit.Contracts;
 
 namespace BimIt.Revit.Server;
@@ -11,10 +10,8 @@ internal static class McpJson
 
     private static JsonSerializerOptions CreateOptions()
     {
-        var options = ContractJson.CreateOptions();
-        options.WriteIndented = false;
+        var options = ReadResultBudget.CreateOptions();
         options.UnmappedMemberHandling = JsonUnmappedMemberHandling.Disallow;
-        options.TypeInfoResolver = new DefaultJsonTypeInfoResolver();
         return options;
     }
 }

@@ -213,14 +213,15 @@ public sealed class IntentStoreLifecycleTests
         var coordinator = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", "Lifecycle", "AddinLifecycleCoordinator.cs"));
 
         Assert.Equal(1, CountOccurrences(adapters, "new EphemeralWriteIntentStore()"));
-        Assert.Contains("new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents, QueryChangeEvents)", adapters, StringComparison.Ordinal);
         Assert.Contains("new DocumentCloseIdentityCleanup<Autodesk.Revit.DB.Document>(ForgetDocument)", adapters, StringComparison.Ordinal);
 
         var forget = Slice(adapters, "private bool ForgetDocument(", "internal static bool ApplySuccessfulDocumentClose");
         var tryGet = forget.IndexOf("_identity.TryGet(document, out var documentId)", StringComparison.Ordinal);
         var parameterForget = forget.IndexOf("() => _parameterRefs.Forget(document)", StringComparison.Ordinal);
-        var identityForget = forget.IndexOf("() => _identity.Forget(document)", StringComparison.Ordinal);
-        Assert.True(tryGet >= 0 && tryGet < parameterForget && parameterForget < identityForget);
+        var revisionForget = forget.IndexOf("_revisions.Forget(documentId)", StringComparison.Ordinal);
+        var identityForget = forget.IndexOf("_identity.Forget(document)", StringComparison.Ordinal);
+        Assert.True(tryGet >= 0 && tryGet < parameterForget && parameterForget < revisionForget && revisionForget < identityForget);
         Assert.DoesNotContain(".GetId(", forget, StringComparison.Ordinal);
         Assert.DoesNotContain("GetOrAssign(", forget, StringComparison.Ordinal);
 

@@ -74,6 +74,8 @@ internal static class ServerHost
         services.AddSingleton<PreviewRoomPatternPlacementsMcpTools>();
         services.AddSingleton<ReadSpatialRoomsApplicationService>();
         services.AddSingleton<ReadSpatialRoomsMcpTools>();
+        services.AddSingleton<QueryFamilyTypesApplicationService>();
+        services.AddSingleton<QueryFamilyTypesMcpTools>();
         services.AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
@@ -100,6 +102,7 @@ internal static class ServerHost
             .WithGetRoomLayoutsTool()
             .WithGetMepDeviceTypesTool()
             .WithPreviewRoomPatternPlacementsTool()
-            .WithReadSpatialRoomsTool();
+            .WithReadSpatialRoomsTool()
+            .WithQueryFamilyTypesTool();
     }
 }

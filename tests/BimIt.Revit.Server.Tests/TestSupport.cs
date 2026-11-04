@@ -49,6 +49,7 @@ internal static class TestSupport
             {
                 BridgeProtocol.GetSelectionVersion => BridgeProtocol.GetSelectionVersions,
                 BridgeProtocol.PreviewRoomPatternPlacementsVersion => BridgeProtocol.PreviewRoomPatternPlacementsVersions,
+                BridgeProtocol.QueryFamilyTypesVersion => BridgeProtocol.QueryFamilyTypesVersions,
                 BridgeProtocol.LinkedRoomPatternPreviewVersion => BridgeProtocol.LinkedRoomPatternPreviewVersions,
                 BridgeProtocol.ReadSpatialRoomsVersion => BridgeProtocol.ReadSpatialRoomsVersions,
                 BridgeProtocol.GetMepDeviceTypesVersion => BridgeProtocol.GetMepDeviceTypesVersions,
@@ -826,11 +827,32 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
             : GetRoomLayouts(request, timeout, cancellationToken);
     }
 
+    public int QueryFamilyTypesCalls { get; private set; }
+
+    public QueryFamilyTypesRequest? LastQueryFamilyTypesRequest { get; private set; }
+
+    public Func<QueryFamilyTypesRequest, TimeSpan, CancellationToken, Task<QueryFamilyTypesResult>>? QueryFamilyTypes { get; set; }
+
+    public Task<QueryFamilyTypesResult> QueryFamilyTypesAsync(
+        QueryFamilyTypesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        QueryFamilyTypesCalls++;
+        LastQueryFamilyTypesRequest = request;
+        return QueryFamilyTypes is null
+            ? throw new NotSupportedException("This recording client does not implement revit.query_family_types.")
+            : QueryFamilyTypes(request, timeout, cancellationToken);
+    }
+
+    public int GetMepDeviceTypesCalls { get; private set; }
+
     public Task<GetMepDeviceTypesResult> GetMepDeviceTypesAsync(
         GetMepDeviceTypesRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
+        GetMepDeviceTypesCalls++;
         _ = request;
         _ = timeout;
         _ = cancellationToken;

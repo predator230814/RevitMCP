@@ -24,6 +24,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitGetMepDeviceTypesService? _getMepDeviceTypes;
     private readonly IRevitPreviewRoomPatternPlacementsService? _previewRoomPatternPlacements;
     private readonly IRevitReadSpatialRoomsService? _readSpatialRooms;
+    private readonly IRevitQueryFamilyTypesService? _queryFamilyTypes;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -45,7 +46,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitGetRoomLayoutsService? getRoomLayouts = null,
         IRevitGetMepDeviceTypesService? getMepDeviceTypes = null,
         IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements = null,
-        IRevitReadSpatialRoomsService? readSpatialRooms = null)
+        IRevitReadSpatialRoomsService? readSpatialRooms = null,
+        IRevitQueryFamilyTypesService? queryFamilyTypes = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -66,6 +68,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _getMepDeviceTypes = getMepDeviceTypes;
         _previewRoomPatternPlacements = previewRoomPatternPlacements;
         _readSpatialRooms = readSpatialRooms;
+        _queryFamilyTypes = queryFamilyTypes;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -745,6 +748,44 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The spatial room request could not be executed."));
+        }
+    }
+
+    [JsonRpcMethod("revit.query_family_types")]
+    public async Task<QueryFamilyTypesResult> QueryFamilyTypesAsync(
+        QueryFamilyTypesRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsQueryFamilyTypes,
+            "revit.query_family_types is not available on this connection.");
+        if (_queryFamilyTypes is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.query_family_types is not available on this endpoint."));
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            return await _queryFamilyTypes.QueryFamilyTypesAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The family type query could not be read."));
         }
     }
 

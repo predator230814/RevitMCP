@@ -669,6 +669,39 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             .ConfigureAwait(false);
     }
 
+    public async Task<QueryFamilyTypesResult> QueryFamilyTypesAsync(
+        QueryFamilyTypesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<QueryFamilyTypesResult>(
+                "revit.query_family_types",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureQueryFamilyTypesAllowed,
+                "The family type query timed out.",
+                "The family type query could not be read.")
+            .ConfigureAwait(false);
+    }
+
+    private void EnsureQueryFamilyTypesAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsQueryFamilyTypes(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.query_family_types requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
     private void EnsureGetRoomLayoutsAllowed()
     {
         EnsureCapabilityReady();
