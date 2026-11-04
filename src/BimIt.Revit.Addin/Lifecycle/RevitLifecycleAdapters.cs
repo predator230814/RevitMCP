@@ -115,13 +115,8 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         TrySubscribeActiveDocument(activeDocumentEvents);
         if (queryChangeEvents is not null)
         {
-            _queryChangeSubscription = queryChangeEvents.Subscribe(document =>
-            {
-                if (_identity.TryGet(document, out var documentId))
-                {
-                    _revisions.Advance(documentId);
-                }
-            });
+            _queryChangeSubscription = queryChangeEvents.Subscribe(
+                document => _revisions.AdvanceIfKnown(document, _identity.TryGet));
         }
     }
 

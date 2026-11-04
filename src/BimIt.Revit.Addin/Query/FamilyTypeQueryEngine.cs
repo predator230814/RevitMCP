@@ -486,7 +486,26 @@ internal sealed class DocumentQueryRevisionService
         ArgumentNullException.ThrowIfNull(documentId);
         _revisions.TryRemove(documentId, out _);
     }
+
+    /// <summary>
+    /// Advances the revision of a changed document that already has a <c>document_id</c>.
+    /// A document without one has never been queried, so it has no outstanding cursor,
+    /// and the signal is ignored without assigning an id.
+    /// </summary>
+    public bool AdvanceIfKnown<TDocument>(TDocument document, TryGetDocumentId<TDocument> tryGetDocumentId)
+    {
+        ArgumentNullException.ThrowIfNull(tryGetDocumentId);
+        if (!tryGetDocumentId(document, out var documentId))
+        {
+            return false;
+        }
+
+        Advance(documentId);
+        return true;
+    }
 }
+
+internal delegate bool TryGetDocumentId<in TDocument>(TDocument document, out string documentId);
 
 internal static class PlacedInstanceCounts
 {
