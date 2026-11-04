@@ -78,7 +78,7 @@ Widen `revit_get_mep_device_types` and add similar per-question tools.
 
 ## Decision
 
-Option C is accepted. The Product Owner and Tech Lead approved this architecture direction after review. This ADR records architecture only; nothing here is implemented yet.
+Option C is accepted. The Product Owner and Tech Lead approved this architecture direction after review. This ADR records architecture. The first slice, `revit_query_family_types`, was implemented from [CAP-0014](../capabilities/CAP-0014-revit-query-family-types.md) and passed its live gate (see the benchmark section and the implementation history below).
 
 ### 1. No arbitrary code execution in the production Revit capability layer
 
@@ -211,7 +211,7 @@ None of these is committed to a single generic tool.
 
 ## Benchmark acceptance target for the first slice
 
-A future live gate on the same reference electrical project. For the nine benchmark categories (Electrical Fixtures, Electrical Equipment, Lighting Fixtures, Lighting Devices, Data Devices, Communication Devices, Fire Alarm Devices, Security Devices, Nurse Call Devices), the new BIM-IT read capability must reproduce the pyRevit baseline:
+The live gate on the same reference electrical project. For the nine benchmark categories (Electrical Fixtures, Electrical Equipment, Lighting Fixtures, Lighting Devices, Data Devices, Communication Devices, Fire Alarm Devices, Security Devices, Nurse Call Devices), the new BIM-IT read capability must reproduce the pyRevit baseline:
 
 | Fact | Baseline |
 |---|---|
@@ -233,6 +233,16 @@ The gate passes only if an isolated MCP client reaches the full inventory:
 - with no failed tool call attributable to Revit API, version, or runtime quirks;
 - with every page traversed to an explicit final page.
 
+### Gate result
+
+The gate passed on 2026-11-04, in two natural-agent runs. In both, an isolated Claude Code client could reach only `BimIt.Revit.Server`, and its prompt was the BIM task alone. The agent chose `revit_get_context` and `revit_query_family_types` by itself, wrote no code, did not change the model, and had 0 BIM-IT or Revit tool failures. Both runs produced 196 families, 1,205 types, 254 placed types, 8,278 placed instances, 87 used families, and 109 unused families, equal to the baseline above, with French names intact.
+
+The first run (26 calls) proved those totals but did not read every row of two categories, so it did not meet the "every page traversed to an explicit final page" criterion. A rerun with a stricter task (24 calls) traversed all 1,205 rows in 21 pages to `complete: true`, with 1,205 distinct row identities and no duplicate or gap. The criterion is unchanged.
+
+In each run, one response of 79,310 characters, inside the 120,000-character budget, was not displayed by that client because of the client's own output limit. That was not a server error, and the agent recovered with smaller pages. The record is [ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md](../ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md). The tool-contract record, including the stale-cursor check, is [CAP_0014_FAMILY_TYPES_VALIDATION.md](../CAP_0014_FAMILY_TYPES_VALIDATION.md).
+
+The gate covers the first slice only: the host document, one reference project, one Revit version, and one client. It does not validate any source named in section 10.
+
 ## Consequences
 
 ### Positive
@@ -249,19 +259,25 @@ The gate passes only if an isolated MCP client reaches the full inventory:
 - Page traversal of large inventories costs more round trips than one script.
 - Two paths to some facts may exist for a while (for example `revit_get_mep_device_types` and the new source), and must be kept consistent.
 
-## Open questions
+## Implementation history and resolved questions
 
-These do not block accepting the architecture. They are implementation questions for the capability spec.
+The five implementation questions that this ADR listed at acceptance were answered by CAP-0014 and its implementation. The answers are recorded in CAP-0014, which is the source of truth for them.
 
-1. **Category filter shape.** How are category filters expressed: stable category tokens only, or tokens plus display names? What happens for an unknown category?
-2. **Execution budget.** What scan or time budget bounds a single page and the summary, and how is the summary computed without making every page as expensive as a full scan? Is it computed once per traversal and carried in the cursor, or recomputed per page?
-3. **Revision source.** Which Revit signal or add-in mechanism advances the document query revision (document-changed events, or another source), and does a workshared sync advance it?
-4. **Name filters.** Does v1 filter by family or type name (exact or contains), or only by category?
-5. **Bridge version number.** Which protocol version is allocated for the first slice.
+1. **Category filter shape.** Resolved: stable `BuiltInCategory` tokens only (`OST_...`). Localized display names are not accepted as input, and an unknown or malformed token is rejected as an invalid query. The result carries both the token and the localized display name.
+2. **Execution budget.** Resolved for v1: no scan limit, no snapshot, and no cache. Each page recomputes the matched inventory and the exact summary under the existing 15-second capability timeout, and a timeout fails the call rather than returning a partial result. The live runs recorded page times well inside that timeout. Caching and snapshots remain deferred until live evidence justifies them.
+3. **Revision source.** Resolved: the Addin advances the document query revision from Revit's `DocumentChanged`, `DocumentSynchronizedWithCentral`, and `DocumentReloadedLatest` events. The handlers must be registered while `OnStartup` runs. A first live run showed that a handler registered later, from the Idling bootstrap, received no events, and that was corrected and revalidated live. See [CAP_0014_FAMILY_TYPES_VALIDATION.md](../CAP_0014_FAMILY_TYPES_VALIDATION.md).
+4. **Name filters.** Resolved: v1 offers case-insensitive substring filters on family name and type name, in addition to category tokens and a `usage` filter.
+5. **Bridge version number.** Resolved: Bridge protocol 22.
 
-Decided: change detection between pages, instance-count semantics, family identity, the scope of the source (all `FamilySymbol` types in the active project document), the first tool, the relationship to existing tools, the Bridge gate, the default page size (100), the maximum page size (200), and the requirement that a serialized result stay within the Assistant-compatible result budget. See sections 4 to 6, 8, and 9.
+Also decided at acceptance: change detection between pages, instance-count semantics, family identity, the scope of the source (all `FamilySymbol` types in the active project document), the first tool, the relationship to existing tools, the Bridge gate, the default page size (100), the maximum page size (200), and the requirement that a serialized result stay within the Assistant-compatible result budget. See sections 4 to 6, 8, and 9.
 
-Still open: the scan and time execution budget, and how the query-level summary computation is bounded, cached, or recomputed (question 2).
+No question from the original list remains open. Questions that are not part of the first slice, such as the sources in section 10, stay undecided.
+
+Implementation history of the first slice:
+
+- CAP-0014 accepted, then implemented: Contracts, Addin read, Bridge protocol 22, and the MCP tool.
+- Live validation of the tool contract found that a stale cursor was not detected, because of the late event registration in question 3. The fix and a passing live revalidation are recorded in [CAP_0014_FAMILY_TYPES_VALIDATION.md](../CAP_0014_FAMILY_TYPES_VALIDATION.md).
+- The natural-agent gate passed on 2026-11-04 (see "Gate result").
 
 ## References
 
@@ -276,3 +292,5 @@ Still open: the scan and time execution budget, and how the query-level summary 
 - ADR-0022: Agent Skills and knowledge architecture
 - CAP-0002: `revit_query_elements` (no cursor in v1)
 - Live benchmarks on project `525413_E_EG`, Revit 2026.5, November 2026: BIM-IT Revit MCP validation and pyRevit MCP comparison, both run through an isolated Claude Code client (transcripts kept outside the repository)
+- [CAP-0014](../capabilities/CAP-0014-revit-query-family-types.md): `revit_query_family_types`
+- [CAP_0014_FAMILY_TYPES_VALIDATION.md](../CAP_0014_FAMILY_TYPES_VALIDATION.md) and [ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md](../ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md): live validation records
