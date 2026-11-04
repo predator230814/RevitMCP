@@ -104,6 +104,13 @@ internal static class InstanceTargetResolver
         return IsEligible(instance, BridgeProtocol.SupportsGetRoomLayouts);
     }
 
+    public static TargetResolution ResolveForQueryFamilyTypes(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        // A v21 host is eligible to be addressed, then refused with BRIDGE_PROTOCOL_INCOMPATIBLE.
+        // Hiding it as unavailable would skip the capability gate CAP-0014 requires.
+        return Resolve(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsGetContext));
+    }
+
     public static TargetResolution ResolveForGetMepDeviceTypes(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
     {
         return Resolve(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsGetMepDeviceTypes));

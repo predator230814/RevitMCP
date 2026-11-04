@@ -47,4 +47,12 @@ public static class CapabilityErrorCodes
     public const string InvalidRoomPatternPlacement = "INVALID_ROOM_PATTERN_PLACEMENT";
 
     public const string InvalidSpatialRooms = "INVALID_SPATIAL_ROOMS";
+
+    public const string InvalidFamilyTypeQuery = "INVALID_FAMILY_TYPE_QUERY";
+
+    public const string InvalidCursor = "INVALID_CURSOR";
+
+    public const string StaleCursor = "STALE_CURSOR";
+
+    public const string ResultTooLarge = "RESULT_TOO_LARGE";
 }

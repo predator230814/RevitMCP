@@ -28,7 +28,7 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(18, tools.Count);
+        Assert.Equal(19, tools.Count);
         Assert.Equal(
             new[]
             {
@@ -47,6 +47,7 @@ public sealed class StdioServerProcessTests
                 PreviewParameterUpdatesToolMetadata.Name,
                 PreviewRoomPatternPlacementsToolMetadata.Name,
                 QueryElementsToolMetadata.Name,
+                QueryFamilyTypesToolMetadata.Name,
                 ReadSpatialRoomsToolMetadata.Name,
                 RequestMepDevicePlacementReviewToolMetadata.Name,
                 RequestParameterUpdateReviewToolMetadata.Name
@@ -70,6 +71,7 @@ public sealed class StdioServerProcessTests
                 "revit_preview_parameter_updates",
                 "revit_preview_room_pattern_placements",
                 "revit_query_elements",
+                "revit_query_family_types",
                 "revit_read_spatial_rooms",
                 "revit_request_mep_device_placement_review",
                 "revit_request_parameter_update_review"

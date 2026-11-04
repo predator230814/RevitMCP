@@ -194,6 +194,17 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         throw new NotSupportedException("This fake client does not implement revit.preview_room_pattern_placements.");
     }
 
+    public Task<QueryFamilyTypesResult> QueryFamilyTypesAsync(
+        QueryFamilyTypesRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.query_family_types.");
+    }
+
     public Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(
         ReadSpatialRoomsRequest request,
         TimeSpan timeout,

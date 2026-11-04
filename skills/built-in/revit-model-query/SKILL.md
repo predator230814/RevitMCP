@@ -28,6 +28,7 @@ Answer questions about a live Revit model by composing the generic BIM-IT Revit 
 | Which parameters exist, and their types | `revit_describe_parameters`, then `revit_get_parameter_values` |
 | Rooms, including rooms in loaded Revit links | `revit_read_spatial_rooms` with `name_contains` |
 | Plan outline of host rooms | `revit_get_room_layouts` (1 to 20 host Rooms) |
+| Loaded family types in the host project, placed or unused | `revit_query_family_types` with `category_tokens`, name filters, or `usage`; follow `next_cursor` until `complete` is true |
 | Loaded MEP family types that BIM-IT can place | `revit_get_mep_device_types` with `search` or `category_tokens` |
 | What is physically connected to an MEP element | `revit_get_mep_topology` from known element references |
 | Model warnings | `revit_get_warnings` |
@@ -42,7 +43,7 @@ When the architecture is a linked model, its Rooms are not host elements. `revit
 
 **Compare two rooms.** Find both with `revit_read_spatial_rooms` (one call with a shared name fragment, or two calls). Compare the returned facts: area, boundary shape and segment count, inner loops, level, and any opening or door information the result contains. State which differences are measured and which you could not observe.
 
-**Find loaded types by name.** Call `revit_get_mep_device_types` with `search` set to the fragment, for example `Tt_INS`. Report family name, type name, category, and placement classification. This catalog covers types BIM-IT can place as MEP devices, not every loaded family.
+**Find loaded types by name.** Call `revit_query_family_types` with `family_name_contains` or `type_name_contains` set to the fragment. Category filters are exact `OST_` tokens. Page with `next_cursor` until `complete` is true, and use the summary for the whole matched set. For types BIM-IT can place as MEP devices, call `revit_get_mep_device_types` instead.
 
 **Inspect the selection.** Call `revit_get_selection`, then `revit_get_elements` on the returned references with the fields the user cares about. Use `revit_describe_parameters` before asking for a parameter you have not seen named.
 

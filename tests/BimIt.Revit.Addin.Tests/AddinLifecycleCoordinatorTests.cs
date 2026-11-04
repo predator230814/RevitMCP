@@ -39,7 +39,7 @@ public sealed class AddinLifecycleCoordinatorTests
 
         Assert.Equal(AddinLifecycleState.Ready, coordinator.State);
         Assert.Equal(1, dispatchers.CreateCount);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "meppreview.create", "mepreview.create", "mepapply.create", "roomlayouts.create", "meptypes.create", "patternpreview.create", "spatialrooms.create", "bridge.start", "registration.publish" }, events);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "meppreview.create", "mepreview.create", "mepapply.create", "roomlayouts.create", "meptypes.create", "patternpreview.create", "spatialrooms.create", "familytypes.create", "bridge.start", "registration.publish" }, events);
     }
 
     [Fact]
@@ -72,8 +72,9 @@ public sealed class AddinLifecycleCoordinatorTests
         Assert.Equal("meptypes.create", events[16]);
         Assert.Equal("patternpreview.create", events[17]);
         Assert.Equal("spatialrooms.create", events[18]);
-        Assert.Equal("bridge.start", events[19]);
-        Assert.Equal("registration.publish", events[20]);
+        Assert.Equal("familytypes.create", events[19]);
+        Assert.Equal("bridge.start", events[20]);
+        Assert.Equal("registration.publish", events[21]);
         Assert.True(bridges.Published);
         Assert.True(bridges.LastBridge?.HasRegistration);
         Assert.NotNull(bridges.LastCapability);
@@ -172,6 +173,7 @@ public sealed class AddinLifecycleCoordinatorTests
                 "meptypes.create",
                 "patternpreview.create",
                 "spatialrooms.create",
+                "familytypes.create",
                 "bridge.start",
                 "registration.publish",
                 "dispatcher.stop",

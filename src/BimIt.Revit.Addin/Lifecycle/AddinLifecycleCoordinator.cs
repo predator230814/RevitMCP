@@ -148,8 +148,11 @@ internal sealed class AddinLifecycleCoordinator
             var readSpatialRooms = dispatcher.CreateReadSpatialRooms(metadata);
             EnsureNotStopping();
 
+            var queryFamilyTypes = dispatcher.CreateQueryFamilyTypes(metadata);
+            EnsureNotStopping();
+
             using var startup = new CancellationTokenSource(_startupTimeout);
-            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, readSpatialRooms, startup.Token);
+            bridge = _bridges.Start(metadata, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, readSpatialRooms, queryFamilyTypes, startup.Token);
 
             lock (_gate)
             {

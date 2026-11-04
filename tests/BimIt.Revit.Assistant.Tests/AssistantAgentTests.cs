@@ -1026,6 +1026,7 @@ public sealed class AssistantAgentTests
         "revit_get_selection",
         "revit_get_warnings",
         "revit_query_elements",
+        "revit_query_family_types",
         "revit_read_spatial_rooms",
     ];
 

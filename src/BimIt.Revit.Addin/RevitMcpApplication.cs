@@ -69,6 +69,8 @@ public sealed class RevitMcpApplication : IExternalApplication
             {
                 _productionDispatchers.CloseEvents =
                     new RevitDocumentCloseEventSource(application.ControlledApplication);
+                _productionDispatchers.QueryChangeEvents =
+                    new RevitDocumentQueryChangeEventSource(application.ControlledApplication);
                 try
                 {
                     _productionDispatchers.ActiveDocumentEvents = new RevitActiveDocumentEventSource(application);

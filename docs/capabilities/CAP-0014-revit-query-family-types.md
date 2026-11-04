@@ -8,7 +8,7 @@
 
 ## Authorization
 
-This specification is **Accepted**. Product Owner and Tech Lead approved the capability contract after review. It is the first implementation slice of Accepted ADR-0023. Nothing here is implemented. Contracts, the Addin service, Bridge protocol v22, and the MCP tool are all future work.
+This specification is **Accepted**. Product Owner and Tech Lead approved the capability contract after review. It is the first implementation slice of Accepted ADR-0023. The Contracts, Addin read, Bridge protocol v22, and MCP tool are implemented. Live Revit validation has not been run.
 
 Where this specification and ADR-0023 differ, ADR-0023 wins and this document is corrected.
 

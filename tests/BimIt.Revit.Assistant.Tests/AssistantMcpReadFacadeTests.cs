@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BimIt.Revit.Contracts;
 using BimIt.Revit.Assistant.Patterns;
 using BimIt.Revit.Assistant.Providers.GitHubCopilot;
 using Microsoft.Extensions.AI;
@@ -25,7 +26,7 @@ public sealed class AssistantMcpReadFacadeTests
     public void Every_current_server_read_is_discovered_from_metadata_and_no_write_is()
     {
         var descriptors = ServerToolMetadata.Descriptors;
-        Assert.Equal(18, descriptors.Count);
+        Assert.Equal(19, descriptors.Count);
         var facade = Facade(new ScriptedSession(), descriptors);
 
         Assert.Equal(AssistantAgentTests.ExpectedGenericReads, facade.Tools.Select(tool => tool.Name).ToArray());
@@ -46,6 +47,8 @@ public sealed class AssistantMcpReadFacadeTests
             .ToArray();
         Assert.Equal(serverReads, facade.Tools.Select(tool => tool.Name).ToArray());
         Assert.Equal(7, facade.Rejected.Count);
+        Assert.Equal(ReadResultBudget.MaxCharacters, AssistantMcpReadFacade.MaxResultCharacters);
+        Assert.Contains("revit_query_family_types", facade.Tools.Select(tool => tool.Name));
     }
 
     [Theory]

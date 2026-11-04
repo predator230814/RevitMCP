@@ -176,6 +176,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("spatialrooms.create");
         return new RecordingReadSpatialRoomsService();
     }
+
+    public IRevitQueryFamilyTypesService? CreateQueryFamilyTypes(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("familytypes.create");
+        return new RecordingQueryFamilyTypesService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -283,6 +290,16 @@ internal sealed class RecordingReadSpatialRoomsService : IRevitReadSpatialRoomsS
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording spatial rooms does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingQueryFamilyTypesService : IRevitQueryFamilyTypesService
+{
+    public Task<QueryFamilyTypesResult> QueryFamilyTypesAsync(QueryFamilyTypesRequest request, CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording family types does not execute Revit work.");
     }
 }
 
@@ -447,6 +464,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitGetMepDeviceTypesService? getMepDeviceTypes,
         IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements,
         IRevitReadSpatialRoomsService? readSpatialRooms,
+        IRevitQueryFamilyTypesService? queryFamilyTypes,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

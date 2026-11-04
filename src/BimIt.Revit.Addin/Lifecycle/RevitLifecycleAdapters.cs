@@ -8,6 +8,7 @@ using BimIt.Revit.Addin.Capabilities;
 using BimIt.Revit.Addin.Execution;
 using BimIt.Revit.Addin.Identity;
 using BimIt.Revit.Addin.Intents;
+using BimIt.Revit.Addin.Query;
 using BimIt.Revit.Bridge;
 
 namespace BimIt.Revit.Addin.Lifecycle;
@@ -73,8 +74,11 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private readonly RevitLocalApprovalInteractionController _interaction;
     private readonly OpenDocumentIdentityService _identity;
     private readonly OpenDocumentParameterIdentityService _parameterRefs;
+    private readonly DocumentQueryRevisionService _revisions = new();
+    private readonly FamilyTypeCursorCodec _cursors = new();
     private IDisposable? _closeCleanup;
     private IDisposable? _activeDocumentObservation;
+    private IDisposable? _queryChangeSubscription;
     private ApprovalUiRuntime? _approvalUi;
     private int _disposed;
 
@@ -89,8 +93,9 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     public RevitExecutionDispatcherLifetime(
         RevitExecutionDispatcher dispatcher,
         IDocumentCloseEventSource? closeEvents = null,
-        IActiveDocumentEventSource? activeDocumentEvents = null)
-        : this(dispatcher, new EphemeralWriteIntentStore(), closeEvents, activeDocumentEvents)
+        IActiveDocumentEventSource? activeDocumentEvents = null,
+        IDocumentQueryChangeEventSource? queryChangeEvents = null)
+        : this(dispatcher, new EphemeralWriteIntentStore(), closeEvents, activeDocumentEvents, queryChangeEvents)
     {
     }
 
@@ -98,7 +103,8 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         RevitExecutionDispatcher dispatcher,
         EphemeralWriteIntentStore intentStore,
         IDocumentCloseEventSource? closeEvents = null,
-        IActiveDocumentEventSource? activeDocumentEvents = null)
+        IActiveDocumentEventSource? activeDocumentEvents = null,
+        IDocumentQueryChangeEventSource? queryChangeEvents = null)
         : this(intentStore, BindExecution(dispatcher))
     {
         if (closeEvents is not null)
@@ -107,6 +113,16 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         }
 
         TrySubscribeActiveDocument(activeDocumentEvents);
+        if (queryChangeEvents is not null)
+        {
+            _queryChangeSubscription = queryChangeEvents.Subscribe(document =>
+            {
+                if (_identity.TryGet(document, out var documentId))
+                {
+                    _revisions.Advance(documentId);
+                }
+            });
+        }
     }
 
     private RevitExecutionDispatcherLifetime(
@@ -185,7 +201,15 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
             _applyAttempts.ForgetDocument,
             _intentStore.ForgetDocument,
             () => _parameterRefs.Forget(document),
-            () => _identity.Forget(document));
+            () =>
+            {
+                if (documentId is not null)
+                {
+                    _revisions.Forget(documentId);
+                }
+
+                return _identity.Forget(document);
+            });
     }
 
     internal static bool ApplySuccessfulDocumentClose(
@@ -298,6 +322,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         }
 
         Stop();
+        _queryChangeSubscription?.Dispose();
         _closeCleanup?.Dispose();
         _disposeExecution();
     }
@@ -405,6 +430,12 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         return new RevitReadSpatialRoomsService(_dispatcher, metadata, _identity);
     }
 
+    public IRevitQueryFamilyTypesService CreateQueryFamilyTypes(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitQueryFamilyTypesService(_dispatcher, metadata, _identity, _revisions, _cursors, new RevitBuiltInCategoryCatalog());
+    }
+
     public IRevitGetRoomLayoutsService CreateGetRoomLayouts(BridgeInstanceMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -432,11 +463,13 @@ internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFact
 
     public IActiveDocumentEventSource? ActiveDocumentEvents { get; set; }
 
+    public IDocumentQueryChangeEventSource? QueryChangeEvents { get; set; }
+
     public ApprovalUiRuntime? ApprovalUi { get; set; }
 
     public ILifecycleDispatcher Create()
     {
-        var lifetime = new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents);
+        var lifetime = new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents, QueryChangeEvents);
         if (ApprovalUi is not null)
         {
             lifetime.AttachApprovalUi(ApprovalUi);
@@ -490,10 +523,11 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         IRevitGetMepDeviceTypesService? getMepDeviceTypes,
         IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements,
         IRevitReadSpatialRoomsService? readSpatialRooms,
+        IRevitQueryFamilyTypesService? queryFamilyTypes,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, readSpatialRooms, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, readSpatialRooms, queryFamilyTypes, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);
