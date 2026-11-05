@@ -1,3 +1,4 @@
+using System.Globalization;
 using BimIt.Revit.Contracts;
 
 namespace BimIt.Revit.Addin.Inspection;
@@ -42,6 +43,45 @@ internal static class ParameterIdentityClassifier
             null,
             null,
             localStableKey);
+    }
+
+    /// <summary>
+    /// The definition-based rule of CAP-0015: built-in when the type id passed the built-in gate,
+    /// else shared when the definition element is a <c>SharedParameterElement</c>
+    /// (<paramref name="sharedParameterGuid"/> not null), else local. Ordering stays in <see cref="Classify"/>.
+    /// </summary>
+    public static ClassifiedParameterIdentity ClassifyDefinition(
+        string? builtInTypeId,
+        Guid? sharedParameterGuid,
+        string localStableKey)
+    {
+        return Classify(
+            builtInTypeId is not null,
+            builtInTypeId,
+            sharedParameterGuid.HasValue,
+            sharedParameterGuid ?? Guid.Empty,
+            localStableKey);
+    }
+
+    /// <summary>
+    /// Null-safe built-in gate. <paramref name="isBuiltInParameter"/> is invoked only for a
+    /// non-null, non-empty type id, so a custom definition without a type id never reaches it.
+    /// </summary>
+    public static bool IsBuiltIn(string? parameterTypeId, Func<bool> isBuiltInParameter)
+    {
+        ArgumentNullException.ThrowIfNull(isBuiltInParameter);
+        return !string.IsNullOrEmpty(parameterTypeId) && isBuiltInParameter();
+    }
+
+    /// <summary>
+    /// The document-scoped local stable key: the parameter element's <c>UniqueId</c> when present,
+    /// otherwise <c>local:</c> and the element id.
+    /// </summary>
+    public static string LocalStableKey(string? parameterElementUniqueId, long fallbackElementId)
+    {
+        return string.IsNullOrEmpty(parameterElementUniqueId)
+            ? "local:" + fallbackElementId.ToString(CultureInfo.InvariantCulture)
+            : parameterElementUniqueId;
     }
 
     public static DescribeParameterIdentity ToContract(ClassifiedParameterIdentity identity)

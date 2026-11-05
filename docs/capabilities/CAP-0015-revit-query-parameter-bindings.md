@@ -460,7 +460,7 @@ The Tech Lead contract review on 2026-11-05 decided the open questions of the fi
 5. **Cursor codec.** The CAP-0014 cursor and fingerprint primitive is generalized into a narrowly scoped, source-tagged query cursor shared by declarative query sources. No generalized query framework beyond the cursor and fingerprint mechanics.
 6. **Definition classification.** Null-safe: the result of `GetParameterTypeId()` is classified as built-in only when it is non-null and non-empty (see "Definition classification").
 
-No contract question remains open for this specification. Acceptance itself is still pending.
+No contract question remains open for this specification.
 
 ## References
 
