@@ -75,7 +75,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private readonly OpenDocumentIdentityService _identity;
     private readonly OpenDocumentParameterIdentityService _parameterRefs;
     private readonly DocumentQueryRevisionService _revisions = new();
-    private readonly FamilyTypeCursorCodec _cursors = new();
+    private readonly DeclarativeQueryCursorCodec _cursors = new();
     private IDisposable? _closeCleanup;
     private IDisposable? _activeDocumentObservation;
     private IDisposable? _queryChangeSubscription;

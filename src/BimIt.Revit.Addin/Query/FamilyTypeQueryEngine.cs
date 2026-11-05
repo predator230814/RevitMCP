@@ -1,7 +1,4 @@
 using System.Collections.Concurrent;
-using System.Globalization;
-using System.Security.Cryptography;
-using System.Text;
 using BimIt.Revit.Bridge;
 using BimIt.Revit.Contracts;
 
@@ -19,7 +16,7 @@ internal static class FamilyTypeQueryLimits
 
     public const int MaxNameLength = 256;
 
-    public const int MaxCursorLength = 2048;
+    public const int MaxCursorLength = DeclarativeQueryCursorCodec.MaxCursorLength;
 
     public const string UsageAll = "all";
 
@@ -225,243 +222,18 @@ internal static class FamilyTypeQueryValidator
 
 internal static class FamilyTypeQueryFingerprint
 {
+    /// <summary>
+    /// The CAP-0014 matched-set fingerprint: <c>usage</c>, both name filters, and
+    /// <c>category_tokens</c> as a set, under the family-type source. Not <c>page_size</c>.
+    /// </summary>
     public static byte[] Compute(ValidatedFamilyTypeQuery query)
     {
-        var builder = new StringBuilder();
-        builder.Append(query.Usage);
-        builder.Append('\n');
-        Append(builder, query.FamilyNameContains);
-        builder.Append('\n');
-        Append(builder, query.TypeNameContains);
-        builder.Append('\n');
-        if (query.CategoryTokens is not null)
-        {
-            foreach (var token in query.CategoryTokens.OrderBy(static token => token, StringComparer.Ordinal))
-            {
-                builder.Append(token.Length.ToString(CultureInfo.InvariantCulture));
-                builder.Append(':');
-                builder.Append(token);
-                builder.Append('\n');
-            }
-        }
-
-        return SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString()));
-    }
-
-    private static void Append(StringBuilder builder, string? value)
-    {
-        if (value is null)
-        {
-            builder.Append('-');
-            return;
-        }
-
-        builder.Append(value.Length.ToString(CultureInfo.InvariantCulture));
-        builder.Append(':');
-        builder.Append(value);
-    }
-}
-
-internal readonly record struct FamilyTypeCursorPayload(
-    string InstanceId,
-    string DocumentId,
-    byte[] Fingerprint,
-    long Revision,
-    int Offset);
-
-/// <summary>
-/// Stateless HMAC cursor. The signing key lives only for this process and is not serialized.
-/// </summary>
-internal sealed class FamilyTypeCursorCodec
-{
-    private readonly byte[] _key;
-
-    public FamilyTypeCursorCodec()
-        : this(RandomNumberGenerator.GetBytes(32))
-    {
-    }
-
-    internal FamilyTypeCursorCodec(byte[] key)
-    {
-        ArgumentNullException.ThrowIfNull(key);
-        if (key.Length < 32)
-        {
-            throw new ArgumentException("A 32-byte cursor key is required.", nameof(key));
-        }
-
-        _key = key.ToArray();
-    }
-
-    public string Mint(FamilyTypeCursorPayload payload)
-    {
-        if (payload.Offset < 0 || payload.Fingerprint is null || payload.Fingerprint.Length != 32)
-        {
-            throw new BridgeException(CapabilityErrorCodes.InvalidCursor, "The family type cursor is not valid.");
-        }
-
-        var body = Encode(payload);
-        var mac = HMACSHA256.HashData(_key, body);
-        var token = Base64Url.Encode(body) + "." + Base64Url.Encode(mac);
-        if (token.Length is < 1 or > FamilyTypeQueryLimits.MaxCursorLength)
-        {
-            throw new BridgeException(
-                CapabilityErrorCodes.ExecutionFailed,
-                "The family type query could not be continued.");
-        }
-
-        return token;
-    }
-
-    public bool TryOpen(string token, out FamilyTypeCursorPayload payload)
-    {
-        payload = default;
-        if (string.IsNullOrEmpty(token) || token.Length > FamilyTypeQueryLimits.MaxCursorLength)
-        {
-            return false;
-        }
-
-        var split = token.IndexOf('.');
-        if (split <= 0 || split != token.LastIndexOf('.') || split == token.Length - 1)
-        {
-            return false;
-        }
-
-        if (!Base64Url.TryDecode(token[..split], out var body) || !Base64Url.TryDecode(token[(split + 1)..], out var mac))
-        {
-            return false;
-        }
-
-        var expected = HMACSHA256.HashData(_key, body);
-        if (mac.Length != expected.Length || !CryptographicOperations.FixedTimeEquals(mac, expected))
-        {
-            return false;
-        }
-
-        return TryDecode(body, out payload);
-    }
-
-    private static byte[] Encode(FamilyTypeCursorPayload payload)
-    {
-        var instance = Encoding.UTF8.GetBytes(payload.InstanceId);
-        var document = Encoding.UTF8.GetBytes(payload.DocumentId);
-        if (instance.Length > ushort.MaxValue || document.Length > ushort.MaxValue)
-        {
-            throw new BridgeException(CapabilityErrorCodes.ExecutionFailed, "The family type query could not be continued.");
-        }
-
-        var buffer = new byte[1 + 2 + instance.Length + 2 + document.Length + 32 + 8 + 4];
-        buffer[0] = 1;
-        var offset = 1;
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(buffer.AsSpan(offset), (ushort)instance.Length);
-        offset += 2;
-        instance.CopyTo(buffer.AsSpan(offset));
-        offset += instance.Length;
-        System.Buffers.Binary.BinaryPrimitives.WriteUInt16BigEndian(buffer.AsSpan(offset), (ushort)document.Length);
-        offset += 2;
-        document.CopyTo(buffer.AsSpan(offset));
-        offset += document.Length;
-        payload.Fingerprint.CopyTo(buffer.AsSpan(offset));
-        offset += 32;
-        System.Buffers.Binary.BinaryPrimitives.WriteInt64BigEndian(buffer.AsSpan(offset), payload.Revision);
-        offset += 8;
-        System.Buffers.Binary.BinaryPrimitives.WriteInt32BigEndian(buffer.AsSpan(offset), payload.Offset);
-        return buffer;
-    }
-
-    private static bool TryDecode(byte[] body, out FamilyTypeCursorPayload payload)
-    {
-        payload = default;
-        if (body.Length < 1 + 2 + 2 + 32 + 8 + 4 || body[0] != 1)
-        {
-            return false;
-        }
-
-        var offset = 1;
-        if (!TryReadText(body, ref offset, out var instanceId) || !TryReadText(body, ref offset, out var documentId))
-        {
-            return false;
-        }
-
-        if (body.Length - offset < 32 + 8 + 4)
-        {
-            return false;
-        }
-
-        var fingerprint = body.AsSpan(offset, 32).ToArray();
-        offset += 32;
-        var revision = System.Buffers.Binary.BinaryPrimitives.ReadInt64BigEndian(body.AsSpan(offset));
-        offset += 8;
-        var rowOffset = System.Buffers.Binary.BinaryPrimitives.ReadInt32BigEndian(body.AsSpan(offset));
-        offset += 4;
-        if (offset != body.Length || rowOffset < 0)
-        {
-            return false;
-        }
-
-        payload = new FamilyTypeCursorPayload(instanceId, documentId, fingerprint, revision, rowOffset);
-        return true;
-    }
-
-    private static bool TryReadText(byte[] body, ref int offset, out string text)
-    {
-        text = "";
-        if (body.Length - offset < 2)
-        {
-            return false;
-        }
-
-        var length = System.Buffers.Binary.BinaryPrimitives.ReadUInt16BigEndian(body.AsSpan(offset));
-        offset += 2;
-        if (body.Length - offset < length)
-        {
-            return false;
-        }
-
-        text = Encoding.UTF8.GetString(body, offset, length);
-        offset += length;
-        return true;
-    }
-
-    private static class Base64Url
-    {
-        public static string Encode(byte[] bytes)
-        {
-            return Convert.ToBase64String(bytes).TrimEnd('=').Replace('+', '-').Replace('/', '_');
-        }
-
-        public static bool TryDecode(string text, out byte[] bytes)
-        {
-            bytes = [];
-            if (text.Length == 0)
-            {
-                return false;
-            }
-
-            var padded = text.Replace('-', '+').Replace('_', '/');
-            switch (padded.Length % 4)
-            {
-                case 2:
-                    padded += "==";
-                    break;
-                case 3:
-                    padded += "=";
-                    break;
-                case 0:
-                    break;
-                default:
-                    return false;
-            }
-
-            try
-            {
-                bytes = Convert.FromBase64String(padded);
-                return true;
-            }
-            catch (FormatException)
-            {
-                return false;
-            }
-        }
+        return new DeclarativeQueryFingerprintBuilder(DeclarativeQuerySources.FamilyTypes)
+            .Value(query.Usage)
+            .Value(query.FamilyNameContains)
+            .Value(query.TypeNameContains)
+            .Set(query.CategoryTokens)
+            .Compute();
     }
 }
 
@@ -546,7 +318,7 @@ internal static class FamilyTypeInventoryQuery
         bool isFamilyDocument,
         long revision,
         IBuiltInCategoryCatalog categories,
-        FamilyTypeCursorCodec cursors)
+        DeclarativeQueryCursorCodec cursors)
     {
         ArgumentNullException.ThrowIfNull(instanceId);
         ArgumentNullException.ThrowIfNull(categories);
@@ -573,7 +345,7 @@ internal static class FamilyTypeInventoryQuery
         var offset = 0;
         if (query.Cursor is not null)
         {
-            if (!cursors.TryOpen(query.Cursor, out var payload)
+            if (!cursors.TryOpen(query.Cursor, DeclarativeQuerySources.FamilyTypes, out var payload)
                 || !string.Equals(payload.InstanceId, instanceId, StringComparison.Ordinal)
                 || !string.Equals(payload.DocumentId, activeDocumentId, StringComparison.Ordinal)
                 || !payload.Fingerprint.AsSpan().SequenceEqual(fingerprint))
@@ -603,7 +375,7 @@ internal static class FamilyTypeInventoryQuery
         long revision,
         Func<IReadOnlyList<FamilyTypeCandidate>> readInventory,
         IBuiltInCategoryCatalog categories,
-        FamilyTypeCursorCodec cursors)
+        DeclarativeQueryCursorCodec cursors)
     {
         ArgumentNullException.ThrowIfNull(readInventory);
         var preparation = Prepare(query, instanceId, activeDocumentId, hasActiveDocument, isFamilyDocument, revision, categories, cursors);
@@ -619,7 +391,7 @@ internal static class FamilyTypeInventoryQuery
         long revision,
         IReadOnlyList<FamilyTypeCandidate> candidates,
         IBuiltInCategoryCatalog categories,
-        FamilyTypeCursorCodec cursors)
+        DeclarativeQueryCursorCodec cursors)
     {
         var preparation = Prepare(query, instanceId, activeDocumentId, hasActiveDocument, isFamilyDocument, revision, categories, cursors);
         ArgumentNullException.ThrowIfNull(candidates);
@@ -630,7 +402,7 @@ internal static class FamilyTypeInventoryQuery
         FamilyTypeQueryPreparation preparation,
         ValidatedFamilyTypeQuery query,
         IReadOnlyList<FamilyTypeCandidate> candidates,
-        FamilyTypeCursorCodec cursors)
+        DeclarativeQueryCursorCodec cursors)
     {
         ArgumentNullException.ThrowIfNull(candidates);
         ArgumentNullException.ThrowIfNull(cursors);
@@ -703,7 +475,7 @@ internal static class FamilyTypeInventoryQuery
         string documentId,
         long revision,
         byte[] fingerprint,
-        FamilyTypeCursorCodec cursors,
+        DeclarativeQueryCursorCodec cursors,
         out bool complete,
         out string? nextCursor)
     {
@@ -727,7 +499,21 @@ internal static class FamilyTypeInventoryQuery
             string? cursor = null;
             if (!isFinal)
             {
-                cursor = cursors.Mint(new FamilyTypeCursorPayload(instanceId, documentId, fingerprint, revision, end));
+                var payload = new DeclarativeQueryCursorPayload(
+                    DeclarativeQuerySources.FamilyTypes,
+                    instanceId,
+                    documentId,
+                    fingerprint,
+                    revision,
+                    end);
+                if (!cursors.TryMint(payload, out var minted))
+                {
+                    throw new BridgeException(
+                        CapabilityErrorCodes.ExecutionFailed,
+                        "The family type query could not be continued.");
+                }
+
+                cursor = minted;
             }
 
             var shaped = Shape(instanceId, documentId, summary, available.Take(count).Select(ToRow).ToArray(), isFinal, cursor);

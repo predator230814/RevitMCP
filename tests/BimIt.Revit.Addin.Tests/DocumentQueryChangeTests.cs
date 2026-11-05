@@ -101,7 +101,7 @@ public sealed class DocumentQueryChangeTests
         Assert.NotEqual(first.NextCursor, restarted.NextCursor);
     }
 
-    private static readonly FamilyTypeCursorCodec Cursors = new(Encoding.ASCII.GetBytes("0123456789abcdef0123456789abcdef"));
+    private static readonly DeclarativeQueryCursorCodec Cursors = new(Encoding.ASCII.GetBytes("0123456789abcdef0123456789abcdef"));
 
     private static QueryFamilyTypesResult Execute(QueryFamilyTypesRequest request, FamilyTypeCandidate[] rows, long revision)
     {
