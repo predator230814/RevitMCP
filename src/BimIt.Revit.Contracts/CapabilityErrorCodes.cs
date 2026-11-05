@@ -50,6 +50,8 @@ public static class CapabilityErrorCodes
 
     public const string InvalidFamilyTypeQuery = "INVALID_FAMILY_TYPE_QUERY";
 
+    public const string InvalidParameterBindingQuery = "INVALID_PARAMETER_BINDING_QUERY";
+
     public const string InvalidCursor = "INVALID_CURSOR";
 
     public const string StaleCursor = "STALE_CURSOR";

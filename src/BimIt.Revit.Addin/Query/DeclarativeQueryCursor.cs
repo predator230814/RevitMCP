@@ -16,6 +16,9 @@ internal static class DeclarativeQuerySources
     /// <summary>CAP-0014 <c>revit_query_family_types</c>.</summary>
     public const string FamilyTypes = "family_types";
 
+    /// <summary>CAP-0015 <c>revit_query_parameter_bindings</c>.</summary>
+    public const string ParameterBindings = "parameter_bindings";
+
     public const int MaxLength = 64;
 
     public static bool IsValid(string? source)

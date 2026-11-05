@@ -164,36 +164,13 @@ internal sealed class RevitQueryFamilyTypesService : IRevitQueryFamilyTypesServi
         return new FamilyTypeCandidate(
             symbol.UniqueId,
             family.UniqueId,
-            CategoryToken(symbol.Category),
+            RevitCategoryTokens.Read(symbol.Category),
             categoryName,
             family.Name ?? string.Empty,
             symbol.Name ?? string.Empty,
             FamilyPlacementTokens.Read(() => family.FamilyPlacementType.ToString()),
             inPlace,
             placedInstanceCount);
-    }
-
-    private static string CategoryToken(Category? category)
-    {
-        if (category is null)
-        {
-            return FamilyPlacementTokens.Unknown;
-        }
-
-        try
-        {
-            var builtIn = category.BuiltInCategory;
-            if (builtIn == BuiltInCategory.INVALID || !Enum.IsDefined(builtIn))
-            {
-                return FamilyPlacementTokens.Unknown;
-            }
-
-            return Enum.GetName(builtIn) ?? FamilyPlacementTokens.Unknown;
-        }
-        catch (Exception)
-        {
-            return FamilyPlacementTokens.Unknown;
-        }
     }
 
     private static BridgeException Unreadable()
