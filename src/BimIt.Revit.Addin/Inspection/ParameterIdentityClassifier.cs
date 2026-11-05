@@ -9,6 +9,12 @@ internal readonly record struct ClassifiedParameterIdentity(
     string? SharedGuid,
     string StableKey);
 
+/// <summary>
+/// What a non-built-in definition's element contributes to its identity:
+/// the shared GUID when it is a <c>SharedParameterElement</c>, and the local stable key.
+/// </summary>
+internal readonly record struct DefinitionElementFacts(Guid? SharedGuid, string LocalStableKey);
+
 internal static class ParameterIdentityClassifier
 {
     public static ClassifiedParameterIdentity Classify(
@@ -47,20 +53,27 @@ internal static class ParameterIdentityClassifier
 
     /// <summary>
     /// The definition-based rule of CAP-0015: built-in when the type id passed the built-in gate,
-    /// else shared when the definition element is a <c>SharedParameterElement</c>
-    /// (<paramref name="sharedParameterGuid"/> not null), else local. Ordering stays in <see cref="Classify"/>.
+    /// and then the definition element is never looked up; otherwise
+    /// <paramref name="resolveDefinitionElement"/> is invoked exactly once, and the identity is
+    /// shared when the element is a <c>SharedParameterElement</c> (a non-null GUID), else local.
     /// </summary>
     public static ClassifiedParameterIdentity ClassifyDefinition(
         string? builtInTypeId,
-        Guid? sharedParameterGuid,
-        string localStableKey)
+        Func<DefinitionElementFacts> resolveDefinitionElement)
     {
+        ArgumentNullException.ThrowIfNull(resolveDefinitionElement);
+        if (!string.IsNullOrEmpty(builtInTypeId))
+        {
+            return Classify(true, builtInTypeId, false, Guid.Empty, builtInTypeId);
+        }
+
+        var element = resolveDefinitionElement();
         return Classify(
-            builtInTypeId is not null,
-            builtInTypeId,
-            sharedParameterGuid.HasValue,
-            sharedParameterGuid ?? Guid.Empty,
-            localStableKey);
+            false,
+            null,
+            element.SharedGuid.HasValue,
+            element.SharedGuid ?? Guid.Empty,
+            element.LocalStableKey);
     }
 
     /// <summary>

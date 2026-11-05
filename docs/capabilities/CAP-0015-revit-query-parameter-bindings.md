@@ -225,7 +225,7 @@ else
 
 `ParameterUtils.IsBuiltInParameter` is called only when `typeId` is non-null and non-empty. A null or empty id is never classified as built-in and never raises.
 
-Required internal refactoring, not done in this PR:
+Required internal entry points:
 
 - `RevitParameterIdentity.Classify(InternalDefinition definition, Document document)` implementing the rule above;
 - `RevitParameterIdentity.ClassifyDataType(Definition definition)`, with the existing `Parameter` overload delegating to it;

@@ -38,12 +38,15 @@ internal static class RevitParameterIdentity
         ArgumentNullException.ThrowIfNull(document);
 
         var builtInTypeId = BuiltInTypeId(definition.GetParameterTypeId());
-        var definitionElement = document.GetElement(definition.Id);
-        Guid? sharedGuid = definitionElement is SharedParameterElement shared ? shared.GuidValue : null;
         return ParameterIdentityClassifier.ClassifyDefinition(
             builtInTypeId,
-            sharedGuid,
-            ResolveLocalKey(definition, definitionElement));
+            () =>
+            {
+                // Reached only for a non-built-in definition, whose Id is its ParameterElement.
+                var definitionElement = document.GetElement(definition.Id);
+                Guid? sharedGuid = definitionElement is SharedParameterElement shared ? shared.GuidValue : null;
+                return new DefinitionElementFacts(sharedGuid, ResolveLocalKey(definition, definitionElement));
+            });
     }
 
     public static DescribeParameterDataType ClassifyDataType(Parameter parameter)

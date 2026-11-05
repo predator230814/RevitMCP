@@ -18,7 +18,7 @@ public sealed class DefinitionParameterClassificationTests
     [Fact]
     public void Built_in_still_takes_priority_over_shared_and_local()
     {
-        var definition = ParameterIdentityClassifier.ClassifyDefinition(
+        var definition = Definition(
             "autodesk.revit.parameter:allModelMark",
             Shared,
             "local:12");
@@ -38,7 +38,7 @@ public sealed class DefinitionParameterClassificationTests
     [Fact]
     public void Shared_guid_canonicalization_is_unchanged()
     {
-        var definition = ParameterIdentityClassifier.ClassifyDefinition(null, Shared, "local:12");
+        var definition = Definition(null, Shared, "local:12");
         var parameter = ParameterIdentityClassifier.Classify(false, null, true, Shared, "local:12");
 
         Assert.Equal(DescribeParameterIdentityKind.Shared, definition.Kind);
@@ -51,7 +51,7 @@ public sealed class DefinitionParameterClassificationTests
     [Fact]
     public void A_shared_parameter_element_with_an_empty_guid_falls_through_to_local_as_before()
     {
-        var definition = ParameterIdentityClassifier.ClassifyDefinition(null, Guid.Empty, "uid-1");
+        var definition = Definition(null, Guid.Empty, "uid-1");
         var parameter = ParameterIdentityClassifier.Classify(false, null, true, Guid.Empty, "uid-1");
 
         Assert.Equal(DescribeParameterIdentityKind.Local, definition.Kind);
@@ -68,7 +68,7 @@ public sealed class DefinitionParameterClassificationTests
         Assert.Equal("local:9007199254740993", ParameterIdentityClassifier.LocalStableKey(null, 9007199254740993));
 
         var key = ParameterIdentityClassifier.LocalStableKey(null, 12);
-        var definition = ParameterIdentityClassifier.ClassifyDefinition(null, null, key);
+        var definition = Definition(null, null, key);
         var parameter = ParameterIdentityClassifier.Classify(false, null, false, Guid.Empty, key);
         Assert.Equal(DescribeParameterIdentityKind.Local, definition.Kind);
         Assert.Equal("local:12", definition.StableKey);
@@ -94,8 +94,8 @@ public sealed class DefinitionParameterClassificationTests
         Assert.Equal(1, calls);
 
         // A definition with no type id falls through to shared, then local.
-        Assert.Equal(DescribeParameterIdentityKind.Shared, ParameterIdentityClassifier.ClassifyDefinition(null, Shared, "uid").Kind);
-        Assert.Equal(DescribeParameterIdentityKind.Local, ParameterIdentityClassifier.ClassifyDefinition(null, null, "uid").Kind);
+        Assert.Equal(DescribeParameterIdentityKind.Shared, Definition(null, Shared, "uid").Kind);
+        Assert.Equal(DescribeParameterIdentityKind.Local, Definition(null, null, "uid").Kind);
 
         var adapter = Adapter();
         Assert.Contains("typeId is null || typeId.Empty() ? null : typeId.TypeId", adapter, StringComparison.Ordinal);
@@ -112,9 +112,39 @@ public sealed class DefinitionParameterClassificationTests
         Assert.Contains("BuiltInTypeId(definition.GetParameterTypeId())", body, StringComparison.Ordinal);
         Assert.Contains("document.GetElement(definition.Id)", body, StringComparison.Ordinal);
         Assert.Contains("definitionElement is SharedParameterElement shared ? shared.GuidValue : null", body, StringComparison.Ordinal);
-        Assert.Contains("ParameterIdentityClassifier.ClassifyDefinition(", body, StringComparison.Ordinal);
         Assert.Contains("ResolveLocalKey(definition, definitionElement)", body, StringComparison.Ordinal);
         Assert.Equal(1, Count(body, "GetElement("));
+
+        // The element lookup lives only inside the resolver passed to ClassifyDefinition,
+        // which skips it for a built-in definition.
+        var classify = body.IndexOf("ParameterIdentityClassifier.ClassifyDefinition(", StringComparison.Ordinal);
+        var resolver = body.IndexOf("() =>", StringComparison.Ordinal);
+        var lookup = body.IndexOf("document.GetElement(definition.Id)", StringComparison.Ordinal);
+        Assert.True(classify >= 0 && classify < resolver && resolver < lookup);
+    }
+
+    [Fact]
+    public void A_built_in_definition_is_classified_without_looking_up_its_element()
+    {
+        var identity = ParameterIdentityClassifier.ClassifyDefinition(
+            "autodesk.revit.parameter:allModelMark",
+            () => throw new InvalidOperationException("Document.GetElement must not be called for a built-in definition."));
+        Assert.Equal(DescribeParameterIdentityKind.BuiltIn, identity.Kind);
+        Assert.Equal("autodesk.revit.parameter:allModelMark", identity.ParameterTypeId);
+        Assert.Equal("autodesk.revit.parameter:allModelMark", identity.StableKey);
+        Assert.Null(identity.SharedGuid);
+
+        foreach (var typeId in new string?[] { null, string.Empty })
+        {
+            var lookups = 0;
+            var shared = ParameterIdentityClassifier.ClassifyDefinition(typeId, () =>
+            {
+                lookups++;
+                return new DefinitionElementFacts(Shared, "uid");
+            });
+            Assert.Equal(1, lookups);
+            Assert.Equal(DescribeParameterIdentityKind.Shared, shared.Kind);
+        }
     }
 
     [Fact]
@@ -186,7 +216,7 @@ public sealed class DefinitionParameterClassificationTests
         // Same identity, whatever the display name ("Tt_Capacité_Sectionneur" or "Tt_Capacite_Sectionneur"),
         // gives the same parameter_ref in the existing map. No second namespace is created.
         var map = new ParameterIdentityMap();
-        var fromDefinition = ParameterIdentityClassifier.ClassifyDefinition(null, Shared, "unused");
+        var fromDefinition = Definition(null, Shared, "unused");
         var fromParameter = ParameterIdentityClassifier.Classify(false, null, true, Shared, "unused");
         Assert.Equal(
             map.GetRef(GetElementParameterSource.Instance, fromParameter),
@@ -203,6 +233,13 @@ public sealed class DefinitionParameterClassificationTests
             Assert.DoesNotContain("GetParameterTypeId", service, StringComparison.Ordinal);
             Assert.DoesNotContain("ParameterBindings", service, StringComparison.Ordinal);
         }
+    }
+
+    private static ClassifiedParameterIdentity Definition(string? builtInTypeId, Guid? sharedGuid, string localStableKey)
+    {
+        return ParameterIdentityClassifier.ClassifyDefinition(
+            builtInTypeId,
+            () => new DefinitionElementFacts(sharedGuid, localStableKey));
     }
 
     private static string Adapter() => Source("Inspection", "RevitParameterIdentity.cs");
