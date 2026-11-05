@@ -1,16 +1,16 @@
 # CAP-0015: `revit_query_parameter_bindings`
 
-- Status: Proposed
+- Status: Accepted
 - Operation class: Read
 - Date: 2026-11-05
-- Architecture: Accepted [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md), second source (proposed)
-- Introduced bridge protocol version: not allocated. Allocated with the implementation, after acceptance.
+- Architecture: Accepted [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md), second source (accepted, not implemented)
+- Introduced bridge protocol version: not allocated. Allocated with the implementation.
 
 ## Authorization
 
-This specification is **Proposed**. It is not accepted and not implemented. No Contracts, Addin, Bridge, Server, or MCP tool change exists for it. Production `tools/list` stays at 19.
+This specification is **Accepted** (Product Owner and Tech Lead, 2026-11-05, after the independent pyRevit baseline and contract review). It is **not yet implemented**. No Bridge protocol version is allocated yet. No Contracts, Addin, Bridge, Server, or MCP tool change exists for it. Production `tools/list` remains 19 until implementation.
 
-It proposes the second source of the ADR-0023 read-query kernel. The independent evidence it relies on is [ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md](../ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md).
+It defines the second source of the ADR-0023 read-query kernel. The independent evidence it relies on is [ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md](../ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md).
 
 Where this specification and ADR-0023 or CAP-0004 differ, the accepted document wins and this one is corrected.
 
@@ -451,7 +451,7 @@ These are evidence from one document state, not product constants. If the model 
 
 ## Decisions recorded at Tech Lead review
 
-The Tech Lead contract review on 2026-11-05 decided the open questions of the first draft. The specification stays **Proposed** until Product Owner and Tech Lead acceptance.
+The Tech Lead contract review on 2026-11-05 decided the open questions of the first draft. The specification was accepted by the Product Owner and Tech Lead on 2026-11-05 with these decisions.
 
 1. **Hidden definitions.** All binding-map entries are inventoried, including `Visible == false` definitions. No `visible` field in v1 and no exclusion. Chaining to CAP-0005 is conditional on the element exposing the parameter (see "Rule" and "Hidden definitions").
 2. **Page size.** Default 50, maximum 100.

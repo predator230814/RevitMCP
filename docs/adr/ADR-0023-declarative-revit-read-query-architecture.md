@@ -203,7 +203,7 @@ Candidate sources and operations, each to be decided on demonstrated need:
 - **Instance queries:** elements of a category or type with level, host, workset, and design-option facts. These overlap `revit_query_elements` (CAP-0002), which has no cursor today. Paging CAP-0002 or adding an instance source must not create two answers to the same question.
 - **System ElementTypes:** conduit, cable tray, wire, pipe, and duct types, distribution systems. They are not `FamilySymbol`s and need their own source shape.
 - **View templates** and **schedules:** schedule *definitions* are inventory. Schedule *contents* are computed data and may belong elsewhere.
-- **Project parameter definitions and bindings (shared and non-shared):** identity, shared-parameter GUID when one exists, data type, instance or type binding, bound categories. Highly relevant to Standard Packs. Proposed as the second demonstrated source in [CAP-0015](../capabilities/CAP-0015-revit-query-parameter-bindings.md) (`revit_query_parameter_bindings`, Proposed, not accepted or implemented), over the entries of `Document.ParameterBindings`. Evidence: [ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md](../ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md).
+- **Project parameter definitions and bindings (shared and non-shared):** identity, shared-parameter GUID when one exists, data type, instance or type binding, bound categories. Highly relevant to Standard Packs. Accepted, not implemented, as the second demonstrated source in [CAP-0015](../capabilities/CAP-0015-revit-query-parameter-bindings.md) (`revit_query_parameter_bindings`, Accepted, not implemented), over the entries of `Document.ParameterBindings`. Evidence: [ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md](../ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md).
 - **Grouping, count, and distinct operations:** a small closed set over the fields of a source, not a general aggregation language.
 - **Linked-document querying:** reading inventory from loaded links. It needs a link-addressing decision consistent with ADR-0019 and ADR-0021, and is not implied here.
 
@@ -278,7 +278,8 @@ Implementation history of the first slice:
 - CAP-0014 accepted, then implemented: Contracts, Addin read, Bridge protocol 22, and the MCP tool.
 - Live validation of the tool contract found that a stale cursor was not detected, because of the late event registration in question 3. The fix and a passing live revalidation are recorded in [CAP_0014_FAMILY_TYPES_VALIDATION.md](../CAP_0014_FAMILY_TYPES_VALIDATION.md).
 - The natural-agent gate passed on 2026-11-04 (see "Gate result").
-- 2026-11-05: a natural-agent run found no BIM-IT tool for a project-wide parameter binding inventory. An independent pyRevit baseline was frozen, and CAP-0015 was proposed as the second source. It is not accepted, and no Bridge version is allocated.
+- 2026-11-05: a natural-agent run found no BIM-IT tool for a project-wide parameter binding inventory. An independent pyRevit baseline was frozen, and CAP-0015 was proposed as the second source.
+- 2026-11-05: CAP-0015 was accepted by the Product Owner and Tech Lead after the independent pyRevit baseline and contract review. It is not implemented, no Bridge version is allocated, and production `tools/list` remains 19.
 
 ## References
 
