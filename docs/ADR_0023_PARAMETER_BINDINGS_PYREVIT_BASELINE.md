@@ -1,7 +1,7 @@
 # ADR-0023 parameter bindings: independent pyRevit baseline
 
 - Date: 2026-11-05
-- Purpose: evidence for the proposed second ADR-0023 source, [CAP-0015](capabilities/CAP-0015-revit-query-parameter-bindings.md)
+- Purpose: evidence for the accepted second ADR-0023 source, [CAP-0015](capabilities/CAP-0015-revit-query-parameter-bindings.md)
 - Status: frozen reference baseline. Research only. No BIM-IT code was changed.
 
 This record keeps aggregate and representative evidence only. The raw 144-row inventory of the reference project is kept outside the repository and is not committed. Its integrity is identified by the SHA-256 below.
