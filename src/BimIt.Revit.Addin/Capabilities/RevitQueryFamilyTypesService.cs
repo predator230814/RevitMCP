@@ -14,7 +14,7 @@ internal sealed class RevitQueryFamilyTypesService : IRevitQueryFamilyTypesServi
     private readonly BridgeInstanceMetadata _metadata;
     private readonly OpenDocumentIdentityService _identity;
     private readonly DocumentQueryRevisionService _revisions;
-    private readonly FamilyTypeCursorCodec _cursors;
+    private readonly DeclarativeQueryCursorCodec _cursors;
     private readonly IBuiltInCategoryCatalog _categories;
 
     public RevitQueryFamilyTypesService(
@@ -22,7 +22,7 @@ internal sealed class RevitQueryFamilyTypesService : IRevitQueryFamilyTypesServi
         BridgeInstanceMetadata metadata,
         OpenDocumentIdentityService identity,
         DocumentQueryRevisionService revisions,
-        FamilyTypeCursorCodec cursors,
+        DeclarativeQueryCursorCodec cursors,
         IBuiltInCategoryCatalog categories)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);

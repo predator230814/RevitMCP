@@ -9,7 +9,7 @@ namespace BimIt.Revit.Addin.Tests;
 
 public sealed class QueryFamilyTypesTests
 {
-    private readonly FamilyTypeCursorCodec _cursors = new(Encoding.ASCII.GetBytes("0123456789abcdef0123456789abcdef"));
+    private readonly DeclarativeQueryCursorCodec _cursors = new(Encoding.ASCII.GetBytes("0123456789abcdef0123456789abcdef"));
 
     private readonly IBuiltInCategoryCatalog _categories = new DefinedCategories("OST_Doors", "OST_Walls", "OST_ElectricalFixtures");
 
@@ -194,7 +194,15 @@ public sealed class QueryFamilyTypesTests
             CapabilityErrorCodes.DocumentContextChanged,
             Error(Request(documentId: "other", cursor: cursor), rows, activeDocumentId: "doc").ErrorCode);
 
-        var other = _cursors.Mint(new FamilyTypeCursorPayload("instance", "other-doc", FamilyTypeQueryFingerprint.Compute(FamilyTypeQueryValidator.Validate(Request())), 0, 0));
+        Assert.True(_cursors.TryMint(
+            new DeclarativeQueryCursorPayload(
+                DeclarativeQuerySources.FamilyTypes,
+                "instance",
+                "other-doc",
+                FamilyTypeQueryFingerprint.Compute(FamilyTypeQueryValidator.Validate(Request())),
+                0,
+                0),
+            out var other));
         Assert.Equal(CapabilityErrorCodes.InvalidCursor, Error(Request(cursor: other), rows).ErrorCode);
 
         var left = FamilyTypeQueryFingerprint.Compute(FamilyTypeQueryValidator.Validate(Request(tokens: ["OST_Walls", "OST_Doors"])));
