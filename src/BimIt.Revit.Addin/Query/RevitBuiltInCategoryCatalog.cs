@@ -19,3 +19,33 @@ internal sealed class RevitBuiltInCategoryCatalog : IBuiltInCategoryCatalog
         return string.Equals(Enum.GetName(value), token, StringComparison.Ordinal);
     }
 }
+
+/// <summary>
+/// The category token of CAP-0014 and CAP-0015: the exact <c>BuiltInCategory</c> member name,
+/// or <c>unknown</c> for a null, unreadable, or undefined category. Never throws.
+/// </summary>
+internal static class RevitCategoryTokens
+{
+    public static string Read(Category? category)
+    {
+        if (category is null)
+        {
+            return DeclarativeQueryFilterRules.UnknownCategoryToken;
+        }
+
+        try
+        {
+            var builtIn = category.BuiltInCategory;
+            if (builtIn == BuiltInCategory.INVALID || !Enum.IsDefined(builtIn))
+            {
+                return DeclarativeQueryFilterRules.UnknownCategoryToken;
+            }
+
+            return Enum.GetName(builtIn) ?? DeclarativeQueryFilterRules.UnknownCategoryToken;
+        }
+        catch (Exception)
+        {
+            return DeclarativeQueryFilterRules.UnknownCategoryToken;
+        }
+    }
+}

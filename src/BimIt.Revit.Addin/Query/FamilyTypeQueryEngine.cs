@@ -10,11 +10,11 @@ internal static class FamilyTypeQueryLimits
 
     public const int MaxPageSize = 200;
 
-    public const int MaxCategoryTokens = 20;
+    public const int MaxCategoryTokens = DeclarativeQueryFilterRules.MaxCategoryTokens;
 
-    public const int MaxTokenLength = 80;
+    public const int MaxTokenLength = DeclarativeQueryFilterRules.MaxCategoryTokenLength;
 
-    public const int MaxNameLength = 256;
+    public const int MaxNameLength = DeclarativeQueryFilterRules.MaxNameLength;
 
     public const int MaxCursorLength = DeclarativeQueryCursorCodec.MaxCursorLength;
 
@@ -52,7 +52,7 @@ internal interface IBuiltInCategoryCatalog
 
 internal static class FamilyPlacementTokens
 {
-    public const string Unknown = "unknown";
+    public const string Unknown = DeclarativeQueryFilterRules.UnknownCategoryToken;
 
     public static string FromRevitName(string? memberName)
     {
@@ -116,24 +116,7 @@ internal static class FamilyTypeQueryValidator
         IReadOnlyList<string>? tokens = null;
         if (request.CategoryTokens is not null)
         {
-            if (request.CategoryTokens.Count is < 1 or > FamilyTypeQueryLimits.MaxCategoryTokens)
-            {
-                throw InvalidQuery();
-            }
-
-            var seen = new HashSet<string>(StringComparer.Ordinal);
-            var accepted = new List<string>(request.CategoryTokens.Count);
-            foreach (var token in request.CategoryTokens)
-            {
-                if (token is null || !IsTokenShape(token) || !seen.Add(token))
-                {
-                    throw InvalidQuery();
-                }
-
-                accepted.Add(token);
-            }
-
-            tokens = accepted;
+            tokens = DeclarativeQueryFilterRules.CategoryTokens(request.CategoryTokens) ?? throw InvalidQuery();
         }
 
         return new ValidatedFamilyTypeQuery(
@@ -148,18 +131,9 @@ internal static class FamilyTypeQueryValidator
 
     public static void EnsureDefinedCategories(IReadOnlyList<string>? tokens, IBuiltInCategoryCatalog catalog)
     {
-        ArgumentNullException.ThrowIfNull(catalog);
-        if (tokens is null)
+        if (!DeclarativeQueryFilterRules.AllDefined(tokens, catalog))
         {
-            return;
-        }
-
-        foreach (var token in tokens)
-        {
-            if (!catalog.IsDefinedMember(token))
-            {
-                throw InvalidQuery();
-            }
+            throw InvalidQuery();
         }
     }
 
@@ -170,43 +144,12 @@ internal static class FamilyTypeQueryValidator
             return null;
         }
 
-        if (value.Length is < 1 or > FamilyTypeQueryLimits.MaxNameLength || IsWhitespace(value))
+        if (!DeclarativeQueryFilterRules.IsNameFilter(value))
         {
             throw InvalidQuery();
         }
 
         return value;
-    }
-
-    private static bool IsTokenShape(string token)
-    {
-        if (token.Length is < 1 or > FamilyTypeQueryLimits.MaxTokenLength)
-        {
-            return false;
-        }
-
-        foreach (var character in token)
-        {
-            if (character is not ((>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9') or '_'))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    private static bool IsWhitespace(string value)
-    {
-        foreach (var character in value)
-        {
-            if (!char.IsWhiteSpace(character))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     private static BridgeException InvalidQuery()
