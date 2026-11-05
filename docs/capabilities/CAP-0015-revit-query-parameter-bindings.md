@@ -28,7 +28,7 @@ revit_get_context
 -> revit_query_parameter_bindings (filters ...)
 -> next_cursor
 -> revit_query_parameter_bindings (same query + cursor) ... until complete: true
--> optional: revit_get_parameter_values (element_ref + parameter_ref from a row)
+-> optional: revit_get_parameter_values (element_ref + parameter_ref from a row, when the element exposes that parameter)
 ```
 
 ## Source boundary
@@ -72,7 +72,7 @@ The description states, in this order, concisely:
 1. what it returns: the project parameter bindings of the active host project, one row per bound definition, with identity, data type, instance or type binding, and all bound categories, plus a summary of the whole matched set;
 2. that it is a paged inventory: repeat the same query with `next_cursor` until `complete` is `true`;
 3. that `document_id` comes from `revit_get_context`;
-4. that `parameter_ref` can be used with `revit_get_parameter_values`;
+4. that `parameter_ref` is the same reference that `revit_describe_parameters` and `revit_get_parameter_values` use;
 5. that category filters use stable `OST_` tokens and the name filter is a case-insensitive substring.
 
 ## MCP input
@@ -195,25 +195,49 @@ For each binding-map entry, the capability computes:
 
 ```text
 source   = Instance for InstanceBinding, Type for TypeBinding
-identity = the classifier's identity of the definition
+identity = the classifier's identity of the definition (see "Definition classification")
 parameter_ref = OpenDocumentParameterIdentityService.GetRef(document, source, identity)
 ```
 
-So, for the same open document, the same definition, and the same source, `revit_query_parameter_bindings` and `revit_describe_parameters` return the **same** `parameter_ref`, whichever runs first. A reference from either tool resolves through the same service. A reference from a binding row can be passed directly to `revit_get_parameter_values` with an element of a bound category, for the bound source.
+The identity and reference namespace is the CAP-0004 one. For the same open document, the same definition, and the same source, the identity is the same whichever path classified it, so `GetRef` returns the same `parameter_ref`, whichever tool runs first. Every reference from this capability resolves through `OpenDocumentParameterIdentityService.TryResolve`.
 
-### Required internal refactoring (not done in this PR)
+**Parity with `revit_describe_parameters`** is required for every definition that CAP-0004 can actually observe, that is, a parameter that `GetOrderedParameters()` returns on the instance or type surface of an element passed to `revit_describe_parameters`. For such a definition, both tools return the same `parameter_ref` and the same `identity` and `data_type`.
 
-The classifier entry points take a `Parameter`. A binding entry has a `Definition` and no element. The implementation adds definition-based entry points and keeps one decision rule:
+**Chaining to `revit_get_parameter_values` (CAP-0005)** is conditional:
 
-- `RevitParameterIdentity.Classify(InternalDefinition definition, Document document)`: built-in from `InternalDefinition.GetParameterTypeId()` with `ParameterUtils.IsBuiltInParameter`; shared from a `SharedParameterElement` resolved from `definition.Id`, using its `GuidValue`; otherwise local with the same `ResolveLocalKey` logic that the `Parameter` path uses for an `InternalDefinition`.
-- `RevitParameterIdentity.ClassifyDataType(Definition definition)`, and the existing `Parameter` overload delegating to it.
-- The pure `ParameterIdentityClassifier` stays the single place that orders built-in, shared, and local.
+- when a target element exposes the parameter on its CAP-0005 parameter surface for the bound source, the reference chains normally and CAP-0005 reads its value;
+- a binding-map definition that the element does not expose on that surface is still a valid inventory row, but the reference may not resolve to a value on that element. CAP-0005 reports that with its existing item-level semantics. This capability makes no promise that every row yields a value on every element of a bound category.
 
-A parity test is required. For a parameter observed on an element and the same definition read from the binding map, both paths must produce an equal `ClassifiedParameterIdentity` and data type, and therefore the same `parameter_ref`. This must hold for shared, local, and accented names.
+### Definition classification
+
+The existing classifier entry points take a `Parameter`. A binding entry has a `Definition` and no element. The implementation adds definition-based entry points that feed the same pure `ParameterIdentityClassifier`. The classification must be null-safe, because Autodesk documents that `InternalDefinition.GetParameterTypeId()` returns `null` for custom-defined parameters:
+
+```text
+typeId = definition.GetParameterTypeId()
+if typeId is not null and not empty
+   and ParameterUtils.IsBuiltInParameter(typeId)
+    -> built_in, parameter_type_id = typeId.TypeId
+else if doc.GetElement(definition.Id) is SharedParameterElement spe
+    -> shared, guid = spe.GuidValue (existing canonical lowercase format)
+else
+    -> local, stable key from the existing ResolveLocalKey logic for an InternalDefinition
+```
+
+`ParameterUtils.IsBuiltInParameter` is called only when `typeId` is non-null and non-empty. A null or empty id is never classified as built-in and never raises.
+
+Required internal refactoring, not done in this PR:
+
+- `RevitParameterIdentity.Classify(InternalDefinition definition, Document document)` implementing the rule above;
+- `RevitParameterIdentity.ClassifyDataType(Definition definition)`, with the existing `Parameter` overload delegating to it;
+- `ParameterIdentityClassifier` stays the single place that orders built-in, then shared, then local.
+
+A parity test is required. For a parameter observed on an element and the same definition read from the binding map, the `Definition` path and the existing `Parameter` path must produce an equal `ClassifiedParameterIdentity` and data type for the same definition and source, and therefore the same `parameter_ref`. It must cover shared, local, and accented names, and a definition whose `GetParameterTypeId()` is null.
 
 ### Hidden definitions
 
-CAP-0004 discovers only parameters returned by `GetOrderedParameters()`, and CAP-0005 resolves through the same scan. A binding-map definition with `Visible == false` (two in the baseline) is part of the source and gets a `parameter_ref`. `revit_describe_parameters` will never show it, and `revit_get_parameter_values` may report it as not present on an element. The capability does not hide such rows, because that would break completeness against the binding map. Whether to expose `visible`, or to exclude hidden definitions, is an open question.
+Decision: the capability inventories **all** `Document.ParameterBindings` entries, including definitions whose `Definition.Visible` is false (two in the baseline). v1 adds no `visible` field and excludes no hidden definition, because either would break completeness against the binding map or widen the row without a demonstrated need.
+
+Consequence: CAP-0004 discovers only parameters that `GetOrderedParameters()` returns, and CAP-0005 resolves through the same surface. A hidden definition has a valid row and `parameter_ref`, but `revit_describe_parameters` may never show it and `revit_get_parameter_values` may not resolve it to a value on an element. This is the conditional chaining described in "Rule".
 
 ## Query-level summary
 
@@ -240,7 +264,7 @@ Every page returns the same exact summary over the **entire matched set**:
 
 Invariants: the three identity counts sum to `matched_definition_count`; the two binding counts sum to it; the sum of `returned_count` over a completed traversal equals it. An empty match returns all zeros.
 
-`built_in_count` is expected to be 0 in normal projects. It stays because the three identity counts partition the set, and a non-zero value is a fact an auditor needs.
+`built_in_count` is expected to be 0 in normal projects. Decided at review: it stays, because the three identity counts partition the set, and a non-zero value is a fact an auditor needs.
 
 **Not in the summary:** `definition_category_pair_count`. It equals the sum of `categories.length` over a completed traversal and is fully derivable. The acceptance gate checks it that way. Data-type counts and per-category counts are also not in the summary: they are derivable, and no use case has needed them as a server aggregate.
 
@@ -263,11 +287,12 @@ Closed objects at every level. Structured content is authoritative, with the CAP
 
 Server-defined total order, not configurable, independent of binding-map iteration order:
 
-1. `name`, ordinal;
-2. identity kind, in the order `built_in`, `shared`, `local`;
-3. the identity's stable key, ordinal: the built-in parameter type id, the lowercase shared GUID, or the local stable key.
+1. `name`, `OrdinalIgnoreCase`;
+2. `name`, `Ordinal`;
+3. identity kind, in the order `built_in`, `shared`, `local`;
+4. the identity's stable key, `Ordinal`: the built-in parameter type id, the lowercase shared GUID, or the local stable key.
 
-Each binding-map entry is keyed by one definition, so the three keys are unique per row. The local stable key is an internal Revit-derived string (the `ParameterElement` `UniqueId`). It is used for ordering only and is never returned. `parameter_ref` is not an ordering key, because it is minted randomly. Ordinal comparison matches CAP-0014 and is chosen for reproducibility, not natural reading order.
+Decided at review: the first two keys follow CAP-0004's descriptor ordering, so the two parameter tools list names the same way. Keys 3 and 4 make the order total. Each binding-map entry is keyed by one definition, so the stable identity key is unique per row. The local stable key is an internal Revit-derived string (the `ParameterElement` `UniqueId`). It is used for ordering only and is never returned. `parameter_ref` is not an ordering key, because it is minted randomly. `OrdinalIgnoreCase` folds case without culture rules and does not fold accents, so the order is reproducible on every machine.
 
 ## Pagination and consistency
 
@@ -285,18 +310,18 @@ Estimates from the frozen baseline, re-serialized offline into the row shape abo
 | Each category entry | about 72 characters |
 | Largest row (107 categories) | 7,960 characters |
 | Whole 144-row inventory | about 62,300 characters |
-| Largest page of 50 rows, in the proposed order | about 23,400 characters |
-| Largest page of 100 rows, in the proposed order | about 39,600 characters |
+| Largest page of 50 rows, in the specified order | about 23,400 characters |
+| Largest page of 100 rows, in the specified order | about 39,600 characters |
 
 CAP-0014 rows have a nearly fixed size. These rows do not: one definition bound to most categories costs as much as 20 to 25 ordinary rows. The ADR-0023 natural-agent run also showed a client that did not display a 79,310-character response, although it was inside the budget.
 
-Proposed: **default 50, maximum 100.** On the baseline, a default page stays near 23,000 characters and a maximum page near 40,000, both well below that observed client limit. The full baseline takes 3 pages at the default and 2 at the maximum. A larger maximum would rarely help: a project that binds many definitions to many categories would hit the budget first, and the budget, not `page_size`, then shortens the page. These values are a proposal for review.
+Decided at review: **default 50, maximum 100.** On the baseline, a default page stays near 23,000 characters and a maximum page near 40,000, both well below that observed client limit. The full baseline takes 3 pages at the default and 2 at the maximum. A larger maximum would rarely help: a project that binds many definitions to many categories would hit the budget first, and the budget, not `page_size`, then shortens the page.
 
 ### Cursor
 
 Opaque, signed, stateless, and bound to the instance, `document_id`, a normalized query fingerprint (`category_tokens` as a sorted set, `name_contains`, `identity_kind`, `binding_kind`; not `page_size`), the document query revision, and the position.
 
-The fingerprint must include a **source discriminator** (for example the literal source name). A cursor minted by `revit_query_family_types` must never be accepted here, and the reverse, even if a future implementation shares one signing key. The implementation generalizes the CAP-0014 `FamilyTypeCursorCodec` and fingerprint to a source-tagged query cursor rather than duplicating them. The validation order is CAP-0014's.
+The fingerprint must include a **source discriminator** (for example the literal source name). A cursor minted by `revit_query_family_types` must never be accepted here, and the reverse, even if a future implementation shares one signing key. Decided at review: the implementation generalizes the CAP-0014 `FamilyTypeCursorCodec` and query fingerprint into one narrowly scoped, source-tagged query cursor primitive shared by the declarative query sources, rather than duplicating them. The primitive covers only the cursor and fingerprint mechanics: signing, the source tag, the fingerprint, document binding, revision, and position. It is not a generalized query framework. Filtering, ordering, summaries, and shaping stay in each source. The CAP-0014 observable cursor behavior must not change. The validation order is CAP-0014's.
 
 ### Document query revision
 
@@ -368,19 +393,20 @@ Revit 2025, 2026, and 2027 from the shared Addin project. `ElementId` value acce
 2. Category-token validation identical to CAP-0014.
 3. Category any-match: a row matched by one token still returns its complete category set.
 4. `identity_kind`, `binding_kind`, `name_contains` semantics, including `É`/`é` case folding without accent folding.
-5. `parameter_ref` parity: the same definition and source yield the same reference from this capability and from `revit_describe_parameters`, in both call orders; a binding row's reference resolves in `revit_get_parameter_values`.
-6. Classifier parity between the `Parameter` and `Definition` paths for built-in, shared, and local identities and for data types.
+5. `parameter_ref` parity: for a definition that CAP-0004 observes on an element, the same definition and source yield the same reference, identity, and data type from this capability and from `revit_describe_parameters`, in both call orders. A binding row's reference resolves through the shared identity service. With an element that exposes the parameter on the bound source, `revit_get_parameter_values` reads its value. With an element that does not expose it, for example a hidden definition, the row stays valid and CAP-0005 returns its existing item-level result, not a capability failure.
+6. Classifier parity between the `Parameter` and `Definition` paths for built-in, shared, and local identities and for data types, including a definition whose `GetParameterTypeId()` returns null, which must classify as shared or local without raising.
 7. Unknown or unreadable category yields `unknown` and is not dropped; empty category set yields `[]`.
 8. A non-instance, non-type binding fails with `REVIT_EXECUTION_FAILED`.
-9. Ordering is total, independent of iteration order, and never uses `parameter_ref`.
-10. Exact summary and its invariants on every page; empty match is all zeros.
-11. Pagination equivalence across page sizes, including a page size change mid-traversal; final-page semantics.
-12. `INVALID_CURSOR` for malformed, forged, wrong-document, changed-filter, and **family-type-query** cursors; `STALE_CURSOR` after a revision change.
-13. Budget: a page with a many-category row is shortened, loses and repeats no row; `RESULT_TOO_LARGE` only for an oversize single row.
-14. Document guard, no active document, family document.
-15. No transaction is opened.
-16. Bridge gating without fallback; strict closed MCP schemas; `tools/list` 20; read-facade policy.
-17. CAP-0004, CAP-0005, CAP-0014 tests pass unmodified.
+9. Ordering follows the four keys (`OrdinalIgnoreCase` name, `Ordinal` name, identity kind, stable key), is total and independent of iteration order, and never uses `parameter_ref`.
+10. Hidden definitions (`Visible == false`) are returned as ordinary rows, with no `visible` field.
+11. Exact summary and its invariants on every page; empty match is all zeros.
+12. Pagination equivalence across page sizes, including a page size change mid-traversal; final-page semantics.
+13. `INVALID_CURSOR` for malformed, forged, wrong-document, changed-filter, and **family-type-query** cursors; `STALE_CURSOR` after a revision change.
+14. Budget: a page with a many-category row is shortened, loses and repeats no row; `RESULT_TOO_LARGE` only for an oversize single row.
+15. Document guard, no active document, family document.
+16. No transaction is opened.
+17. Bridge gating without fallback; strict closed MCP schemas; `tools/list` 20; read-facade policy.
+18. CAP-0004, CAP-0005, CAP-0014 tests pass unmodified.
 
 ### Live gate
 
@@ -412,7 +438,7 @@ These are evidence from one document state, not product constants. If the model 
 ## Explicitly deferred
 
 - parameter group (`GetGroupTypeId`);
-- `Visible` and `VariesAcrossGroups` (see the open questions);
+- `Visible` (hidden definitions are inventoried without the field; see "Hidden definitions") and `VariesAcrossGroups`;
 - an inventory of every `ParameterElement` or `SharedParameterElement`, bound or not;
 - parameter values and formulas;
 - family-document parameters;
@@ -423,13 +449,18 @@ These are evidence from one document state, not product constants. If the model 
 - projection, caller ordering, grouping, caching, snapshots;
 - any write, including creating or changing bindings.
 
-## Open questions for review
+## Decisions recorded at Tech Lead review
 
-1. **Hidden definitions.** Keep all binding-map entries (the proposal, matching the 144 baseline) and accept that two of them are invisible to CAP-0004 and may not resolve in CAP-0005? Or add a `visible` row field, or exclude them?
-2. **Page size.** Accept default 50 and maximum 100, or align with CAP-0014 (100 and 200) and rely on the budget?
-3. **Ordering.** Ordinal first key (consistent with CAP-0014), or CAP-0004's `OrdinalIgnoreCase` then ordinal (consistent with the other parameter tool)?
-4. **`built_in_count`.** Keep it to make the identity partition explicit, or drop it because it is expected to be 0?
-5. **Cursor codec.** Generalize the CAP-0014 codec with a source tag (the proposal), or keep one codec and key per source?
+The Tech Lead contract review on 2026-11-05 decided the open questions of the first draft. The specification stays **Proposed** until Product Owner and Tech Lead acceptance.
+
+1. **Hidden definitions.** All binding-map entries are inventoried, including `Visible == false` definitions. No `visible` field in v1 and no exclusion. Chaining to CAP-0005 is conditional on the element exposing the parameter (see "Rule" and "Hidden definitions").
+2. **Page size.** Default 50, maximum 100.
+3. **Ordering.** `name` with `OrdinalIgnoreCase`, then `name` with `Ordinal`, then identity kind, then stable identity key.
+4. **`built_in_count`.** Kept.
+5. **Cursor codec.** The CAP-0014 cursor and fingerprint primitive is generalized into a narrowly scoped, source-tagged query cursor shared by declarative query sources. No generalized query framework beyond the cursor and fingerprint mechanics.
+6. **Definition classification.** Null-safe: the result of `GetParameterTypeId()` is classified as built-in only when it is non-null and non-empty (see "Definition classification").
+
+No contract question remains open for this specification. Acceptance itself is still pending.
 
 ## References
 
