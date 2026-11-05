@@ -489,7 +489,7 @@ public sealed class QueryParameterBindingsTests
 
         Assert.Equal(["A", "B", "C"], Names(Execute(Request(), rows)));
         Assert.Equal(["A", "B", "C"], Names(Execute(Request(), reversedRefs)));
-        Assert.Equal(["A", "B", "C"], Names(Execute(Request(), rows.Reverse().ToArray())));
+        Assert.Equal(["A", "B", "C"], Names(Execute(Request(), Enumerable.Reverse(rows).ToArray())));
         Assert.Equal(["z", "m", "a"], Execute(Request(), rows).Bindings.Select(row => row.ParameterRef).ToArray());
     }
 
