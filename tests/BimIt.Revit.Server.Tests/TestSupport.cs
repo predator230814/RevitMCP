@@ -49,6 +49,7 @@ internal static class TestSupport
             {
                 BridgeProtocol.GetSelectionVersion => BridgeProtocol.GetSelectionVersions,
                 BridgeProtocol.PreviewRoomPatternPlacementsVersion => BridgeProtocol.PreviewRoomPatternPlacementsVersions,
+                BridgeProtocol.QueryParameterBindingsVersion => BridgeProtocol.QueryParameterBindingsVersions,
                 BridgeProtocol.QueryFamilyTypesVersion => BridgeProtocol.QueryFamilyTypesVersions,
                 BridgeProtocol.LinkedRoomPatternPreviewVersion => BridgeProtocol.LinkedRoomPatternPreviewVersions,
                 BridgeProtocol.ReadSpatialRoomsVersion => BridgeProtocol.ReadSpatialRoomsVersions,
@@ -843,6 +844,17 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return QueryFamilyTypes is null
             ? throw new NotSupportedException("This recording client does not implement revit.query_family_types.")
             : QueryFamilyTypes(request, timeout, cancellationToken);
+    }
+
+    public Task<QueryParameterBindingsResult> QueryParameterBindingsAsync(
+        QueryParameterBindingsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("The Server does not expose revit.query_parameter_bindings yet.");
     }
 
     public int GetMepDeviceTypesCalls { get; private set; }

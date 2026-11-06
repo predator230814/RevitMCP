@@ -3,12 +3,12 @@
 - Status: Accepted
 - Operation class: Read
 - Date: 2026-11-05
-- Architecture: Accepted [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md), second source (accepted, not implemented)
-- Introduced bridge protocol version: not allocated. Allocated with the implementation.
+- Architecture: Accepted [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md), second source (accepted, partially implemented)
+- Introduced bridge protocol version: 23 ([BRIDGE-0019](../bridge/BRIDGE-0019-query-parameter-bindings-capability-rpc.md))
 
 ## Authorization
 
-This specification is **Accepted** (Product Owner and Tech Lead, 2026-11-05, after the independent pyRevit baseline and contract review). It is **not yet implemented**. No Bridge protocol version is allocated yet. No Contracts, Addin, Bridge, Server, or MCP tool change exists for it. Production `tools/list` remains 19 until implementation.
+This specification is **Accepted** (Product Owner and Tech Lead, 2026-11-05, after the independent pyRevit baseline and contract review). It is **partially implemented**: the Contracts, the Addin query core and `Document.ParameterBindings` reader, and the Bridge RPC `revit.query_parameter_bindings` on protocol 23 exist. The Server application service and the MCP tool do not, so production `tools/list` remains 19. No live Revit validation has been run, and the acceptance gate below is not met.
 
 It defines the second source of the ADR-0023 read-query kernel. The independent evidence it relies on is [ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md](../ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md).
 

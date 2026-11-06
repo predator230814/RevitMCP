@@ -10,8 +10,8 @@ public sealed class QueryFamilyTypesBridgeTests
 {
     [Theory]
     [InlineData(21)]
-    [InlineData(23)]
-    public async Task Versions_outside_v22_do_not_invoke_the_service(int version)
+    [InlineData(24)]
+    public async Task Versions_outside_v22_and_v23_do_not_invoke_the_service(int version)
     {
         var service = new RecordingQuery();
         var adapter = Adapter(service, version);

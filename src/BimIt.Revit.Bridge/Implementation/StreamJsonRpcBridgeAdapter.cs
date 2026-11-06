@@ -25,6 +25,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitPreviewRoomPatternPlacementsService? _previewRoomPatternPlacements;
     private readonly IRevitReadSpatialRoomsService? _readSpatialRooms;
     private readonly IRevitQueryFamilyTypesService? _queryFamilyTypes;
+    private readonly IRevitQueryParameterBindingsService? _queryParameterBindings;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -47,7 +48,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitGetMepDeviceTypesService? getMepDeviceTypes = null,
         IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements = null,
         IRevitReadSpatialRoomsService? readSpatialRooms = null,
-        IRevitQueryFamilyTypesService? queryFamilyTypes = null)
+        IRevitQueryFamilyTypesService? queryFamilyTypes = null,
+        IRevitQueryParameterBindingsService? queryParameterBindings = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -69,6 +71,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _previewRoomPatternPlacements = previewRoomPatternPlacements;
         _readSpatialRooms = readSpatialRooms;
         _queryFamilyTypes = queryFamilyTypes;
+        _queryParameterBindings = queryParameterBindings;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -786,6 +789,44 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The family type query could not be read."));
+        }
+    }
+
+    [JsonRpcMethod("revit.query_parameter_bindings")]
+    public async Task<QueryParameterBindingsResult> QueryParameterBindingsAsync(
+        QueryParameterBindingsRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsQueryParameterBindings,
+            "revit.query_parameter_bindings is not available on this connection.");
+        if (_queryParameterBindings is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.query_parameter_bindings is not available on this endpoint."));
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            return await _queryParameterBindings.QueryParameterBindingsAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The parameter binding query could not be read."));
         }
     }
 

@@ -58,7 +58,7 @@ public sealed class LinkedRoomPatternPreviewBridgeTests
     public async Task Unknown_v23_does_not_preview()
     {
         var preview = new StubRoomPatternPreview { Linked = true };
-        var adapter = await AdapterAsync(preview, 23);
+        var adapter = await AdapterAsync(preview, 24);
 
         var rejected = await Assert.ThrowsAsync<LocalRpcException>(() =>
             adapter.PreviewRoomPatternPlacementsAsync(Request("host-room-unique"), CancellationToken.None));

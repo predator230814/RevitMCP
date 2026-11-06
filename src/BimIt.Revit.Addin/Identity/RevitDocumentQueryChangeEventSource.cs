@@ -4,8 +4,9 @@ using Autodesk.Revit.DB;
 namespace BimIt.Revit.Addin.Identity;
 
 /// <summary>
-/// Signals that a host document may have changed in a way that can affect FamilySymbol
-/// inventory or placed-instance counts. The revision service advances on every signal.
+/// Signals that a host document may have changed in a way that can affect a declarative
+/// query inventory (CAP-0014 family types and instance counts, CAP-0015 parameter bindings).
+/// The revision service advances on every signal; the revision is per document, not per source.
 /// These subscriptions do not prove that Revit raises each event for every such change.
 /// </summary>
 internal interface IDocumentQueryChangeEventSource
