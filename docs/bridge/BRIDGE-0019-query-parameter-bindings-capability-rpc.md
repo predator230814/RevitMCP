@@ -1,6 +1,6 @@
 # BRIDGE-0019: Query parameter bindings
 
-- Status: Implemented in the Addin and Bridge. Not exposed through the Server or MCP. Live Bridge-to-Revit validation has not been run.
+- Status: Implemented in the Addin and Bridge. Not exposed through the Server or MCP. Live Bridge-to-Addin-to-Revit validation passed on Revit 2026.5 (`26.5.0.55`) at `393b12f`; see [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md).
 - Date: 2026-11-05
 - Capability: [CAP-0015](../capabilities/CAP-0015-revit-query-parameter-bindings.md)
 - Architecture: [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md)
@@ -29,8 +29,8 @@ Identity, data type, and `parameter_ref` reuse the CAP-0004 helpers and the per-
 
 It does not open a transaction, traverse links, read a shared-parameter file, read parameter values, or keep an inventory snapshot. An unexpected failure is reported as `REVIT_EXECUTION_FAILED` with a compact message.
 
-Document query revisions advance from `DocumentChanged`, `DocumentSynchronizedWithCentral`, and `DocumentReloadedLatest` on documents this process has already identified. The revision is per document, so a family-type change also invalidates an outstanding binding cursor. Those subscriptions do not by themselves prove that Revit raises each event for every binding change; that is part of the live gate.
+Document query revisions advance from `DocumentChanged`, `DocumentSynchronizedWithCentral`, and `DocumentReloadedLatest` on documents this process has already identified. The revision is per document, so a family-type change also invalidates an outstanding binding cursor. Those subscriptions do not by themselves prove that Revit raises each event for every binding change. The live validation showed it for one manual binding change (a category added to a project parameter): the old cursor returned `STALE_CURSOR`, and the restart succeeded with a different cursor.
 
 ## Not in this record
 
-The Server application service, MCP schemas, and the `revit_query_parameter_bindings` tool are not part of this slice. Production `tools/list` stays 19. A live Bridge-to-Addin-to-Revit smoke test is the next gate, before Server or MCP exposure.
+The Server application service, MCP schemas, and the `revit_query_parameter_bindings` tool are not part of this slice. Production `tools/list` stays 19. The typed Bridge-to-Addin-to-Revit live validation passed and is recorded in [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md). Server and MCP exposure, and the CAP-0015 natural-agent gate, remain pending.
