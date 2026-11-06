@@ -1,6 +1,6 @@
 # BRIDGE-0019: Query parameter bindings
 
-- Status: Implemented in the Addin and Bridge. Not exposed through the Server or MCP. Live Bridge-to-Addin-to-Revit validation passed on Revit 2026.5 (`26.5.0.55`) at `393b12f`; see [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md).
+- Status: Implemented in the Addin and Bridge, and exposed through the Server as the MCP tool `revit_query_parameter_bindings`. Live Bridge-to-Addin-to-Revit validation passed on Revit 2026.5 (`26.5.0.55`) at `393b12f`; see [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md).
 - Date: 2026-11-05
 - Capability: [CAP-0015](../capabilities/CAP-0015-revit-query-parameter-bindings.md)
 - Architecture: [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md)
@@ -31,6 +31,8 @@ It does not open a transaction, traverse links, read a shared-parameter file, re
 
 Document query revisions advance from `DocumentChanged`, `DocumentSynchronizedWithCentral`, and `DocumentReloadedLatest` on documents this process has already identified. The revision is per document, so a family-type change also invalidates an outstanding binding cursor. Those subscriptions do not by themselves prove that Revit raises each event for every binding change. The live validation showed it for one manual binding change (a category added to a project parameter): the old cursor returned `STALE_CURSOR`, and the restart succeeded with a different cursor.
 
-## Not in this record
+## Server and MCP exposure
 
-The Server application service, MCP schemas, and the `revit_query_parameter_bindings` tool are not part of this slice. Production `tools/list` stays 19. The typed Bridge-to-Addin-to-Revit live validation passed and is recorded in [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md). Server and MCP exposure, and the CAP-0015 natural-agent gate, remain pending.
+The Server application service, the MCP schemas, and the `revit_query_parameter_bindings` tool consume this RPC without changing it. Without `instance_id`, the Server selects only a Ready host whose negotiated protocol supports `{23}`. With an explicit `instance_id`, the handshake decides: a Ready v22 host returns `BRIDGE_PROTOCOL_INCOMPATIBLE`, and no fallback capability is called. Production `tools/list` is 20.
+
+The typed Bridge-to-Addin-to-Revit live validation passed and is recorded in [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md). That record was made before the tool existed, when `tools/list` was 19. The CAP-0015 natural-agent gate, through an isolated official MCP client, has not been run.

@@ -846,15 +846,25 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
             : QueryFamilyTypes(request, timeout, cancellationToken);
     }
 
+    public int QueryParameterBindingsCalls { get; private set; }
+
+    public QueryParameterBindingsRequest? LastQueryParameterBindingsRequest { get; private set; }
+
+    public TimeSpan? LastQueryParameterBindingsTimeout { get; private set; }
+
+    public Func<QueryParameterBindingsRequest, TimeSpan, CancellationToken, Task<QueryParameterBindingsResult>>? QueryParameterBindings { get; set; }
+
     public Task<QueryParameterBindingsResult> QueryParameterBindingsAsync(
         QueryParameterBindingsRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        _ = request;
-        _ = timeout;
-        _ = cancellationToken;
-        throw new NotSupportedException("The Server does not expose revit.query_parameter_bindings yet.");
+        QueryParameterBindingsCalls++;
+        LastQueryParameterBindingsRequest = request;
+        LastQueryParameterBindingsTimeout = timeout;
+        return QueryParameterBindings is null
+            ? throw new NotSupportedException("This recording client does not implement revit.query_parameter_bindings.")
+            : QueryParameterBindings(request, timeout, cancellationToken);
     }
 
     public int GetMepDeviceTypesCalls { get; private set; }

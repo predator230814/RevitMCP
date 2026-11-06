@@ -26,7 +26,7 @@ public sealed class AssistantMcpReadFacadeTests
     public void Every_current_server_read_is_discovered_from_metadata_and_no_write_is()
     {
         var descriptors = ServerToolMetadata.Descriptors;
-        Assert.Equal(19, descriptors.Count);
+        Assert.Equal(20, descriptors.Count);
         var facade = Facade(new ScriptedSession(), descriptors);
 
         Assert.Equal(AssistantAgentTests.ExpectedGenericReads, facade.Tools.Select(tool => tool.Name).ToArray());
@@ -49,6 +49,33 @@ public sealed class AssistantMcpReadFacadeTests
         Assert.Equal(7, facade.Rejected.Count);
         Assert.Equal(ReadResultBudget.MaxCharacters, AssistantMcpReadFacade.MaxResultCharacters);
         Assert.Contains("revit_query_family_types", facade.Tools.Select(tool => tool.Name));
+        Assert.Contains("revit_query_parameter_bindings", facade.Tools.Select(tool => tool.Name));
+    }
+
+    [Fact]
+    public void Query_parameter_bindings_is_discovered_generically_and_only_routing_fields_are_removed()
+    {
+        var facade = Facade(new ScriptedSession(), ServerToolMetadata.Descriptors);
+        var tool = facade.Tools.Single(item => item.Name == "revit_query_parameter_bindings");
+        var server = ServerToolMetadata.Get("revit_query_parameter_bindings");
+        Assert.True(server.ReadOnlyHint);
+        Assert.False(server.OpenWorldHint);
+        Assert.NotEqual(true, server.DestructiveHint);
+
+        Assert.True(tool.InjectsDocument);
+        Assert.True(tool.RequiresDocument);
+        Assert.Equal(
+            ["binding_kind", "category_tokens", "cursor", "identity_kind", "name_contains", "page_size"],
+            tool.Properties.Order(StringComparer.Ordinal).ToArray());
+        Assert.False(tool.ProviderSchema.TryGetProperty("required", out _));
+        Assert.False(tool.ProviderSchema.GetProperty("additionalProperties").GetBoolean());
+        var properties = tool.ProviderSchema.GetProperty("properties");
+        Assert.False(properties.TryGetProperty("instance_id", out _));
+        Assert.False(properties.TryGetProperty("document_id", out _));
+        Assert.Equal(100, properties.GetProperty("page_size").GetProperty("maximum").GetInt32());
+        Assert.Equal(20, properties.GetProperty("category_tokens").GetProperty("maxItems").GetInt32());
+        Assert.True(properties.GetProperty("category_tokens").GetProperty("uniqueItems").GetBoolean());
+        Assert.Equal(2048, properties.GetProperty("cursor").GetProperty("maxLength").GetInt32());
     }
 
     [Theory]

@@ -116,6 +116,18 @@ internal static class InstanceTargetResolver
         return ResolveExplicit(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsGetContext));
     }
 
+    public static TargetResolution ResolveForQueryParameterBindings(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        ArgumentNullException.ThrowIfNull(discovered);
+        if (instanceId is null)
+        {
+            return ResolveUnspecified(discovered, instance => IsEligible(instance, BridgeProtocol.SupportsQueryParameterBindings));
+        }
+
+        // An explicit id still reaches handshake. A ready v22 host then returns BRIDGE_PROTOCOL_INCOMPATIBLE.
+        return ResolveExplicit(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsGetContext));
+    }
+
     public static TargetResolution ResolveForGetMepDeviceTypes(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
     {
         return Resolve(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsGetMepDeviceTypes));
