@@ -8,7 +8,7 @@
 
 ## Authorization
 
-This specification is **Accepted** (Product Owner and Tech Lead, 2026-11-05, after the independent pyRevit baseline and contract review). It is **partially implemented**: the Contracts, the Addin query core and `Document.ParameterBindings` reader, and the Bridge RPC `revit.query_parameter_bindings` on protocol 23 exist. The Server application service and the MCP tool do not, so production `tools/list` remains 19. No live Revit validation has been run, and the acceptance gate below is not met.
+This specification is **Accepted** (Product Owner and Tech Lead, 2026-11-05, after the independent pyRevit baseline and contract review). It is **partially implemented**: the Contracts, the Addin query core and `Document.ParameterBindings` reader, and the Bridge RPC `revit.query_parameter_bindings` on protocol 23 exist. The Server application service and the MCP tool do not, so production `tools/list` remains 19. The typed Bridge live validation (Bridge → Addin → Revit 2026.5) passed on 2026-11-06 at `393b12f`, including the stale-cursor contract check below; see [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md). The natural-agent gate has not been run, so the acceptance gate below is not met.
 
 It defines the second source of the ADR-0023 read-query kernel. The independent evidence it relies on is [ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md](../ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md).
 
@@ -410,7 +410,7 @@ Revit 2025, 2026, and 2027 from the shared Addin project. `ElementId` value acce
 
 ### Live gate
 
-Contract validation, analogous to CAP-0014's record: a binding change made in Revit between two pages returns `STALE_CURSOR`, and the restart succeeds.
+Contract validation, analogous to CAP-0014's record: a binding change made in Revit between two pages returns `STALE_CURSOR`, and the restart succeeds. Passed through the typed Bridge on 2026-11-06; see [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md).
 
 Natural-agent gate, on an equivalent state of the reference project, compared with the frozen independent pyRevit baseline:
 
