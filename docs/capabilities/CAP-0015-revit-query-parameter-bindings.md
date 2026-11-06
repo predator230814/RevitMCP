@@ -371,7 +371,7 @@ No `instance_id`, provider data, numeric `ElementId`, projection, or ordering. S
 
 ## Bridge
 
-A new Bridge capability gate, following the BRIDGE-0013 explicit version-set pattern, with RPC `revit.query_parameter_bindings`. The protocol number is allocated with the implementation after acceptance. This specification allocates none. A host that did not negotiate it is refused with `BRIDGE_PROTOCOL_INCOMPATIBLE` and receives no fallback to `revit_describe_parameters`. Production `tools/list` would grow from 19 to 20 with the implementation.
+A new Bridge capability gate, following the BRIDGE-0013 explicit version-set pattern, with RPC `revit.query_parameter_bindings`. The RPC is on Bridge protocol 23 ([BRIDGE-0019](../bridge/BRIDGE-0019-query-parameter-bindings-capability-rpc.md)). A host whose negotiated protocol does not support it is refused with `BRIDGE_PROTOCOL_INCOMPATIBLE` and receives no fallback to `revit_describe_parameters`. The Server exposes the capability as `revit_query_parameter_bindings`, and production `tools/list` is 20. The natural-agent MCP gate remains pending.
 
 ## Text and encoding
 
