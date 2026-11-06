@@ -124,7 +124,8 @@ public sealed class ParameterBindingReaderStructureTests
             .ToArray();
         Assert.Equal(["RevitParameterBindingReader.cs", "RevitQueryParameterBindingsService.cs"], users);
 
-        // BRIDGE-0019 exposes the RPC; the Server/MCP tool is a later slice.
+        // The Server exposes the MCP tool through the Bridge only. Neither it nor the Assistant touches the reader
+        // or the Revit binding map, and the Assistant discovers the read generically instead of naming the tool.
         foreach (var project in new[] { "BimIt.Revit.Server", "BimIt.Revit.Assistant", "BimIt.Revit.Assistant.Ipc" })
         {
             var directory = Path.Combine(root, "src", project);
@@ -133,11 +134,18 @@ public sealed class ParameterBindingReaderStructureTests
                 continue;
             }
 
-            foreach (var path in Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories))
+            foreach (var path in Directory.GetFiles(directory, "*.cs", SearchOption.AllDirectories)
+                .Where(path => !path.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+                    && !path.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.Ordinal)))
             {
                 var text = File.ReadAllText(path);
-                Assert.DoesNotContain("QueryParameterBindings", text, StringComparison.Ordinal);
-                Assert.DoesNotContain("query_parameter_bindings", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("RevitParameterBindingReader", text, StringComparison.Ordinal);
+                Assert.DoesNotContain("ParameterBindings.ForwardIterator", text, StringComparison.Ordinal);
+                if (project != "BimIt.Revit.Server")
+                {
+                    Assert.DoesNotContain("QueryParameterBindings", text, StringComparison.Ordinal);
+                    Assert.DoesNotContain("query_parameter_bindings", text, StringComparison.Ordinal);
+                }
             }
         }
     }

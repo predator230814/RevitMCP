@@ -3,12 +3,12 @@
 - Status: Accepted
 - Operation class: Read
 - Date: 2026-11-05
-- Architecture: Accepted [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md), second source (accepted, partially implemented)
+- Architecture: Accepted [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md), second source (accepted, implemented; natural-agent gate pending)
 - Introduced bridge protocol version: 23 ([BRIDGE-0019](../bridge/BRIDGE-0019-query-parameter-bindings-capability-rpc.md))
 
 ## Authorization
 
-This specification is **Accepted** (Product Owner and Tech Lead, 2026-11-05, after the independent pyRevit baseline and contract review). It is **partially implemented**: the Contracts, the Addin query core and `Document.ParameterBindings` reader, and the Bridge RPC `revit.query_parameter_bindings` on protocol 23 exist. The Server application service and the MCP tool do not, so production `tools/list` remains 19. The typed Bridge live validation (Bridge → Addin → Revit 2026.5) passed on 2026-11-06 at `393b12f`, including the stale-cursor contract check below; see [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md). The natural-agent gate has not been run, so the acceptance gate below is not met.
+This specification is **Accepted** (Product Owner and Tech Lead, 2026-11-05, after the independent pyRevit baseline and contract review). It is **implemented**: the Contracts, the Addin query core and `Document.ParameterBindings` reader, the Bridge RPC `revit.query_parameter_bindings` on protocol 23, the Server application service, and the MCP tool `revit_query_parameter_bindings` exist, so production `tools/list` is 20. The typed Bridge live validation (Bridge → Addin → Revit 2026.5) passed on 2026-11-06 at `393b12f`, including the stale-cursor contract check below; see [CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md](../CAP_0015_PARAMETER_BINDINGS_BRIDGE_VALIDATION.md). That record was made before the tool existed, when `tools/list` was 19. The natural-agent gate, through an isolated official MCP client against the 20-tool Server, has not been run, so the acceptance gate below is not met.
 
 It defines the second source of the ADR-0023 read-query kernel. The independent evidence it relies on is [ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md](../ADR_0023_PARAMETER_BINDINGS_PYREVIT_BASELINE.md).
 
@@ -371,7 +371,7 @@ No `instance_id`, provider data, numeric `ElementId`, projection, or ordering. S
 
 ## Bridge
 
-A new Bridge capability gate, following the BRIDGE-0013 explicit version-set pattern, with RPC `revit.query_parameter_bindings`. The protocol number is allocated with the implementation after acceptance. This specification allocates none. A host that did not negotiate it is refused with `BRIDGE_PROTOCOL_INCOMPATIBLE` and receives no fallback to `revit_describe_parameters`. Production `tools/list` would grow from 19 to 20 with the implementation.
+A new Bridge capability gate, following the BRIDGE-0013 explicit version-set pattern, with RPC `revit.query_parameter_bindings`. The RPC is on Bridge protocol 23 ([BRIDGE-0019](../bridge/BRIDGE-0019-query-parameter-bindings-capability-rpc.md)). A host whose negotiated protocol does not support it is refused with `BRIDGE_PROTOCOL_INCOMPATIBLE` and receives no fallback to `revit_describe_parameters`. The Server exposes the capability as `revit_query_parameter_bindings`, and production `tools/list` is 20. The natural-agent MCP gate remains pending.
 
 ## Text and encoding
 
