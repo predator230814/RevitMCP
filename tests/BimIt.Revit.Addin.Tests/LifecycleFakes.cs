@@ -183,6 +183,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("familytypes.create");
         return new RecordingQueryFamilyTypesService();
     }
+
+    public IRevitQueryParameterBindingsService? CreateQueryParameterBindings(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("parameterbindings.create");
+        return new RecordingQueryParameterBindingsService();
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -300,6 +307,16 @@ internal sealed class RecordingQueryFamilyTypesService : IRevitQueryFamilyTypesS
         _ = request;
         _ = cancellationToken;
         throw new NotSupportedException("Lifecycle recording family types does not execute Revit work.");
+    }
+}
+
+internal sealed class RecordingQueryParameterBindingsService : IRevitQueryParameterBindingsService
+{
+    public Task<QueryParameterBindingsResult> QueryParameterBindingsAsync(QueryParameterBindingsRequest request, CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = cancellationToken;
+        throw new NotSupportedException("Lifecycle recording parameter bindings does not execute Revit work.");
     }
 }
 
@@ -444,6 +461,10 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitGetRoomLayoutsService? LastGetRoomLayouts { get; private set; }
 
+    public IRevitQueryFamilyTypesService? LastQueryFamilyTypes { get; private set; }
+
+    public IRevitQueryParameterBindingsService? LastQueryParameterBindings { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
@@ -465,6 +486,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements,
         IRevitReadSpatialRoomsService? readSpatialRooms,
         IRevitQueryFamilyTypesService? queryFamilyTypes,
+        IRevitQueryParameterBindingsService? queryParameterBindings,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -480,6 +502,8 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         LastGetWarnings = getWarnings;
         LastGetSelection = getSelection;
         LastGetRoomLayouts = getRoomLayouts;
+        LastQueryFamilyTypes = queryFamilyTypes;
+        LastQueryParameterBindings = queryParameterBindings;
         _events.Add("bridge.start");
         if (_startError is not null)
         {

@@ -110,7 +110,7 @@ public sealed class ParameterBindingReaderStructureTests
     }
 
     [Fact]
-    public void No_transport_or_runtime_wiring_is_added_in_this_slice()
+    public void The_reader_is_reached_only_through_the_Addin_service_and_not_from_the_Server()
     {
         var root = FindRepoRoot();
         var addin = Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Addin"), "*.cs", SearchOption.AllDirectories)
@@ -120,10 +120,12 @@ public sealed class ParameterBindingReaderStructureTests
         var users = addin
             .Where(path => File.ReadAllText(path).Contains("RevitParameterBindingReader", StringComparison.Ordinal))
             .Select(path => Path.GetFileName(path))
+            .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(["RevitParameterBindingReader.cs"], users);
+        Assert.Equal(["RevitParameterBindingReader.cs", "RevitQueryParameterBindingsService.cs"], users);
 
-        foreach (var project in new[] { "BimIt.Revit.Bridge", "BimIt.Revit.Server", "BimIt.Revit.Assistant" })
+        // BRIDGE-0019 exposes the RPC; the Server/MCP tool is a later slice.
+        foreach (var project in new[] { "BimIt.Revit.Server", "BimIt.Revit.Assistant", "BimIt.Revit.Assistant.Ipc" })
         {
             var directory = Path.Combine(root, "src", project);
             if (!Directory.Exists(directory))

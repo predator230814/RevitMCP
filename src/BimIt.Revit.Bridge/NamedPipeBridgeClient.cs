@@ -702,6 +702,39 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         }
     }
 
+    public async Task<QueryParameterBindingsResult> QueryParameterBindingsAsync(
+        QueryParameterBindingsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<QueryParameterBindingsResult>(
+                "revit.query_parameter_bindings",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureQueryParameterBindingsAllowed,
+                "The parameter binding query timed out.",
+                "The parameter binding query could not be read.")
+            .ConfigureAwait(false);
+    }
+
+    private void EnsureQueryParameterBindingsAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsQueryParameterBindings(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.query_parameter_bindings requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+    }
+
     private void EnsureGetRoomLayoutsAllowed()
     {
         EnsureCapabilityReady();
