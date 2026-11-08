@@ -134,6 +134,18 @@ This amendment partially supersedes ADR-0014 for model-facing read exposure only
 - Standard Packs remain future work. A Skill can point to reference files, but structured standards, role mappings, and Tetra Tech standards are not implemented.
 - The direct Claude Code validation in [BIM_IT_SKILLS_CLAUDE_CODE_VALIDATION.md](../BIM_IT_SKILLS_CLAUDE_CODE_VALIDATION.md) measures how usable the generic MCP surface is to a strong external agent, and lists missing generic primitives without adding them.
 
+## Implementation and ecosystem note (2026-11-07)
+
+This note does not change the decision above. Checked 2026-11-07 against the MCP Skills extension repository and the C# SDK source:
+
+- SEP-2640 is Final (merged 2026-09-13). The MCP Skills extension (`io.modelcontextprotocol/skills`) remains Beta.
+- The official MCP C# SDK now ships `ModelContextProtocol.Extensions.Skills`, marked `[Experimental]`.
+- The wording above that a future adapter must wait for C# SDK support is therefore no longer literally current.
+- BIM-IT's provider-neutral Skill registry remains the accepted implementation.
+- No MCP Skills adapter is authorized by this note, and the package is not added to the solution. Adoption should be evaluated separately for interoperability, security, migration cost, and client support.
+
+Sources and dates: [TECH_WATCH.md](../TECH_WATCH.md).
+
 ## References
 
 - [ADR-0007](ADR-0007-federated-mcp-boundaries-and-orchestration.md)
