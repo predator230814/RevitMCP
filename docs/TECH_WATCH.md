@@ -8,7 +8,7 @@ Living record of external technology to recheck before architecture-sensitive de
 | pyRevit Agent Runtime | [pyRevit docs: Agent runtime](https://docs.pyrevitlabs.io/agent-runtime/) | 2026-11-07 | Experimental, off by default. | Reference for progressive disclosure, API lookup, compact results with run records, and token economy. | None. BIM-IT does not adopt its Python execution model. |
 | Autodesk Revit MCP | [Revit Public MCP Server](https://help.autodesk.com/cloudhelp/ENU/ADSKMCP-RevitMcp/files/ADSKMCP_RevitMcp_revit_mcp_server_html.html) | 2026-11-07 | Technical Preview, Revit 2027.2 only. | Reference and evidence for the ecosystem (ADR-0007). Not an architecture mandate. | None. |
 | WebMCP / MCP Apps / other agent standards | To be identified when next checked | Not rechecked | Unknown here | Keep in scope; do not couple the core. | None. |
-| Flexible C# Revit API execution | [ADR-0023](adr/ADR-0023-declarative-revit-read-query-architecture.md); [dotnet/runtime PR 53308](https://github.com/dotnet/runtime/pull/53308) | 2026-11-07 | Research only | Long-tail facts (for example workset) that the declarative kernel does not expose. | None. No implementation and no ADR change. |
+| Flexible C# Revit API execution | [ADR-0023](adr/ADR-0023-declarative-revit-read-query-architecture.md); [Microsoft Learn: AssemblyLoadContext](https://learn.microsoft.com/en-us/dotnet/api/system.runtime.loader.assemblyloadcontext) | 2026-11-07 | Research only | Long-tail facts (for example workset) that the declarative kernel does not expose. | None. No implementation and no ADR change. |
 
 ## Notes
 
@@ -34,8 +34,8 @@ Revit 2027.2 Technical Preview, with three server options: Read (does not modify
 Known constraints:
 
 - ADR-0023 currently prohibits model-supplied C#, Python, or API source in the normal production capability layer.
-- Modern .NET `AssemblyLoadContext` is not a security boundary: it does not provide an in-process sandbox.
-- Code Access Security is not available in modern .NET and is not a viable sandbox.
+- Modern .NET `AssemblyLoadContext` provides no security features and is not a security boundary (Microsoft Learn).
+- Code Access Security is not supported or honored in modern .NET, so it is not a viable sandbox.
 - Any future generated-C# execution design needs a real security and reliability boundary, or an explicitly different trust and product surface.
 - No implementation or ADR change is authorized yet.
 

@@ -2,7 +2,7 @@
 
 This directory contains Architecture Decision Records (ADRs) for significant RevitMCP decisions.
 
-Accepted ADRs:
+ADRs:
 
 - [ADR-0001](ADR-0001-out-of-process-mcp-and-revit-capability-host.md) — out-of-process MCP server and Revit capability host
 - [ADR-0002](ADR-0002-named-pipes-json-rpc-local-bridge.md) — Named Pipes and JSON-RPC local bridge
