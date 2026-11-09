@@ -1,6 +1,34 @@
 # BIM-IT Revit MCP Current State
 
-_Last updated: 2026-10-30_
+_Last updated: 2026-11-07_
+
+## Current snapshot (2026-11-07) — preferred handoff
+
+Start a new AI conversation here. Future project conversations should prefer current repository code, this snapshot, accepted ADRs and CAPs, and accepted validation records over reconstructing history from chat memory. Everything under "Historical accumulated detail" below is an accumulated record and is not updated to this snapshot. Do not rely on its older tool counts or protocol numbers.
+
+| Fact | Value |
+|---|---|
+| Main SHA at this snapshot | `d5d71e9ab134cb9b192a11bdab10f00589323468` (merge of PR #111) |
+| Product name | BIM-IT Revit MCP (formerly RevitMCP; code namespaces `BimIt.Revit.*`) |
+| Target Revit versions | 2025, 2026, 2027 (`Directory.Build.props`) |
+| Bridge protocol | 23 (`BridgeProtocol.QueryParameterBindingsVersion`) |
+| Production `tools/list` | 20 tools (read from the Release Server over stdio in [ADR_0023_PARAMETER_BINDINGS_NATURAL_AGENT_VALIDATION.md](ADR_0023_PARAMETER_BINDINGS_NATURAL_AGENT_VALIDATION.md)) |
+
+State of the main lines of work:
+
+- [ADR-0022](adr/ADR-0022-agent-skills-and-knowledge-architecture.md) (Agent Skills and knowledge architecture) is Accepted and implemented. The provider-neutral Skill registry lives outside the add-in. See [SKILLS.md](SKILLS.md).
+- The Assistant dynamically exposes trusted generic MCP reads to the model.
+- [ADR-0023](adr/ADR-0023-declarative-revit-read-query-architecture.md) is Accepted. The declarative read-query kernel is the trusted deterministic read path. No model-supplied code runs in the production capability layer.
+- [CAP-0014](capabilities/CAP-0014-revit-query-family-types.md) `revit_query_family_types` is implemented and natural-agent validated ([ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md](ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md), [CAP_0014_FAMILY_TYPES_VALIDATION.md](CAP_0014_FAMILY_TYPES_VALIDATION.md)).
+- [CAP-0015](capabilities/CAP-0015-revit-query-parameter-bindings.md) `revit_query_parameter_bindings` is implemented and natural-agent validated ([ADR_0023_PARAMETER_BINDINGS_NATURAL_AGENT_VALIDATION.md](ADR_0023_PARAMETER_BINDINGS_NATURAL_AGENT_VALIDATION.md)). CAP-0015 closes the family/parameter benchmark work.
+- Next product priority: the first firm-owned Electrical Standards Skill and library. The capture plan is [ELECTRICAL_STANDARDS_SKILL_V0_1.md](ELECTRICAL_STANDARDS_SKILL_V0_1.md). Knowledge governance is in [SKILLS.md](SKILLS.md#knowledge-governance-observed-candidate-approved).
+- Observations from a representative model are evidence, not approved standards.
+- Flexible C# Revit API execution is a research topic only. It does not supersede ADR-0023 and nothing is authorized. Workset is the first deliberate research example: a fact that is easy in the Revit API but that should not automatically become another hardcoded MCP field or tool.
+- External technology to recheck before architecture-sensitive decisions: [TECH_WATCH.md](TECH_WATCH.md).
+
+Read next: ADR-0022, ADR-0023, [SKILLS.md](SKILLS.md), CAP-0014, CAP-0015, and the natural-agent validation records linked above.
+
+## Historical accumulated detail (last revised 2026-10-30)
 
 RevitMCP was renamed to BIM-IT Revit MCP. Current projects are `BimIt.Revit.Contracts`, `BimIt.Revit.Bridge`, `BimIt.Revit.Addin`, `BimIt.Revit.Server`, `BimIt.Revit.Assistant`, and `BimIt.Revit.Skills`. MCP tool names, Bridge method names, protocol versions, the Approval pane GUID, audit domain strings, and the `LocalAppData\RevitMCP` storage root are unchanged. The historical validation narrative below keeps the RevitMCP names and SHAs it recorded.
 

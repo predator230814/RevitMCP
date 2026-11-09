@@ -99,6 +99,28 @@ For a one-off Skill, use Settings → Skills → Import Skill and choose a folde
 
 The folders are portable. To use `revit-model-query` from Claude Code against BIM-IT Revit MCP, copy the folder to `.claude/skills/revit-model-query/` in the working folder (or to `~/.claude/skills/`), and add `BimIt.Revit.Server.exe` as a stdio MCP server. See [BIM_IT_SKILLS_CLAUDE_CODE_VALIDATION.md](BIM_IT_SKILLS_CLAUDE_CODE_VALIDATION.md).
 
+## Knowledge governance: observed, candidate, approved
+
+Company and project knowledge is discovered from evidence and approved by people. A representative Revit model is an observation source, not an authority.
+
+| State | Meaning |
+|---|---|
+| `observed` | Directly evidenced in one or more identified model states. |
+| `candidate` | Interpreted as a possible firm or project rule and awaiting BIM review. |
+| `approved` | Explicitly confirmed by an authorized BIM or domain lead. |
+
+Rules:
+
+- Frequency in a model does not make something approved.
+- A naming prefix does not imply approval.
+- Benchmark models can contain legacy, error, or exception content.
+- Approval and modification are a human BIM responsibility.
+- Provenance stays human-readable: which model state, which query, when, and who reviewed.
+- Skills guide reasoning. They never grant write authority. Writes follow the controlled-write policy ([ADR-0008](adr/ADR-0008-controlled-write-safety-model.md)).
+- Standard Pack and company knowledge belong to the firm or project, not to the compiled Revit Addin.
+
+Firm standards should normally live in an EXTERNAL Skill source (a Git, SharePoint, or OneDrive-synced folder), not as a BIM-IT built-in Skill. Built-in Skills teach generic BIM-IT and Revit workflows. Company-specific standards stay firm-owned. The first capture plan is [ELECTRICAL_STANDARDS_SKILL_V0_1.md](ELECTRICAL_STANDARDS_SKILL_V0_1.md).
+
 ## Future: MCP Skills extension
 
-The registry is independent of the Assistant. A later adapter can publish the same Skills through the MCP `io.modelcontextprotocol/skills` extension, so any MCP client can discover them from BIM-IT. That is not implemented yet.
+The registry is independent of the Assistant. A later adapter can publish the same Skills through the MCP `io.modelcontextprotocol/skills` extension, so any MCP client can discover them from BIM-IT. That is not implemented yet. As of 2026-11-07 SEP-2640 is Final, the extension is Beta, and the official C# SDK has an experimental Skills package. No adapter is authorized. See [TECH_WATCH.md](TECH_WATCH.md).
