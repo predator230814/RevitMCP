@@ -50,28 +50,56 @@ Supported validation keywords, and no others:
 
 `type`, `enum`, `const`, `properties`, `required`, `additionalProperties`, `items`, `minLength`, `maxLength`, `minimum`, `maximum`, `minItems`, `maxItems`, `uniqueItems`.
 
-`type` may be one of `object`, `array`, `string`, `number`, `integer`, `boolean`, `null`, or a non-empty array of those names. That preserves the type arrays already used by MCP tool schemas, including `["integer", "null"]` and `["string", "null"]`.
-
 `minimum` and `maximum` are inclusive. `integer` rejects a fractional JSON number. `uniqueItems` uses the same JSON equality the current Server validator uses.
 
 Not supported, and rejected by definition validation: `oneOf`, `anyOf`, `allOf`, `$ref`, `pattern`, `format`, and every other validation or structural keyword.
 
-Annotation keywords that do not affect validation are allow-listed: `description`, `title`, and `default`. Production MCP schemas already use all three. They stay annotations. `default` is not applied as a value.
+Annotation keywords that do not affect validation are allow-listed: `description`, `title`, and `default`. Production MCP schemas already use all three. They stay annotations.
 
-Instance validation ignores keywords outside the supported validation set, which is the current `ClosedSchemaArgumentValidator` behavior. Definition validation does not ignore them. A keyword that is neither a supported validation keyword nor an allow-listed annotation fails definition validation.
+Instance validation ignores keywords outside the supported validation set, which is the current `ClosedSchemaArgumentValidator` behavior. Legacy Server MCP argument checks may keep that behavior. Definition validation does not. A keyword that is neither a supported validation keyword nor an allow-listed annotation fails definition validation. A supported keyword used with a malformed shape or value also fails definition validation. It must never become a constraint that instance validation silently skips.
 
-`ClosedSchemaArgumentValidator` remains the Server entry point for MCP argument checks and becomes a thin wrapper over instance validation. Existing tool-argument tests must keep passing. Operation contracts use definition validation at registry startup and instance validation on every read.
+`ClosedSchemaArgumentValidator` remains the Server entry point for MCP argument checks and becomes a thin wrapper over instance validation. Existing tool-argument tests must keep passing. Every operation schema passes strict definition validation before the registry activates, and instance validation again on every read.
+
+### Definition validation
+
+This is a small deterministic BIM-IT meta-schema for the supported subset. It is not full JSON Schema compliance. Definition validation checks keyword shape and values, then validates nested schemas. A failure names the keyword or node and fails registry startup.
+
+| Keyword | Accepted shape |
+|---|---|
+| `type` | One of `object`, `array`, `string`, `number`, `integer`, `boolean`, `null`, or a non-empty array of those names with no duplicates and no unknown name. This includes the nullable arrays already used by MCP schemas, such as `["string", "null"]`, `["integer", "null"]`, and `["object", "null"]`. |
+| `properties` | A JSON object. Every property value is a schema object and is validated recursively. |
+| `required` | An array of unique strings. For an operation contract, every name is declared in `properties`. |
+| `additionalProperties` | On an object-capable operation node, exactly the boolean `false`. A schema value or `true` is rejected. |
+| `items` | One schema object, validated recursively. An array of schemas is rejected. |
+| `minLength`, `maxLength` | Non-negative integers. When both are present, `minLength` is less than or equal to `maxLength`. |
+| `minimum`, `maximum` | JSON numbers. When both are present, `minimum` is less than or equal to `maximum`. |
+| `minItems`, `maxItems` | Non-negative integers. When both are present, `minItems` is less than or equal to `maxItems`. |
+| `uniqueItems` | A boolean. |
+| `enum` | A JSON array. |
+| `const` | Any JSON value. |
+| `description`, `title` | Strings when present. |
+| `default` | Any JSON value. It is an annotation only. No default is injected when a property is absent. |
+
+A validation keyword is rejected when the node's `type` does not permit the instance kind that keyword constrains:
+
+- `properties`, `required`, and `additionalProperties` only where `type` permits `object`;
+- `items`, `minItems`, `maxItems`, and `uniqueItems` only where `type` permits `array`;
+- `minLength` and `maxLength` only where `type` permits `string`;
+- `minimum` and `maximum` only where `type` permits `integer` or `number`.
+
+`enum` and `const` may appear on any typed node. The root `input_schema` and `output_schema` each remain an object contract: `type` is `object`, not a union.
 
 ### Recursive closure
 
-Definition validation requires every object-shaped node in an operation `input_schema` and `output_schema` to carry `additionalProperties` with boolean value `false`. That includes:
+An operation-schema node is **object-capable** when its `type` is `object`, or when its `type` is an array that contains `object`. Every object-capable node in an operation `input_schema` and `output_schema` must carry `"additionalProperties": false`. That includes nullable objects such as `"type": ["object", "null"]`, and it applies recursively to:
 
 - the root object;
-- nested objects at any depth;
+- nested properties at any depth;
 - object schemas used as `items`;
-- an object node that declares no `properties`, including the empty object.
+- an object-capable node that declares no `properties`, including the empty object;
+- object-capable nodes inside any composition keyword added to this subset later.
 
-A node whose `type` is not `object` does not carry `additionalProperties`. `additionalProperties` set to a schema, or to `true`, fails definition validation.
+A node whose allowed types do not include `object` does not carry `additionalProperties`.
 
 ## Registry
 
@@ -112,7 +140,7 @@ Server routing field, removed before the Bridge call:
 
 - `instance_id`, optional string.
 
-Bridge request. Every field is optional. A JSON `null` means the field is omitted.
+Bridge request. Every field is optional. A JSON `null` is treated exactly as absence, in both search mode and exact mode. Bounds such as `minLength`, `minimum`, and `maximum` apply only to a non-null value.
 
 | Field | Rule |
 |---|---|
@@ -122,7 +150,7 @@ Bridge request. Every field is optional. A JSON `null` means the field is omitte
 | `offset` | Integer greater than or equal to 0. Default 0. Legal only in search mode. |
 | `limit` | Integer, 1..50. Default 25. Legal only in search mode. |
 
-Search mode is the absence of `operation`. Exact mode is the presence of `operation`. The match is ordinal and exact. The id is not trimmed.
+Search mode is the absence of `operation`, including a null `operation`. Exact mode is a non-null `operation`. The match is ordinal and exact. The id is not trimmed.
 
 `query` uses `StringComparison.OrdinalIgnoreCase` substring over operation id, title, and description. A match on any one of the three includes the operation. There is no fuzzy match, ranking, or tag search. A whitespace-only query is a literal substring, not a request to list everything.
 
@@ -144,7 +172,17 @@ One envelope for both modes:
   "total": 1,
   "returned_count": 1,
   "next_offset": null,
-  "operations": []
+  "operations": [
+    {
+      "id": "project.user_worksets",
+      "contract_version": 1,
+      "title": "User worksets",
+      "description": "User-created worksets of the active host project. Omits view, family, standard, and other internal worksets, and omits worksets that belong to linked documents. A project that is not workshared returns an empty inventory.",
+      "context": "document",
+      "effects": "read",
+      "pagination": "cursor"
+    }
+  ]
 }
 ```
 
@@ -185,7 +223,7 @@ Bridge request:
 | `page_size` | Optional integer, 1..200. Legal only when `pagination` is `cursor`. Default 100 for those operations. |
 | `cursor` | Optional string, 1..2048 characters. Legal only when `pagination` is `cursor`. |
 
-A JSON `null` on `page_size` or `cursor` means omitted. Paging fields are never accepted inside `inputs`. An operation whose `pagination` is `none` rejects either paging field with `INVALID_READ_OPERATION_INPUT`, and the message names the field.
+A JSON `null` on `instance_id`, `page_size`, or `cursor` means omitted. Required `document_id`, `operation`, `contract_version`, and `inputs` are not nullable. Bounds apply to the non-null value. Paging fields are never accepted inside `inputs`. An operation whose `pagination` is `none` rejects either paging field with `INVALID_READ_OPERATION_INPUT`, and the message names the field.
 
 Unknown envelope fields are rejected. Unknown `inputs` properties are rejected by the closed operation schema. They are not ignored.
 
@@ -230,11 +268,11 @@ The active document and the document query revision are readable on the Revit th
 8. Require a project document (`UNSUPPORTED_DOCUMENT_KIND` when `Document.IsFamilyDocument` is true).
 9. Compare `document_id` to the active document with ordinal equality (`DOCUMENT_CONTEXT_CHANGED`).
 10. For a cursor operation, compare the cursor revision with the current document query revision (`STALE_CURSOR`). A cursor whose document does not match the active document is `INVALID_CURSOR`.
-11. Execute the operation.
+11. Execute the operation. A cursor operation fits its own page before it returns. The generic dispatcher does not truncate or inspect the opaque `result` after `Execute`.
 12. Validate the typed result.
 13. Serialize it on the shared UTF-8 contract path.
 14. Validate that JSON against `output_schema`.
-15. Apply the result budget.
+15. Measure the final complete envelope against `ReadResultBudget.MaxCharacters`. If it still exceeds the hard limit, return `RESULT_TOO_LARGE` and no data.
 16. Return.
 
 Steps 12 and 14 return `READ_OPERATION_RESULT_INVALID` and no `result`. There is one work item per read. Lookup uses none.
@@ -263,17 +301,23 @@ A family-type cursor, a parameter-binding cursor, a tampered token, a token long
 
 ### Result budget
 
-`page_size` is a maximum. The serialized structured read result, as the MCP client receives it, stays within 120,000 characters (`ReadResultBudget.MaxCharacters`). The Addin and Contracts do not reference the Assistant assembly.
+`page_size` is a maximum. The serialized structured read result, as the MCP client receives it, stays within 120,000 characters (`ReadResultBudget.MaxCharacters`). The Addin and Contracts do not reference the Assistant assembly. CAP-0014 and CAP-0015 keep their own paging and cursor behavior.
 
-If a page of `page_size` rows would exceed the budget, return the longest ordered prefix that fits:
+The generic dispatcher does not truncate an opaque operation `result` and does not walk its rows after `Execute`.
 
-- `complete` is false;
-- `next_cursor` is positioned after the last returned row;
-- no row is skipped or repeated;
-- the operation summary is the whole matched set, unchanged;
-- the operation `returned_count` is the number of rows in that shorter page.
+For `pagination = cursor`, the operation's typed paging logic chooses the longest ordered row prefix that fits. Later registered inventories share one page-fitting helper for that measurement. The helper's class name is an implementation detail. The measurement includes the complete generic `ReadOperationResult` envelope, not only the operation payload. The operation may therefore return fewer rows than `page_size`. It mints `next_cursor` after the last returned row. No row is skipped or repeated. `complete` is false on a shortened page. The operation summary stays the whole matched set, and the operation `returned_count` is the number of rows in that page.
 
-A page has zero rows only when the matched set is empty. If one row plus the required envelope and summary cannot fit, the result is `RESULT_TOO_LARGE` and no data is returned. A non-paged operation that exceeds the budget is `RESULT_TOO_LARGE`; it has no shorter-page behavior.
+A page has zero rows only when the matched set is empty. If one row plus the required envelope and summary cannot fit, the operation does not invent a smaller row. The dispatcher then returns `RESULT_TOO_LARGE`.
+
+After the operation returns its fitted typed result, the dispatcher still:
+
+1. validates the typed result;
+2. serializes it;
+3. validates that JSON against `output_schema`;
+4. measures the final complete envelope against `ReadResultBudget.MaxCharacters`;
+5. returns `RESULT_TOO_LARGE` and no data when that measurement still exceeds the hard limit.
+
+For `pagination = none` there is no fitting and no truncation. An envelope over the hard limit is `RESULT_TOO_LARGE`.
 
 ## `project.user_worksets`, contract version 1
 
@@ -473,7 +517,7 @@ Malformed MCP envelope JSON, unknown envelope properties, and envelope values ou
 
 Automated tests, without a live Revit session unless a criterion says otherwise:
 
-1. **Startup validation.** The production list registers only `project.user_worksets` version 1 and passes. Fixture failures each disable the whole fixture registry: open object, missing `additionalProperties` on an empty object, missing `additionalProperties` on a nested object or array item, `pattern` or `oneOf`, duplicate `(id, version)`, one-segment id, id longer than 64 characters, `effects` other than `read`, `pagination` other than `none` or `cursor`, contract version less than 1.
+1. **Startup validation.** The production list registers only `project.user_worksets` version 1 and passes. Fixture failures each disable the whole fixture registry: open object, missing `additionalProperties` on an empty object, on a nested object, on an array item, or on `"type": ["object", "null"]`, a malformed supported keyword (`type` with an unknown name, `required` naming an undeclared property, `minLength` greater than `maxLength`, `items` as an array, string-length keywords on a number), `pattern` or `oneOf`, duplicate `(id, version)`, one-segment id, id longer than 64 characters, `effects` other than `read`, `pagination` other than `none` or `cursor`, contract version less than 1. A non-object node is not required to carry `additionalProperties`.
 2. **Fail closed at the host.** A startup failure leaves protocol 24 unadvertised, leaves protocol 23 usable, and does not fail Addin startup.
 3. **Lookup search.** Absent `query` lists the operation without schemas. A case-insensitive substring matches id, title, or description. Order is id ordinal, then version. Defaults are offset 0 and limit 25. Limit 51, limit 0, a negative offset, and a 257-character query are `INVALID_REQUEST`. `contract_version` in search mode is `INVALID_READ_OPERATION_LOOKUP`. No match returns an empty success. `offset` past `total` returns an empty page and a correct `total`.
 4. **Lookup exact.** The id returns the full descriptor, including both schemas. An omitted version returns every fixture version in ascending order. Unknown id is `UNKNOWN_READ_OPERATION`. A known id with a missing version is `READ_OPERATION_VERSION_UNSUPPORTED` and the message lists the registered versions. `query`, `offset`, or `limit` in exact mode is `INVALID_READ_OPERATION_LOOKUP`.
@@ -486,7 +530,7 @@ Automated tests, without a live Revit session unless a criterion says otherwise:
 11. **Cursor.** Tampering, a wrong source, a wrong version inside the fingerprint, a wrong document, a wrong instance, and a wrong `name_contains` are `INVALID_CURSOR`. A changed revision is `STALE_CURSOR`. Changing `page_size` between pages is allowed. `page_size` is not part of the fingerprint.
 12. **Summary.** On every page, `matched_workset_count` equals the full filtered set and `worksharing_enabled` is unchanged. `returned_count` equals the page length. Concatenated pages equal the ordered set once. `page_size` values 1, 100, and 200 agree.
 13. **Schema enforcement.** An unknown input property, a whitespace-only `name_contains`, and a string outside 1..256 characters are `INVALID_READ_OPERATION_INPUT` and do not enqueue. A typed result that drifts from the output schema is `READ_OPERATION_RESULT_INVALID` and returns no data.
-14. **Budget.** A page that would exceed 120,000 characters is shortened without skipping or repeating a row. One row that cannot fit is `RESULT_TOO_LARGE`.
+14. **Budget.** The cursor operation shortens a page that would exceed 120,000 characters, including the generic envelope, without skipping or repeating a row. The dispatcher does not shorten the returned `result`. One row that cannot fit, a fitted result that still exceeds the hard limit, and any non-paged oversize result are `RESULT_TOO_LARGE`.
 15. **Protocol.** Support for the two RPCs is `{24}` only. A negotiated protocol 23 returns `BRIDGE_PROTOCOL_INCOMPATIBLE` and does not invoke the registry. Protocol 23 still serves `revit.query_parameter_bindings` and `revit.query_family_types`.
 16. **Tool surface.** Production `tools/list` has exactly the 22 names in SERVER-0015. No CAP-0014 or CAP-0015 request or result field changes.
 17. **No write.** The operation path contains no transaction API and no mutating workset API.

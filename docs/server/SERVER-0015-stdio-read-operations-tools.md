@@ -49,7 +49,7 @@ Both tools remain in `tools/list` when the selected host cannot negotiate protoc
 
 ## Envelopes
 
-Both input schemas are closed objects: `additionalProperties` is false. A JSON `null` for an optional field means the field is omitted.
+Both input schemas are closed objects: `additionalProperties` is false. A JSON `null` for an optional field means the field is omitted, and the schema accepts that null. Bounds apply to the non-null value, as the existing validator already does. Exact and search mode treat null exactly as absence. Required `document_id`, `operation`, `contract_version`, and `inputs` do not accept null.
 
 `revit_lookup` input:
 
@@ -58,12 +58,12 @@ Both input schemas are closed objects: `additionalProperties` is false. A JSON `
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "instance_id": { "type": "string", "minLength": 1 },
-    "operation": { "type": "string", "minLength": 1, "maxLength": 64 },
-    "contract_version": { "type": "integer", "minimum": 1 },
-    "query": { "type": "string", "minLength": 1, "maxLength": 256 },
-    "offset": { "type": "integer", "minimum": 0 },
-    "limit": { "type": "integer", "minimum": 1, "maximum": 50 }
+    "instance_id": { "type": ["string", "null"], "minLength": 1 },
+    "operation": { "type": ["string", "null"], "minLength": 1, "maxLength": 64 },
+    "contract_version": { "type": ["integer", "null"], "minimum": 1 },
+    "query": { "type": ["string", "null"], "minLength": 1, "maxLength": 256 },
+    "offset": { "type": ["integer", "null"], "minimum": 0 },
+    "limit": { "type": ["integer", "null"], "minimum": 1, "maximum": 50 }
   }
 }
 ```
@@ -76,13 +76,13 @@ Both input schemas are closed objects: `additionalProperties` is false. A JSON `
   "additionalProperties": false,
   "required": ["document_id", "operation", "contract_version", "inputs"],
   "properties": {
-    "instance_id": { "type": "string", "minLength": 1 },
+    "instance_id": { "type": ["string", "null"], "minLength": 1 },
     "document_id": { "type": "string", "minLength": 1 },
     "operation": { "type": "string", "minLength": 1, "maxLength": 64 },
     "contract_version": { "type": "integer", "minimum": 1 },
     "inputs": { "type": "object" },
-    "page_size": { "type": "integer", "minimum": 1, "maximum": 200 },
-    "cursor": { "type": "string", "minLength": 1, "maxLength": 2048 }
+    "page_size": { "type": ["integer", "null"], "minimum": 1, "maximum": 200 },
+    "cursor": { "type": ["string", "null"], "minLength": 1, "maxLength": 2048 }
   }
 }
 ```

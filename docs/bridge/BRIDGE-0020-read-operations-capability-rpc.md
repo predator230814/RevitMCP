@@ -16,9 +16,9 @@ Support for both is the explicit set `{24}`. A later protocol version supports t
 
 Protocol 24 preserves every capability from protocol 23 by explicit membership, including `revit.query_parameter_bindings`, `revit.query_family_types`, and `revit.preview_room_pattern_placements` with linked-room references. Individual registered operations do not consume a protocol version. Their presence is discovered through lookup.
 
-`BridgeProtocol.CurrentVersion` becomes 24 only for a host that advertises 24. `ReadOperationsVersion` is 24. `SupportsReadOperations` is true only for 24. Every existing `Supports…` predicate that is true for 23 becomes true for 24 by explicit membership, in the same style as `SupportsQueryParameterBindings`.
+After implementation, `BridgeProtocol.CurrentVersion` is 24 for that build. It is not conditional on runtime registry state. `ReadOperationsVersion` is 24. `SupportsReadOperations` is true only for 24. Every existing `Supports…` predicate that is true for 23 becomes true for 24 by explicit membership, in the same style as `SupportsQueryParameterBindings`.
 
-A full production host advertises `[24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1]` only when the read-operation service is composed and its registry passed startup validation, together with the complete v23 prefix. A complete v23 host without that service still advertises `[23..1]`. A read-operation service without the v23 prefix does not advertise 24. Unknown protocol 25 supports nothing.
+Host advertisement is separate from `CurrentVersion`. A host advertises `[24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1]` only when the read-operation service is composed, its registry passed startup validation, and the complete v23 prefix is present. Otherwise it advertises the highest valid earlier prefix, normally `[23..1]`. A read-operation service without the v23 prefix does not advertise 24. Unknown protocol 25 supports nothing.
 
 A connection below 24 is refused with `BRIDGE_PROTOCOL_INCOMPATIBLE` before either method runs. There is no fallback to `revit.query_family_types`, `revit.query_parameter_bindings`, or any other RPC.
 
@@ -37,7 +37,7 @@ Contracts in `BimIt.Revit.Contracts`:
 
 The Bridge methods do not accept `instance_id`. JSON property names are snake_case. `inputs` and `result` are JSON elements. The operation's typed request and result stay in the Addin. The Server does not receive a per-operation CLR type.
 
-Lookup fields are `operation`, `contract_version`, `query`, `offset`, and `limit`, all optional. Read fields are `document_id`, `operation`, `contract_version`, `inputs`, `page_size`, and `cursor`, with the first four required.
+Lookup fields are `operation`, `contract_version`, `query`, `offset`, and `limit`, all optional. Read fields are `document_id`, `operation`, `contract_version`, `inputs`, `page_size`, and `cursor`, with the first four required. A JSON `null` on an optional field is absence. The four required read fields are not nullable. Search and exact mode treat a null the same way.
 
 The results are the CAP-0016 envelopes. `next_offset` and `next_cursor` are present and null when the CAP says they are null. Exact lookup includes `input_schema` and `output_schema`. Search lookup omits both.
 
@@ -48,6 +48,8 @@ The results are the CAP-0016 envelopes. `next_offset` and `next_cursor` are pres
 `revit.lookup_read_operations` reads the immutable registry on the calling thread. It does not call `EnqueueAsync` and does not touch the Revit API. It still applies `ReadResultBudget` to the serialized lookup result.
 
 `revit.read_operation` performs the Revit-free CAP-0016 checks first. Only a request that passes them is handed to one `EnqueueAsync` work item. Document kind, the document guard, cursor revision, and the workset read happen at the start of that work item, in that order. The operation receives the active `Document` and the existing identity, revision, and cursor services. It does not receive `UIApplication`.
+
+A cursor operation fits its page before returning. The dispatcher does not truncate or inspect that `result`. After typed validation, serialization, and output-schema validation, the dispatcher measures the complete envelope and returns `RESULT_TOO_LARGE` if it still exceeds `ReadResultBudget.MaxCharacters`. A non-paged operation is not fitted.
 
 The cursor codec is the same per-process `DeclarativeQueryCursorCodec` that CAP-0014 and CAP-0015 use. The source string is the operation id. No new value is added to a central source list. Body version stays 2.
 
