@@ -87,7 +87,13 @@ A validation keyword is rejected when the node's `type` does not permit the inst
 - `minLength` and `maxLength` only where `type` permits `string`;
 - `minimum` and `maximum` only where `type` permits `integer` or `number`.
 
-`enum` and `const` may appear on any typed node. The root `input_schema` and `output_schema` each remain an object contract: `type` is `object`, not a union.
+`enum`, `const`, annotations, and constraints may refine a typed node. They do not replace `type`.
+
+For an ADR-0024 operation contract, every schema node declares an explicit `type`. That node is the `input_schema` root, the `output_schema` root, every schema under `properties`, every `items` schema, and every schema inside a composition branch if one is later added to this subset. `type` is one supported type name, or a non-empty array of unique supported type names, under the shape rules above. A missing `type`, including `{}` and `{"enum":["a","b"]}`, fails definition validation and therefore the existing fail-closed registry behavior. `{"type":"string","enum":["a","b"]}` satisfies this rule.
+
+This explicit-`type` requirement applies only to operation contracts. Legacy MCP tool schemas that share the instance validator are not rejected for omitting `type`.
+
+The root `input_schema` and `output_schema` each remain an object contract: `type` is `object`, not a union.
 
 ### Recursive closure
 
@@ -517,7 +523,7 @@ Malformed MCP envelope JSON, unknown envelope properties, and envelope values ou
 
 Automated tests, without a live Revit session unless a criterion says otherwise:
 
-1. **Startup validation.** The production list registers only `project.user_worksets` version 1 and passes. Fixture failures each disable the whole fixture registry: open object, missing `additionalProperties` on an empty object, on a nested object, on an array item, or on `"type": ["object", "null"]`, a malformed supported keyword (`type` with an unknown name, `required` naming an undeclared property, `minLength` greater than `maxLength`, `items` as an array, string-length keywords on a number), `pattern` or `oneOf`, duplicate `(id, version)`, one-segment id, id longer than 64 characters, `effects` other than `read`, `pagination` other than `none` or `cursor`, contract version less than 1. A non-object node is not required to carry `additionalProperties`.
+1. **Startup validation.** The production list registers only `project.user_worksets` version 1 and passes. Fixture failures each disable the whole fixture registry: open object, missing `additionalProperties` on an empty object, on a nested object, on an array item, or on `"type": ["object", "null"]`, a nested property schema `{}`, a nested property schema `{"enum":["a","b"]}` with no `type`, a malformed supported keyword (`type` with an unknown name, `required` naming an undeclared property, `minLength` greater than `maxLength`, `items` as an array, string-length keywords on a number), `pattern` or `oneOf`, duplicate `(id, version)`, one-segment id, id longer than 64 characters, `effects` other than `read`, `pagination` other than `none` or `cursor`, contract version less than 1. `{"type":"string","enum":["a","b"]}` passes definition validation. A non-object node is not required to carry `additionalProperties`. An existing production MCP tool schema that omits `type` still passes instance validation.
 2. **Fail closed at the host.** A startup failure leaves protocol 24 unadvertised, leaves protocol 23 usable, and does not fail Addin startup.
 3. **Lookup search.** Absent `query` lists the operation without schemas. A case-insensitive substring matches id, title, or description. Order is id ordinal, then version. Defaults are offset 0 and limit 25. Limit 51, limit 0, a negative offset, and a 257-character query are `INVALID_REQUEST`. `contract_version` in search mode is `INVALID_READ_OPERATION_LOOKUP`. No match returns an empty success. `offset` past `total` returns an empty page and a correct `total`.
 4. **Lookup exact.** The id returns the full descriptor, including both schemas. An omitted version returns every fixture version in ascending order. Unknown id is `UNKNOWN_READ_OPERATION`. A known id with a missing version is `READ_OPERATION_VERSION_UNSUPPORTED` and the message lists the registered versions. `query`, `offset`, or `limit` in exact mode is `INVALID_READ_OPERATION_LOOKUP`.
