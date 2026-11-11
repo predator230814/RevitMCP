@@ -49,7 +49,7 @@ public static class JsonSchemaSubset
 
     public static bool MatchesInstance(JsonElement instance, JsonElement schema)
     {
-        return MatchesValue(instance, schema);
+        return MatchesValue(instance, schema, strict: true);
     }
 
     public static bool HasUnexpectedProperties(IDictionary<string, JsonElement>? arguments, JsonElement schema)
@@ -149,7 +149,7 @@ public static class JsonSchemaSubset
                 continue;
             }
 
-            if (!MatchesValue(value, property.Value))
+            if (!MatchesValue(value, property.Value, strict: false))
             {
                 return false;
             }
@@ -158,7 +158,7 @@ public static class JsonSchemaSubset
         return true;
     }
 
-    private static bool MatchesObjectElement(JsonElement value, JsonElement schema)
+    private static bool MatchesObjectElement(JsonElement value, JsonElement schema, bool strict)
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
@@ -187,7 +187,7 @@ public static class JsonSchemaSubset
                 continue;
             }
 
-            if (!MatchesValue(child, property.Value))
+            if (!MatchesValue(child, property.Value, strict))
             {
                 return false;
             }
@@ -196,14 +196,14 @@ public static class JsonSchemaSubset
         return true;
     }
 
-    private static bool MatchesValue(JsonElement value, JsonElement schema)
+    private static bool MatchesValue(JsonElement value, JsonElement schema, bool strict)
     {
         if (!MatchesDeclaredType(value, schema))
         {
             return false;
         }
 
-        if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        if (!strict && value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
         {
             return true;
         }
@@ -213,12 +213,17 @@ public static class JsonSchemaSubset
             return false;
         }
 
+        if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
+        {
+            return true;
+        }
+
         return value.ValueKind switch
         {
             JsonValueKind.String => MatchesStringConstraints(value, schema),
             JsonValueKind.Number => MatchesNumberConstraints(value, schema),
-            JsonValueKind.Array => MatchesArray(value, schema),
-            JsonValueKind.Object => MatchesObjectElement(value, schema),
+            JsonValueKind.Array => MatchesArray(value, schema, strict),
+            JsonValueKind.Object => MatchesObjectElement(value, schema, strict),
             _ => true
         };
     }
@@ -323,7 +328,7 @@ public static class JsonSchemaSubset
         return true;
     }
 
-    private static bool MatchesArray(JsonElement value, JsonElement schema)
+    private static bool MatchesArray(JsonElement value, JsonElement schema, bool strict)
     {
         var length = value.GetArrayLength();
         if (schema.TryGetProperty("minItems", out var minItems)
@@ -344,7 +349,7 @@ public static class JsonSchemaSubset
         {
             foreach (var item in value.EnumerateArray())
             {
-                if (!MatchesValue(item, items))
+                if (!MatchesValue(item, items, strict))
                 {
                     return false;
                 }

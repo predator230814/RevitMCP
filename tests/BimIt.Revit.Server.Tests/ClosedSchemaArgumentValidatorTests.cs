@@ -30,6 +30,26 @@ public sealed class ClosedSchemaArgumentValidatorTests
     }
 
     [Fact]
+    public void Legacy_nullable_enum_and_const_still_accept_null()
+    {
+        var schema = Parse(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "value": { "type": ["string", "null"], "enum": ["a"], "const": "a" }
+              }
+            }
+            """);
+        var arguments = new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        {
+            ["value"] = Parse("null")
+        };
+
+        Assert.False(ClosedSchemaArgumentValidator.IsInvalid(arguments, schema));
+    }
+
+    [Fact]
     public void Closed_objects_still_reject_undeclared_arguments()
     {
         var schema = Parse(

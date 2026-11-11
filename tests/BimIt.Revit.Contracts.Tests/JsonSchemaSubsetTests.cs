@@ -43,6 +43,67 @@ public sealed class JsonSchemaSubsetTests
     }
 
     [Fact]
+    public void Strict_instance_validation_applies_enum_and_const_to_null()
+    {
+        var enumSchema = Parse("""{"type":["string","null"],"enum":["a"]}""");
+        Assert.False(JsonSchemaSubset.MatchesInstance(Parse("null"), enumSchema));
+        Assert.True(JsonSchemaSubset.MatchesInstance(Parse("\"a\""), enumSchema));
+
+        var enumWithNull = Parse("""{"type":["string","null"],"enum":["a",null]}""");
+        Assert.True(JsonSchemaSubset.MatchesInstance(Parse("null"), enumWithNull));
+
+        var constSchema = Parse("""{"type":["string","null"],"const":"a"}""");
+        Assert.False(JsonSchemaSubset.MatchesInstance(Parse("null"), constSchema));
+
+        var constNull = Parse("""{"type":["string","null"],"const":null}""");
+        Assert.True(JsonSchemaSubset.MatchesInstance(Parse("null"), constNull));
+    }
+
+    [Fact]
+    public void Strict_null_enum_and_const_apply_inside_objects_and_arrays()
+    {
+        var nested = Parse(
+            """
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "value": { "type": ["string", "null"], "enum": ["a"] }
+              }
+            }
+            """);
+        Assert.False(JsonSchemaSubset.MatchesInstance(Parse("""{"value":null}"""), nested));
+        Assert.True(JsonSchemaSubset.MatchesInstance(Parse("""{"value":"a"}"""), nested));
+
+        var items = Parse(
+            """
+            {
+              "type": "array",
+              "items": { "type": ["string", "null"], "const": "a" }
+            }
+            """);
+        Assert.False(JsonSchemaSubset.MatchesInstance(Parse("""[null]"""), items));
+        Assert.True(JsonSchemaSubset.MatchesInstance(Parse("""["a"]"""), items));
+    }
+
+    [Fact]
+    public void Legacy_argument_validation_still_accepts_null_before_enum_and_const()
+    {
+        var schema = Parse(
+            """
+            {
+              "type": "object",
+              "properties": {
+                "value": { "type": ["string", "null"], "enum": ["a"], "const": "a" }
+              }
+            }
+            """);
+
+        Assert.True(JsonSchemaSubset.MatchesArguments(Object("""{"value":null}"""), schema));
+        Assert.False(JsonSchemaSubset.MatchesInstance(Parse("""{"value":null}"""), schema));
+    }
+
+    [Fact]
     public void Instance_validation_ignores_unknown_keywords_and_missing_type()
     {
         var schema = Parse(
