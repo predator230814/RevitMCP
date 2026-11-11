@@ -1,6 +1,6 @@
 # ADR-0024: Registry-driven compiled Revit read operations
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-11-10
 - Revised: 2026-11-10, after Tech Lead review (overall architecture approved; decisions on schema validation, lookup, versioning, registry failure, paging, and promotion recorded below)
 - Product Owner: Dave
