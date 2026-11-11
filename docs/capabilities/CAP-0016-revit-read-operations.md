@@ -1,6 +1,6 @@
 # CAP-0016: Registry-driven Revit read operations
 
-- Status: Proposed
+- Status: Accepted. Not implemented.
 - Operation class: Read
 - Date: 2026-11-11
 - Architecture: Accepted [ADR-0024](../adr/ADR-0024-registry-driven-compiled-revit-read-operations.md)

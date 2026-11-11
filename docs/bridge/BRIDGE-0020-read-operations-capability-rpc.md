@@ -1,6 +1,6 @@
 # BRIDGE-0020: Read-operation registry
 
-- Status: Proposed. Not implemented.
+- Status: Accepted. Not implemented.
 - Date: 2026-11-11
 - Capability: [CAP-0016](../capabilities/CAP-0016-revit-read-operations.md)
 - Architecture: Accepted [ADR-0024](../adr/ADR-0024-registry-driven-compiled-revit-read-operations.md)
