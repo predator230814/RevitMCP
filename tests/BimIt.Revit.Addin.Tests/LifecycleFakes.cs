@@ -1,4 +1,6 @@
 using BimIt.Revit.Addin.Lifecycle;
+using BimIt.Revit.Addin.Query;
+using BimIt.Revit.Addin.ReadOperations;
 using BimIt.Revit.Bridge;
 using BimIt.Revit.Contracts;
 
@@ -190,6 +192,22 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
         _events.Add("parameterbindings.create");
         return new RecordingQueryParameterBindingsService();
     }
+
+    public Func<BridgeInstanceMetadata, IRevitReadOperationsService?>? ReadOperationsFactory { get; set; }
+
+    public IRevitReadOperationsService? CreateReadOperations(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("readoperations.create");
+        return ReadOperationsFactory is null
+            ? ReadOperationComposition.TryCreate(
+                ReadOperationComposition.ProductionOperations(),
+                metadata.InstanceId,
+                new DeclarativeQueryCursorCodec(),
+                new DocumentQueryRevisionService(),
+                new LifecycleReadOperationQueue())
+            : ReadOperationsFactory(metadata);
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -372,13 +390,17 @@ internal sealed class RecordingDispatcherFactory : ILifecycleDispatcherFactory
 
     public int CreateCount { get; private set; }
 
+    public Action<RecordingDispatcher>? Configure { get; set; }
+
     public ILifecycleDispatcher Create()
     {
         CreateCount++;
         _events.Add("dispatcher.create");
         _entered?.Set();
         _release?.Wait();
-        return new RecordingDispatcher(_events);
+        var dispatcher = new RecordingDispatcher(_events);
+        Configure?.Invoke(dispatcher);
+        return dispatcher;
     }
 }
 
@@ -465,6 +487,8 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
 
     public IRevitQueryParameterBindingsService? LastQueryParameterBindings { get; private set; }
 
+    public IRevitReadOperationsService? LastReadOperations { get; private set; }
+
     public ILifecycleBridge Start(
         BridgeInstanceMetadata metadata,
         IRevitCapabilityService? capability,
@@ -487,6 +511,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitReadSpatialRoomsService? readSpatialRooms,
         IRevitQueryFamilyTypesService? queryFamilyTypes,
         IRevitQueryParameterBindingsService? queryParameterBindings,
+        IRevitReadOperationsService? readOperations,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
@@ -504,6 +529,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         LastGetRoomLayouts = getRoomLayouts;
         LastQueryFamilyTypes = queryFamilyTypes;
         LastQueryParameterBindings = queryParameterBindings;
+        LastReadOperations = readOperations;
         _events.Add("bridge.start");
         if (_startError is not null)
         {
@@ -532,5 +558,20 @@ internal sealed class FixedMetadataSource : IRuntimeMetadataSource
             AddinVersion = "1.0.0",
             SupportedProtocolVersions = BridgeProtocol.SupportedVersions
         };
+    }
+}
+
+internal sealed class LifecycleReadOperationQueue : IReadOperationWorkQueue
+{
+    public int Calls { get; private set; }
+
+    public Task<ReadOperationResult> EnqueueAsync(
+        Func<IReadOperationDocument, ReadOperationResult> execute,
+        CancellationToken cancellationToken)
+    {
+        _ = execute;
+        Calls++;
+        cancellationToken.ThrowIfCancellationRequested();
+        throw new InvalidOperationException("Lifecycle composition must not enqueue during startup.");
     }
 }

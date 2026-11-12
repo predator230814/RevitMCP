@@ -17,7 +17,7 @@ public sealed class QueryParameterBindingsBridgeTests
     [InlineData(1)]
     [InlineData(21)]
     [InlineData(22)]
-    [InlineData(24)]
+    [InlineData(25)]
     public async Task Versions_other_than_23_refuse_the_rpc_without_invoking_the_service(int version)
     {
         var bindings = new RecordingBindings();
@@ -111,7 +111,7 @@ public sealed class QueryParameterBindingsBridgeTests
         var metadata = TestSupport.CreateMetadata();
 
         var full = Advertise(metadata, new RecordingFamilyTypes(), new RecordingBindings());
-        Assert.Equal(BridgeProtocol.SupportedVersions, full.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.QueryParameterBindingsVersions, full.SupportedProtocolVersions);
         Assert.Equal(
             new[] { 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 },
             full.SupportedProtocolVersions);
@@ -283,8 +283,8 @@ public sealed class QueryParameterBindingsBridgeTests
             new StubSpatialRooms(),
             new RecordingFamilyTypes(),
             bindings,
-            CancellationToken.None);
-        Assert.Equal(BridgeProtocol.SupportedVersions, host.Metadata.SupportedProtocolVersions);
+            cancellationToken: CancellationToken.None);
+        Assert.Equal(BridgeProtocol.QueryParameterBindingsVersions, host.Metadata.SupportedProtocolVersions);
         return new HostContext(host, metadata);
     }
 
