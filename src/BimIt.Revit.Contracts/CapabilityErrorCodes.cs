@@ -57,4 +57,14 @@ public static class CapabilityErrorCodes
     public const string StaleCursor = "STALE_CURSOR";
 
     public const string ResultTooLarge = "RESULT_TOO_LARGE";
+
+    public const string UnknownReadOperation = "UNKNOWN_READ_OPERATION";
+
+    public const string ReadOperationVersionUnsupported = "READ_OPERATION_VERSION_UNSUPPORTED";
+
+    public const string InvalidReadOperationLookup = "INVALID_READ_OPERATION_LOOKUP";
+
+    public const string InvalidReadOperationInput = "INVALID_READ_OPERATION_INPUT";
+
+    public const string ReadOperationResultInvalid = "READ_OPERATION_RESULT_INVALID";
 }
