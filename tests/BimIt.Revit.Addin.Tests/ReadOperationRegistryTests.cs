@@ -140,6 +140,30 @@ public sealed class ReadOperationRegistryTests
     }
 
     [Fact]
+    public void Registry_keeps_the_descriptor_captured_at_registration()
+    {
+        var first = new OneShotOperation(Operation("project.sample", 1, "First").Descriptor);
+        var later = new OneShotOperation(Operation("project.sample", 2, "Later").Descriptor);
+        var registry = new ReadOperationRegistry([later, first]);
+
+        var search = registry.Search(null, 0, 10);
+        Assert.Equal(["First", "Later"], search.Operations.Select(item => item.Title).ToArray());
+        Assert.Equal([1, 2], search.Operations.Select(item => item.ContractVersion).ToArray());
+        Assert.Null(search.Operations[0].InputSchema);
+
+        var exact = registry.LookupExact("project.sample", null);
+        Assert.Same(first.Registered, exact.Result!.Operations[0]);
+        Assert.Same(later.Registered, exact.Result.Operations[1]);
+
+        var unsupported = registry.LookupExact("project.sample", 9);
+        Assert.Equal(ReadOperationResolution.UnsupportedVersion, unsupported.Resolution);
+        Assert.Equal([1, 2], unsupported.RegisteredVersions);
+
+        Assert.Equal(1, first.Reads);
+        Assert.Equal(1, later.Reads);
+    }
+
+    [Fact]
     public void A_typed_enum_property_remains_a_valid_nested_definition()
     {
         var registry = new ReadOperationRegistry(
@@ -293,5 +317,27 @@ public sealed class ReadOperationRegistryTests
     private sealed class FixtureOperation(ReadOperationDescriptor descriptor) : IRevitReadOperation
     {
         public ReadOperationDescriptor Descriptor { get; } = descriptor;
+    }
+
+    private sealed class OneShotOperation(ReadOperationDescriptor registered) : IRevitReadOperation
+    {
+        private int _reads;
+
+        public ReadOperationDescriptor Registered { get; } = registered;
+
+        public int Reads => _reads;
+
+        public ReadOperationDescriptor Descriptor
+        {
+            get
+            {
+                if (_reads++ > 0)
+                {
+                    throw new InvalidOperationException("Descriptor was read again after registration.");
+                }
+
+                return Registered;
+            }
+        }
     }
 }
