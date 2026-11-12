@@ -159,6 +159,15 @@ public sealed class ReadOperationRegistryTests
         Assert.Equal(ReadOperationResolution.UnsupportedVersion, unsupported.Resolution);
         Assert.Equal([1, 2], unsupported.RegisteredVersions);
 
+        var resolved = registry.Resolve("project.sample", 1);
+        Assert.Equal(ReadOperationResolution.Found, resolved.Resolution);
+        Assert.Same(first, resolved.Operation);
+        Assert.Same(first.Registered, resolved.Descriptor);
+        var missingVersion = registry.Resolve("project.sample", 9);
+        Assert.Equal(ReadOperationResolution.UnsupportedVersion, missingVersion.Resolution);
+        Assert.Equal([1, 2], missingVersion.RegisteredVersions);
+        Assert.Null(missingVersion.Operation);
+
         Assert.Equal(1, first.Reads);
         Assert.Equal(1, later.Reads);
     }

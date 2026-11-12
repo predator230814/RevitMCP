@@ -1,0 +1,86 @@
+using BimIt.Revit.Contracts;
+using Xunit;
+
+namespace BimIt.Revit.Addin.Tests;
+
+public sealed class RevitUserWorksetReaderStructureTests
+{
+    [Fact]
+    public void The_reader_uses_only_user_worksets_on_the_host_and_skips_a_non_workshared_document()
+    {
+        var reader = Source("ReadOperations", "RevitUserWorksetReader.cs");
+        var guard = reader.IndexOf("if (!document.IsWorkshared)", StringComparison.Ordinal);
+        var collector = reader.IndexOf("new FilteredWorksetCollector(document)", StringComparison.Ordinal);
+        Assert.True(guard >= 0 && collector > guard);
+        Assert.Contains("return new UserWorksetInventory(false, []);", reader, StringComparison.Ordinal);
+        Assert.Equal(1, Count(reader, "OfKind(WorksetKind.UserWorkset)"));
+        Assert.Contains("workset.Name ?? string.Empty", reader, StringComparison.Ordinal);
+        Assert.Contains("workset.IsDefaultWorkset", reader, StringComparison.Ordinal);
+        Assert.Contains("workset.IsVisibleByDefault", reader, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetLinkDocument", reader, StringComparison.Ordinal);
+        Assert.DoesNotContain("RevitLinkInstance", reader, StringComparison.Ordinal);
+        Assert.DoesNotContain("WorksetId", reader, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsEditable", reader, StringComparison.Ordinal);
+        Assert.DoesNotContain("IsOpen", reader, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Owner", reader, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Read_operation_code_has_no_transaction_or_workset_mutation_and_is_not_composed()
+    {
+        var root = FindRepoRoot();
+        var files = Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Addin", "ReadOperations"), "*.cs");
+        var combined = string.Join("\n", files.Select(File.ReadAllText)).Replace("\r\n", "\n", StringComparison.Ordinal);
+        foreach (var forbidden in new[]
+        {
+            "Transaction",
+            "SubTransaction",
+            "TransactionGroup",
+            "SetActiveWorksetId",
+            "GetLinkDocument",
+            "RevitLinkInstance"
+        })
+        {
+            Assert.DoesNotContain(forbidden, combined, StringComparison.Ordinal);
+        }
+
+        var lifecycle = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Addin", "Lifecycle", "RevitLifecycleAdapters.cs"));
+        Assert.DoesNotContain("RevitReadOperationService", lifecycle, StringComparison.Ordinal);
+        Assert.DoesNotContain("ReadOperationRegistry", lifecycle, StringComparison.Ordinal);
+        Assert.Equal(23, BridgeProtocol.CurrentVersion);
+    }
+
+    private static string Source(string folder, string file)
+    {
+        return File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", folder, file)).Replace("\r\n", "\n", StringComparison.Ordinal);
+    }
+
+    private static int Count(string text, string value)
+    {
+        var count = 0;
+        var index = 0;
+        while ((index = text.IndexOf(value, index, StringComparison.Ordinal)) >= 0)
+        {
+            count++;
+            index += value.Length;
+        }
+
+        return count;
+    }
+
+    private static string FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null)
+        {
+            if (File.Exists(Path.Combine(directory.FullName, "BimIt.Revit.sln")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new InvalidOperationException("Could not locate BimIt.Revit.sln from the test output directory.");
+    }
+}
