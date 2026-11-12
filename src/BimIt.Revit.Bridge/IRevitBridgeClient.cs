@@ -92,6 +92,16 @@ public interface IRevitBridgeClient : IAsyncDisposable
         TimeSpan timeout,
         CancellationToken cancellationToken);
 
+    Task<LookupReadOperationsResult> LookupReadOperationsAsync(
+        LookupReadOperationsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
+    Task<ReadOperationResult> ReadOperationAsync(
+        ReadOperationRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
     Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(
         ReadSpatialRoomsRequest request,
         TimeSpan timeout,

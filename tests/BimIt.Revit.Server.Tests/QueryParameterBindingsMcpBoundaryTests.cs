@@ -451,7 +451,7 @@ public sealed class QueryParameterBindingsMcpBoundaryTests
         var outcome = await Service(client, V23, P23, 23).ExecuteAsync(null, Request(), CancellationToken.None);
 
         Assert.Equal(BridgeProtocol.SupportedVersions, offered);
-        Assert.Equal(23, BridgeProtocol.CurrentVersion);
+        Assert.Equal(24, BridgeProtocol.CurrentVersion);
         Assert.Same(expected, outcome.Result);
     }
 

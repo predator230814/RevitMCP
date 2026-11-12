@@ -9,6 +9,7 @@ using BimIt.Revit.Addin.Execution;
 using BimIt.Revit.Addin.Identity;
 using BimIt.Revit.Addin.Intents;
 using BimIt.Revit.Addin.Query;
+using BimIt.Revit.Addin.ReadOperations;
 using BimIt.Revit.Bridge;
 
 namespace BimIt.Revit.Addin.Lifecycle;
@@ -451,6 +452,17 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         return new RevitQueryParameterBindingsService(_dispatcher, metadata, _identity, _parameterRefs, _revisions, _cursors, new RevitBuiltInCategoryCatalog());
     }
 
+    public IRevitReadOperationsService? CreateReadOperations(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return ReadOperationComposition.TryCreate(
+            ReadOperationComposition.ProductionOperations(),
+            metadata.InstanceId,
+            _cursors,
+            _revisions,
+            new RevitReadOperationWorkQueue(_dispatcher, _identity));
+    }
+
     public IRevitGetRoomLayoutsService CreateGetRoomLayouts(BridgeInstanceMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -540,10 +552,11 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         IRevitReadSpatialRoomsService? readSpatialRooms,
         IRevitQueryFamilyTypesService? queryFamilyTypes,
         IRevitQueryParameterBindingsService? queryParameterBindings,
+        IRevitReadOperationsService? readOperations,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, readSpatialRooms, queryFamilyTypes, queryParameterBindings, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, readSpatialRooms, queryFamilyTypes, queryParameterBindings, readOperations, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);
