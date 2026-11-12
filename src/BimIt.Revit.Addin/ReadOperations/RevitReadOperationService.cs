@@ -30,9 +30,9 @@ internal sealed class RevitReadOperationService
     public async Task<ReadOperationResult> ReadAsync(ReadOperationRequest request, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(request);
-        var prepared = _pipeline.Prepare(request);
         try
         {
+            var prepared = _pipeline.Prepare(request);
             return await _queue.EnqueueAsync(document => _pipeline.Execute(prepared, document), cancellationToken)
                 .ConfigureAwait(false);
         }
@@ -55,19 +55,15 @@ internal sealed class RevitReadOperationWorkQueue : IReadOperationWorkQueue
 {
     private readonly RevitExecutionDispatcher _dispatcher;
     private readonly OpenDocumentIdentityService _identity;
-    private readonly RevitUserWorksetReader _reader;
 
     public RevitReadOperationWorkQueue(
         RevitExecutionDispatcher dispatcher,
-        OpenDocumentIdentityService identity,
-        RevitUserWorksetReader reader)
+        OpenDocumentIdentityService identity)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(identity);
-        ArgumentNullException.ThrowIfNull(reader);
         _dispatcher = dispatcher;
         _identity = identity;
-        _reader = reader;
     }
 
     public Task<ReadOperationResult> EnqueueAsync(
@@ -75,7 +71,7 @@ internal sealed class RevitReadOperationWorkQueue : IReadOperationWorkQueue
         CancellationToken cancellationToken)
     {
         return _dispatcher.EnqueueAsync(
-            application => execute(new RevitActiveReadDocument(application, _identity, _reader)),
+            application => execute(new RevitActiveReadDocument(application, _identity)),
             cancellationToken);
     }
 }
@@ -84,19 +80,13 @@ internal sealed class RevitActiveReadDocument : IReadOperationDocument
 {
     private readonly Document? _document;
     private readonly OpenDocumentIdentityService _identity;
-    private readonly RevitUserWorksetReader _reader;
 
-    public RevitActiveReadDocument(
-        UIApplication application,
-        OpenDocumentIdentityService identity,
-        RevitUserWorksetReader reader)
+    public RevitActiveReadDocument(UIApplication application, OpenDocumentIdentityService identity)
     {
         ArgumentNullException.ThrowIfNull(application);
         ArgumentNullException.ThrowIfNull(identity);
-        ArgumentNullException.ThrowIfNull(reader);
         _document = application.ActiveUIDocument?.Document;
         _identity = identity;
-        _reader = reader;
     }
 
     public bool HasActiveDocument => _document is not null;
@@ -108,8 +98,5 @@ internal sealed class RevitActiveReadDocument : IReadOperationDocument
         return _identity.GetId(_document!);
     }
 
-    public UserWorksetInventory ReadUserWorksets()
-    {
-        return _reader.Read(_document!);
-    }
+    public Document Document => _document ?? throw new InvalidOperationException("No active document is available.");
 }

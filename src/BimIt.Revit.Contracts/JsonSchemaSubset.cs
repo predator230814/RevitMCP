@@ -49,7 +49,19 @@ public static class JsonSchemaSubset
 
     public static bool MatchesInstance(JsonElement instance, JsonElement schema)
     {
-        return MatchesValue(instance, schema, strict: true);
+        return TryMatchInstance(instance, schema, out _);
+    }
+
+    /// <summary>
+    /// Strict instance check. <paramref name="error"/> names the first failing keyword and its path.
+    /// This is the same recursive check as <see cref="MatchesInstance"/>.
+    /// </summary>
+    public static bool TryMatchInstance(
+        JsonElement instance,
+        JsonElement schema,
+        [NotNullWhen(false)] out JsonSchemaInstanceError? error)
+    {
+        return TryMatchValue(instance, schema, strict: true, "$", out error);
     }
 
     public static bool HasUnexpectedProperties(IDictionary<string, JsonElement>? arguments, JsonElement schema)
@@ -149,7 +161,7 @@ public static class JsonSchemaSubset
                 continue;
             }
 
-            if (!MatchesValue(value, property.Value, strict: false))
+            if (!TryMatchValue(value, property.Value, strict: false, "$." + property.Name, out _))
             {
                 return false;
             }
@@ -158,26 +170,45 @@ public static class JsonSchemaSubset
         return true;
     }
 
-    private static bool MatchesObjectElement(JsonElement value, JsonElement schema, bool strict)
+    private static bool TryMatchObjectElement(
+        JsonElement value,
+        JsonElement schema,
+        bool strict,
+        string path,
+        out JsonSchemaInstanceError? error)
     {
         if (value.ValueKind != JsonValueKind.Object)
         {
-            return false;
+            return Mismatch(path, "type", out error);
         }
 
-        if (IsClosedObject(schema) && HasUnexpectedNames(EnumerateNames(value), schema))
+        if (IsClosedObject(schema))
         {
-            return false;
+            var allowed = GetDeclaredNames(schema);
+            foreach (var property in value.EnumerateObject())
+            {
+                if (!allowed.Contains(property.Name))
+                {
+                    return Mismatch(path + "." + property.Name, "additionalProperties", out error);
+                }
+            }
         }
 
-        if (HasMissingRequired(EnumerateNames(value), schema))
+        if (TryGetRequiredNames(schema, out var required))
         {
-            return false;
+            var present = new HashSet<string>(EnumerateNames(value), StringComparer.Ordinal);
+            foreach (var name in required)
+            {
+                if (!present.Contains(name))
+                {
+                    return Mismatch(path + "." + name, "required", out error);
+                }
+            }
         }
 
         if (!TryGetDeclaredProperties(schema, out var declared))
         {
-            return true;
+            return Matched(out error);
         }
 
         foreach (var property in declared.EnumerateObject())
@@ -187,45 +218,67 @@ public static class JsonSchemaSubset
                 continue;
             }
 
-            if (!MatchesValue(child, property.Value, strict))
+            if (!TryMatchValue(child, property.Value, strict, path + "." + property.Name, out error))
             {
                 return false;
             }
         }
 
-        return true;
+        return Matched(out error);
     }
 
-    private static bool MatchesValue(JsonElement value, JsonElement schema, bool strict)
+    private static bool TryMatchValue(
+        JsonElement value,
+        JsonElement schema,
+        bool strict,
+        string path,
+        out JsonSchemaInstanceError? error)
     {
         if (!MatchesDeclaredType(value, schema))
         {
-            return false;
+            return Mismatch(path, "type", out error);
         }
 
         if (!strict && value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
         {
-            return true;
+            return Matched(out error);
         }
 
-        if (!MatchesEnum(value, schema) || !MatchesConst(value, schema))
+        if (!MatchesEnum(value, schema))
         {
-            return false;
+            return Mismatch(path, "enum", out error);
+        }
+
+        if (!MatchesConst(value, schema))
+        {
+            return Mismatch(path, "const", out error);
         }
 
         if (value.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
         {
-            return true;
+            return Matched(out error);
         }
 
         return value.ValueKind switch
         {
-            JsonValueKind.String => MatchesStringConstraints(value, schema),
-            JsonValueKind.Number => MatchesNumberConstraints(value, schema),
-            JsonValueKind.Array => MatchesArray(value, schema, strict),
-            JsonValueKind.Object => MatchesObjectElement(value, schema, strict),
-            _ => true
+            JsonValueKind.String => TryMatchString(value, schema, path, out error),
+            JsonValueKind.Number => TryMatchNumber(value, schema, path, out error),
+            JsonValueKind.Array => TryMatchArray(value, schema, strict, path, out error),
+            JsonValueKind.Object => TryMatchObjectElement(value, schema, strict, path, out error),
+            _ => Matched(out error)
         };
+    }
+
+    private static bool Matched(out JsonSchemaInstanceError? error)
+    {
+        error = null;
+        return true;
+    }
+
+    private static bool Mismatch(string path, string keyword, out JsonSchemaInstanceError? error)
+    {
+        error = new JsonSchemaInstanceError(path, keyword);
+        return false;
     }
 
     private static bool MatchesDeclaredType(JsonElement value, JsonElement schema)
@@ -284,79 +337,100 @@ public static class JsonSchemaSubset
         return !schema.TryGetProperty("const", out var constant) || JsonEquals(value, constant);
     }
 
-    private static bool MatchesStringConstraints(JsonElement value, JsonElement schema)
+    private static bool TryMatchString(
+        JsonElement value,
+        JsonElement schema,
+        string path,
+        out JsonSchemaInstanceError? error)
     {
         var text = value.GetString() ?? string.Empty;
         if (schema.TryGetProperty("minLength", out var minLength)
             && minLength.TryGetInt32(out var min)
             && text.Length < min)
         {
-            return false;
+            return Mismatch(path, "minLength", out error);
         }
 
         if (schema.TryGetProperty("maxLength", out var maxLength)
             && maxLength.TryGetInt32(out var max)
             && text.Length > max)
         {
-            return false;
+            return Mismatch(path, "maxLength", out error);
         }
 
-        return true;
+        return Matched(out error);
     }
 
-    private static bool MatchesNumberConstraints(JsonElement value, JsonElement schema)
+    private static bool TryMatchNumber(
+        JsonElement value,
+        JsonElement schema,
+        string path,
+        out JsonSchemaInstanceError? error)
     {
         if (!value.TryGetDecimal(out var number))
         {
-            return false;
+            return Mismatch(path, "type", out error);
         }
 
         if (schema.TryGetProperty("minimum", out var minimum)
             && minimum.TryGetDecimal(out var min)
             && number < min)
         {
-            return false;
+            return Mismatch(path, "minimum", out error);
         }
 
         if (schema.TryGetProperty("maximum", out var maximum)
             && maximum.TryGetDecimal(out var max)
             && number > max)
         {
-            return false;
+            return Mismatch(path, "maximum", out error);
         }
 
-        return true;
+        return Matched(out error);
     }
 
-    private static bool MatchesArray(JsonElement value, JsonElement schema, bool strict)
+    private static bool TryMatchArray(
+        JsonElement value,
+        JsonElement schema,
+        bool strict,
+        string path,
+        out JsonSchemaInstanceError? error)
     {
         var length = value.GetArrayLength();
         if (schema.TryGetProperty("minItems", out var minItems)
             && minItems.TryGetInt32(out var min)
             && length < min)
         {
-            return false;
+            return Mismatch(path, "minItems", out error);
         }
 
         if (schema.TryGetProperty("maxItems", out var maxItems)
             && maxItems.TryGetInt32(out var max)
             && length > max)
         {
-            return false;
+            return Mismatch(path, "maxItems", out error);
         }
 
         if (schema.TryGetProperty("items", out var items) && items.ValueKind == JsonValueKind.Object)
         {
+            var index = 0;
             foreach (var item in value.EnumerateArray())
             {
-                if (!MatchesValue(item, items, strict))
+                if (!TryMatchValue(item, items, strict, path + "[" + index.ToString(System.Globalization.CultureInfo.InvariantCulture) + "]", out error))
                 {
                     return false;
                 }
+
+                index++;
             }
         }
 
-        return !RequiresUniqueItems(schema) || HasUniqueItems(value);
+        if (RequiresUniqueItems(schema) && !HasUniqueItems(value))
+        {
+            return Mismatch(path, "uniqueItems", out error);
+        }
+
+        return Matched(out error);
     }
 
     private static bool RequiresUniqueItems(JsonElement schema)
@@ -959,3 +1033,6 @@ public static class JsonSchemaSubset
 }
 
 public sealed record JsonSchemaDefinitionError(string Path, string Keyword, string Message);
+
+/// <summary>First strict-instance failure. The path does not include the rejected value.</summary>
+public sealed record JsonSchemaInstanceError(string Path, string Keyword);

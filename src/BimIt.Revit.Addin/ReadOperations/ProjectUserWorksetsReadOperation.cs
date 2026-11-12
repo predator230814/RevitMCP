@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using BimIt.Revit.Addin.Query;
+using BimIt.Revit.Bridge;
 using BimIt.Revit.Contracts;
 
 namespace BimIt.Revit.Addin.ReadOperations;
@@ -11,6 +12,8 @@ namespace BimIt.Revit.Addin.ReadOperations;
 /// </summary>
 internal sealed class ProjectUserWorksetsReadOperation : RevitReadOperation<UserWorksetsRequest, UserWorksetsResult>
 {
+    private readonly RevitUserWorksetReader _reader = new();
+
     internal const string OperationId = "project.user_worksets";
 
     internal const int Version = 1;
@@ -112,7 +115,12 @@ internal sealed class ProjectUserWorksetsReadOperation : RevitReadOperation<User
 
     protected override ReadOperationExecutionResult ExecuteRead(UserWorksetsRequest request, ReadOperationExecutionContext context)
     {
-        return ProjectUserWorksetsQuery.Complete(request, context);
+        if (context.Host is not RevitActiveReadDocument active)
+        {
+            throw new BridgeException(CapabilityErrorCodes.ExecutionFailed, "The read operation could not be read.");
+        }
+
+        return ProjectUserWorksetsQuery.Complete(request, context, _reader.Read(active.Document));
     }
 
     protected override void ValidateTypedResult(UserWorksetsResult result)

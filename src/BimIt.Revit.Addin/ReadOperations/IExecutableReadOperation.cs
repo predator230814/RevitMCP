@@ -33,7 +33,7 @@ internal sealed class ReadOperationExecutionContext
 
     public required DeclarativeQueryCursorCodec Cursors { get; init; }
 
-    public required Func<UserWorksetInventory> ReadWorksets { get; init; }
+    public required IReadOperationDocument Host { get; init; }
 }
 
 internal sealed class ReadOperationExecutionResult
@@ -52,6 +52,4 @@ internal interface IReadOperationDocument
     bool IsFamilyDocument { get; }
 
     string GetDocumentId();
-
-    UserWorksetInventory ReadUserWorksets();
 }

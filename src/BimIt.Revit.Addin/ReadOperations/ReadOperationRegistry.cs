@@ -33,7 +33,7 @@ internal sealed class ReadOperationExecutionResolution
 {
     public required ReadOperationResolution Resolution { get; init; }
 
-    public IRevitReadOperation? Operation { get; init; }
+    public IExecutableReadOperation? Operation { get; init; }
 
     public ReadOperationDescriptor? Descriptor { get; init; }
 
@@ -62,7 +62,7 @@ internal sealed class ReadOperationRegistry
 
     private readonly Registration[] _registrations;
 
-    public ReadOperationRegistry(IReadOnlyList<IRevitReadOperation> operations)
+    public ReadOperationRegistry(IReadOnlyList<IExecutableReadOperation> operations)
     {
         ArgumentNullException.ThrowIfNull(operations);
         var captured = new Registration[operations.Count];
@@ -262,9 +262,9 @@ internal sealed class ReadOperationRegistry
             : left.Descriptor.ContractVersion.CompareTo(right.Descriptor.ContractVersion);
     }
 
-    private sealed class Registration(IRevitReadOperation operation, ReadOperationDescriptor descriptor)
+    private sealed class Registration(IExecutableReadOperation operation, ReadOperationDescriptor descriptor)
     {
-        public IRevitReadOperation Operation { get; } = operation;
+        public IExecutableReadOperation Operation { get; } = operation;
 
         public ReadOperationDescriptor Descriptor { get; } = descriptor;
     }

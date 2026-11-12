@@ -48,6 +48,36 @@ public sealed class RevitUserWorksetReaderStructureTests
         Assert.DoesNotContain("RevitReadOperationService", lifecycle, StringComparison.Ordinal);
         Assert.DoesNotContain("ReadOperationRegistry", lifecycle, StringComparison.Ordinal);
         Assert.Equal(23, BridgeProtocol.CurrentVersion);
+
+        foreach (var file in new[]
+        {
+            "IRevitReadOperation.cs",
+            "IExecutableReadOperation.cs",
+            "RevitReadOperation.cs",
+            "ReadOperationRegistry.cs",
+            "ReadOperationPipeline.cs",
+            "ReadOperationResults.cs",
+            "RevitReadOperationService.cs"
+        })
+        {
+            var source = Source("ReadOperations", file);
+            Assert.DoesNotContain("Workset", source, StringComparison.Ordinal);
+            Assert.DoesNotContain("workset", source, StringComparison.Ordinal);
+        }
+
+        var pipeline = Source("ReadOperations", "ReadOperationPipeline.cs");
+        var familyGuard = pipeline.IndexOf("document.IsFamilyDocument", StringComparison.Ordinal);
+        var hostHandoff = pipeline.IndexOf("Host = document", StringComparison.Ordinal);
+        Assert.True(familyGuard >= 0 && hostHandoff > familyGuard);
+        Assert.DoesNotContain("as IExecutableReadOperation", pipeline, StringComparison.Ordinal);
+        Assert.DoesNotContain("Autodesk.Revit.DB", pipeline, StringComparison.Ordinal);
+
+        var operation = Source("ReadOperations", "ProjectUserWorksetsReadOperation.cs");
+        Assert.Contains("_reader.Read(active.Document)", operation, StringComparison.Ordinal);
+        Assert.Contains("context.Host is not RevitActiveReadDocument active", operation, StringComparison.Ordinal);
+        var registry = Source("ReadOperations", "ReadOperationRegistry.cs");
+        Assert.Contains("IReadOnlyList<IExecutableReadOperation>", registry, StringComparison.Ordinal);
+        Assert.DoesNotContain("IReadOnlyList<IRevitReadOperation>", registry, StringComparison.Ordinal);
     }
 
     private static string Source(string folder, string file)

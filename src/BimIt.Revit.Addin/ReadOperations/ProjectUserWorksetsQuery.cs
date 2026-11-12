@@ -6,9 +6,11 @@ namespace BimIt.Revit.Addin.ReadOperations;
 
 internal static class ProjectUserWorksetsQuery
 {
-    public static ReadOperationExecutionResult Complete(UserWorksetsRequest request, ReadOperationExecutionContext context)
+    public static ReadOperationExecutionResult Complete(
+        UserWorksetsRequest request,
+        ReadOperationExecutionContext context,
+        UserWorksetInventory inventory)
     {
-        var inventory = context.ReadWorksets();
         if (!inventory.WorksharingEnabled)
         {
             return Empty(context, worksharingEnabled: false);

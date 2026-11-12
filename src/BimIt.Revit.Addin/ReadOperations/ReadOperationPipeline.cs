@@ -69,21 +69,21 @@ internal sealed class ReadOperationPipeline
         }
 
         var descriptor = resolved.Descriptor ?? throw Failed();
-        var operation = resolved.Operation as IExecutableReadOperation ?? throw Failed();
+        var operation = resolved.Operation ?? throw Failed();
         var pageSize = AcceptPaging(descriptor, request);
         if (string.IsNullOrEmpty(request.DocumentId))
         {
             throw InvalidInput("document_id is required.");
         }
 
-        if (request.Inputs is not { } inputs || inputs.ValueKind != JsonValueKind.Object)
+        if (request.Inputs is not { } inputs || inputs.ValueKind == JsonValueKind.Undefined)
         {
-            throw InvalidInput(AcceptedInputs(descriptor));
+            throw InvalidInput(SchemaFailure(descriptor, null));
         }
 
-        if (!JsonSchemaSubset.MatchesInstance(inputs, descriptor.InputSchema!.Value))
+        if (!JsonSchemaSubset.TryMatchInstance(inputs, descriptor.InputSchema!.Value, out var mismatch))
         {
-            throw InvalidInput(AcceptedInputs(descriptor));
+            throw InvalidInput(SchemaFailure(descriptor, mismatch));
         }
 
         object bound;
@@ -97,11 +97,11 @@ internal sealed class ReadOperationPipeline
         }
         catch (JsonException)
         {
-            throw InvalidInput(AcceptedInputs(descriptor));
+            throw InvalidInput(SchemaFailure(descriptor, null));
         }
         catch (NotSupportedException)
         {
-            throw InvalidInput(AcceptedInputs(descriptor));
+            throw InvalidInput(SchemaFailure(descriptor, null));
         }
 
         operation.ValidateInputs(bound);
@@ -157,7 +157,7 @@ internal sealed class ReadOperationPipeline
                 Offset = prepared.Cursor?.Offset ?? 0,
                 Revision = revision,
                 Cursors = _cursors,
-                ReadWorksets = document.ReadUserWorksets
+                Host = document
             });
         }
         catch (BridgeException)
@@ -285,24 +285,28 @@ internal sealed class ReadOperationPipeline
         return pageSize;
     }
 
-    private static string AcceptedInputs(ReadOperationDescriptor descriptor)
+    private static string SchemaFailure(ReadOperationDescriptor descriptor, JsonSchemaInstanceError? mismatch)
     {
-        if (descriptor.InputSchema is not { } schema
-            || !schema.TryGetProperty("properties", out var properties)
-            || properties.ValueKind != JsonValueKind.Object)
+        var accepted = "The read operation inputs are invalid.";
+        if (descriptor.InputSchema is { } schema
+            && schema.TryGetProperty("properties", out var properties)
+            && properties.ValueKind == JsonValueKind.Object)
         {
-            return "The read operation inputs are invalid.";
+            var names = new List<string>();
+            foreach (var property in properties.EnumerateObject())
+            {
+                names.Add(property.Name);
+            }
+
+            if (names.Count > 0)
+            {
+                accepted += " Accepted inputs: " + string.Join(", ", names) + ".";
+            }
         }
 
-        var names = new List<string>();
-        foreach (var property in properties.EnumerateObject())
-        {
-            names.Add(property.Name);
-        }
-
-        return names.Count == 0
-            ? "The read operation inputs are invalid."
-            : "The read operation inputs are invalid. Accepted inputs: " + string.Join(", ", names) + ".";
+        return mismatch is null
+            ? accepted
+            : accepted + " Constraint " + mismatch.Keyword + " failed at " + mismatch.Path + ".";
     }
 
     private static BridgeException InvalidInput(string message)

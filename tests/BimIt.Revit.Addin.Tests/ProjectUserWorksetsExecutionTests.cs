@@ -20,24 +20,43 @@ public sealed class ProjectUserWorksetsExecutionTests
     public async Task Schema_and_semantic_failures_do_not_enter_execution()
     {
         var queue = new FlagQueue();
-        var service = Service(queue, Inventory(("Shared Levels", false, true)));
+        var service = Service(queue);
+        var pipeline = Pipeline();
 
-        var all = await Read(service, "{}");
-        Assert.Equal(1, all.Result.GetProperty("worksets").GetArrayLength());
-        Assert.Equal("Shared Levels", all.Result.GetProperty("worksets")[0].GetProperty("name").GetString());
-        Assert.Equal(1, queue.Calls);
+        var omitted = Assert.IsType<UserWorksetsRequest>(pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, "{}")).Request);
+        Assert.Null(omitted.NameContains);
+        var named = Assert.IsType<UserWorksetsRequest>(pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, """{"name_contains":"level"}""")).Request);
+        Assert.Equal("level", named.NameContains);
 
-        var named = await Read(service, """{"name_contains":"level"}""");
-        Assert.Equal("Shared Levels", named.Result.GetProperty("worksets")[0].GetProperty("name").GetString());
+        var unknown = await RejectsBeforeEnqueue(queue, service, """{"other":"secret-value"}""", CapabilityErrorCodes.InvalidReadOperationInput);
+        Assert.Contains("Accepted inputs: name_contains.", unknown.Message, StringComparison.Ordinal);
+        Assert.Contains("Constraint additionalProperties failed at $.other.", unknown.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("secret-value", unknown.Message, StringComparison.Ordinal);
 
-        await RejectsBeforeEnqueue(queue, service, """{"other":1}""", CapabilityErrorCodes.InvalidReadOperationInput);
-        await RejectsBeforeEnqueue(queue, service, """{"name_contains":""}""", CapabilityErrorCodes.InvalidReadOperationInput);
-        await RejectsBeforeEnqueue(queue, service, "{\"name_contains\":\"" + new string('a', 257) + "\"}", CapabilityErrorCodes.InvalidReadOperationInput);
-        await RejectsBeforeEnqueue(queue, service, """{"name_contains":"   "}""", CapabilityErrorCodes.InvalidReadOperationInput);
+        var empty = await RejectsBeforeEnqueue(queue, service, """{"name_contains":""}""", CapabilityErrorCodes.InvalidReadOperationInput);
+        Assert.Contains("Constraint minLength failed at $.name_contains.", empty.Message, StringComparison.Ordinal);
+
+        var tooLong = new string('a', 257);
+        var length = await RejectsBeforeEnqueue(queue, service, "{\"name_contains\":\"" + tooLong + "\"}", CapabilityErrorCodes.InvalidReadOperationInput);
+        Assert.Contains("Constraint maxLength failed at $.name_contains.", length.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain(tooLong, length.Message, StringComparison.Ordinal);
+
+        var wrongType = await RejectsBeforeEnqueue(queue, service, """{"name_contains":1}""", CapabilityErrorCodes.InvalidReadOperationInput);
+        Assert.Contains("Constraint type failed at $.name_contains.", wrongType.Message, StringComparison.Ordinal);
+
+        var whitespace = await RejectsBeforeEnqueue(queue, service, """{"name_contains":"   "}""", CapabilityErrorCodes.InvalidReadOperationInput);
+        Assert.Contains("name_contains is invalid.", whitespace.Message, StringComparison.Ordinal);
+        Assert.DoesNotContain("Constraint", whitespace.Message, StringComparison.Ordinal);
 
         var bindingQueue = new FlagQueue();
-        var binding = Service(bindingQueue, Inventory(), new ThrowingBindOperation(new ProjectUserWorksetsReadOperation().Descriptor));
+        var binding = Service(bindingQueue, new ThrowingBindOperation(new ProjectUserWorksetsReadOperation().Descriptor));
         await RejectsBeforeEnqueue(bindingQueue, binding, "{}", CapabilityErrorCodes.InvalidReadOperationInput);
+
+        var explodingQueue = new FlagQueue();
+        var exploding = Service(explodingQueue, new ExplodingOperation(new ProjectUserWorksetsReadOperation().Descriptor));
+        var unexpected = await RejectsBeforeEnqueue(explodingQueue, exploding, "{}", CapabilityErrorCodes.ExecutionFailed);
+        Assert.Equal("The read operation could not be read.", unexpected.Message);
+        Assert.DoesNotContain("boom", unexpected.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -45,7 +64,7 @@ public sealed class ProjectUserWorksetsExecutionTests
     {
         var operation = new CountingOperation(new ProjectUserWorksetsReadOperation());
         var queue = new FlagQueue();
-        var service = Service(queue, Inventory(), operation);
+        var service = Service(queue, operation);
         Assert.Equal(1, operation.Reads);
 
         var unknown = await Assert.ThrowsAsync<BridgeException>(() => service.ReadAsync(Request("Project.user_worksets", 1, "{}"), CancellationToken.None));
@@ -82,12 +101,7 @@ public sealed class ProjectUserWorksetsExecutionTests
     [Fact]
     public void Non_workshared_and_unmatched_results_are_empty_successes()
     {
-        var document = new FakeDocument
-        {
-            Inventory = new UserWorksetInventory(false, [new UserWorksetCandidate("Hidden", false, false)])
-        };
-        var page = Execute(document, null, 100);
-        Assert.Equal(1, document.Reads);
+        var page = Execute(new UserWorksetInventory(false, [new UserWorksetCandidate("Hidden", false, false)]), null, 100);
         Assert.False(page.Result.GetProperty("summary").GetProperty("worksharing_enabled").GetBoolean());
         Assert.Equal(0, page.Result.GetProperty("summary").GetProperty("matched_workset_count").GetInt32());
         Assert.Equal(0, page.Result.GetProperty("returned_count").GetInt32());
@@ -109,19 +123,18 @@ public sealed class ProjectUserWorksetsExecutionTests
     public void Pages_concatenate_to_the_ordered_set_once(int pageSize)
     {
         var names = new[] { "d", "b", "c", "a", "e" };
-        var document = Document(names.Select(name => (name, false, true)).ToArray());
-        var collected = Walk(document, pageSize);
+        var collected = Walk(Inventory(names.Select(name => (name, false, true)).ToArray()), pageSize);
         Assert.Equal(["a", "b", "c", "d", "e"], collected);
     }
 
     [Fact]
     public void Page_size_can_change_between_pages_and_is_not_part_of_the_fingerprint()
     {
-        var document = Document(("a", false, true), ("b", false, true), ("c", false, true), ("d", false, true));
+        var inventory = Inventory(("a", false, true), ("b", false, true), ("c", false, true), ("d", false, true));
         var pipeline = Pipeline();
-        var first = pipeline.Execute(pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, "{}", pageSize: 1)), document);
-        var second = pipeline.Execute(pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, "{}", pageSize: 2, cursor: first.NextCursor)), document);
-        var third = pipeline.Execute(pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, "{}", pageSize: 100, cursor: second.NextCursor)), document);
+        var first = Page(pipeline, inventory, null, 1, null);
+        var second = Page(pipeline, inventory, null, 2, first.NextCursor);
+        var third = Page(pipeline, inventory, null, 100, second.NextCursor);
         Assert.Equal(["a", "b", "c", "d"], Names(first).Concat(Names(second)).Concat(Names(third)).ToArray());
         Assert.True(third.Complete);
 
@@ -138,12 +151,9 @@ public sealed class ProjectUserWorksetsExecutionTests
     [Fact]
     public void Cursors_are_isolated_and_a_changed_revision_is_stale_before_the_read()
     {
-        var pipeline = Pipeline();
+        var probe = new ProbeOperation(new ProjectUserWorksetsReadOperation().Descriptor);
+        var pipeline = Pipeline(probe);
         var codec = pipeline.Cursors;
-        var document = Document(("Alpha", false, true));
-        var good = pipeline.Execute(pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, """{"name_contains":"Alpha"}""", pageSize: 1)), document);
-        Assert.Null(good.NextCursor);
-
         var minted = Mint(codec, """{"name_contains":"Alpha"}""", DocumentId, InstanceId, revision: 0, offset: 0);
         Assert.Equal(CapabilityErrorCodes.InvalidCursor, PrepareError(pipeline, Request(ProjectUserWorksetsReadOperation.OperationId, 1, """{"name_contains":"Alpha"}""", cursor: minted + "x")));
         Assert.Equal(CapabilityErrorCodes.InvalidCursor, PrepareError(pipeline, Request(ProjectUserWorksetsReadOperation.OperationId, 1, """{"name_contains":"Alpha"}""", cursor: Mint(codec, """{"name_contains":"Alpha"}""", DocumentId, "other-host", 0, 0))));
@@ -153,19 +163,20 @@ public sealed class ProjectUserWorksetsExecutionTests
         Assert.Equal(CapabilityErrorCodes.InvalidCursor, PrepareError(pipeline, Request(ProjectUserWorksetsReadOperation.OperationId, 1, """{"name_contains":"Alpha"}""", cursor: ForeignCursor(codec, DeclarativeQuerySources.FamilyTypes))));
         Assert.Equal(CapabilityErrorCodes.InvalidCursor, PrepareError(pipeline, Request(ProjectUserWorksetsReadOperation.OperationId, 1, """{"name_contains":"Alpha"}""", cursor: ForeignCursor(codec, DeclarativeQuerySources.ParameterBindings))));
 
-        var staleDocument = Document(("Alpha", false, true));
+        var staleDocument = new FakeDocument();
         var staleCursor = Mint(codec, """{"name_contains":"Alpha"}""", DocumentId, InstanceId, revision: 0, offset: 0);
         pipeline.Revisions.Advance(DocumentId);
         var prepared = pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, """{"name_contains":"Alpha"}""", cursor: staleCursor));
         var stale = Assert.Throws<BridgeException>(() => pipeline.Execute(prepared, staleDocument));
         Assert.Equal(CapabilityErrorCodes.StaleCursor, stale.ErrorCode);
-        Assert.Equal(0, staleDocument.Reads);
+        Assert.Equal(0, probe.Executions);
     }
 
     [Fact]
     public void Document_guards_run_before_the_workset_read()
     {
-        var pipeline = Pipeline();
+        var probe = new ProbeOperation(new ProjectUserWorksetsReadOperation().Descriptor);
+        var pipeline = Pipeline(probe);
         var prepared = pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, "{}"));
         var family = new FakeDocument { IsFamilyDocument = true };
         var missing = new FakeDocument { HasActiveDocument = false };
@@ -174,9 +185,7 @@ public sealed class ProjectUserWorksetsExecutionTests
         Assert.Equal(CapabilityErrorCodes.UnsupportedDocumentKind, Assert.Throws<BridgeException>(() => pipeline.Execute(prepared, family)).ErrorCode);
         Assert.Equal(CapabilityErrorCodes.NoActiveDocument, Assert.Throws<BridgeException>(() => pipeline.Execute(prepared, missing)).ErrorCode);
         Assert.Equal(CapabilityErrorCodes.DocumentContextChanged, Assert.Throws<BridgeException>(() => pipeline.Execute(prepared, changed)).ErrorCode);
-        Assert.Equal(0, family.Reads);
-        Assert.Equal(0, missing.Reads);
-        Assert.Equal(0, changed.Reads);
+        Assert.Equal(0, probe.Executions);
     }
 
     [Fact]
@@ -185,7 +194,7 @@ public sealed class ProjectUserWorksetsExecutionTests
         var operation = new DriftOperation();
         var pipeline = Pipeline(operation);
         var prepared = pipeline.Prepare(Request(operation.Descriptor.Id, 1, "{}"));
-        var error = Assert.Throws<BridgeException>(() => pipeline.Execute(prepared, Document(("A", false, true))));
+        var error = Assert.Throws<BridgeException>(() => pipeline.Execute(prepared, new FakeDocument()));
         Assert.Equal(CapabilityErrorCodes.ReadOperationResultInvalid, error.ErrorCode);
     }
 
@@ -193,59 +202,100 @@ public sealed class ProjectUserWorksetsExecutionTests
     public void Oversized_pages_shorten_in_order_and_one_impossible_row_is_too_large()
     {
         var names = Enumerable.Range(0, 8).Select(index => index.ToString("D2") + new string('x', 20_000)).ToArray();
-        var document = Document(names.Select(name => (name, false, true)).ToArray());
-        var collected = Walk(document, pageSize: 100);
+        var inventory = Inventory(names.Select(name => (name, false, true)).ToArray());
+        var collected = Walk(inventory, pageSize: 100);
         Assert.Equal(names, collected);
-        var first = Pipeline().Execute(Pipeline().Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, "{}", pageSize: 100)), document);
+        var first = Page(Pipeline(), inventory, null, 100, null);
         Assert.True(Names(first).Count < names.Length);
         Assert.False(first.Complete);
 
-        var huge = Document((new string('y', 130_000), false, true));
+        var huge = Inventory((new string('y', 130_000), false, true));
         var tooLarge = Assert.Throws<BridgeException>(() => Execute(huge, null, 1));
         Assert.Equal(CapabilityErrorCodes.ResultTooLarge, tooLarge.ErrorCode);
 
         var dispatcher = new UnfittedOperation();
         var unfitted = Pipeline(dispatcher);
         var prepared = unfitted.Prepare(Request(dispatcher.Descriptor.Id, 1, "{}"));
-        var measured = Assert.Throws<BridgeException>(() => unfitted.Execute(prepared, Document(("A", false, true))));
+        var measured = Assert.Throws<BridgeException>(() => unfitted.Execute(prepared, new FakeDocument()));
         Assert.Equal(CapabilityErrorCodes.ResultTooLarge, measured.ErrorCode);
     }
 
-    private static async Task<ReadOperationResult> Read(RevitReadOperationService service, string inputs)
+    [Fact]
+    public async Task Cancellation_passes_through_before_execution()
     {
-        return await service.ReadAsync(Request(ProjectUserWorksetsReadOperation.OperationId, 1, inputs), CancellationToken.None);
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        var queue = new FlagQueue();
+        var service = Service(queue);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => service.ReadAsync(
+            Request(ProjectUserWorksetsReadOperation.OperationId, 1, "{}"),
+            cancelled.Token));
+        Assert.Equal(0, queue.Calls);
     }
 
-    private static async Task RejectsBeforeEnqueue(FlagQueue queue, RevitReadOperationService service, string inputs, string code)
+    private static async Task<BridgeException> RejectsBeforeEnqueue(FlagQueue queue, RevitReadOperationService service, string inputs, string code)
     {
         var before = queue.Calls;
         var error = await Assert.ThrowsAsync<BridgeException>(() => service.ReadAsync(Request(ProjectUserWorksetsReadOperation.OperationId, 1, inputs), CancellationToken.None));
         Assert.Equal(code, error.ErrorCode);
         Assert.Equal(before, queue.Calls);
+        return error;
     }
 
     private ReadOperationResult Execute(UserWorksetInventory inventory, string? nameContains, int pageSize)
     {
-        return Execute(new FakeDocument { Inventory = inventory }, nameContains, pageSize);
+        return Page(Pipeline(), inventory, nameContains, pageSize, null);
     }
 
-    private ReadOperationResult Execute(FakeDocument document, string? nameContains, int pageSize)
+    private ReadOperationResult Page(TestPipeline pipeline, UserWorksetInventory inventory, string? nameContains, int pageSize, string? cursor)
     {
         var inputs = nameContains is null ? "{}" : "{\"name_contains\":" + JsonSerializer.Serialize(nameContains) + "}";
-        var pipeline = Pipeline();
-        return pipeline.Execute(pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, inputs, pageSize)), document);
+        var prepared = pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, inputs, pageSize, cursor));
+        var page = ProjectUserWorksetsQuery.Complete(
+            (UserWorksetsRequest)prepared.Request,
+            Context(prepared, pipeline),
+            inventory);
+        var payload = ReadOperationResults.Payload(page.TypedResult);
+        Assert.True(JsonSchemaSubset.MatchesInstance(payload, prepared.Descriptor.OutputSchema!.Value));
+        var envelope = ReadOperationResults.Envelope(
+            InstanceId,
+            DocumentId,
+            prepared.Descriptor.Id,
+            prepared.Descriptor.ContractVersion,
+            payload,
+            page.Complete,
+            page.NextCursor);
+        if (ReadResultBudget.Measure(envelope) > ReadResultBudget.MaxCharacters)
+        {
+            throw new BridgeException(CapabilityErrorCodes.ResultTooLarge, "The read operation result is too large.");
+        }
+
+        return envelope;
     }
 
-    private List<string> Walk(FakeDocument document, int pageSize)
+    private static ReadOperationExecutionContext Context(PreparedReadOperation prepared, TestPipeline pipeline)
+    {
+        return new ReadOperationExecutionContext
+        {
+            Descriptor = prepared.Descriptor,
+            InstanceId = InstanceId,
+            DocumentId = DocumentId,
+            PageSize = prepared.PageSize,
+            Offset = prepared.Cursor?.Offset ?? 0,
+            Revision = pipeline.Revisions.Current(DocumentId),
+            Cursors = pipeline.Cursors,
+            Host = new FakeDocument()
+        };
+    }
+
+    private List<string> Walk(UserWorksetInventory inventory, int pageSize)
     {
         var pipeline = Pipeline();
         var collected = new List<string>();
         string? cursor = null;
         for (var guard = 0; guard < 30; guard++)
         {
-            var page = pipeline.Execute(
-                pipeline.Prepare(Request(ProjectUserWorksetsReadOperation.OperationId, 1, "{}", pageSize, cursor)),
-                document);
+            var page = Page(pipeline, inventory, null, pageSize, cursor);
             collected.AddRange(Names(page));
             if (page.Complete)
             {
@@ -290,7 +340,7 @@ public sealed class ProjectUserWorksetsExecutionTests
         return token;
     }
 
-    private TestPipeline Pipeline(IRevitReadOperation? operation = null)
+    private TestPipeline Pipeline(IExecutableReadOperation? operation = null)
     {
         var codec = new DeclarativeQueryCursorCodec(_key);
         var revisions = new DocumentQueryRevisionService();
@@ -298,9 +348,9 @@ public sealed class ProjectUserWorksetsExecutionTests
         return new TestPipeline(new ReadOperationPipeline(registry, InstanceId, codec, revisions), codec, revisions);
     }
 
-    private RevitReadOperationService Service(FlagQueue queue, UserWorksetInventory inventory, IRevitReadOperation? operation = null)
+    private RevitReadOperationService Service(FlagQueue queue, IExecutableReadOperation? operation = null)
     {
-        queue.Document = new FakeDocument { Inventory = inventory };
+        queue.Document = new FakeDocument();
         var pipeline = Pipeline(operation);
         return new RevitReadOperationService(pipeline.Pipeline, queue);
     }
@@ -324,11 +374,6 @@ public sealed class ProjectUserWorksetsExecutionTests
         return new UserWorksetInventory(true, rows.Select(row => new UserWorksetCandidate(row.Name, row.IsDefault, row.IsVisible)).ToArray());
     }
 
-    private static FakeDocument Document(params (string Name, bool IsDefault, bool IsVisible)[] rows)
-    {
-        return new FakeDocument { Inventory = Inventory(rows) };
-    }
-
     private sealed class TestPipeline(ReadOperationPipeline pipeline, DeclarativeQueryCursorCodec cursors, DocumentQueryRevisionService revisions)
     {
         public ReadOperationPipeline Pipeline { get; } = pipeline;
@@ -350,6 +395,7 @@ public sealed class ProjectUserWorksetsExecutionTests
 
         public Task<ReadOperationResult> EnqueueAsync(Func<IReadOperationDocument, ReadOperationResult> execute, CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             Calls++;
             return Task.FromResult(execute(Document!));
         }
@@ -363,10 +409,6 @@ public sealed class ProjectUserWorksetsExecutionTests
 
         public string DocumentId { get; init; } = ProjectUserWorksetsExecutionTests.DocumentId;
 
-        public UserWorksetInventory Inventory { get; init; } = new(true, []);
-
-        public int Reads { get; private set; }
-
         public string GetDocumentId()
         {
             if (!HasActiveDocument || IsFamilyDocument)
@@ -376,16 +418,51 @@ public sealed class ProjectUserWorksetsExecutionTests
 
             return DocumentId;
         }
+    }
 
-        public UserWorksetInventory ReadUserWorksets()
+    private sealed class ProbeOperation(ReadOperationDescriptor descriptor) : IExecutableReadOperation
+    {
+        public int Executions { get; private set; }
+
+        public ReadOperationDescriptor Descriptor { get; } = descriptor;
+
+        public object Bind(JsonElement inputs)
+            => JsonSerializer.Deserialize<UserWorksetsRequest>(inputs, ReadResultBudget.Options)!;
+
+        public void ValidateInputs(object request)
         {
-            Reads++;
-            if (!HasActiveDocument || IsFamilyDocument)
-            {
-                throw new InvalidOperationException("Worksets were read before the document guard.");
-            }
+        }
 
-            return Inventory;
+        public byte[] Fingerprint(object request, string documentId, ReadOperationDescriptor captured)
+            => ProjectUserWorksetsReadOperation.FingerprintFor((UserWorksetsRequest)request, documentId, captured);
+
+        public ReadOperationExecutionResult Execute(object request, ReadOperationExecutionContext context)
+        {
+            Executions++;
+            throw new InvalidOperationException("Execution started before the document guard.");
+        }
+
+        public void ValidateResult(object result)
+        {
+        }
+    }
+
+    private sealed class ExplodingOperation(ReadOperationDescriptor descriptor) : IExecutableReadOperation
+    {
+        public ReadOperationDescriptor Descriptor { get; } = descriptor;
+
+        public object Bind(JsonElement inputs) => throw new InvalidOperationException("boom-internal");
+
+        public void ValidateInputs(object request)
+        {
+        }
+
+        public byte[] Fingerprint(object request, string documentId, ReadOperationDescriptor captured) => [];
+
+        public ReadOperationExecutionResult Execute(object request, ReadOperationExecutionContext context) => throw new InvalidOperationException("boom-internal");
+
+        public void ValidateResult(object result)
+        {
         }
     }
 
