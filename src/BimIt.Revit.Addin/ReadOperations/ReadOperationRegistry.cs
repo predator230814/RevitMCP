@@ -25,6 +25,21 @@ internal sealed class ReadOperationExactLookup
     public required IReadOnlyList<int> RegisteredVersions { get; init; }
 }
 
+/// <summary>
+/// Execution resolution. The descriptor is the snapshot captured at registration.
+/// <see cref="RegisteredVersions"/> is populated only for an unsupported version.
+/// </summary>
+internal sealed class ReadOperationExecutionResolution
+{
+    public required ReadOperationResolution Resolution { get; init; }
+
+    public IExecutableReadOperation? Operation { get; init; }
+
+    public ReadOperationDescriptor? Descriptor { get; init; }
+
+    public required IReadOnlyList<int> RegisteredVersions { get; init; }
+}
+
 internal sealed class ReadOperationRegistrationException : Exception
 {
     public ReadOperationRegistrationException(string message)
@@ -45,12 +60,12 @@ internal sealed class ReadOperationRegistry
         RegexOptions.CultureInvariant | RegexOptions.Compiled,
         TimeSpan.FromMilliseconds(100));
 
-    private readonly ReadOperationDescriptor[] _descriptors;
+    private readonly Registration[] _registrations;
 
-    public ReadOperationRegistry(IReadOnlyList<IRevitReadOperation> operations)
+    public ReadOperationRegistry(IReadOnlyList<IExecutableReadOperation> operations)
     {
         ArgumentNullException.ThrowIfNull(operations);
-        var captured = new ReadOperationDescriptor[operations.Count];
+        var captured = new Registration[operations.Count];
         var seen = new HashSet<(string Id, int Version)>();
         for (var index = 0; index < operations.Count; index++)
         {
@@ -65,21 +80,21 @@ internal sealed class ReadOperationRegistry
                     $"Operation '{descriptor.Id}' contract version {descriptor.ContractVersion} is registered more than once.");
             }
 
-            captured[index] = descriptor;
+            captured[index] = new Registration(operation, descriptor);
         }
 
         Array.Sort(captured, Compare);
-        _descriptors = captured;
+        _registrations = captured;
     }
 
     public LookupReadOperationsResult Search(string? query, int offset, int limit)
     {
         var matched = new List<ReadOperationDescriptor>();
-        foreach (var descriptor in _descriptors)
+        foreach (var registration in _registrations)
         {
-            if (query is null || Matches(descriptor, query))
+            if (query is null || Matches(registration.Descriptor, query))
             {
-                matched.Add(WithoutSchemas(descriptor));
+                matched.Add(WithoutSchemas(registration.Descriptor));
             }
         }
 
@@ -96,12 +111,12 @@ internal sealed class ReadOperationRegistry
 
     public ReadOperationExactLookup LookupExact(string operationId, int? contractVersion)
     {
-        var matches = new List<ReadOperationDescriptor>();
-        foreach (var descriptor in _descriptors)
+        var matches = new List<Registration>();
+        foreach (var registration in _registrations)
         {
-            if (string.Equals(descriptor.Id, operationId, StringComparison.Ordinal))
+            if (string.Equals(registration.Descriptor.Id, operationId, StringComparison.Ordinal))
             {
-                matches.Add(descriptor);
+                matches.Add(registration);
             }
         }
 
@@ -117,11 +132,11 @@ internal sealed class ReadOperationRegistry
         if (contractVersion is int version)
         {
             var exact = new List<ReadOperationDescriptor>();
-            foreach (var descriptor in matches)
+            foreach (var registration in matches)
             {
-                if (descriptor.ContractVersion == version)
+                if (registration.Descriptor.ContractVersion == version)
                 {
-                    exact.Add(descriptor);
+                    exact.Add(registration.Descriptor);
                 }
             }
 
@@ -130,14 +145,55 @@ internal sealed class ReadOperationRegistry
                 return new ReadOperationExactLookup
                 {
                     Resolution = ReadOperationResolution.UnsupportedVersion,
-                    RegisteredVersions = matches.Select(descriptor => descriptor.ContractVersion).ToArray()
+                    RegisteredVersions = Versions(matches)
                 };
             }
 
             return Found(exact);
         }
 
-        return Found(matches);
+        return Found(matches.Select(registration => registration.Descriptor).ToArray());
+    }
+
+    public ReadOperationExecutionResolution Resolve(string? operationId, int contractVersion)
+    {
+        var matches = new List<Registration>();
+        foreach (var registration in _registrations)
+        {
+            if (string.Equals(registration.Descriptor.Id, operationId, StringComparison.Ordinal))
+            {
+                matches.Add(registration);
+            }
+        }
+
+        if (matches.Count == 0)
+        {
+            return new ReadOperationExecutionResolution
+            {
+                Resolution = ReadOperationResolution.UnknownOperation,
+                RegisteredVersions = []
+            };
+        }
+
+        foreach (var registration in matches)
+        {
+            if (registration.Descriptor.ContractVersion == contractVersion)
+            {
+                return new ReadOperationExecutionResolution
+                {
+                    Resolution = ReadOperationResolution.Found,
+                    Operation = registration.Operation,
+                    Descriptor = registration.Descriptor,
+                    RegisteredVersions = []
+                };
+            }
+        }
+
+        return new ReadOperationExecutionResolution
+        {
+            Resolution = ReadOperationResolution.UnsupportedVersion,
+            RegisteredVersions = Versions(matches)
+        };
     }
 
     private static ReadOperationExactLookup Found(IReadOnlyList<ReadOperationDescriptor> operations)
@@ -187,12 +243,30 @@ internal sealed class ReadOperationRegistry
         };
     }
 
-    private static int Compare(ReadOperationDescriptor left, ReadOperationDescriptor right)
+    private static int[] Versions(IReadOnlyList<Registration> matches)
     {
-        var id = string.CompareOrdinal(left.Id, right.Id);
+        var versions = new int[matches.Count];
+        for (var index = 0; index < matches.Count; index++)
+        {
+            versions[index] = matches[index].Descriptor.ContractVersion;
+        }
+
+        return versions;
+    }
+
+    private static int Compare(Registration left, Registration right)
+    {
+        var id = string.CompareOrdinal(left.Descriptor.Id, right.Descriptor.Id);
         return id != 0
             ? id
-            : left.ContractVersion.CompareTo(right.ContractVersion);
+            : left.Descriptor.ContractVersion.CompareTo(right.Descriptor.ContractVersion);
+    }
+
+    private sealed class Registration(IExecutableReadOperation operation, ReadOperationDescriptor descriptor)
+    {
+        public IExecutableReadOperation Operation { get; } = operation;
+
+        public ReadOperationDescriptor Descriptor { get; } = descriptor;
     }
 
     private static void Validate(ReadOperationDescriptor descriptor)

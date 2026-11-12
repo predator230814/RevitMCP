@@ -101,6 +101,71 @@ public sealed class JsonSchemaSubsetTests
 
         Assert.True(JsonSchemaSubset.MatchesArguments(Object("""{"value":null}"""), schema));
         Assert.False(JsonSchemaSubset.MatchesInstance(Parse("""{"value":null}"""), schema));
+        Assert.False(JsonSchemaSubset.TryMatchInstance(Parse("""{"value":null}"""), schema, out var diagnostic));
+        Assert.Equal("$.value", diagnostic.Path);
+        Assert.Equal("enum", diagnostic.Keyword);
+    }
+
+    [Fact]
+    public void Strict_instance_diagnostics_name_the_path_and_keyword()
+    {
+        var schema = """
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name"],
+              "properties": {
+                "name": { "type": "string", "minLength": 1, "maxLength": 4 },
+                "code": { "type": "string", "enum": ["a", "ab"] },
+                "count": { "type": "integer", "minimum": 1, "maximum": 2 },
+                "child": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "label": { "type": "string", "minLength": 1 }
+                  }
+                },
+                "rows": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["name"],
+                    "properties": { "name": { "type": "string" } }
+                  }
+                }
+              }
+            }
+            """;
+
+        AssertDiagnostic("""{"extra":"secret-value"}""", schema, "$.extra", "additionalProperties");
+        AssertDiagnostic("""{"name":""}""", schema, "$.name", "minLength");
+        AssertDiagnostic("""{"name":"abcde"}""", schema, "$.name", "maxLength");
+        AssertDiagnostic("""{"name":1}""", schema, "$.name", "type");
+        AssertDiagnostic("""{"name":"a","count":0}""", schema, "$.count", "minimum");
+        AssertDiagnostic("""{"name":"a","count":3}""", schema, "$.count", "maximum");
+        AssertDiagnostic("""{"name":"a","code":"zz"}""", schema, "$.code", "enum");
+        AssertDiagnostic("""{"name":"a","child":{"label":""}}""", schema, "$.child.label", "minLength");
+        AssertDiagnostic("""{"name":"a","rows":[{"name":1}]}""", schema, "$.rows[0].name", "type");
+        AssertDiagnostic("""{"name":"a","rows":[{}]}""", schema, "$.rows[0].name", "required");
+
+        var accepted = Parse("""{"name":"ab","count":1,"child":{"label":"ok"},"rows":[{"name":"n"}]}""");
+        Assert.True(JsonSchemaSubset.MatchesInstance(accepted, Parse(schema)));
+        Assert.True(JsonSchemaSubset.TryMatchInstance(accepted, Parse(schema), out var none));
+        Assert.Null(none);
+
+        var enumSchema = Parse("""{"type":["string","null"],"enum":["a"]}""");
+        Assert.False(JsonSchemaSubset.TryMatchInstance(Parse("null"), enumSchema, out var enumError));
+        Assert.Equal("$", enumError.Path);
+        Assert.Equal("enum", enumError.Keyword);
+        Assert.False(JsonSchemaSubset.MatchesInstance(Parse("null"), enumSchema));
+        Assert.True(JsonSchemaSubset.MatchesInstance(Parse("\"a\""), enumSchema));
+
+        var constSchema = Parse("""{"type":["string","null"],"const":"a"}""");
+        Assert.False(JsonSchemaSubset.TryMatchInstance(Parse("null"), constSchema, out var constError));
+        Assert.Equal("const", constError.Keyword);
+        Assert.True(JsonSchemaSubset.MatchesInstance(Parse("null"), Parse("""{"type":["string","null"],"const":null}""")));
+        Assert.True(JsonSchemaSubset.MatchesArguments(Object("""{"value":null}"""), Parse("""{"type":"object","properties":{"value":{"type":["string","null"],"enum":["a"],"const":"a"}}}""")));
     }
 
     [Fact]
@@ -219,6 +284,18 @@ public sealed class JsonSchemaSubsetTests
         Assert.False(JsonSchemaSubset.TryValidateOperationSchema(Parse(json), out var error));
         Assert.NotNull(error);
         return error;
+    }
+
+    private static void AssertDiagnostic(string instance, string schema, string path, string keyword)
+    {
+        var parsedSchema = Parse(schema);
+        var parsedInstance = Parse(instance);
+        Assert.False(JsonSchemaSubset.MatchesInstance(parsedInstance, parsedSchema));
+        Assert.False(JsonSchemaSubset.TryMatchInstance(parsedInstance, parsedSchema, out var error));
+        Assert.NotNull(error);
+        Assert.Equal(path, error.Path);
+        Assert.Equal(keyword, error.Keyword);
+        Assert.DoesNotContain("secret-value", error.Path, StringComparison.Ordinal);
     }
 
     private static IDictionary<string, JsonElement> Object(string json)

@@ -1,3 +1,4 @@
+using System.Reflection;
 using System.Text.Json;
 using BimIt.Revit.Addin.ReadOperations;
 using BimIt.Revit.Contracts;
@@ -159,8 +160,30 @@ public sealed class ReadOperationRegistryTests
         Assert.Equal(ReadOperationResolution.UnsupportedVersion, unsupported.Resolution);
         Assert.Equal([1, 2], unsupported.RegisteredVersions);
 
+        var resolved = registry.Resolve("project.sample", 1);
+        Assert.Equal(ReadOperationResolution.Found, resolved.Resolution);
+        Assert.Same(first, resolved.Operation);
+        Assert.Same(first.Registered, resolved.Descriptor);
+        var missingVersion = registry.Resolve("project.sample", 9);
+        Assert.Equal(ReadOperationResolution.UnsupportedVersion, missingVersion.Resolution);
+        Assert.Equal([1, 2], missingVersion.RegisteredVersions);
+        Assert.Null(missingVersion.Operation);
+
         Assert.Equal(1, first.Reads);
         Assert.Equal(1, later.Reads);
+    }
+
+    [Fact]
+    public void A_descriptor_only_registration_cannot_enter_the_registry()
+    {
+        var constructor = Assert.Single(typeof(ReadOperationRegistry).GetConstructors());
+        var parameter = Assert.Single(constructor.GetParameters());
+        Assert.Equal(typeof(IReadOnlyList<IExecutableReadOperation>), parameter.ParameterType);
+
+        var descriptorOnly = new DescriptorOnlyOperation();
+        Assert.IsAssignableFrom<IRevitReadOperation>(descriptorOnly);
+        Assert.False(typeof(IExecutableReadOperation).IsAssignableFrom(descriptorOnly.GetType()));
+        Assert.Throws<ArgumentException>(() => constructor.Invoke([new IRevitReadOperation[] { descriptorOnly }]));
     }
 
     [Fact]
@@ -196,7 +219,7 @@ public sealed class ReadOperationRegistryTests
     [MemberData(nameof(InvalidRegistrations))]
     public void Invalid_registration_rejects_the_whole_list(string name, object invalid)
     {
-        var rejected = Assert.IsAssignableFrom<IRevitReadOperation>(invalid);
+        var rejected = Assert.IsAssignableFrom<IExecutableReadOperation>(invalid);
         var valid = Operation("kept.operation");
         var alone = new ReadOperationRegistry([valid]);
         Assert.Equal("kept.operation", Assert.Single(alone.Search(null, 0, 1).Operations).Id);
@@ -271,7 +294,7 @@ public sealed class ReadOperationRegistryTests
             Operation("project.sample", output: """{"type":"object","additionalProperties":false,"oneOf":[{"type":"object"}]}"""));
     }
 
-    private static object[] Case(string name, IRevitReadOperation operation)
+    private static object[] Case(string name, IExecutableReadOperation operation)
     {
         return [name, operation];
     }
@@ -314,12 +337,12 @@ public sealed class ReadOperationRegistryTests
         return document.RootElement.Clone();
     }
 
-    private sealed class FixtureOperation(ReadOperationDescriptor descriptor) : IRevitReadOperation
+    private sealed class FixtureOperation(ReadOperationDescriptor descriptor) : ExecutableFixture
     {
-        public ReadOperationDescriptor Descriptor { get; } = descriptor;
+        public override ReadOperationDescriptor Descriptor { get; } = descriptor;
     }
 
-    private sealed class OneShotOperation(ReadOperationDescriptor registered) : IRevitReadOperation
+    private sealed class OneShotOperation(ReadOperationDescriptor registered) : ExecutableFixture
     {
         private int _reads;
 
@@ -327,7 +350,7 @@ public sealed class ReadOperationRegistryTests
 
         public int Reads => _reads;
 
-        public ReadOperationDescriptor Descriptor
+        public override ReadOperationDescriptor Descriptor
         {
             get
             {
@@ -339,5 +362,38 @@ public sealed class ReadOperationRegistryTests
                 return Registered;
             }
         }
+    }
+
+    private sealed class DescriptorOnlyOperation : IRevitReadOperation
+    {
+        public ReadOperationDescriptor Descriptor { get; } = new()
+        {
+            Id = "project.sample",
+            ContractVersion = 1,
+            Title = "Sample",
+            Description = "Sample",
+            Context = "document",
+            Effects = "read",
+            Pagination = "none",
+            InputSchema = Parse(ClosedObject),
+            OutputSchema = Parse(ClosedObject)
+        };
+    }
+
+    private abstract class ExecutableFixture : IExecutableReadOperation
+    {
+        public abstract ReadOperationDescriptor Descriptor { get; }
+
+        public object Bind(JsonElement inputs) => throw new InvalidOperationException("A lookup fixture cannot execute.");
+
+        public void ValidateInputs(object request) => throw new InvalidOperationException("A lookup fixture cannot execute.");
+
+        public byte[] Fingerprint(object request, string documentId, ReadOperationDescriptor descriptor)
+            => throw new InvalidOperationException("A lookup fixture cannot execute.");
+
+        public ReadOperationExecutionResult Execute(object request, ReadOperationExecutionContext context)
+            => throw new InvalidOperationException("A lookup fixture cannot execute.");
+
+        public void ValidateResult(object result) => throw new InvalidOperationException("A lookup fixture cannot execute.");
     }
 }

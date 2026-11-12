@@ -1,14 +1,19 @@
+using System.Globalization;
 using System.Text.Json;
+using BimIt.Revit.Addin.Query;
+using BimIt.Revit.Bridge;
 using BimIt.Revit.Contracts;
 
 namespace BimIt.Revit.Addin.ReadOperations;
 
 /// <summary>
-/// CAP-0016 <c>project.user_worksets</c> version 1 contract.
-/// This definition is not composed and does not read Revit.
+/// CAP-0016 <c>project.user_worksets</c> version 1.
+/// Not composed into the host. Revit access happens only through the execution context.
 /// </summary>
-internal sealed class ProjectUserWorksetsReadOperation : IRevitReadOperation
+internal sealed class ProjectUserWorksetsReadOperation : RevitReadOperation<UserWorksetsRequest, UserWorksetsResult>
 {
+    private readonly RevitUserWorksetReader _reader = new();
+
     internal const string OperationId = "project.user_worksets";
 
     internal const int Version = 1;
@@ -84,7 +89,59 @@ internal sealed class ProjectUserWorksetsReadOperation : IRevitReadOperation
         };
     }
 
-    public ReadOperationDescriptor Descriptor { get; }
+    public override ReadOperationDescriptor Descriptor { get; }
+
+    internal static byte[] FingerprintFor(UserWorksetsRequest request, string documentId, ReadOperationDescriptor descriptor)
+    {
+        return new DeclarativeQueryFingerprintBuilder(descriptor.Id)
+            .Value(descriptor.ContractVersion.ToString(CultureInfo.InvariantCulture))
+            .Value(documentId)
+            .Value(request.NameContains)
+            .Compute();
+    }
+
+    protected override void ValidateRequest(UserWorksetsRequest request)
+    {
+        if (request.NameContains is not null && string.IsNullOrWhiteSpace(request.NameContains))
+        {
+            throw InvalidInput("name_contains is invalid.");
+        }
+    }
+
+    protected override byte[] CreateFingerprint(UserWorksetsRequest request, string documentId, ReadOperationDescriptor descriptor)
+    {
+        return FingerprintFor(request, documentId, descriptor);
+    }
+
+    protected override ReadOperationExecutionResult ExecuteRead(UserWorksetsRequest request, ReadOperationExecutionContext context)
+    {
+        if (context.Host is not RevitActiveReadDocument active)
+        {
+            throw new BridgeException(CapabilityErrorCodes.ExecutionFailed, "The read operation could not be read.");
+        }
+
+        return ProjectUserWorksetsQuery.Complete(request, context, _reader.Read(active.Document));
+    }
+
+    protected override void ValidateTypedResult(UserWorksetsResult result)
+    {
+        if (result.Summary is null
+            || result.Worksets is null
+            || result.ReturnedCount != result.Worksets.Count
+            || result.ReturnedCount < 0
+            || result.Summary.MatchedWorksetCount < result.ReturnedCount)
+        {
+            throw InvalidResult();
+        }
+
+        foreach (var row in result.Worksets)
+        {
+            if (row is null || row.Name is null)
+            {
+                throw InvalidResult();
+            }
+        }
+    }
 
     private static JsonElement Parse(string json)
     {
