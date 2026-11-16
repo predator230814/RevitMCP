@@ -26,7 +26,7 @@ public sealed class RevitUserWorksetReaderStructureTests
     }
 
     [Fact]
-    public void Read_operation_code_has_no_transaction_or_workset_mutation_and_is_not_composed()
+    public void Read_operation_code_has_no_transaction_or_workset_mutation_and_composes_one_operation()
     {
         var root = FindRepoRoot();
         var files = Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Addin", "ReadOperations"), "*.cs");
@@ -45,9 +45,11 @@ public sealed class RevitUserWorksetReaderStructureTests
         }
 
         var lifecycle = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Addin", "Lifecycle", "RevitLifecycleAdapters.cs"));
-        Assert.DoesNotContain("RevitReadOperationService", lifecycle, StringComparison.Ordinal);
-        Assert.DoesNotContain("ReadOperationRegistry", lifecycle, StringComparison.Ordinal);
-        Assert.Equal(23, BridgeProtocol.CurrentVersion);
+        Assert.Contains("ReadOperationComposition.TryCreate", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("ReadOperationComposition.ProductionOperations()", lifecycle, StringComparison.Ordinal);
+        Assert.Contains("new RevitReadOperationWorkQueue(_dispatcher, _identity)", lifecycle, StringComparison.Ordinal);
+        Assert.DoesNotContain("Assembly.GetTypes", lifecycle, StringComparison.Ordinal);
+        Assert.Equal(24, BridgeProtocol.CurrentVersion);
 
         foreach (var file in new[]
         {
@@ -64,6 +66,11 @@ public sealed class RevitUserWorksetReaderStructureTests
             Assert.DoesNotContain("Workset", source, StringComparison.Ordinal);
             Assert.DoesNotContain("workset", source, StringComparison.Ordinal);
         }
+
+        var lookup = Source("ReadOperations", "RevitLookupReadOperationsService.cs");
+        Assert.DoesNotContain("EnqueueAsync", lookup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Autodesk.Revit", lookup, StringComparison.Ordinal);
+        Assert.DoesNotContain("Workset", lookup, StringComparison.Ordinal);
 
         var pipeline = Source("ReadOperations", "ReadOperationPipeline.cs");
         var familyGuard = pipeline.IndexOf("document.IsFamilyDocument", StringComparison.Ordinal);

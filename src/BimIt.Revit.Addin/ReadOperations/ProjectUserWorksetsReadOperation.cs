@@ -8,7 +8,7 @@ namespace BimIt.Revit.Addin.ReadOperations;
 
 /// <summary>
 /// CAP-0016 <c>project.user_worksets</c> version 1.
-/// Not composed into the host. Revit access happens only through the execution context.
+/// Revit access happens only through the execution context.
 /// </summary>
 internal sealed class ProjectUserWorksetsReadOperation : RevitReadOperation<UserWorksetsRequest, UserWorksetsResult>
 {

@@ -216,6 +216,28 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         throw new NotSupportedException("This fake client does not implement revit.query_parameter_bindings.");
     }
 
+    public Task<LookupReadOperationsResult> LookupReadOperationsAsync(
+        LookupReadOperationsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.lookup_read_operations.");
+    }
+
+    public Task<ReadOperationResult> ReadOperationAsync(
+        ReadOperationRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.read_operation.");
+    }
+
     public Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(
         ReadSpatialRoomsRequest request,
         TimeSpan timeout,

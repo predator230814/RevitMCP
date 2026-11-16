@@ -26,6 +26,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitReadSpatialRoomsService? _readSpatialRooms;
     private readonly IRevitQueryFamilyTypesService? _queryFamilyTypes;
     private readonly IRevitQueryParameterBindingsService? _queryParameterBindings;
+    private readonly IRevitReadOperationsService? _readOperations;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -49,7 +50,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitPreviewRoomPatternPlacementsService? previewRoomPatternPlacements = null,
         IRevitReadSpatialRoomsService? readSpatialRooms = null,
         IRevitQueryFamilyTypesService? queryFamilyTypes = null,
-        IRevitQueryParameterBindingsService? queryParameterBindings = null)
+        IRevitQueryParameterBindingsService? queryParameterBindings = null,
+        IRevitReadOperationsService? readOperations = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -72,6 +74,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _readSpatialRooms = readSpatialRooms;
         _queryFamilyTypes = queryFamilyTypes;
         _queryParameterBindings = queryParameterBindings;
+        _readOperations = readOperations;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -827,6 +830,82 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The parameter binding query could not be read."));
+        }
+    }
+
+    [JsonRpcMethod("revit.lookup_read_operations")]
+    public async Task<LookupReadOperationsResult> LookupReadOperationsAsync(
+        LookupReadOperationsRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsReadOperations,
+            "revit.lookup_read_operations is not available on this connection.");
+        if (_readOperations is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.lookup_read_operations is not available on this endpoint."));
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            return await _readOperations.LookupReadOperationsAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The read operation lookup could not be read."));
+        }
+    }
+
+    [JsonRpcMethod("revit.read_operation")]
+    public async Task<ReadOperationResult> ReadOperationAsync(
+        ReadOperationRequest request,
+        CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsReadOperations,
+            "revit.read_operation is not available on this connection.");
+        if (_readOperations is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.read_operation is not available on this endpoint."));
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            return await _readOperations.ReadOperationAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The read operation could not be read."));
         }
     }
 

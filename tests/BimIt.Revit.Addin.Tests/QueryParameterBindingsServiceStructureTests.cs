@@ -85,8 +85,8 @@ public sealed class QueryParameterBindingsServiceStructureTests
 
         var coordinator = Source("Lifecycle", "AddinLifecycleCoordinator.cs");
         Assert.Contains("dispatcher.CreateQueryParameterBindings(metadata)", coordinator, StringComparison.Ordinal);
-        Assert.Contains("queryFamilyTypes, queryParameterBindings, startup.Token)", coordinator, StringComparison.Ordinal);
-        Assert.Contains("queryFamilyTypes, queryParameterBindings, cancellationToken)", adapters, StringComparison.Ordinal);
+        Assert.Contains("queryFamilyTypes, queryParameterBindings, readOperations, startup.Token)", coordinator, StringComparison.Ordinal);
+        Assert.Contains("queryFamilyTypes, queryParameterBindings, readOperations, cancellationToken)", adapters, StringComparison.Ordinal);
     }
 
     [Fact]

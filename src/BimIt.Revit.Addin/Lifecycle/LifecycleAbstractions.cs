@@ -54,6 +54,8 @@ internal interface ILifecycleDispatcher : IDisposable
     IRevitQueryFamilyTypesService? CreateQueryFamilyTypes(BridgeInstanceMetadata metadata);
 
     IRevitQueryParameterBindingsService? CreateQueryParameterBindings(BridgeInstanceMetadata metadata);
+
+    IRevitReadOperationsService? CreateReadOperations(BridgeInstanceMetadata metadata);
 }
 
 internal interface ILifecycleBridge : IAsyncDisposable
@@ -90,6 +92,7 @@ internal interface ILifecycleBridgeFactory
         IRevitReadSpatialRoomsService? readSpatialRooms,
         IRevitQueryFamilyTypesService? queryFamilyTypes,
         IRevitQueryParameterBindingsService? queryParameterBindings,
+        IRevitReadOperationsService? readOperations,
         CancellationToken cancellationToken);
 }
 

@@ -735,6 +735,61 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         }
     }
 
+    public async Task<LookupReadOperationsResult> LookupReadOperationsAsync(
+        LookupReadOperationsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<LookupReadOperationsResult>(
+                "revit.lookup_read_operations",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureReadOperationsAllowed,
+                "The read operation lookup timed out.",
+                "The read operation lookup could not be read.")
+            .ConfigureAwait(false);
+    }
+
+    public async Task<ReadOperationResult> ReadOperationAsync(
+        ReadOperationRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<ReadOperationResult>(
+                "revit.read_operation",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureReadOperationsAllowed,
+                "The read operation timed out.",
+                "The read operation could not be read.")
+            .ConfigureAwait(false);
+    }
+
+    private void EnsureReadOperationsAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsReadOperations(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.lookup_read_operations and revit.read_operation require a negotiated bridge protocol version that explicitly supports them.");
+        }
+    }
+
     private void EnsureGetRoomLayoutsAllowed()
     {
         EnsureCapabilityReady();

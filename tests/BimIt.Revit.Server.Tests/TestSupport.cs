@@ -49,6 +49,7 @@ internal static class TestSupport
             {
                 BridgeProtocol.GetSelectionVersion => BridgeProtocol.GetSelectionVersions,
                 BridgeProtocol.PreviewRoomPatternPlacementsVersion => BridgeProtocol.PreviewRoomPatternPlacementsVersions,
+                BridgeProtocol.ReadOperationsVersion => BridgeProtocol.ReadOperationsVersions,
                 BridgeProtocol.QueryParameterBindingsVersion => BridgeProtocol.QueryParameterBindingsVersions,
                 BridgeProtocol.QueryFamilyTypesVersion => BridgeProtocol.QueryFamilyTypesVersions,
                 BridgeProtocol.LinkedRoomPatternPreviewVersion => BridgeProtocol.LinkedRoomPatternPreviewVersions,
@@ -865,6 +866,28 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return QueryParameterBindings is null
             ? throw new NotSupportedException("This recording client does not implement revit.query_parameter_bindings.")
             : QueryParameterBindings(request, timeout, cancellationToken);
+    }
+
+    public Task<LookupReadOperationsResult> LookupReadOperationsAsync(
+        LookupReadOperationsRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.lookup_read_operations.");
+    }
+
+    public Task<ReadOperationResult> ReadOperationAsync(
+        ReadOperationRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.read_operation.");
     }
 
     public int GetMepDeviceTypesCalls { get; private set; }

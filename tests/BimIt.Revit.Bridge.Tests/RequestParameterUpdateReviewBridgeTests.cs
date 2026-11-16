@@ -101,8 +101,8 @@ public sealed class RequestParameterUpdateReviewBridgeTests
             missing.RequestParameterUpdateReviewAsync(ValidRequest(), CancellationToken.None));
         Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, ErrorCode(incompatible));
 
-        var unknown = CreateAdapter(review, selectedVersion: 24);
-        await unknown.HandshakeAsync(Handshake("any", [24]), CancellationToken.None);
+        var unknown = CreateAdapter(review, selectedVersion: 25);
+        await unknown.HandshakeAsync(Handshake("any", [25]), CancellationToken.None);
         var future = await Assert.ThrowsAsync<LocalRpcException>(() =>
             unknown.RequestParameterUpdateReviewAsync(ValidRequest(), CancellationToken.None));
         Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, ErrorCode(future));

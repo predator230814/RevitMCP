@@ -39,7 +39,7 @@ public sealed class AddinLifecycleCoordinatorTests
 
         Assert.Equal(AddinLifecycleState.Ready, coordinator.State);
         Assert.Equal(1, dispatchers.CreateCount);
-        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "meppreview.create", "mepreview.create", "mepapply.create", "roomlayouts.create", "meptypes.create", "patternpreview.create", "spatialrooms.create", "familytypes.create", "parameterbindings.create", "bridge.start", "registration.publish" }, events);
+        Assert.Equal(new[] { "dispatcher.create", "capability.create", "query.create", "getelements.create", "describe.create", "getparametervalues.create", "getmep.create", "preview.create", "review.create", "apply.create", "warnings.create", "selection.create", "meppreview.create", "mepreview.create", "mepapply.create", "roomlayouts.create", "meptypes.create", "patternpreview.create", "spatialrooms.create", "familytypes.create", "parameterbindings.create", "readoperations.create", "bridge.start", "registration.publish" }, events);
     }
 
     [Fact]
@@ -74,8 +74,9 @@ public sealed class AddinLifecycleCoordinatorTests
         Assert.Equal("spatialrooms.create", events[18]);
         Assert.Equal("familytypes.create", events[19]);
         Assert.Equal("parameterbindings.create", events[20]);
-        Assert.Equal("bridge.start", events[21]);
-        Assert.Equal("registration.publish", events[22]);
+        Assert.Equal("readoperations.create", events[21]);
+        Assert.Equal("bridge.start", events[22]);
+        Assert.Equal("registration.publish", events[23]);
         Assert.True(bridges.Published);
         Assert.True(bridges.LastBridge?.HasRegistration);
         Assert.NotNull(bridges.LastCapability);
@@ -178,6 +179,7 @@ public sealed class AddinLifecycleCoordinatorTests
                 "spatialrooms.create",
                 "familytypes.create",
                 "parameterbindings.create",
+                "readoperations.create",
                 "bridge.start",
                 "registration.publish",
                 "dispatcher.stop",
