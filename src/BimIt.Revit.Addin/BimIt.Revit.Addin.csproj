@@ -48,8 +48,17 @@
     <ProjectReference Include="..\BimIt.Revit.Assistant.Ipc\BimIt.Revit.Assistant.Ipc.csproj" />
   </ItemGroup>
 
+  <PropertyGroup Condition="'$(BimItApiAccessSpike)' == 'true'">
+    <DefineConstants>$(DefineConstants);BIMIT_API_ACCESS_SPIKE</DefineConstants>
+  </PropertyGroup>
+
   <ItemGroup>
     <InternalsVisibleTo Include="BimIt.Revit.Addin.Tests" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(BimItApiAccessSpike)' == 'true'">
+    <InternalsVisibleTo Include="BimIt.Revit.ApiAccessSpike.Tests" />
+    <Compile Include="..\..\spikes\BimIt.Revit.ApiAccessSpike\*.cs" Link="ApiAccessSpike\%(Filename)%(Extension)" />
   </ItemGroup>
 
   <ItemGroup>

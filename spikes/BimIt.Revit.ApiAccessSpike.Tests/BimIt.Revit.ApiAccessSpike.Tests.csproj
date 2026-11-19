@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>BimIt.Revit.ApiAccessSpike.Tests</RootNamespace>
+    <IsTestProject>true</IsTestProject>
+    <RevitVersion>2026</RevitVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI" />
+    <PackageReference Include="System.Reflection.MetadataLoadContext" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BimIt.Revit.Addin\BimIt.Revit.Addin.csproj">
+      <AdditionalProperties>RevitVersion=2026;BimItApiAccessSpike=true</AdditionalProperties>
+    </ProjectReference>
+  </ItemGroup>
+
+  <Target Name="CopyRevitApiReference" AfterTargets="ResolveAssemblyReferences">
+    <Copy SourceFiles="@(ReferencePath)" DestinationFolder="$(OutputPath)" Condition="'%(Filename)' == 'RevitAPI'" SkipUnchangedFiles="true" />
+  </Target>
+</Project>
