@@ -1,13 +1,13 @@
 # CAP-0017: Bounded Revit API property access
 
-- Status: Accepted on 2026-11-19. Not implemented.
+- Status: Accepted on 2026-11-19. Implemented. Live Revit validation has not been run.
 - Operation class: Read
 - Date: 2026-11-19
 - Architecture: Accepted [ADR-0025](../adr/ADR-0025-bounded-revit-api-property-access.md). ADR-0023 stays Accepted and unchanged. ADR-0024 stays Accepted and is amended only as ADR-0025 describes.
 - Bridge: no new RPC and no protocol bump. Reuses protocol 24 and [CAP-0016](CAP-0016-revit-read-operations.md) `revit_lookup` / `revit_read`.
 - MCP: no new tool. `revit_lookup` remains a lookup of BIM-IT registered operations.
 
-This specification is the accepted contract. It is not the implementation. Production code, tests, Skills, and the Server catalogue stay unchanged until a later implementation task.
+This specification is the accepted contract. The two operations are implemented in the Addin registry. Live Revit validation has not been run. Skills, Assistant behavior, controlled writes, and the MCP tool list are unchanged.
 
 ## Purpose
 

@@ -126,6 +126,9 @@ public sealed class ReadOperationsContractTests
         Assert.Equal("INVALID_READ_OPERATION_LOOKUP", CapabilityErrorCodes.InvalidReadOperationLookup);
         Assert.Equal("INVALID_READ_OPERATION_INPUT", CapabilityErrorCodes.InvalidReadOperationInput);
         Assert.Equal("READ_OPERATION_RESULT_INVALID", CapabilityErrorCodes.ReadOperationResultInvalid);
+        Assert.Equal("REVIT_API_TYPE_REJECTED", CapabilityErrorCodes.RevitApiTypeRejected);
+        Assert.Equal("DOCUMENT_IS_MODIFIABLE", CapabilityErrorCodes.DocumentIsModifiable);
+        Assert.Equal("DOCUMENT_BECAME_MODIFIABLE", CapabilityErrorCodes.DocumentBecameModifiable);
     }
 
     private static LookupReadOperationsResult SearchResult(
