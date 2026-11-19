@@ -21,16 +21,18 @@ internal static class RevitApiElementReader
             throw new BridgeException(CapabilityErrorCodes.DocumentIsModifiable, "The document is modifiable.");
         }
 
-        IList<Element> collected;
+        using var collector = new FilteredElementCollector(document);
+        FilteredElementCollector selected;
         try
         {
-            using var collector = new FilteredElementCollector(document);
-            collected = collector.OfClass(elementType).ToElements();
+            selected = collector.OfClass(elementType);
         }
-        catch (Autodesk.Revit.Exceptions.ArgumentException exception) when (IndicatesNativeModelMismatch(exception.Message))
+        catch (Autodesk.Revit.Exceptions.ArgumentException)
         {
             throw RevitApiTypeResolver.Reject("not_collectable");
         }
+
+        var collected = selected.ToElements();
 
         if (document.IsModifiable)
         {
@@ -83,9 +85,4 @@ internal static class RevitApiElementReader
         }
     }
 
-    public static bool IndicatesNativeModelMismatch(string? message)
-    {
-        return message is not null
-            && message.Contains("native object model", StringComparison.OrdinalIgnoreCase);
-    }
 }

@@ -30,26 +30,36 @@ internal static class RevitApiMetadataIndex
             throw InvalidQuery("query has no searchable tokens.");
         }
 
-        var matches = new List<RevitApiMetadataType>();
-        foreach (var type in ElementTypes(assembly))
+        var types = ElementTypes(assembly);
+        var typeNameMatches = new List<RevitApiMetadataType>();
+        foreach (var type in types)
         {
-            if (TryMatch(type, query, queryTokens, out var summary))
+            if (MatchesTypeName(type, query, queryTokens))
             {
-                matches.Add(summary);
+                typeNameMatches.Add(Summary(type, assembly, element: true, [], 0, [], 0));
             }
         }
 
-        if (matches.Count > MaxSearchMatches)
+        if (typeNameMatches.Count > 0)
         {
-            throw InvalidQuery("query matches more than 200 types.");
+            return Bound(typeNameMatches);
         }
 
-        if (queryTokens.Count == 0 && matches.Count == 0)
+        if (queryTokens.Count == 0)
         {
             throw InvalidQuery("query has no searchable tokens.");
         }
 
-        return matches;
+        var propertyMatches = new List<RevitApiMetadataType>();
+        foreach (var type in types)
+        {
+            if (TryMatchProperties(type, queryTokens, out var summary))
+            {
+                propertyMatches.Add(summary);
+            }
+        }
+
+        return Bound(propertyMatches);
     }
 
     public static RevitApiMetadataType DescribeExact(string fullName)
@@ -123,40 +133,97 @@ internal static class RevitApiMetadataIndex
         return (listed, rejected.Count - take);
     }
 
-    private static bool TryMatch(
-        Type type,
-        string query,
-        IReadOnlyList<string> queryTokens,
-        out RevitApiMetadataType summary)
+    private static IReadOnlyList<RevitApiMetadataType> Bound(List<RevitApiMetadataType> matches)
+    {
+        if (matches.Count > MaxSearchMatches)
+        {
+            throw InvalidQuery("query matches more than 200 types.");
+        }
+
+        return matches;
+    }
+
+    private static bool MatchesTypeName(Type type, string query, IReadOnlyList<string> queryTokens)
     {
         var simpleName = type.Name;
-        var typeTokens = RevitApiTokens.Tokenize(simpleName);
-        var properties = PropertyTokens(type);
-        var substring = query.Length >= 2
-            && simpleName.Contains(query, StringComparison.OrdinalIgnoreCase);
-        var matchedProperties = new List<string>();
-        if (queryTokens.Count > 0)
+        if (query.Length >= 2
+            && string.Equals(AsciiLettersAndDigits(query), simpleName, StringComparison.OrdinalIgnoreCase))
         {
-            foreach (var property in properties)
+            return true;
+        }
+
+        var typeTokens = RevitApiTokens.Tokenize(simpleName);
+        if (queryTokens.Count == 0 || queryTokens.Count != typeTokens.Count)
+        {
+            return false;
+        }
+
+        foreach (var typeToken in typeTokens)
+        {
+            if (!QueryTokenMatches(queryTokens, typeToken))
             {
-                if (SharesToken(queryTokens, property.Tokens))
-                {
-                    matchedProperties.Add(property.Name);
-                }
+                return false;
             }
         }
 
-        var typeNameHit = RevitApiTokens.MatchesAll(queryTokens, typeTokens);
-        var tokenHit = typeNameHit || (queryTokens.Count > 0 && QueryMatches(queryTokens, typeTokens, properties));
-        if (!tokenHit && !substring)
+        foreach (var queryToken in queryTokens)
+        {
+            if (!SharesOne(queryToken, typeTokens))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool QueryTokenMatches(IReadOnlyList<string> queryTokens, string typeToken)
+    {
+        foreach (var queryToken in queryTokens)
+        {
+            if (RevitApiTokens.Matches(queryToken, typeToken))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string AsciiLettersAndDigits(string value)
+    {
+        var kept = new char[value.Length];
+        var count = 0;
+        foreach (var character in value)
+        {
+            if (character is (>= 'A' and <= 'Z') or (>= 'a' and <= 'z') or (>= '0' and <= '9'))
+            {
+                kept[count++] = character;
+            }
+        }
+
+        return new string(kept, 0, count);
+    }
+
+    private static bool TryMatchProperties(
+        Type type,
+        IReadOnlyList<string> queryTokens,
+        out RevitApiMetadataType summary)
+    {
+        var properties = PropertyTokens(type);
+        if (!MatchesEveryToken(queryTokens, properties))
         {
             summary = null!;
             return false;
         }
 
-        if (typeNameHit || !tokenHit)
+        var matchedProperties = new List<string>();
+        foreach (var property in properties)
         {
-            matchedProperties.Clear();
+            if (SharesToken(queryTokens, property.Tokens))
+            {
+                matchedProperties.Add(property.Name);
+            }
         }
 
         matchedProperties.Sort(StringComparer.Ordinal);
@@ -172,18 +239,15 @@ internal static class RevitApiMetadataIndex
         return true;
     }
 
-    private static bool QueryMatches(
-        IReadOnlyList<string> queryTokens,
-        IReadOnlyList<string> typeTokens,
-        IReadOnlyList<PropertyNameTokens> properties)
+    private static bool MatchesEveryToken(IReadOnlyList<string> queryTokens, IReadOnlyList<PropertyNameTokens> properties)
     {
+        if (queryTokens.Count == 0)
+        {
+            return false;
+        }
+
         foreach (var queryToken in queryTokens)
         {
-            if (SharesOne(queryToken, typeTokens))
-            {
-                continue;
-            }
-
             var propertyHit = false;
             foreach (var property in properties)
             {

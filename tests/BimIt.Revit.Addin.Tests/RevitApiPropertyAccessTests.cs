@@ -66,9 +66,9 @@ public sealed class RevitApiPropertyAccessTests
             Assert.Contains(RevitApiPropertyPolicy.UnsupportedReturn, unsupported.Message, StringComparison.Ordinal);
         }
 
-        AssertTooBroad(assembly, "levels");
-        AssertTooBroad(assembly, "phases");
-        AssertTooBroad(assembly, "design options");
+        AssertTypeName(assembly, "levels", "Autodesk.Revit.DB.Level");
+        AssertTypeName(assembly, "phases", "Autodesk.Revit.DB.Phase");
+        AssertTypeName(assembly, "design options", "Autodesk.Revit.DB.DesignOption");
         var elevation = Assert.Single(
             RevitApiMetadataIndex.Search(assembly, "elevation"),
             type => type.TypeName == Benchmarks[0].TypeName);
@@ -254,9 +254,15 @@ public sealed class RevitApiPropertyAccessTests
             CapabilityErrorCodes.ReadOperationResultInvalid,
             Assert.Throws<BridgeException>(() => read.ValidateResult(invalid)).ErrorCode);
 
-        Assert.True(RevitApiElementReader.IndicatesNativeModelMismatch(
-            "The type exists in the API, but not in Revit's native object model."));
-        Assert.False(RevitApiElementReader.IndicatesNativeModelMismatch("The argument is null."));
+        var reader = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", "ReadOperations", "RevitApiElementReader.cs"))
+            .Replace("\r\n", "\n", StringComparison.Ordinal);
+        var ofClass = reader.IndexOf("selected = collector.OfClass(elementType);", StringComparison.Ordinal);
+        var rejection = reader.IndexOf("catch (Autodesk.Revit.Exceptions.ArgumentException)", StringComparison.Ordinal);
+        var reason = reader.IndexOf("Reject(\"not_collectable\")", rejection, StringComparison.Ordinal);
+        var materialize = reader.IndexOf("selected.ToElements()", StringComparison.Ordinal);
+        Assert.True(ofClass >= 0 && rejection > ofClass && reason > rejection && materialize > reason);
+        Assert.DoesNotContain(".Message", reader, StringComparison.Ordinal);
+        Assert.DoesNotContain("native object model", reader, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -311,8 +317,11 @@ public sealed class RevitApiPropertyAccessTests
         var reader = File.ReadAllText(Path.Combine(folder, "RevitApiElementReader.cs"));
         var before = reader.IndexOf("document.IsModifiable", StringComparison.Ordinal);
         var ofClass = reader.IndexOf(".OfClass(elementType)", StringComparison.Ordinal);
+        var rejection = reader.IndexOf("catch (Autodesk.Revit.Exceptions.ArgumentException)", StringComparison.Ordinal);
+        var materialize = reader.IndexOf(".ToElements()", StringComparison.Ordinal);
         var after = reader.LastIndexOf("document.IsModifiable", StringComparison.Ordinal);
-        Assert.True(before >= 0 && before < ofClass && after > ofClass);
+        Assert.True(before >= 0 && before < ofClass && rejection > ofClass && materialize > rejection && after > materialize);
+        Assert.DoesNotContain(".Message", reader, StringComparison.Ordinal);
 
         var operation = File.ReadAllText(Path.Combine(folder, "RevitApiElementPropertiesReadOperation.cs"));
         var typeCheck = operation.IndexOf("RequireForRead", StringComparison.Ordinal);
@@ -331,12 +340,13 @@ public sealed class RevitApiPropertyAccessTests
         Assert.Equal(24, BridgeProtocol.CurrentVersion);
     }
 
-    private static void AssertTooBroad(Assembly assembly, string query)
+    private static void AssertTypeName(Assembly assembly, string query, string typeName)
     {
-        var rejected = Assert.Throws<BridgeException>(() => RevitApiMetadataIndex.Search(assembly, query));
-        Assert.Equal(CapabilityErrorCodes.InvalidReadOperationInput, rejected.ErrorCode);
-        Assert.Contains("query", rejected.Message, StringComparison.Ordinal);
-        Assert.Contains("200", rejected.Message, StringComparison.Ordinal);
+        var matches = RevitApiMetadataIndex.Search(assembly, query);
+        var match = Assert.Single(matches, type => type.TypeName == typeName);
+        Assert.Empty(match.MatchedMembers);
+        Assert.Empty(match.Properties);
+        Assert.True(match.IsElement);
     }
 
     private static void AssertRejected(Assembly assembly, string typeName, string reason)
