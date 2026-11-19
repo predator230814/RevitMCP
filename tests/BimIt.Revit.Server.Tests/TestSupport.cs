@@ -868,26 +868,46 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
             : QueryParameterBindings(request, timeout, cancellationToken);
     }
 
+    public int LookupReadOperationsCalls { get; private set; }
+
+    public LookupReadOperationsRequest? LastLookupReadOperationsRequest { get; private set; }
+
+    public TimeSpan? LastLookupReadOperationsTimeout { get; private set; }
+
+    public Func<LookupReadOperationsRequest, TimeSpan, CancellationToken, Task<LookupReadOperationsResult>>? LookupReadOperations { get; set; }
+
     public Task<LookupReadOperationsResult> LookupReadOperationsAsync(
         LookupReadOperationsRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        _ = request;
-        _ = timeout;
-        _ = cancellationToken;
-        throw new NotSupportedException("This recording client does not implement revit.lookup_read_operations.");
+        LookupReadOperationsCalls++;
+        LastLookupReadOperationsRequest = request;
+        LastLookupReadOperationsTimeout = timeout;
+        return LookupReadOperations is null
+            ? throw new NotSupportedException("This recording client does not implement revit.lookup_read_operations.")
+            : LookupReadOperations(request, timeout, cancellationToken);
     }
+
+    public int ReadOperationCalls { get; private set; }
+
+    public ReadOperationRequest? LastReadOperationRequest { get; private set; }
+
+    public TimeSpan? LastReadOperationTimeout { get; private set; }
+
+    public Func<ReadOperationRequest, TimeSpan, CancellationToken, Task<ReadOperationResult>>? ReadOperation { get; set; }
 
     public Task<ReadOperationResult> ReadOperationAsync(
         ReadOperationRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        _ = request;
-        _ = timeout;
-        _ = cancellationToken;
-        throw new NotSupportedException("This recording client does not implement revit.read_operation.");
+        ReadOperationCalls++;
+        LastReadOperationRequest = request;
+        LastReadOperationTimeout = timeout;
+        return ReadOperation is null
+            ? throw new NotSupportedException("This recording client does not implement revit.read_operation.")
+            : ReadOperation(request, timeout, cancellationToken);
     }
 
     public int GetMepDeviceTypesCalls { get; private set; }

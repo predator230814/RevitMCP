@@ -78,6 +78,10 @@ internal static class ServerHost
         services.AddSingleton<QueryFamilyTypesMcpTools>();
         services.AddSingleton<QueryParameterBindingsApplicationService>();
         services.AddSingleton<QueryParameterBindingsMcpTools>();
+        services.AddSingleton<LookupReadOperationsApplicationService>();
+        services.AddSingleton<LookupReadOperationsMcpTools>();
+        services.AddSingleton<ReadOperationApplicationService>();
+        services.AddSingleton<ReadOperationMcpTools>();
         services.AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
@@ -106,6 +110,8 @@ internal static class ServerHost
             .WithPreviewRoomPatternPlacementsTool()
             .WithReadSpatialRoomsTool()
             .WithQueryFamilyTypesTool()
-            .WithQueryParameterBindingsTool();
+            .WithQueryParameterBindingsTool()
+            .WithLookupReadOperationsTool()
+            .WithReadOperationTool();
     }
 }

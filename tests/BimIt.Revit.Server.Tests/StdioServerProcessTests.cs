@@ -28,7 +28,7 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(20, tools.Count);
+        Assert.Equal(22, tools.Count);
         Assert.Equal(
             new[]
             {
@@ -43,12 +43,14 @@ public sealed class StdioServerProcessTests
                 GetRoomLayoutsToolMetadata.Name,
                 GetSelectionToolMetadata.Name,
                 GetWarningsToolMetadata.Name,
+                LookupReadOperationsToolMetadata.Name,
                 PreviewMepDevicePlacementsToolMetadata.Name,
                 PreviewParameterUpdatesToolMetadata.Name,
                 PreviewRoomPatternPlacementsToolMetadata.Name,
                 QueryElementsToolMetadata.Name,
                 QueryFamilyTypesToolMetadata.Name,
                 QueryParameterBindingsToolMetadata.Name,
+                ReadOperationToolMetadata.Name,
                 ReadSpatialRoomsToolMetadata.Name,
                 RequestMepDevicePlacementReviewToolMetadata.Name,
                 RequestParameterUpdateReviewToolMetadata.Name
@@ -68,12 +70,14 @@ public sealed class StdioServerProcessTests
                 "revit_get_room_layouts",
                 "revit_get_selection",
                 "revit_get_warnings",
+                "revit_lookup",
                 "revit_preview_mep_device_placements",
                 "revit_preview_parameter_updates",
                 "revit_preview_room_pattern_placements",
                 "revit_query_elements",
                 "revit_query_family_types",
                 "revit_query_parameter_bindings",
+                "revit_read",
                 "revit_read_spatial_rooms",
                 "revit_request_mep_device_placement_review",
                 "revit_request_parameter_update_review"
@@ -125,6 +129,21 @@ public sealed class StdioServerProcessTests
         var getRoomLayouts = Assert.Single(tools, tool => tool.Name == GetRoomLayoutsToolMetadata.Name);
         Assert.True(getRoomLayouts.ProtocolTool.Annotations?.ReadOnlyHint);
         Assert.False(getRoomLayouts.ProtocolTool.Annotations?.OpenWorldHint);
+
+        var lookup = Assert.Single(tools, tool => tool.Name == LookupReadOperationsToolMetadata.Name);
+        Assert.Equal(LookupReadOperationsToolMetadata.Title, lookup.Title);
+        Assert.Equal(LookupReadOperationsToolMetadata.Description, lookup.Description);
+        Assert.Contains("does not describe the Revit API", lookup.Description, StringComparison.Ordinal);
+        Assert.True(lookup.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(lookup.ProtocolTool.Annotations?.OpenWorldHint);
+        Assert.Null(lookup.ProtocolTool.Annotations?.DestructiveHint);
+
+        var read = Assert.Single(tools, tool => tool.Name == ReadOperationToolMetadata.Name);
+        Assert.Equal(ReadOperationToolMetadata.Title, read.Title);
+        Assert.Equal(ReadOperationToolMetadata.Description, read.Description);
+        Assert.True(read.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(read.ProtocolTool.Annotations?.OpenWorldHint);
+        Assert.Null(read.ProtocolTool.Annotations?.DestructiveHint);
 
         var getMepTopology = Assert.Single(tools, tool => tool.Name == GetMepTopologyToolMetadata.Name);
         Assert.Equal(GetMepTopologyToolMetadata.Title, getMepTopology.Title);
