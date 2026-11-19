@@ -28,6 +28,15 @@
     <DefaultItemExcludes>$(DefaultItemExcludes);obj/**;bin/**</DefaultItemExcludes>
   </PropertyGroup>
 
+  <!--
+    Opt-in API-access spike. A separate output keeps the experimental registry out of the
+    normal Addin binaries. Normal builds do not set BimItApiAccessSpike.
+  -->
+  <PropertyGroup Condition="'$(MSBuildProjectName)' == 'BimIt.Revit.Addin' AND '$(BimItApiAccessSpike)' == 'true' AND ('$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027')">
+    <BaseOutputPath>bin\$(RevitVersion)\Spike\</BaseOutputPath>
+    <BaseIntermediateOutputPath>obj\$(RevitVersion)\Spike\</BaseIntermediateOutputPath>
+  </PropertyGroup>
+
   <PropertyGroup Condition="'$(MSBuildProjectName)' == 'BimIt.Revit.Addin'">
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2025'">$(Nice3pointRevitApi2025)</RevitApiPackageVersion>
     <RevitApiPackageVersion Condition="'$(RevitVersion)' == '2026'">$(Nice3pointRevitApi2026)</RevitApiPackageVersion>

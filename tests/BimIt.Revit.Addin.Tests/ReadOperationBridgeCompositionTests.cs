@@ -1,3 +1,4 @@
+using System.Text;
 using System.Text.Json;
 using BimIt.Revit.Addin.Lifecycle;
 using BimIt.Revit.Addin.Query;
@@ -18,6 +19,9 @@ public sealed class ReadOperationBridgeCompositionTests
         var operation = Assert.Single(ReadOperationComposition.ProductionOperations());
         Assert.Equal(ProjectUserWorksetsReadOperation.OperationId, operation.Descriptor.Id);
         Assert.Equal(ProjectUserWorksetsReadOperation.Version, operation.Descriptor.ContractVersion);
+        var image = Encoding.Unicode.GetString(File.ReadAllBytes(typeof(ReadOperationComposition).Assembly.Location));
+        Assert.DoesNotContain("experimental.revit_api_lookup", image, StringComparison.Ordinal);
+        Assert.DoesNotContain("experimental.revit_api_read", image, StringComparison.Ordinal);
     }
 
     [Fact]
