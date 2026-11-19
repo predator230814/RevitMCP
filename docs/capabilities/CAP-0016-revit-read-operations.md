@@ -1,6 +1,6 @@
 # CAP-0016: Registry-driven Revit read operations
 
-- Status: Accepted. Implemented. The natural-agent gate has not been recorded.
+- Status: Accepted. Implemented. Natural-agent gate PASS: [CAP_0016_READ_OPERATIONS_NATURAL_AGENT_VALIDATION.md](../CAP_0016_READ_OPERATIONS_NATURAL_AGENT_VALIDATION.md).
 - Operation class: Read
 - Date: 2026-11-11
 - Architecture: Accepted [ADR-0024](../adr/ADR-0024-registry-driven-compiled-revit-read-operations.md)
