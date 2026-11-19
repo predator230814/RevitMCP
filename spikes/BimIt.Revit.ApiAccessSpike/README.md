@@ -76,4 +76,6 @@ Live model facts for this spike come only from `BimIt.Revit.Assistant` talking t
 
 ## Classification
 
-Automated tests show one generic path for the benchmark types. The live Assistant benchmark has not been observed yet, so this spike is not classified A, B, or C.
+Live class: **A — promising**. The record is [VALIDATION.md](VALIDATION.md).
+
+One generic collector and one scalar projector read Levels, Phases, and Design Options on Revit 2026.5. The live run did not add a type-specific reader. Class A is not a production approval. A getter can still change the document without flipping `Document.IsModified`, and reflection is not a security boundary.
