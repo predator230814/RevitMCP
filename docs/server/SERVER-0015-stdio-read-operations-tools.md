@@ -1,6 +1,6 @@
 # SERVER-0015: Read-operation tools
 
-- Status: Accepted. Not implemented.
+- Status: Accepted. Implemented. The CAP-0016 natural-agent gate has not been recorded.
 - Date: 2026-11-11
 - Capability: [CAP-0016](../capabilities/CAP-0016-revit-read-operations.md)
 - Bridge: [BRIDGE-0020](../bridge/BRIDGE-0020-read-operations-capability-rpc.md)

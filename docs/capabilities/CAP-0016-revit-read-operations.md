@@ -1,6 +1,6 @@
 # CAP-0016: Registry-driven Revit read operations
 
-- Status: Accepted. Not implemented.
+- Status: Accepted. Implemented. The natural-agent gate has not been recorded.
 - Operation class: Read
 - Date: 2026-11-11
 - Architecture: Accepted [ADR-0024](../adr/ADR-0024-registry-driven-compiled-revit-read-operations.md)
@@ -9,7 +9,7 @@
 
 ## Authorization
 
-This specification is the implementation contract for the first ADR-0024 vertical slice. It is not implemented. It does not change [CAP-0014](CAP-0014-revit-query-family-types.md) or [CAP-0015](CAP-0015-revit-query-parameter-bindings.md). It does not modify the external Electrical Standards Skill.
+This specification is the implementation contract for the first ADR-0024 vertical slice. It does not change [CAP-0014](CAP-0014-revit-query-family-types.md) or [CAP-0015](CAP-0015-revit-query-parameter-bindings.md). It does not modify the external Electrical Standards Skill.
 
 Where this specification and Accepted ADR-0024 differ in envelope spelling, lookup paging, or the shared validator location, this specification is the decision ADR-0024 left to the implementing specs. The one execution-order constraint discovered against the current Addin is recorded under "Execution" and does not change the architecture.
 

@@ -26,7 +26,7 @@ public sealed class AssistantMcpReadFacadeTests
     public void Every_current_server_read_is_discovered_from_metadata_and_no_write_is()
     {
         var descriptors = ServerToolMetadata.Descriptors;
-        Assert.Equal(20, descriptors.Count);
+        Assert.Equal(22, descriptors.Count);
         var facade = Facade(new ScriptedSession(), descriptors);
 
         Assert.Equal(AssistantAgentTests.ExpectedGenericReads, facade.Tools.Select(tool => tool.Name).ToArray());
@@ -332,6 +332,34 @@ public sealed class AssistantMcpReadFacadeTests
         {
             Directory.Delete(directory, recursive: true);
         }
+    }
+
+    [Fact]
+    public void Read_operation_tools_are_discovered_without_an_assistant_catalogue()
+    {
+        var facade = Facade(new ScriptedSession(), ServerToolMetadata.Descriptors);
+        var lookup = facade.Tools.Single(tool => tool.Name == "revit_lookup");
+        Assert.Contains("does not describe the Revit API", lookup.Description, StringComparison.Ordinal);
+        Assert.False(lookup.InjectsDocument);
+        Assert.False(lookup.RequiresDocument);
+        Assert.Equal(
+            ["contract_version", "limit", "offset", "operation", "query"],
+            lookup.Properties.Order(StringComparer.Ordinal).ToArray());
+        Assert.DoesNotContain("instance_id", lookup.ProviderSchema.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("document_id", lookup.ProviderSchema.GetRawText(), StringComparison.Ordinal);
+
+        var read = facade.Tools.Single(tool => tool.Name == "revit_read");
+        Assert.True(read.InjectsDocument);
+        Assert.True(read.RequiresDocument);
+        Assert.Equal(
+            ["contract_version", "cursor", "inputs", "operation", "page_size"],
+            read.Properties.Order(StringComparer.Ordinal).ToArray());
+        Assert.Equal(
+            ["contract_version", "inputs", "operation"],
+            read.ProviderSchema.GetProperty("required").EnumerateArray().Select(item => item.GetString()!).Order(StringComparer.Ordinal).ToArray());
+        Assert.False(read.ProviderSchema.GetProperty("properties").GetProperty("inputs").TryGetProperty("additionalProperties", out _));
+        Assert.DoesNotContain("instance_id", read.ProviderSchema.GetRawText(), StringComparison.Ordinal);
+        Assert.DoesNotContain("document_id", read.ProviderSchema.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]
