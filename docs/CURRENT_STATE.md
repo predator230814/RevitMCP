@@ -1,6 +1,6 @@
 # BIM-IT Revit MCP Current State
 
-_Last updated: 2026-11-19_
+_Last updated: 2026-11-07_
 
 ## Current snapshot (2026-11-07) — preferred handoff
 
@@ -11,8 +11,8 @@ Start a new AI conversation here. Future project conversations should prefer cur
 | Main SHA at this snapshot | `d5d71e9ab134cb9b192a11bdab10f00589323468` (merge of PR #111) |
 | Product name | BIM-IT Revit MCP (formerly RevitMCP; code namespaces `BimIt.Revit.*`) |
 | Target Revit versions | 2025, 2026, 2027 (`Directory.Build.props`) |
-| Bridge protocol | 24 (`BridgeProtocol.ReadOperationsVersion`) |
-| Production `tools/list` | 22 tools, including `revit_lookup` and `revit_read` |
+| Bridge protocol | 23 (`BridgeProtocol.QueryParameterBindingsVersion`) |
+| Production `tools/list` | 20 tools (read from the Release Server over stdio in [ADR_0023_PARAMETER_BINDINGS_NATURAL_AGENT_VALIDATION.md](ADR_0023_PARAMETER_BINDINGS_NATURAL_AGENT_VALIDATION.md)) |
 
 State of the main lines of work:
 
@@ -21,7 +21,6 @@ State of the main lines of work:
 - [ADR-0023](adr/ADR-0023-declarative-revit-read-query-architecture.md) is Accepted. The declarative read-query kernel is the trusted deterministic read path. No model-supplied code runs in the production capability layer.
 - [CAP-0014](capabilities/CAP-0014-revit-query-family-types.md) `revit_query_family_types` is implemented and natural-agent validated ([ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md](ADR_0023_NATURAL_AGENT_BENCHMARK_VALIDATION.md), [CAP_0014_FAMILY_TYPES_VALIDATION.md](CAP_0014_FAMILY_TYPES_VALIDATION.md)).
 - [CAP-0015](capabilities/CAP-0015-revit-query-parameter-bindings.md) `revit_query_parameter_bindings` is implemented and natural-agent validated ([ADR_0023_PARAMETER_BINDINGS_NATURAL_AGENT_VALIDATION.md](ADR_0023_PARAMETER_BINDINGS_NATURAL_AGENT_VALIDATION.md)). CAP-0015 closes the family/parameter benchmark work.
-- [SERVER-0015](server/SERVER-0015-stdio-read-operations-tools.md) is implemented. `revit_lookup` and `revit_read` are generic envelopes over the Addin read-operation registry. The Server holds no operation catalogue and no Revit API type. Eligibility is protocol 24 only. The only production registered operation remains `project.user_worksets` version 1. The [CAP-0016](capabilities/CAP-0016-revit-read-operations.md) natural-agent gate has not been recorded.
 - Next product priority: the first firm-owned Electrical Standards Skill and library. The capture plan is [ELECTRICAL_STANDARDS_SKILL_V0_1.md](ELECTRICAL_STANDARDS_SKILL_V0_1.md). Knowledge governance is in [SKILLS.md](SKILLS.md#knowledge-governance-observed-candidate-approved).
 - Observations from a representative model are evidence, not approved standards.
 - Flexible C# Revit API execution is a research topic only. It does not supersede ADR-0023 and nothing is authorized. Workset is the first deliberate research example: a fact that is easy in the Revit API but that should not automatically become another hardcoded MCP field or tool.
