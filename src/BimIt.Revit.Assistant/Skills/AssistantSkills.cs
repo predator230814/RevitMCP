@@ -362,7 +362,10 @@ internal sealed class BimItSkillTool
         var read = registry is null
             ? new SkillReadResult(SkillReadCodes.UnknownSkill, "No BIM-IT Skills are available.")
             : registry.ReadForModel(name, request?.File);
-        Note(AssistantActivityLabels.ReadingSkill(AssistantActivityState.Completed));
+        if (read.Ok)
+        {
+            Note(AssistantActivityLabels.ReadingSkill(AssistantActivityState.Completed));
+        }
         return Task.FromResult(JsonSerializer.SerializeToElement(Shape(read)));
     }
 

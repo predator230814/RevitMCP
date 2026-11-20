@@ -165,6 +165,7 @@ public sealed class AssistantSkillTests : IDisposable
         Assert.DoesNotContain(_root.Replace("\\", "\\\\", StringComparison.Ordinal), result.GetRawText(), StringComparison.OrdinalIgnoreCase);
         Assert.All(tool.ConsumeActivities(), activity =>
         {
+            Assert.Equal(AssistantActivityState.Started, activity.State);
             Assert.DoesNotContain("\\", activity.Label, StringComparison.Ordinal);
             Assert.DoesNotContain("secret", activity.Label, StringComparison.OrdinalIgnoreCase);
             Assert.Equal("bimit_read_skill", activity.Tool);
@@ -177,6 +178,36 @@ public sealed class AssistantSkillTests : IDisposable
         var tool = new BimItSkillTool(() => null);
         var result = await tool.InvokeRequestAsync(new SkillReadRequest { Name = "anything" }, CancellationToken.None);
         Assert.Equal(SkillReadCodes.UnknownSkill, result.GetProperty("code").GetString());
+        var activity = Assert.Single(tool.ConsumeActivities());
+        Assert.Equal(AssistantActivityState.Started, activity.State);
+        Assert.Equal("Reading a Skill", activity.Label);
+    }
+
+    [Fact]
+    public async Task Failed_skill_read_never_completes_the_activity()
+    {
+        SkillRegistryTests.WriteSkill(Custom, "present-skill");
+        var skills = Skills();
+        skills.RefreshSummaries();
+        var tool = new BimItSkillTool(() => skills.Registry);
+
+        await tool.InvokeRequestAsync(new SkillReadRequest { Name = "missing-skill" }, CancellationToken.None);
+        await tool.InvokeRequestAsync(new SkillReadRequest { Name = "present-skill", File = "../secret.md" }, CancellationToken.None);
+        var missingRegistry = new BimItSkillTool(() => null);
+        await missingRegistry.InvokeRequestAsync(new SkillReadRequest { Name = "present-skill" }, CancellationToken.None);
+
+        var activities = tool.ConsumeActivities().Concat(missingRegistry.ConsumeActivities()).ToArray();
+        Assert.Equal(3, activities.Length);
+        Assert.All(activities, activity =>
+        {
+            Assert.Equal(AssistantActivityState.Started, activity.State);
+            Assert.Equal(AssistantActivityKind.ReadingSkill, activity.Kind);
+            Assert.Equal("Reading a Skill", activity.Label);
+            Assert.Equal("bimit_read_skill", activity.Tool);
+            Assert.DoesNotContain("secret", activity.Label, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("missing-skill", activity.Label, StringComparison.Ordinal);
+            Assert.DoesNotContain("present-skill", activity.Label, StringComparison.Ordinal);
+        });
     }
 
     [Fact]

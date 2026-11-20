@@ -417,6 +417,46 @@ public sealed class AssistantMcpReadFacadeTests
         Assert.DoesNotContain(next.Items, item => item.Label.Contains("instance_id", StringComparison.Ordinal));
     }
 
+    [Fact]
+    public async Task Failed_mcp_read_never_completes_the_activity()
+    {
+        var sink = new RecordingSink();
+        var bus = new AssistantActivityBus();
+        bus.Bind(sink);
+        var session = new ScriptedSession { Fail = ("read_failed", "secret-argument") };
+        var facade = new AssistantMcpReadFacade(session, InstanceId, ServerToolMetadata.Descriptors, bus);
+
+        var failed = await facade.InvokeAsync("revit_lookup", null, CancellationToken.None);
+        Assert.Equal("read_failed", failed["code"]);
+        AssertOnlyStarted(sink, "revit_lookup");
+
+        sink.Items.Clear();
+        session.Fail = null;
+        session.Throw = new InvalidOperationException("secret-argument");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => facade.InvokeAsync("revit_get_context", null, CancellationToken.None));
+        AssertOnlyStarted(sink, "revit_get_context");
+
+        sink.Items.Clear();
+        session.Throw = null;
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => facade.InvokeAsync("revit_lookup", null, cancelled.Token));
+        AssertOnlyStarted(sink, "revit_lookup");
+
+        sink.Items.Clear();
+        await facade.InvokeAsync("revit_apply_parameter_updates", Args("""{"intent_ref":"secret-argument"}"""), CancellationToken.None);
+        Assert.Empty(sink.Items);
+        Assert.False(AssistantIpc.GrantsApprovalAuthority);
+    }
+
+    private static void AssertOnlyStarted(RecordingSink sink, string tool)
+    {
+        var activity = Assert.Single(sink.Items);
+        Assert.Equal(AssistantActivityState.Started, activity.State);
+        Assert.Equal(tool, activity.Tool);
+        Assert.DoesNotContain("secret-argument", activity.Label, StringComparison.Ordinal);
+    }
+
     private static AssistantMcpReadFacade Facade(IAssistantToolSession session, IReadOnlyList<AssistantMcpToolDescriptor> descriptors)
         => new(session, InstanceId, descriptors);
 
@@ -445,6 +485,8 @@ public sealed class AssistantMcpReadFacadeTests
 
         public (string Code, string Message)? Fail { get; set; }
 
+        public Exception? Throw { get; set; }
+
         public List<(string Tool, IReadOnlyDictionary<string, object?> Arguments)> Calls { get; } = [];
 
         public Task<AssistantMcpReadiness> InitializeAsync(CancellationToken cancellationToken)
@@ -453,6 +495,12 @@ public sealed class AssistantMcpReadFacadeTests
         public Task<AssistantToolCall> CallAsync(string toolName, IReadOnlyDictionary<string, object?> arguments, CancellationToken cancellationToken)
         {
             Calls.Add((toolName, arguments));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Throw is not null)
+            {
+                throw Throw;
+            }
+
             if (toolName == "revit_get_context")
             {
                 var document = Document is null ? "null" : "{\"title\":\"Doc\",\"document_id\":\"" + Document + "\"}";

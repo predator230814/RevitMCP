@@ -313,22 +313,13 @@ internal sealed class AssistantMcpReadFacade
         }
 
         _activity?.Report(AssistantActivityLabels.McpRead(name, tool.Description, AssistantActivityState.Started));
-        AssistantToolCall result;
-        try
-        {
-            result = await _session.CallAsync(name, call, cancellationToken).ConfigureAwait(false);
-        }
-        catch
-        {
-            _activity?.Report(AssistantActivityLabels.McpRead(name, tool.Description, AssistantActivityState.Completed));
-            throw;
-        }
-
-        _activity?.Report(AssistantActivityLabels.McpRead(name, tool.Description, AssistantActivityState.Completed));
+        var result = await _session.CallAsync(name, call, cancellationToken).ConfigureAwait(false);
         if (result.IsError)
         {
             return Fail(result);
         }
+
+        _activity?.Report(AssistantActivityLabels.McpRead(name, tool.Description, AssistantActivityState.Completed));
 
         if (result.Structured is not { ValueKind: JsonValueKind.Object or JsonValueKind.Array } structured)
         {
