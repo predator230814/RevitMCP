@@ -186,6 +186,7 @@ internal static class AssistantHost
         }
 
         var providerStart = StartProviderAsync(runtime, timeouts, cancellationToken);
+        var pipeWrite = new SemaphoreSlim(1, 1);
         try
         {
             await WriteAsync(server, Status(readiness, runtime.Status), cancellationToken).ConfigureAwait(false);
@@ -335,7 +336,8 @@ internal static class AssistantHost
 
                 if (parsed.Message.Kind == AssistantIpcKind.Chat)
                 {
-                    await WriteAsync(server, await ChatAsync(runtime, parsed.Message, documents.Current, skills.RefreshSummaries(), timeouts, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                    var chat = await ChatAsync(server, pipeWrite, runtime, parsed.Message, documents.Current, skills.RefreshSummaries(), timeouts, cancellationToken).ConfigureAwait(false);
+                    await WriteLockedAsync(pipeWrite, server, chat, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -421,6 +423,8 @@ internal static class AssistantHost
     }
 
     private static async Task<AssistantIpcMessage> ChatAsync(
+        Stream server,
+        SemaphoreSlim pipeWrite,
         IAssistantAgentRuntime runtime,
         AssistantIpcMessage message,
         AssistantDocumentArtifact? attachment,
@@ -451,10 +455,11 @@ internal static class AssistantHost
 
         AssistantAgentTurn turn;
         var turnFinished = true;
+        var activity = new PipeActivitySink(server, message.RequestId ?? "", pipeWrite, cancellationToken);
         try
         {
             var pending = RunBudgetAsync(
-                token => runtime.SendAsync(new AssistantAgentRequest(message.Text ?? "", attachment, skills), token),
+                token => runtime.SendAsync(new AssistantAgentRequest(message.Text ?? "", attachment, skills, activity), token),
                 timeouts.Turn,
                 cancellationToken);
             var (finished, value) = await pending.ConfigureAwait(false);
@@ -964,5 +969,64 @@ internal static class AssistantHost
     private static Task WriteAsync(Stream stream, AssistantIpcMessage message, CancellationToken cancellationToken)
     {
         return AssistantPipeFrames.WriteAsync(stream, AssistantIpc.Serialize(message), cancellationToken);
+    }
+
+    private static async Task WriteLockedAsync(SemaphoreSlim gate, Stream stream, AssistantIpcMessage message, CancellationToken cancellationToken)
+    {
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await WriteAsync(stream, message, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Writes one activity frame for the chat request in progress. Unsafe labels are dropped. The frame is not a chat result.
+    /// </summary>
+    private sealed class PipeActivitySink(Stream stream, string requestId, SemaphoreSlim gate, CancellationToken cancellationToken) : IAssistantActivitySink
+    {
+        public void Report(AssistantActivity activity)
+        {
+            if (activity is null
+                || string.IsNullOrWhiteSpace(requestId)
+                || !AssistantIpc.IsSafeActivity(activity.Kind, activity.State, activity.Label, activity.Tool))
+            {
+                return;
+            }
+
+            var message = new AssistantIpcMessage(
+                AssistantIpcKind.ChatActivity,
+                null,
+                null,
+                null,
+                false,
+                requestId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                ActivityKind: activity.Kind,
+                ActivityState: activity.State,
+                ActivityLabel: activity.Label,
+                ActivityTool: activity.Tool);
+            gate.Wait(cancellationToken);
+            try
+            {
+                AssistantPipeFrames.WriteAsync(stream, AssistantIpc.Serialize(message), cancellationToken).GetAwaiter().GetResult();
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BimIt.Revit.Assistant.Ipc;
 using BimIt.Revit.Contracts;
 using BimIt.Revit.Assistant.Patterns;
 using BimIt.Revit.Assistant.Providers.GitHubCopilot;
@@ -373,8 +374,58 @@ public sealed class AssistantMcpReadFacadeTests
         Assert.DoesNotContain("bimit_", skill, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Mcp_read_activity_follows_the_invocation_and_hides_arguments()
+    {
+        var sink = new RecordingSink();
+        var bus = new AssistantActivityBus();
+        bus.Bind(sink);
+        var session = new ScriptedSession();
+        var facade = new AssistantMcpReadFacade(session, InstanceId, ServerToolMetadata.Descriptors, bus);
+
+        await facade.InvokeAsync("revit_get_context", null, CancellationToken.None);
+        Assert.Equal(new[] { "revit_get_context", "revit_get_context" }, sink.Items.Select(item => item.Tool).ToArray());
+        Assert.Equal("Reading model context", sink.Items[0].Label);
+        Assert.Equal("Read model context", sink.Items[1].Label);
+
+        sink.Items.Clear();
+        var secret = "do-not-show-argument";
+        await facade.InvokeAsync(
+            "revit_read",
+            Args($$$"""{"operation":"project.user_worksets","contract_version":"1","inputs":{"note":"{{{secret}}}"}}"""),
+            CancellationToken.None);
+        Assert.Equal(new[] { "revit_read", "revit_read" }, sink.Items.Select(item => item.Tool).ToArray());
+        Assert.Equal(new[] { "Reading Revit data", "Read Revit data" }, sink.Items.Select(item => item.Label).ToArray());
+        Assert.DoesNotContain(sink.Items, item => item.Label.Contains(secret, StringComparison.Ordinal));
+        Assert.Contains(session.Calls, call => call.Tool == "revit_get_context");
+        Assert.DoesNotContain(sink.Items, item => item.Tool == "revit_get_context");
+
+        sink.Items.Clear();
+        await facade.InvokeAsync("revit_apply_parameter_updates", Args("""{"intent_ref":"intent-1"}"""), CancellationToken.None);
+        Assert.Empty(sink.Items);
+        Assert.False(AssistantIpc.IsModelToolName("revit_apply_parameter_updates"));
+        Assert.False(AssistantIpc.GrantsApprovalAuthority);
+
+        bus.Clear();
+        await facade.InvokeAsync("revit_get_warnings", null, CancellationToken.None);
+        Assert.Empty(sink.Items);
+        var next = new RecordingSink();
+        bus.Bind(next);
+        await facade.InvokeAsync("revit_lookup", null, CancellationToken.None);
+        Assert.Equal("Discovering Revit capabilities", next.Items[0].Label);
+        Assert.Equal("Discovered Revit capabilities", next.Items[1].Label);
+        Assert.DoesNotContain(next.Items, item => item.Label.Contains("instance_id", StringComparison.Ordinal));
+    }
+
     private static AssistantMcpReadFacade Facade(IAssistantToolSession session, IReadOnlyList<AssistantMcpToolDescriptor> descriptors)
         => new(session, InstanceId, descriptors);
+
+    private sealed class RecordingSink : IAssistantActivitySink
+    {
+        public List<AssistantActivity> Items { get; } = [];
+
+        public void Report(AssistantActivity activity) => Items.Add(activity);
+    }
 
     private static IReadOnlyDictionary<string, object?> Args(string json)
     {

@@ -19,6 +19,7 @@ public enum AssistantIpcKind
     WorkflowResult,
     Chat,
     ChatResult,
+    ChatActivity,
     ResetConversation,
     QueryStatus,
     AttachDocument,
@@ -70,7 +71,11 @@ public sealed record AssistantIpcMessage(
     bool? Truncated = null,
     string? DocumentCode = null,
     string? DocumentMessage = null,
-    string? PatternReview = null);
+    string? PatternReview = null,
+    string? ActivityKind = null,
+    string? ActivityState = null,
+    string? ActivityLabel = null,
+    string? ActivityTool = null);
 
 public readonly record struct AssistantIpcParse(bool Accepted, AssistantIpcMessage? Message, string Reason)
 {
@@ -132,6 +137,11 @@ public static class AssistantIpc
                 return AssistantIpcParse.Reject("pattern");
             }
 
+            if (HasActivity(body) && body.Type != "chatActivity")
+            {
+                return AssistantIpcParse.Reject("activity");
+            }
+
             return body.Type switch
             {
                 "hello" => ParseHello(body),
@@ -141,6 +151,7 @@ public static class AssistantIpc
                 "status" => ParseStatus(body),
                 "workflowResult" => ParseResult(body),
                 "chat" => ParseChat(body),
+                "chatActivity" => ParseChatActivity(body),
                 "chatResult" => ParseChatResult(body),
                 "resetConversation" => ParseSignal(body, AssistantIpcKind.ResetConversation),
                 "queryStatus" => ParseSignal(body, AssistantIpcKind.QueryStatus),
@@ -214,6 +225,15 @@ public static class AssistantIpc
                 Type = "chat",
                 RequestId = message.RequestId,
                 Text = message.Text,
+            },
+            AssistantIpcKind.ChatActivity => new Envelope
+            {
+                Type = "chatActivity",
+                RequestId = message.RequestId,
+                ActivityKind = message.ActivityKind,
+                ActivityState = message.ActivityState,
+                ActivityLabel = message.ActivityLabel,
+                ActivityTool = message.ActivityTool,
             },
             AssistantIpcKind.ChatResult => new Envelope
             {
@@ -454,6 +474,95 @@ public static class AssistantIpc
             null,
             false,
             Text: body.Text));
+    }
+
+    private static AssistantIpcParse ParseChatActivity(Envelope body)
+    {
+        if (!IsBoundedId(body.RequestId)
+            || body.Text is not null
+            || body.Title is not null
+            || body.Body is not null
+            || body.Workflow is not null
+            || body.UsedTools is not null
+            || body.IsError is not null
+            || body.InstanceId is not null
+            || body.PatternReview is not null
+            || HasDocument(body)
+            || HasProvider(body)
+            || !IsSafeActivity(body.ActivityKind, body.ActivityState, body.ActivityLabel, body.ActivityTool))
+        {
+            return AssistantIpcParse.Reject("activity");
+        }
+
+        return AssistantIpcParse.Accept(new AssistantIpcMessage(
+            AssistantIpcKind.ChatActivity,
+            null,
+            null,
+            null,
+            false,
+            body.RequestId,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            ActivityKind: body.ActivityKind,
+            ActivityState: body.ActivityState,
+            ActivityLabel: body.ActivityLabel,
+            ActivityTool: body.ActivityTool));
+    }
+
+    /// <summary>
+    /// A chat activity is safe to show: a known phase, a BIM-IT label, and at most a trusted tool name.
+    /// </summary>
+    public static bool IsSafeActivity(string? kind, string? state, string? label, string? tool)
+    {
+        if (kind is not ("preparing" or "reading_skill" or "mcp_read" or "preparing_response"))
+        {
+            return false;
+        }
+
+        if (state is not ("started" or "completed"))
+        {
+            return false;
+        }
+
+        if (!IsSafeActivityLabel(label))
+        {
+            return false;
+        }
+
+        return kind switch
+        {
+            "mcp_read" => tool is not null && tool.StartsWith("revit_", StringComparison.Ordinal) && IsModelToolName(tool),
+            "reading_skill" => tool is null || tool == "bimit_read_skill",
+            _ => tool is null,
+        };
+    }
+
+    private static bool IsSafeActivityLabel(string? label)
+    {
+        if (string.IsNullOrWhiteSpace(label) || label.Length > 80 || label != label.Trim())
+        {
+            return false;
+        }
+
+        foreach (var character in label)
+        {
+            if (char.IsControl(character) || character is '<' or '>' or '{' or '}' or '\\' or '"' or '`')
+            {
+                return false;
+            }
+        }
+
+        return !label.Contains("://", StringComparison.Ordinal)
+            && !label.Contains(":\\", StringComparison.Ordinal)
+            && !label.Contains("instance_id", StringComparison.OrdinalIgnoreCase)
+            && !label.Contains("document_id", StringComparison.OrdinalIgnoreCase);
     }
 
     private static AssistantIpcParse ParseChatResult(Envelope body)
@@ -1006,6 +1115,14 @@ public static class AssistantIpc
                 || value.Contains("://", StringComparison.Ordinal));
     }
 
+    private static bool HasActivity(Envelope body)
+    {
+        return body.ActivityKind is not null
+            || body.ActivityState is not null
+            || body.ActivityLabel is not null
+            || body.ActivityTool is not null;
+    }
+
     private static bool HasProvider(Envelope body)
     {
         return body.ProviderName is not null
@@ -1095,5 +1212,13 @@ public static class AssistantIpc
         public string? DocumentMessage { get; set; }
 
         public string? PatternReview { get; set; }
+
+        public string? ActivityKind { get; set; }
+
+        public string? ActivityState { get; set; }
+
+        public string? ActivityLabel { get; set; }
+
+        public string? ActivityTool { get; set; }
     }
 }

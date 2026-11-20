@@ -197,7 +197,10 @@ public sealed class AssistantShellTests
         var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
         var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
         Assert.Contains("post({ type: \"confirmProjectAxesPreview\" })", page, StringComparison.Ordinal);
-        Assert.Contains("Confirm project axes &amp; preview", html, StringComparison.Ordinal);
+        Assert.Contains("Confirm project axes &amp; preview", page, StringComparison.Ordinal);
+        Assert.Contains("snapshot.placementActions === true", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Confirm project axes", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"confirm-row\"", html, StringComparison.Ordinal);
         Assert.DoesNotContain("data-action=\"confirmProjectAxesPreview\"", html, StringComparison.Ordinal);
 
         var link = new ScriptedLink
@@ -238,8 +241,11 @@ public sealed class AssistantShellTests
         var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
         Assert.Contains("post({ type: \"reviewInRevit\" })", page, StringComparison.Ordinal);
         Assert.Contains("post({ type: \"applyApprovedPlacements\" })", page, StringComparison.Ordinal);
-        Assert.Contains("Review in Revit", html, StringComparison.Ordinal);
-        Assert.Contains("Apply approved placements", html, StringComparison.Ordinal);
+        Assert.Contains("Review in Revit", page, StringComparison.Ordinal);
+        Assert.Contains("Apply approved placements", page, StringComparison.Ordinal);
+        Assert.Contains("id=\"review-pattern\"", page, StringComparison.Ordinal);
+        Assert.Contains("id=\"apply-pattern\"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("Apply approved placements", html, StringComparison.Ordinal);
         Assert.DoesNotContain("data-action=\"reviewInRevit\"", html, StringComparison.Ordinal);
         Assert.DoesNotContain("data-action=\"applyApprovedPlacements\"", html, StringComparison.Ordinal);
 
@@ -777,17 +783,174 @@ public sealed class AssistantShellTests
     }
 
     [Fact]
-    public void Quick_actions_stay_beside_the_composer()
+    public void Welcome_actions_remain_and_the_composer_has_no_duplicate_row()
     {
         var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
+        var css = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.css"));
         var mainEnd = html.IndexOf("</main>", StringComparison.Ordinal);
-        var row = html.IndexOf("class=\"quick-row\"", StringComparison.Ordinal);
-        Assert.True(mainEnd >= 0 && row > mainEnd);
+        var welcome = html.IndexOf("class=\"welcome\"", StringComparison.Ordinal);
+        Assert.True(mainEnd >= 0 && welcome >= 0 && welcome < mainEnd);
+        Assert.DoesNotContain("class=\"quick-row\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("class=\"confirm-row\"", html, StringComparison.Ordinal);
         Assert.Contains("data-action=\"context\"", html, StringComparison.Ordinal);
         Assert.Contains("data-action=\"warnings\"", html, StringComparison.Ordinal);
         Assert.Contains("data-action=\"activeView\"", html, StringComparison.Ordinal);
         var script = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
         Assert.Contains("message.used", script, StringComparison.Ordinal);
+        Assert.DoesNotContain("Waiting for the Assistant.", script, StringComparison.Ordinal);
+        Assert.Contains("activityCard", script, StringComparison.Ordinal);
+        Assert.Contains("prefers-reduced-motion", css, StringComparison.Ordinal);
+        Assert.Contains("default-src 'none'", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Chat_activity_resets_and_placement_actions_stay_contextual()
+    {
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus(),
+            IncludeForeignActivity = true,
+            ChatResult = ChatReply("There are 7 warnings.", ["revit_get_context"]),
+        };
+        link.Activities.Add(ActivityFrame("preparing", "started", "Preparing", null));
+        link.Activities.Add(ActivityFrame("mcp_read", "started", "Reading model context", "revit_get_context"));
+        link.Activities.Add(ActivityFrame("mcp_read", "completed", "Read model context", "revit_get_context"));
+        link.Activities.Add(ActivityFrame("mcp_read", "started", "Reading Revit data", "revit_read"));
+        var during = new List<string>();
+        var shell = CreateShell("instance-activity", new RecordingProcessFactory(), link, FastTimeouts());
+        link.BeforeReturn = () => during.Add(shell.SerializeSnapshot());
+
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"What is open?"}""");
+        await WaitFor(() =>
+        {
+            var snapshot = shell.SerializeSnapshot();
+            return snapshot.Contains("There are 7 warnings.", StringComparison.Ordinal) && snapshot.Contains("\"busy\":false", StringComparison.Ordinal);
+        });
+
+        link.BeforeReturn = null;
+        var working = Assert.Single(during);
+        using (var workingJson = JsonDocument.Parse(working))
+        {
+            var activities = workingJson.RootElement.GetProperty("status").GetProperty("activities").EnumerateArray().ToArray();
+            Assert.Equal(new[] { "Read model context", "Reading Revit data" }, activities.Select(item => item.GetProperty("label").GetString()).ToArray());
+            Assert.Equal(new[] { "completed", "started" }, activities.Select(item => item.GetProperty("state").GetString()).ToArray());
+            Assert.All(activities, item => Assert.False(item.TryGetProperty("tool", out _)));
+        }
+
+        Assert.Contains("\"busy\":true", working, StringComparison.Ordinal);
+        Assert.DoesNotContain("Reading secret args", working, StringComparison.Ordinal);
+        var finished = shell.SerializeSnapshot();
+        Assert.Contains("\"busy\":false", finished, StringComparison.Ordinal);
+        Assert.Contains("Used: revit_get_context", finished, StringComparison.Ordinal);
+        Assert.DoesNotContain("Reading Revit data", finished, StringComparison.Ordinal);
+        Assert.DoesNotContain("placementActions", finished, StringComparison.Ordinal);
+
+        link.ChatResult = ChatReply("The provider failed.", [], isError: true);
+        link.Activities.Clear();
+        link.Activities.Add(ActivityFrame("preparing", "started", "Preparing", null));
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Try again."}""");
+        await WaitFor(() =>
+        {
+            var snapshot = shell.SerializeSnapshot();
+            return snapshot.Contains("The provider failed.", StringComparison.Ordinal) && snapshot.Contains("\"busy\":false", StringComparison.Ordinal);
+        });
+        var failed = shell.SerializeSnapshot();
+        Assert.Contains("\"busy\":false", failed, StringComparison.Ordinal);
+        Assert.DoesNotContain("\"label\":\"Preparing\"", failed, StringComparison.Ordinal);
+
+        link.ChatResult = ChatReply("Stored.", ["bimit_propose_mep_device_placements"]);
+        link.Activities.Clear();
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Propose devices."}""");
+        await WaitFor(() =>
+        {
+            var snapshot = shell.SerializeSnapshot();
+            return snapshot.Contains("\"placementActions\":true", StringComparison.Ordinal) && snapshot.Contains("\"busy\":false", StringComparison.Ordinal);
+        });
+        Assert.Contains("\"placementActions\":true", shell.SerializeSnapshot(), StringComparison.Ordinal);
+
+        shell.ReceivePageMessage("""{"type":"newConversation"}""");
+        var reset = shell.SerializeSnapshot();
+        Assert.DoesNotContain("placementActions", reset, StringComparison.Ordinal);
+        Assert.Contains("\"busy\":false", reset, StringComparison.Ordinal);
+        Assert.DoesNotContain("Preparing", reset, StringComparison.Ordinal);
+        Assert.Empty(shell.Conversation.Entries);
+    }
+
+    [Fact]
+    public async Task Cancelled_chat_clears_the_activity_feed()
+    {
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus(),
+            CancelChat = true,
+            ChatResult = ChatReply("unused", []),
+        };
+        link.Activities.Add(ActivityFrame("mcp_read", "started", "Reading Revit data", "revit_read"));
+        var during = new List<string>();
+        var shell = CreateShell("instance-cancel", new RecordingProcessFactory(), link, FastTimeouts());
+        link.BeforeReturn = () => during.Add(shell.SerializeSnapshot());
+
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Stop this."}""");
+        await WaitFor(() =>
+        {
+            var snapshot = shell.SerializeSnapshot();
+            return snapshot.Contains("The AI provider did not answer in time.", StringComparison.Ordinal) && snapshot.Contains("\"busy\":false", StringComparison.Ordinal);
+        });
+
+        Assert.Contains("Reading Revit data", Assert.Single(during), StringComparison.Ordinal);
+        var finished = shell.SerializeSnapshot();
+        Assert.Contains("\"busy\":false", finished, StringComparison.Ordinal);
+        Assert.DoesNotContain("Reading Revit data", finished, StringComparison.Ordinal);
+    }
+
+    private static AssistantIpcMessage ChatReply(string body, IReadOnlyList<string> used, bool isError = false)
+    {
+        return new AssistantIpcMessage(
+            AssistantIpcKind.ChatResult,
+            null,
+            null,
+            null,
+            false,
+            "chat",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "BIM-IT Assistant",
+            body,
+            isError,
+            "GitHub Copilot",
+            "ready",
+            "auto",
+            null,
+            "GitHub Copilot · auto",
+            UsedTools: used);
+    }
+
+    private static AssistantIpcMessage ActivityFrame(string kind, string state, string label, string? tool)
+    {
+        return new AssistantIpcMessage(
+            AssistantIpcKind.ChatActivity,
+            null,
+            null,
+            null,
+            false,
+            "pending",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            ActivityKind: kind,
+            ActivityState: state,
+            ActivityLabel: label,
+            ActivityTool: tool);
     }
 
     [Fact]
@@ -1173,10 +1336,62 @@ public sealed class AssistantShellTests
             return Result;
         }
 
-        public Task<AssistantIpcMessage?> ChatAsync(string requestId, string text, CancellationToken cancellationToken)
+        public List<AssistantIpcMessage> Activities { get; } = [];
+
+        public bool IncludeForeignActivity { get; set; }
+
+        public bool CancelChat { get; set; }
+
+        public Action? BeforeReturn { get; set; }
+
+        public Task<AssistantIpcMessage?> ChatAsync(
+            string requestId,
+            string text,
+            CancellationToken cancellationToken,
+            Action<AssistantIpcMessage>? onActivity)
         {
             Chats.Add(text);
+            if (IncludeForeignActivity)
+            {
+                onActivity?.Invoke(Activity("other-request", "mcp_read", "started", "Reading secret args", "revit_read"));
+            }
+
+            foreach (var activity in Activities)
+            {
+                onActivity?.Invoke(activity with { RequestId = requestId });
+            }
+
+            BeforeReturn?.Invoke();
+            if (CancelChat)
+            {
+                throw new OperationCanceledException();
+            }
+
             return Task.FromResult(ChatResult);
+        }
+
+        private static AssistantIpcMessage Activity(string requestId, string kind, string state, string label, string? tool)
+        {
+            return new AssistantIpcMessage(
+                AssistantIpcKind.ChatActivity,
+                null,
+                null,
+                null,
+                false,
+                requestId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                ActivityKind: kind,
+                ActivityState: state,
+                ActivityLabel: label,
+                ActivityTool: tool);
         }
 
         public List<string> Attachments { get; } = [];

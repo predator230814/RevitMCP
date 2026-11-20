@@ -124,10 +124,24 @@ public sealed class AssistantSkillTests : IDisposable
 
         Assert.Equal([BimItSkillTool.Name], tool.ConsumeUsedTools());
         var activities = tool.ConsumeActivities();
-        Assert.Equal(2, activities.Count);
-        Assert.All(activities, activity => Assert.Equal("read_skill", activity.Kind));
-        Assert.Equal("wanted-skill", activities[0].Subject);
-        Assert.Equal("ok", activities[0].Status);
+        Assert.Equal(
+            [
+                AssistantActivityState.Started,
+                AssistantActivityState.Completed,
+                AssistantActivityState.Started,
+                AssistantActivityState.Completed,
+            ],
+            activities.Select(activity => activity.State).ToArray());
+        Assert.All(activities, activity =>
+        {
+            Assert.Equal(AssistantActivityKind.ReadingSkill, activity.Kind);
+            Assert.Equal("bimit_read_skill", activity.Tool);
+            Assert.DoesNotContain("rules.md", activity.Label, StringComparison.Ordinal);
+            Assert.DoesNotContain("wanted-skill", activity.Label, StringComparison.Ordinal);
+            Assert.DoesNotContain("\\", activity.Label, StringComparison.Ordinal);
+        });
+        Assert.Equal("Reading a Skill", activities[0].Label);
+        Assert.Equal("Read a Skill", activities[1].Label);
     }
 
     [Theory]
@@ -149,6 +163,12 @@ public sealed class AssistantSkillTests : IDisposable
         Assert.Equal(code, result.GetProperty("code").GetString());
         Assert.False(result.TryGetProperty("content", out _));
         Assert.DoesNotContain(_root.Replace("\\", "\\\\", StringComparison.Ordinal), result.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.All(tool.ConsumeActivities(), activity =>
+        {
+            Assert.DoesNotContain("\\", activity.Label, StringComparison.Ordinal);
+            Assert.DoesNotContain("secret", activity.Label, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("bimit_read_skill", activity.Tool);
+        });
     }
 
     [Fact]

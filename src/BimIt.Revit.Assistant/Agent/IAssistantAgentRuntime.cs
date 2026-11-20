@@ -12,7 +12,8 @@ public sealed record AssistantAgentTurn(
 public sealed record AssistantAgentRequest(
     string Text,
     AssistantDocumentArtifact? Attachment = null,
-    IReadOnlyList<BimIt.Revit.Skills.SkillSummary>? Skills = null);
+    IReadOnlyList<BimIt.Revit.Skills.SkillSummary>? Skills = null,
+    IAssistantActivitySink? Activity = null);
 
 public interface IAssistantAgentRuntime : IAsyncDisposable
 {

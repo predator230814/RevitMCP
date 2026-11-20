@@ -16,6 +16,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
     private readonly string _directory;
     private readonly CopilotAttachmentDelivery _delivery = new();
     private readonly BimItSkillTool _skills;
+    private readonly AssistantActivityBus _activity = new();
     private readonly AssistantSkillDelivery _skillDelivery = new();
     private CopilotClient? _client;
     private CopilotSession? _session;
@@ -36,10 +37,10 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         _patternStore = patternStore ?? throw new ArgumentNullException(nameof(patternStore));
         ArgumentNullException.ThrowIfNull(currentAttachmentId);
         ArgumentNullException.ThrowIfNull(currentAttachment);
-        _tools = new AssistantMcpReadFacade(session, instanceId, mcpTools);
+        _tools = new AssistantMcpReadFacade(session, instanceId, mcpTools, _activity);
         _proposals = new MepDevicePlacementProposalTool(session, instanceId, proposalStore, currentAttachmentId);
         _roomPatterns = new RoomPatternProposalTool(session, instanceId, patternStore, currentAttachment);
-        _skills = new BimItSkillTool(() => skills);
+        _skills = new BimItSkillTool(() => skills, _activity);
         _directory = string.IsNullOrWhiteSpace(runtimeDirectory) ? CopilotRuntimeDirectory.Create() : runtimeDirectory;
         Directory.CreateDirectory(_directory);
         Status = AssistantProviderStatus.NotConfigured;
@@ -128,52 +129,63 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                 return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, ConsumeTurnTools());
             }
 
-            var attachment = _delivery.ShouldDeliver(request.Attachment) ? request.Attachment : null;
-            var skillSummaries = _skillDelivery.Take(request.Skills);
-            var message = await _session.SendAndWaitAsync(
-                CopilotTurnComposer.Compose(AssistantSkillPrompt.Compose(userText.Trim(), skillSummaries), attachment),
-                AssistantProviderTimeouts.Default.Turn,
-                budget.Token).ConfigureAwait(false);
-            if (attachment is not null)
+            _activity.Bind(request.Activity);
+            try
             {
-                _delivery.MarkDelivered(attachment.ArtifactId);
-            }
-
-            if (skillSummaries is not null)
-            {
-                _skillDelivery.MarkDelivered(skillSummaries);
-            }
-            var data = message?.Data;
-            RememberModel(data?.Model);
-            var content = AssistantSafeText.Clean(data?.Content, 16_000);
-            if (string.IsNullOrWhiteSpace(content))
-            {
-                content = "The assistant did not return an answer.";
-            }
-
-            if (_client is not null)
-            {
-                try
+                _activity.Report(AssistantActivityLabels.Preparing());
+                var attachment = _delivery.ShouldDeliver(request.Attachment) ? request.Attachment : null;
+                var skillSummaries = _skillDelivery.Take(request.Skills);
+                var message = await _session.SendAndWaitAsync(
+                    CopilotTurnComposer.Compose(AssistantSkillPrompt.Compose(userText.Trim(), skillSummaries), attachment),
+                    AssistantProviderTimeouts.Default.Turn,
+                    budget.Token).ConfigureAwait(false);
+                if (attachment is not null)
                 {
-                    var completion = await PatternTargetOrchestrator.CompleteAsync(
-                        _patternStore,
-                        new GitHubCopilotPatternTargetReasoner(_client, _directory, Status.Model),
-                        budget.Token).ConfigureAwait(false);
-                    if (completion is not null)
+                    _delivery.MarkDelivered(attachment.ArtifactId);
+                }
+
+                if (skillSummaries is not null)
+                {
+                    _skillDelivery.MarkDelivered(skillSummaries);
+                }
+
+                var data = message?.Data;
+                RememberModel(data?.Model);
+                var content = AssistantSafeText.Clean(data?.Content, 16_000);
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    content = "The assistant did not return an answer.";
+                }
+
+                _activity.Report(AssistantActivityLabels.PreparingResponse());
+                if (_client is not null)
+                {
+                    try
                     {
-                        content = PatternTargetCompletionText.Compose(completion);
+                        var completion = await PatternTargetOrchestrator.CompleteAsync(
+                            _patternStore,
+                            new GitHubCopilotPatternTargetReasoner(_client, _directory, Status.Model),
+                            budget.Token).ConfigureAwait(false);
+                        if (completion is not null)
+                        {
+                            content = PatternTargetCompletionText.Compose(completion);
+                        }
+                    }
+                    catch (OperationCanceledException) when (_stop.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception)
+                    {
                     }
                 }
-                catch (OperationCanceledException) when (_stop.IsCancellationRequested)
-                {
-                    throw;
-                }
-                catch (Exception)
-                {
-                }
-            }
 
-            return new AssistantAgentTurn("BIM-IT Assistant", content, false, ConsumeTurnTools(), _patternStore.PeekReviewJson(), _skills.ConsumeActivities());
+                return new AssistantAgentTurn("BIM-IT Assistant", content, false, ConsumeTurnTools(), _patternStore.PeekReviewJson(), _skills.ConsumeActivities());
+            }
+            finally
+            {
+                _activity.Clear();
+            }
         }
         catch (Exception exception) when (exception is not OperationCanceledException || !_stop.IsCancellationRequested)
         {
