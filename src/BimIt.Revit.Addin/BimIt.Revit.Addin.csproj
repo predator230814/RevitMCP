@@ -82,6 +82,9 @@
     <Content Include="Assistant\Ui\index.html" Link="assistant-ui\index.html" CopyToOutputDirectory="Always" />
     <Content Include="Assistant\Ui\app.js" Link="assistant-ui\app.js" CopyToOutputDirectory="Always" />
     <Content Include="Assistant\Ui\app.css" Link="assistant-ui\app.css" CopyToOutputDirectory="Always" />
+    <Content Include="Assistant\Ui\logo.png" Link="assistant-ui\logo.png" CopyToOutputDirectory="Always" />
+    <Content Include="Assistant\Ribbon\assistant-16.png" Link="assistant-ribbon\assistant-16.png" CopyToOutputDirectory="Always" />
+    <Content Include="Assistant\Ribbon\assistant-32.png" Link="assistant-ribbon\assistant-32.png" CopyToOutputDirectory="Always" />
   </ItemGroup>
 
   <ItemGroup>
@@ -129,6 +132,9 @@
     <Copy SourceFiles="Assistant\Ui\index.html" DestinationFiles="$(OutputPath)assistant-ui\index.html" SkipUnchangedFiles="false" />
     <Copy SourceFiles="Assistant\Ui\app.js" DestinationFiles="$(OutputPath)assistant-ui\app.js" SkipUnchangedFiles="false" />
     <Copy SourceFiles="Assistant\Ui\app.css" DestinationFiles="$(OutputPath)assistant-ui\app.css" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="Assistant\Ui\logo.png" DestinationFiles="$(OutputPath)assistant-ui\logo.png" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="Assistant\Ribbon\assistant-16.png" DestinationFiles="$(OutputPath)assistant-ribbon\assistant-16.png" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="Assistant\Ribbon\assistant-32.png" DestinationFiles="$(OutputPath)assistant-ribbon\assistant-32.png" SkipUnchangedFiles="false" />
   </Target>
 
   <Target Name="AssertAddinRuntimePayload" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
@@ -164,7 +170,7 @@
       Condition="!Exists('$(OutputPath)ui\index.html') OR !Exists('$(OutputPath)ui\app.js') OR !Exists('$(OutputPath)ui\app.css')" />
     <Error
       Text="Bundled Assistant UI assets are missing from $(OutputPath)assistant-ui."
-      Condition="!Exists('$(OutputPath)assistant-ui\index.html') OR !Exists('$(OutputPath)assistant-ui\app.js') OR !Exists('$(OutputPath)assistant-ui\app.css')" />
+      Condition="!Exists('$(OutputPath)assistant-ui\index.html') OR !Exists('$(OutputPath)assistant-ui\app.js') OR !Exists('$(OutputPath)assistant-ui\app.css') OR !Exists('$(OutputPath)assistant-ui\logo.png') OR !Exists('$(OutputPath)assistant-ribbon\assistant-16.png') OR !Exists('$(OutputPath)assistant-ribbon\assistant-32.png')" />
   </Target>
 
   <Target Name="ReportRevitBuild" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">

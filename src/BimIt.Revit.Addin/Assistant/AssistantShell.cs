@@ -29,6 +29,9 @@ internal sealed class AssistantShell
     private bool _openRequested;
     private bool _diagnostics;
     private bool _busy;
+    private string? _placementProposal;
+    private string? _chatRequestId;
+    private readonly List<ActivityNote> _activities = [];
     private string _assistantState = "unavailable";
     private string _mcpState = "unavailable";
     private int? _toolCount;
@@ -125,6 +128,8 @@ internal sealed class AssistantShell
                 _patternReview = null;
                 _patternTypes.Clear();
                 _patternPrepared = false;
+                _placementProposal = null;
+                ClearChatActivity();
                 PostSnapshot();
                 Sequence(ResetProviderAsync);
                 break;
@@ -171,6 +176,9 @@ internal sealed class AssistantShell
                 break;
             case AssistantPageIntent.Skills:
                 RequestSkills(parsed.Action!, parsed.Text);
+                break;
+            case AssistantPageIntent.SelectProvider:
+                PostSnapshot();
                 break;
             case AssistantPageIntent.OpenDiagnostics:
                 _diagnostics = !_diagnostics;
@@ -401,6 +409,13 @@ internal sealed class AssistantShell
         }
 
         _busy = true;
+        var requestId = Guid.NewGuid().ToString("N");
+        lock (_gate)
+        {
+            _chatRequestId = requestId;
+            _activities.Clear();
+        }
+
         PostSnapshot();
         try
         {
@@ -416,7 +431,7 @@ internal sealed class AssistantShell
             }
 
             using var chatTimeout = new CancellationTokenSource(_timeouts.Chat);
-            var result = await _link.ChatAsync(Guid.NewGuid().ToString("N"), text, chatTimeout.Token).ConfigureAwait(false);
+            var result = await _link.ChatAsync(requestId, text, chatTimeout.Token, activity => NoteActivity(requestId, activity)).ConfigureAwait(false);
             if (result is null || result.Kind != AssistantIpcKind.ChatResult)
             {
                 _conversation.Add("error", "Assistant", "The Assistant did not return an answer.");
@@ -427,6 +442,8 @@ internal sealed class AssistantShell
             }
 
             ApplyProvider(result);
+            ApplyPlacement(result.PlacementProposal);
+
             if (result.PatternReview is not null && RoomPatternReview.TryParse(result.PatternReview, out var review))
             {
                 _patternReview = review;
@@ -457,8 +474,90 @@ internal sealed class AssistantShell
         finally
         {
             _busy = false;
+            ClearChatActivity();
             PostSnapshot();
         }
+    }
+
+    private void NoteActivity(string requestId, AssistantIpcMessage activity)
+    {
+        if (activity.Kind != AssistantIpcKind.ChatActivity
+            || !string.Equals(activity.RequestId, requestId, StringComparison.Ordinal)
+            || string.IsNullOrWhiteSpace(activity.ActivityLabel)
+            || string.IsNullOrWhiteSpace(activity.ActivityKind)
+            || activity.ActivityState is not ("started" or "completed"))
+        {
+            return;
+        }
+
+        lock (_gate)
+        {
+            if (!string.Equals(_chatRequestId, requestId, StringComparison.Ordinal) || _activities.Count >= 32)
+            {
+                return;
+            }
+
+            _activities.Add(new ActivityNote(activity.ActivityTool ?? activity.ActivityKind, activity.ActivityLabel, activity.ActivityState));
+        }
+
+        PostSnapshot();
+    }
+
+    private void ClearChatActivity()
+    {
+        lock (_gate)
+        {
+            _activities.Clear();
+            _chatRequestId = null;
+        }
+    }
+
+    private IReadOnlyList<ActivityNote> DisplayActivities()
+    {
+        List<ActivityNote> copy;
+        lock (_gate)
+        {
+            copy = _activities.ToList();
+        }
+
+        var rows = new List<ActivityNote>();
+        foreach (var item in copy)
+        {
+            if (item.State == "completed")
+            {
+                var index = rows.FindLastIndex(row => row.State == "started" && row.Key == item.Key);
+                if (index >= 0)
+                {
+                    rows[index] = item;
+                }
+                else
+                {
+                    rows.Add(item);
+                }
+            }
+            else
+            {
+                rows.Add(item);
+            }
+        }
+
+        ActivityNote? current = null;
+        for (var index = rows.Count - 1; index >= 0; index--)
+        {
+            if (rows[index].State == "started")
+            {
+                current = rows[index];
+                break;
+            }
+        }
+
+        var display = rows.Where(row => row.State == "completed").TakeLast(4).ToList();
+        if (current is not null)
+        {
+            display.Add(current);
+        }
+
+        return display;
     }
 
     private void AttachFromPicker()
@@ -775,6 +874,7 @@ internal sealed class AssistantShell
                 _patternReview = null;
                 _patternTypes.Clear();
                 _patternPrepared = false;
+                ApplyPlacement(result.PlacementProposal);
             }
             else
             {
@@ -799,6 +899,8 @@ internal sealed class AssistantShell
             _conversation.Add("error", "Assistant", "The document could not be attached.");
             return;
         }
+
+        ApplyPlacement(result.PlacementProposal);
 
         if (result.Attached == true && !string.IsNullOrWhiteSpace(result.DisplayName) && result.DocumentKind is not null)
         {
@@ -827,6 +929,7 @@ internal sealed class AssistantShell
     private async Task ResetProviderAsync()
     {
         _conversation.Reset();
+        _placementProposal = null;
         _attachment = null;
         _patternReview = null;
         _patternTypes.Clear();
@@ -983,26 +1086,56 @@ internal sealed class AssistantShell
 
             return message;
         }).ToArray();
+        var status = new Dictionary<string, object?>
+        {
+            ["revitBridge"] = _bridgeReady() ? "ready" : "unavailable",
+            ["assistant"] = _assistantState,
+            ["mcp"] = _mcpState,
+            ["aiProvider"] = _providerLabel,
+            ["aiProviderState"] = _providerState,
+            ["providers"] = new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = AssistantProviderChoice.CopilotId,
+                    ["label"] = AssistantProviderChoice.CopilotLabel,
+                    ["state"] = _providerState,
+                    ["active"] = true,
+                },
+            },
+            ["providerError"] = _providerError,
+            ["toolCount"] = _toolCount,
+            ["toolNames"] = _toolNames,
+            ["error"] = _statusError,
+            ["busy"] = _busy,
+            ["diagnostics"] = _diagnostics,
+        };
+        if (_busy)
+        {
+            var activities = DisplayActivities()
+                .Select(item => new Dictionary<string, string>
+                {
+                    ["label"] = item.Label,
+                    ["state"] = item.State,
+                })
+                .ToArray();
+            if (activities.Length > 0)
+            {
+                status["activities"] = activities;
+            }
+        }
+
         var snapshot = new Dictionary<string, object?>
         {
             ["type"] = "snapshot",
-            ["status"] = new Dictionary<string, object?>
-            {
-                ["revitBridge"] = _bridgeReady() ? "ready" : "unavailable",
-                ["assistant"] = _assistantState,
-                ["mcp"] = _mcpState,
-                ["aiProvider"] = _providerLabel,
-                ["aiProviderState"] = _providerState,
-                ["providerError"] = _providerError,
-                ["toolCount"] = _toolCount,
-                ["toolNames"] = _toolNames,
-                ["error"] = _statusError,
-                ["busy"] = _busy,
-                ["diagnostics"] = _diagnostics,
-            },
+            ["status"] = status,
             ["messages"] = messages,
             ["empty"] = messages.Length == 0,
         };
+        if (_placementProposal is not null)
+        {
+            snapshot["placementProposal"] = _placementProposal;
+        }
         if (_attachment is not null)
         {
             snapshot["attachment"] = new Dictionary<string, string>
@@ -1041,6 +1174,11 @@ internal sealed class AssistantShell
         }
 
         return JsonSerializer.Serialize(snapshot);
+    }
+
+    private void ApplyPlacement(string? state)
+    {
+        _placementProposal = state is "ready" or "needs_calibration" ? state : null;
     }
 
     private static string? UsedLabel(IReadOnlyList<string>? names)
@@ -1253,6 +1391,8 @@ internal sealed class AssistantShell
     }
 
     private sealed record AssistantAttachmentChip(string DisplayName, string Summary);
+
+    private sealed record ActivityNote(string Key, string Label, string State);
 
     private static string DisplayCommand(string action)
     {

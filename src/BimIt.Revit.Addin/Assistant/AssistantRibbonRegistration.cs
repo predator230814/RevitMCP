@@ -1,3 +1,6 @@
+using System.IO;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
 using Autodesk.Revit.Attributes;
 using Autodesk.Revit.DB;
 using Autodesk.Revit.UI;
@@ -54,7 +57,52 @@ internal static class AssistantRibbonRegistration
             typeof(ShowBimItAssistantCommand).Assembly.Location,
             typeof(ShowBimItAssistantCommand).FullName);
         button.ToolTip = "Open BIM-IT Assistant";
+        var small = AssistantRibbonImages.Load("assistant-16.png");
+        var large = AssistantRibbonImages.Load("assistant-32.png");
+        if (small is not null)
+        {
+            button.Image = small;
+        }
+
+        if (large is not null)
+        {
+            button.LargeImage = large;
+        }
+
         panel.AddItem(button);
+    }
+}
+
+internal static class AssistantRibbonImages
+{
+    public static ImageSource? Load(string fileName)
+    {
+        var directory = Path.GetDirectoryName(typeof(AssistantRibbonImages).Assembly.Location);
+        if (directory is null)
+        {
+            return null;
+        }
+
+        var path = Path.Combine(directory, "assistant-ribbon", fileName);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            image.UriSource = new Uri(path, UriKind.Absolute);
+            image.EndInit();
+            image.Freeze();
+            return image;
+        }
+        catch (Exception)
+        {
+            return null;
+        }
     }
 }
 

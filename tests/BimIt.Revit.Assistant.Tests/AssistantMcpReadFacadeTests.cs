@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BimIt.Revit.Assistant.Ipc;
 using BimIt.Revit.Contracts;
 using BimIt.Revit.Assistant.Patterns;
 using BimIt.Revit.Assistant.Providers.GitHubCopilot;
@@ -373,8 +374,98 @@ public sealed class AssistantMcpReadFacadeTests
         Assert.DoesNotContain("bimit_", skill, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public async Task Mcp_read_activity_follows_the_invocation_and_hides_arguments()
+    {
+        var sink = new RecordingSink();
+        var bus = new AssistantActivityBus();
+        bus.Bind(sink);
+        var session = new ScriptedSession();
+        var facade = new AssistantMcpReadFacade(session, InstanceId, ServerToolMetadata.Descriptors, bus);
+
+        await facade.InvokeAsync("revit_get_context", null, CancellationToken.None);
+        Assert.Equal(new[] { "revit_get_context", "revit_get_context" }, sink.Items.Select(item => item.Tool).ToArray());
+        Assert.Equal("Reading model context", sink.Items[0].Label);
+        Assert.Equal("Read model context", sink.Items[1].Label);
+
+        sink.Items.Clear();
+        var secret = "do-not-show-argument";
+        await facade.InvokeAsync(
+            "revit_read",
+            Args($$$"""{"operation":"project.user_worksets","contract_version":"1","inputs":{"note":"{{{secret}}}"}}"""),
+            CancellationToken.None);
+        Assert.Equal(new[] { "revit_read", "revit_read" }, sink.Items.Select(item => item.Tool).ToArray());
+        Assert.Equal(new[] { "Reading Revit data", "Read Revit data" }, sink.Items.Select(item => item.Label).ToArray());
+        Assert.DoesNotContain(sink.Items, item => item.Label.Contains(secret, StringComparison.Ordinal));
+        Assert.Contains(session.Calls, call => call.Tool == "revit_get_context");
+        Assert.DoesNotContain(sink.Items, item => item.Tool == "revit_get_context");
+
+        sink.Items.Clear();
+        await facade.InvokeAsync("revit_apply_parameter_updates", Args("""{"intent_ref":"intent-1"}"""), CancellationToken.None);
+        Assert.Empty(sink.Items);
+        Assert.False(AssistantIpc.IsModelToolName("revit_apply_parameter_updates"));
+        Assert.False(AssistantIpc.GrantsApprovalAuthority);
+
+        bus.Clear();
+        await facade.InvokeAsync("revit_get_warnings", null, CancellationToken.None);
+        Assert.Empty(sink.Items);
+        var next = new RecordingSink();
+        bus.Bind(next);
+        await facade.InvokeAsync("revit_lookup", null, CancellationToken.None);
+        Assert.Equal("Discovering Revit capabilities", next.Items[0].Label);
+        Assert.Equal("Discovered Revit capabilities", next.Items[1].Label);
+        Assert.DoesNotContain(next.Items, item => item.Label.Contains("instance_id", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task Failed_mcp_read_never_completes_the_activity()
+    {
+        var sink = new RecordingSink();
+        var bus = new AssistantActivityBus();
+        bus.Bind(sink);
+        var session = new ScriptedSession { Fail = ("read_failed", "secret-argument") };
+        var facade = new AssistantMcpReadFacade(session, InstanceId, ServerToolMetadata.Descriptors, bus);
+
+        var failed = await facade.InvokeAsync("revit_lookup", null, CancellationToken.None);
+        Assert.Equal("read_failed", failed["code"]);
+        AssertOnlyStarted(sink, "revit_lookup");
+
+        sink.Items.Clear();
+        session.Fail = null;
+        session.Throw = new InvalidOperationException("secret-argument");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => facade.InvokeAsync("revit_get_context", null, CancellationToken.None));
+        AssertOnlyStarted(sink, "revit_get_context");
+
+        sink.Items.Clear();
+        session.Throw = null;
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => facade.InvokeAsync("revit_lookup", null, cancelled.Token));
+        AssertOnlyStarted(sink, "revit_lookup");
+
+        sink.Items.Clear();
+        await facade.InvokeAsync("revit_apply_parameter_updates", Args("""{"intent_ref":"secret-argument"}"""), CancellationToken.None);
+        Assert.Empty(sink.Items);
+        Assert.False(AssistantIpc.GrantsApprovalAuthority);
+    }
+
+    private static void AssertOnlyStarted(RecordingSink sink, string tool)
+    {
+        var activity = Assert.Single(sink.Items);
+        Assert.Equal(AssistantActivityState.Started, activity.State);
+        Assert.Equal(tool, activity.Tool);
+        Assert.DoesNotContain("secret-argument", activity.Label, StringComparison.Ordinal);
+    }
+
     private static AssistantMcpReadFacade Facade(IAssistantToolSession session, IReadOnlyList<AssistantMcpToolDescriptor> descriptors)
         => new(session, InstanceId, descriptors);
+
+    private sealed class RecordingSink : IAssistantActivitySink
+    {
+        public List<AssistantActivity> Items { get; } = [];
+
+        public void Report(AssistantActivity activity) => Items.Add(activity);
+    }
 
     private static IReadOnlyDictionary<string, object?> Args(string json)
     {
@@ -394,6 +485,8 @@ public sealed class AssistantMcpReadFacadeTests
 
         public (string Code, string Message)? Fail { get; set; }
 
+        public Exception? Throw { get; set; }
+
         public List<(string Tool, IReadOnlyDictionary<string, object?> Arguments)> Calls { get; } = [];
 
         public Task<AssistantMcpReadiness> InitializeAsync(CancellationToken cancellationToken)
@@ -402,6 +495,12 @@ public sealed class AssistantMcpReadFacadeTests
         public Task<AssistantToolCall> CallAsync(string toolName, IReadOnlyDictionary<string, object?> arguments, CancellationToken cancellationToken)
         {
             Calls.Add((toolName, arguments));
+            cancellationToken.ThrowIfCancellationRequested();
+            if (Throw is not null)
+            {
+                throw Throw;
+            }
+
             if (toolName == "revit_get_context")
             {
                 var document = Document is null ? "null" : "{\"title\":\"Doc\",\"document_id\":\"" + Document + "\"}";

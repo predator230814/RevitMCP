@@ -1,12 +1,18 @@
-const statusNode = document.getElementById("status");
+const statusLine = document.getElementById("status-line");
+const providerSelect = document.getElementById("provider");
+const attachIcon = `<svg class="attach-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M14 3.5H7.5A1.5 1.5 0 0 0 6 5v14a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V8.2L14 3.5z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M14 3.5V8h4M12 11.5v5M9.5 14h5"/></svg>`;
 const welcome = document.getElementById("welcome");
 const timeline = document.getElementById("timeline");
 const diagnostics = document.getElementById("diagnostics-panel");
 const command = document.getElementById("command");
 const retry = document.getElementById("retry");
 
+const webview = window.chrome && window.chrome.webview;
+
 function post(message) {
-  window.chrome.webview.postMessage(message);
+  if (webview) {
+    webview.postMessage(message);
+  }
 }
 
 function chip(label, value, state) {
@@ -16,14 +22,58 @@ function chip(label, value, state) {
   return `<span class="chip${bad ? " bad" : ""}${wait ? " wait" : ""}">${label}: ${escapeHtml(value)}</span>`;
 }
 
+function compactStatus(status) {
+  if (status.assistant === "unavailable" || status.mcp === "unavailable") {
+    return "Unavailable";
+  }
+  if (status.assistant === "starting" || status.mcp === "starting" || status.aiProviderState === "starting") {
+    return "Starting";
+  }
+  if (status.aiProviderState === "unavailable") {
+    return "AI provider unavailable";
+  }
+  if (status.mcp === "ready" && status.aiProviderState === "ready") {
+    return "Ready";
+  }
+  return "Connected";
+}
+
+function activityCard(activities) {
+  const items = (Array.isArray(activities) ? activities : []).filter((item) => item && typeof item.label === "string" && item.label);
+  const current = items.length && items[items.length - 1].state === "started" ? items[items.length - 1] : null;
+  const done = (current ? items.slice(0, -1) : items).filter((item) => item.state === "completed");
+  const rows = done.map((item) => `<li class="done">${escapeHtml(item.label)}</li>`).join("")
+    + (current ? `<li class="current">${escapeHtml(current.label)}</li>` : "");
+  const list = rows ? `<ul class="activity-list">${rows}</ul>` : "";
+  return `<li class="msg activity" aria-live="polite"><div class="activity-head"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><strong>Working</strong></div>${list}</li>`;
+}
+
+function renderProvider(status) {
+  const providers = Array.isArray(status.providers)
+    ? status.providers.filter((item) => item && typeof item.id === "string" && item.id && typeof item.label === "string" && item.label)
+    : [];
+  const list = providers.length ? providers : [{ id: "github-copilot", label: "GitHub Copilot", active: true }];
+  const active = list.find((item) => item.active) || list[0];
+  const signature = list.map((item) => item.id + "\n" + item.label).join("\n");
+  if (providerSelect.dataset.providers !== signature) {
+    providerSelect.replaceChildren();
+    for (const item of list) {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.label;
+      providerSelect.appendChild(option);
+    }
+    providerSelect.dataset.providers = signature;
+  }
+  if (active && providerSelect.value !== active.id) {
+    providerSelect.value = active.id;
+  }
+  statusLine.textContent = compactStatus(status);
+}
+
 function render(snapshot) {
   const status = snapshot.status || {};
-  statusNode.innerHTML = [
-    chip("Revit / Bridge", status.revitBridge || "unavailable"),
-    chip("Assistant", status.assistant || "unavailable"),
-    chip("MCP", status.mcp || "unavailable"),
-    chip("AI Provider", status.aiProvider || "Not configured", status.aiProviderState)
-  ].join("");
+  renderProvider(status);
   const unavailable = status.assistant === "unavailable" || status.mcp === "unavailable";
   retry.hidden = !unavailable;
   const messages = snapshot.messages || [];
@@ -36,17 +86,40 @@ function render(snapshot) {
   if (status.diagnostics) {
     const names = (status.toolNames || []).join("\n");
     diagnostics.hidden = false;
-    diagnostics.textContent = `Tools: ${status.toolCount ?? 0}\n${names}${status.error ? "\n" + status.error : ""}${status.providerError ? "\n" + status.providerError : ""}`;
+    diagnostics.innerHTML = `<div class="status-detail">${[
+      chip("Revit / Bridge", status.revitBridge || "unavailable"),
+      chip("Assistant", status.assistant || "unavailable"),
+      chip("MCP", status.mcp || "unavailable"),
+      chip("AI Provider", status.aiProvider || "Not configured", status.aiProviderState)
+    ].join("")}</div><pre class="diagnostics-text"></pre>`;
+    diagnostics.querySelector(".diagnostics-text").textContent = `Tools: ${status.toolCount ?? 0}\n${names}${status.error ? "\n" + status.error : ""}${status.providerError ? "\n" + status.providerError : ""}`;
   } else {
     diagnostics.hidden = true;
+    diagnostics.innerHTML = "";
   }
   if (status.busy) {
-    timeline.insertAdjacentHTML("beforeend", `<li class="msg"><h3>Working</h3><p>Waiting for the Assistant.</p></li>`);
+    timeline.insertAdjacentHTML("beforeend", activityCard(status.activities));
   }
   renderSkills(snapshot.skills);
   renderAttachment(snapshot.attachment);
+  renderPlacement(snapshot.placementProposal);
   patternTypes = snapshot.patternTypes && typeof snapshot.patternTypes === "object" ? snapshot.patternTypes : {};
   renderPattern(snapshot.patternReview, snapshot.patternPrepared === true);
+}
+
+function renderPlacement(state) {
+  const node = document.getElementById("placement");
+  const enabled = state === "ready" || state === "needs_calibration";
+  if (!enabled) {
+    node.hidden = true;
+    node.innerHTML = "";
+    return;
+  }
+  node.hidden = false;
+  node.innerHTML = `<h2>Placement proposal</h2><p class="sub">These actions apply to the current proposal. Approval still happens in the Revit Approval pane.</p><div class="pattern-actions"><button id="confirm-axes" type="button">Confirm project axes &amp; preview</button><button id="review-placements" type="button">Review in Revit</button><button id="apply-placements" type="button">Apply approved placements</button></div>`;
+  document.getElementById("confirm-axes").addEventListener("click", () => post({ type: "confirmProjectAxesPreview" }));
+  document.getElementById("review-placements").addEventListener("click", () => post({ type: "reviewInRevit" }));
+  document.getElementById("apply-placements").addEventListener("click", () => post({ type: "applyApprovedPlacements" }));
 }
 
 function renderAttachment(attachment) {
@@ -57,7 +130,7 @@ function renderAttachment(attachment) {
     return;
   }
   node.hidden = false;
-  node.innerHTML = `<span class="clip" aria-hidden="true">📎</span><span class="attachment-copy"><strong>${escapeHtml(attachment.displayName)}</strong><span class="sub">${escapeHtml(attachment.summary || "")}</span></span><button id="remove-attachment" type="button" aria-label="Remove document">Remove</button>`;
+  node.innerHTML = `<span class="clip" aria-hidden="true">${attachIcon}</span><span class="attachment-copy"><strong>${escapeHtml(attachment.displayName)}</strong><span class="sub">${escapeHtml(attachment.summary || "")}</span></span><button id="remove-attachment" type="button" aria-label="Remove document">Remove</button>`;
   document.getElementById("remove-attachment").addEventListener("click", () => post({ type: "removeDocument" }));
 }
 
@@ -397,12 +470,14 @@ function escapeHtml(value) {
   })[character]);
 }
 
-window.chrome.webview.addEventListener("message", (event) => {
-  const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
-  if (data && data.type === "snapshot") {
-    render(data);
-  }
-});
+if (webview) {
+  webview.addEventListener("message", (event) => {
+    const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data;
+    if (data && data.type === "snapshot") {
+      render(data);
+    }
+  });
+}
 
 document.querySelectorAll("[data-action]").forEach((button) => {
   button.addEventListener("click", () => post({ type: "runQuickAction", action: button.dataset.action }));
@@ -412,15 +487,13 @@ document.getElementById("new-chat").addEventListener("click", () => post({ type:
 retry.addEventListener("click", () => post({ type: "retryConnection" }));
 document.getElementById("diagnostics").addEventListener("click", () => post({ type: "openDiagnostics" }));
 document.getElementById("attach").addEventListener("click", () => post({ type: "attachDocument" }));
+providerSelect.addEventListener("change", () => post({ type: "selectProvider", action: providerSelect.value }));
 document.getElementById("settings-open").addEventListener("click", openSettings);
 document.getElementById("settings-close").addEventListener("click", closeSettings);
 document.getElementById("skills-reload").addEventListener("click", () => post({ type: "skills", action: "reload" }));
 document.getElementById("skills-import").addEventListener("click", () => post({ type: "skills", action: "import" }));
 document.getElementById("skills-add-source").addEventListener("click", () => post({ type: "skills", action: "addSource" }));
 document.getElementById("skills-open-custom").addEventListener("click", () => post({ type: "skills", action: "openCustomFolder" }));
-document.getElementById("confirm-axes").addEventListener("click", () => post({ type: "confirmProjectAxesPreview" }));
-document.getElementById("review-placements").addEventListener("click", () => post({ type: "reviewInRevit" }));
-document.getElementById("apply-placements").addEventListener("click", () => post({ type: "applyApprovedPlacements" }));
 document.getElementById("composer").addEventListener("submit", (event) => {
   event.preventDefault();
   const text = command.value.trim();
@@ -431,4 +504,6 @@ document.getElementById("composer").addEventListener("submit", (event) => {
   post({ type: "sendCommand", text });
 });
 
-post({ type: "pageReady" });
+if (webview) {
+  post({ type: "pageReady" });
+}

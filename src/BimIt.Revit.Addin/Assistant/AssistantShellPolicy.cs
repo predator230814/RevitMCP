@@ -13,9 +13,18 @@ internal static class AssistantContent
 
     public const string LocalOrigin = "https://bimit-revit-assistant.local/";
 
-    public const string AssetRevision = "2026-10-30.1";
+    public const string AssetRevision = "2026-11-20.2";
 
     public static string IndexUri => LocalOrigin + "index.html?rev=" + AssetRevision;
+}
+
+internal static class AssistantProviderChoice
+{
+    public const string CopilotId = "github-copilot";
+
+    public const string CopilotLabel = "GitHub Copilot";
+
+    public static bool IsKnown(string? id) => string.Equals(id, CopilotId, StringComparison.Ordinal);
 }
 
 internal static class AssistantOrigin

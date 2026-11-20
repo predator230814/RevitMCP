@@ -197,13 +197,19 @@ internal sealed class AssistantMcpReadFacade
 
     private readonly IAssistantToolSession _session;
     private readonly string _instanceId;
+    private readonly AssistantActivityBus? _activity;
     private readonly Dictionary<string, AssistantReadTool> _tools = new(StringComparer.Ordinal);
     private readonly object _usedLock = new();
     private readonly List<string> _used = [];
 
-    public AssistantMcpReadFacade(IAssistantToolSession session, string instanceId, IReadOnlyList<AssistantMcpToolDescriptor>? descriptors)
+    public AssistantMcpReadFacade(
+        IAssistantToolSession session,
+        string instanceId,
+        IReadOnlyList<AssistantMcpToolDescriptor>? descriptors,
+        AssistantActivityBus? activity = null)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
+        _activity = activity;
         if (string.IsNullOrWhiteSpace(instanceId))
         {
             throw new ArgumentException("An exact instance_id is required.", nameof(instanceId));
@@ -306,11 +312,14 @@ internal sealed class AssistantMcpReadFacade
             }
         }
 
+        _activity?.Report(AssistantActivityLabels.McpRead(name, tool.Description, AssistantActivityState.Started));
         var result = await _session.CallAsync(name, call, cancellationToken).ConfigureAwait(false);
         if (result.IsError)
         {
             return Fail(result);
         }
+
+        _activity?.Report(AssistantActivityLabels.McpRead(name, tool.Description, AssistantActivityState.Completed));
 
         if (result.Structured is not { ValueKind: JsonValueKind.Object or JsonValueKind.Array } structured)
         {

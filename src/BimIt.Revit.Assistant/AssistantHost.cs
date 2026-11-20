@@ -186,6 +186,7 @@ internal static class AssistantHost
         }
 
         var providerStart = StartProviderAsync(runtime, timeouts, cancellationToken);
+        var pipeWrite = new SemaphoreSlim(1, 1);
         try
         {
             await WriteAsync(server, Status(readiness, runtime.Status), cancellationToken).ConfigureAwait(false);
@@ -229,16 +230,17 @@ internal static class AssistantHost
                     try
                     {
                         var read = documents.Attach(parsed.Message.DocumentPath);
-                        documentResult = DocumentResult(read);
                         if (read.Artifact is not null)
                         {
                             proposals.NoteAttachmentIdentityChanged(previousArtifactId, CurrentAttachmentId(documents));
                             roomPatterns.NoteAttachmentIdentityChanged(previousArtifactId, CurrentAttachmentId(documents));
                         }
+
+                        documentResult = DocumentResult(read, proposals.PresentationState);
                     }
                     catch (Exception)
                     {
-                        documentResult = DocumentFailure(AssistantDocumentErrors.ReadFailed, AssistantDocumentErrors.ReadFailedMessage);
+                        documentResult = DocumentFailure(AssistantDocumentErrors.ReadFailed, AssistantDocumentErrors.ReadFailedMessage, proposals.PresentationState);
                     }
 
                     await WriteAsync(server, documentResult, cancellationToken).ConfigureAwait(false);
@@ -306,7 +308,7 @@ internal static class AssistantHost
                     documents.Clear();
                     proposals.NoteAttachmentIdentityChanged(previousArtifactId, null);
                     roomPatterns.NoteAttachmentIdentityChanged(previousArtifactId, null);
-                    await WriteAsync(server, DocumentCleared(), cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, DocumentCleared(proposals.PresentationState), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -335,7 +337,8 @@ internal static class AssistantHost
 
                 if (parsed.Message.Kind == AssistantIpcKind.Chat)
                 {
-                    await WriteAsync(server, await ChatAsync(runtime, parsed.Message, documents.Current, skills.RefreshSummaries(), timeouts, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+                    var chat = await ChatAsync(server, pipeWrite, runtime, parsed.Message, documents.Current, skills.RefreshSummaries(), timeouts, cancellationToken).ConfigureAwait(false);
+                    await WriteLockedAsync(pipeWrite, server, chat, cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -421,6 +424,8 @@ internal static class AssistantHost
     }
 
     private static async Task<AssistantIpcMessage> ChatAsync(
+        Stream server,
+        SemaphoreSlim pipeWrite,
         IAssistantAgentRuntime runtime,
         AssistantIpcMessage message,
         AssistantDocumentArtifact? attachment,
@@ -451,10 +456,11 @@ internal static class AssistantHost
 
         AssistantAgentTurn turn;
         var turnFinished = true;
+        var activity = new PipeActivitySink(server, message.RequestId ?? "", pipeWrite, cancellationToken);
         try
         {
             var pending = RunBudgetAsync(
-                token => runtime.SendAsync(new AssistantAgentRequest(message.Text ?? "", attachment, skills), token),
+                token => runtime.SendAsync(new AssistantAgentRequest(message.Text ?? "", attachment, skills, activity), token),
                 timeouts.Turn,
                 cancellationToken);
             var (finished, value) = await pending.ConfigureAwait(false);
@@ -570,7 +576,8 @@ internal static class AssistantHost
             status.Label,
             null,
             UsedToolNames(turn?.UsedTools),
-            PatternReview: turn?.PatternReview);
+            PatternReview: turn?.PatternReview,
+            PlacementProposal: PlacementPresentation(turn?.PlacementProposal));
     }
 
     private static IReadOnlyList<string> UsedToolNames(IReadOnlyList<string>? names)
@@ -597,7 +604,10 @@ internal static class AssistantHost
         return accepted;
     }
 
-    private static AssistantIpcMessage DocumentResult(AssistantDocumentReadResult result)
+    private static string? PlacementPresentation(string? state)
+        => state is "ready" or "needs_calibration" ? state : null;
+
+    private static AssistantIpcMessage DocumentResult(AssistantDocumentReadResult result, string? placement)
     {
         var artifact = result.Artifact;
         if (artifact is { IsDisposed: false })
@@ -624,15 +634,17 @@ internal static class AssistantHost
                 SourceSizeBytes: artifact.SourceSizeBytes,
                 PageCount: artifact.PageCount,
                 VisualCount: artifact.VisualPages.Count > 0 ? artifact.VisualPages.Count : null,
-                Truncated: artifact.TextTruncated || artifact.VisualTruncated);
+                Truncated: artifact.TextTruncated || artifact.VisualTruncated,
+                PlacementProposal: placement);
         }
 
         return DocumentFailure(
             result.Code ?? AssistantDocumentErrors.ReadFailed,
-            result.Message ?? AssistantDocumentErrors.ReadFailedMessage);
+            result.Message ?? AssistantDocumentErrors.ReadFailedMessage,
+            placement);
     }
 
-    private static AssistantIpcMessage DocumentFailure(string code, string message)
+    private static AssistantIpcMessage DocumentFailure(string code, string message, string? placement = null)
     {
         return new AssistantIpcMessage(
             AssistantIpcKind.DocumentResult,
@@ -652,10 +664,11 @@ internal static class AssistantHost
             false,
             Attached: false,
             DocumentCode: code,
-            DocumentMessage: message);
+            DocumentMessage: message,
+            PlacementProposal: placement);
     }
 
-    private static AssistantIpcMessage DocumentCleared()
+    private static AssistantIpcMessage DocumentCleared(string? placement)
     {
         return new AssistantIpcMessage(
             AssistantIpcKind.DocumentResult,
@@ -673,7 +686,8 @@ internal static class AssistantHost
             null,
             null,
             false,
-            Attached: false);
+            Attached: false,
+            PlacementProposal: placement);
     }
 
     private static AssistantIpcMessage Status(AssistantMcpReadiness readiness, AssistantProviderStatus provider)
@@ -964,5 +978,64 @@ internal static class AssistantHost
     private static Task WriteAsync(Stream stream, AssistantIpcMessage message, CancellationToken cancellationToken)
     {
         return AssistantPipeFrames.WriteAsync(stream, AssistantIpc.Serialize(message), cancellationToken);
+    }
+
+    private static async Task WriteLockedAsync(SemaphoreSlim gate, Stream stream, AssistantIpcMessage message, CancellationToken cancellationToken)
+    {
+        await gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await WriteAsync(stream, message, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    /// <summary>
+    /// Writes one activity frame for the chat request in progress. Unsafe labels are dropped. The frame is not a chat result.
+    /// </summary>
+    private sealed class PipeActivitySink(Stream stream, string requestId, SemaphoreSlim gate, CancellationToken cancellationToken) : IAssistantActivitySink
+    {
+        public void Report(AssistantActivity activity)
+        {
+            if (activity is null
+                || string.IsNullOrWhiteSpace(requestId)
+                || !AssistantIpc.IsSafeActivity(activity.Kind, activity.State, activity.Label, activity.Tool))
+            {
+                return;
+            }
+
+            var message = new AssistantIpcMessage(
+                AssistantIpcKind.ChatActivity,
+                null,
+                null,
+                null,
+                false,
+                requestId,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                false,
+                ActivityKind: activity.Kind,
+                ActivityState: activity.State,
+                ActivityLabel: activity.Label,
+                ActivityTool: activity.Tool);
+            gate.Wait(cancellationToken);
+            try
+            {
+                AssistantPipeFrames.WriteAsync(stream, AssistantIpc.Serialize(message), cancellationToken).GetAwaiter().GetResult();
+            }
+            finally
+            {
+                gate.Release();
+            }
+        }
     }
 }

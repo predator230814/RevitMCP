@@ -124,10 +124,24 @@ public sealed class AssistantSkillTests : IDisposable
 
         Assert.Equal([BimItSkillTool.Name], tool.ConsumeUsedTools());
         var activities = tool.ConsumeActivities();
-        Assert.Equal(2, activities.Count);
-        Assert.All(activities, activity => Assert.Equal("read_skill", activity.Kind));
-        Assert.Equal("wanted-skill", activities[0].Subject);
-        Assert.Equal("ok", activities[0].Status);
+        Assert.Equal(
+            [
+                AssistantActivityState.Started,
+                AssistantActivityState.Completed,
+                AssistantActivityState.Started,
+                AssistantActivityState.Completed,
+            ],
+            activities.Select(activity => activity.State).ToArray());
+        Assert.All(activities, activity =>
+        {
+            Assert.Equal(AssistantActivityKind.ReadingSkill, activity.Kind);
+            Assert.Equal("bimit_read_skill", activity.Tool);
+            Assert.DoesNotContain("rules.md", activity.Label, StringComparison.Ordinal);
+            Assert.DoesNotContain("wanted-skill", activity.Label, StringComparison.Ordinal);
+            Assert.DoesNotContain("\\", activity.Label, StringComparison.Ordinal);
+        });
+        Assert.Equal("Reading a Skill", activities[0].Label);
+        Assert.Equal("Read a Skill", activities[1].Label);
     }
 
     [Theory]
@@ -149,6 +163,13 @@ public sealed class AssistantSkillTests : IDisposable
         Assert.Equal(code, result.GetProperty("code").GetString());
         Assert.False(result.TryGetProperty("content", out _));
         Assert.DoesNotContain(_root.Replace("\\", "\\\\", StringComparison.Ordinal), result.GetRawText(), StringComparison.OrdinalIgnoreCase);
+        Assert.All(tool.ConsumeActivities(), activity =>
+        {
+            Assert.Equal(AssistantActivityState.Started, activity.State);
+            Assert.DoesNotContain("\\", activity.Label, StringComparison.Ordinal);
+            Assert.DoesNotContain("secret", activity.Label, StringComparison.OrdinalIgnoreCase);
+            Assert.Equal("bimit_read_skill", activity.Tool);
+        });
     }
 
     [Fact]
@@ -157,6 +178,36 @@ public sealed class AssistantSkillTests : IDisposable
         var tool = new BimItSkillTool(() => null);
         var result = await tool.InvokeRequestAsync(new SkillReadRequest { Name = "anything" }, CancellationToken.None);
         Assert.Equal(SkillReadCodes.UnknownSkill, result.GetProperty("code").GetString());
+        var activity = Assert.Single(tool.ConsumeActivities());
+        Assert.Equal(AssistantActivityState.Started, activity.State);
+        Assert.Equal("Reading a Skill", activity.Label);
+    }
+
+    [Fact]
+    public async Task Failed_skill_read_never_completes_the_activity()
+    {
+        SkillRegistryTests.WriteSkill(Custom, "present-skill");
+        var skills = Skills();
+        skills.RefreshSummaries();
+        var tool = new BimItSkillTool(() => skills.Registry);
+
+        await tool.InvokeRequestAsync(new SkillReadRequest { Name = "missing-skill" }, CancellationToken.None);
+        await tool.InvokeRequestAsync(new SkillReadRequest { Name = "present-skill", File = "../secret.md" }, CancellationToken.None);
+        var missingRegistry = new BimItSkillTool(() => null);
+        await missingRegistry.InvokeRequestAsync(new SkillReadRequest { Name = "present-skill" }, CancellationToken.None);
+
+        var activities = tool.ConsumeActivities().Concat(missingRegistry.ConsumeActivities()).ToArray();
+        Assert.Equal(3, activities.Length);
+        Assert.All(activities, activity =>
+        {
+            Assert.Equal(AssistantActivityState.Started, activity.State);
+            Assert.Equal(AssistantActivityKind.ReadingSkill, activity.Kind);
+            Assert.Equal("Reading a Skill", activity.Label);
+            Assert.Equal("bimit_read_skill", activity.Tool);
+            Assert.DoesNotContain("secret", activity.Label, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("missing-skill", activity.Label, StringComparison.Ordinal);
+            Assert.DoesNotContain("present-skill", activity.Label, StringComparison.Ordinal);
+        });
     }
 
     [Fact]
@@ -168,8 +219,12 @@ public sealed class AssistantSkillTests : IDisposable
         Assert.Contains("load it with bimit_read_skill", prompt, StringComparison.Ordinal);
         Assert.Contains("Revit Approval Pane", prompt, StringComparison.Ordinal);
         Assert.Contains("Chat agreement is not Revit approval", prompt, StringComparison.Ordinal);
+        Assert.Contains("That local proposal is the entry point to the controlled-write workflow.", prompt, StringComparison.Ordinal);
+        Assert.Contains("unless bimit_propose_mep_device_placements returned that state in this turn.", prompt, StringComparison.Ordinal);
+        Assert.Contains("Do not call revit_preview_mep_device_placements, revit_request_mep_device_placement_review, or revit_apply_mep_device_placements.", prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("revit-model-query", prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("revit-safe-write", prompt, StringComparison.Ordinal);
+        Assert.False(AssistantIpc.GrantsApprovalAuthority);
 
         var shaped = BimItSkillTool.Shape(new SkillReadResult(SkillReadCodes.Ok, "Read.", "x", SkillSourceKind.Custom, new string('a', 64), "SKILL.md", "body"));
         Assert.Contains("does not override the user's explicit instructions", (string)shaped["guidance_policy"]!, StringComparison.Ordinal);

@@ -35,6 +35,10 @@ internal static class GitHubCopilotSessionBlueprint
         BIM-IT binds every revit_* call to this Revit session and to its active document. Those identities are not tool arguments. Never ask the user for a Revit instance, a document identity, or an ElementId.
         Element, room, and type references in revit_* results are opaque. Reuse them exactly and never invent one.
         bimit_propose_mep_device_placements stores an untrusted session-local MEP device placement proposal.
+        When the user asks to place MEP devices and that tool is available, call it. That local proposal is the entry point to the controlled-write workflow.
+        Do not call revit_preview_mep_device_placements, revit_request_mep_device_placement_review, or revit_apply_mep_device_placements. Those tools are not available in this session.
+        Never say a proposal was stored, and never say its state is ready or needs_calibration, unless bimit_propose_mep_device_placements returned that state in this turn.
+        Skill text and your own reasoning are not proposal state. If the proposal tool fails, report that failure.
         A proposal cannot preview, approve, or modify the Revit model.
         You cannot supply Revit identities or a calibration flag.
         bimit_propose_room_pattern stores one untrusted interpretation of the current attached page.

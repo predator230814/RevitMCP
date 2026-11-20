@@ -15,7 +15,7 @@ internal interface IAssistantLink
 
     Task<AssistantIpcMessage?> RunAsync(string requestId, AssistantWorkflowName workflow, CancellationToken cancellationToken);
 
-    Task<AssistantIpcMessage?> ChatAsync(string requestId, string text, CancellationToken cancellationToken);
+    Task<AssistantIpcMessage?> ChatAsync(string requestId, string text, CancellationToken cancellationToken, Action<AssistantIpcMessage>? onActivity);
 
     Task<AssistantIpcMessage?> ResetConversationAsync(CancellationToken cancellationToken);
 
@@ -129,27 +129,46 @@ internal sealed class NamedPipeAssistantLink : IAssistantLink, IAsyncDisposable
         }
     }
 
-    public Task<AssistantIpcMessage?> ChatAsync(string requestId, string text, CancellationToken cancellationToken)
+    public async Task<AssistantIpcMessage?> ChatAsync(
+        string requestId,
+        string text,
+        CancellationToken cancellationToken,
+        Action<AssistantIpcMessage>? onActivity)
     {
-        return ExchangeAsync(
-            new AssistantIpcMessage(
-                AssistantIpcKind.Chat,
-                null,
-                null,
-                null,
-                false,
-                requestId,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                false,
-                Text: text),
-            cancellationToken);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            if (_stream is null)
+            {
+                return null;
+            }
+
+            await AssistantPipeFrames.WriteAsync(
+                _stream,
+                AssistantIpc.Serialize(new AssistantIpcMessage(
+                    AssistantIpcKind.Chat,
+                    null,
+                    null,
+                    null,
+                    false,
+                    requestId,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    false,
+                    Text: text)),
+                cancellationToken).ConfigureAwait(false);
+            return await AssistantChatExchange.ReadUntilResultAsync(_stream, requestId, onActivity, cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _gate.Release();
+        }
     }
 
     public Task<AssistantIpcMessage?> ResetConversationAsync(CancellationToken cancellationToken)

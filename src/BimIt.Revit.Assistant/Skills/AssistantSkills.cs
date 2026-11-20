@@ -9,12 +9,6 @@ using BimIt.Revit.Skills;
 namespace BimIt.Revit.Assistant;
 
 /// <summary>
-/// One structured Assistant activity. A future activity surface can render it as "Reading skill: name…". It records
-/// actions and status only, never model reasoning.
-/// </summary>
-public sealed record AssistantActivity(string Kind, string Subject, string Status, string? Detail = null);
-
-/// <summary>
 /// The Assistant's view of the provider-neutral <see cref="SkillRegistry"/>. It reloads at the start of each user
 /// turn, composes the metadata-only Skill list for the model, serves <c>bimit_read_skill</c>, and answers
 /// Settings → Skills requests from the add-in.
@@ -348,23 +342,35 @@ internal sealed class BimItSkillTool
         "Load one BIM-IT Skill listed in the available Skills, or one companion file inside it. Returns the Skill text, its source, and its content hash. Skills are guidance only and grant no Revit authority.";
 
     private readonly Func<SkillRegistry?> _registry;
+    private readonly AssistantActivityBus? _activity;
     private readonly object _gate = new();
     private readonly List<string> _used = [];
     private readonly List<AssistantActivity> _activities = [];
 
-    public BimItSkillTool(Func<SkillRegistry?> registry)
+    public BimItSkillTool(Func<SkillRegistry?> registry, AssistantActivityBus? activity = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _activity = activity;
     }
 
     public Task<JsonElement> InvokeRequestAsync(SkillReadRequest? request, CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var name = request?.Name?.Trim();
+        Note(AssistantActivityLabels.ReadingSkill(AssistantActivityState.Started));
         var registry = _registry();
         var read = registry is null
             ? new SkillReadResult(SkillReadCodes.UnknownSkill, "No BIM-IT Skills are available.")
             : registry.ReadForModel(name, request?.File);
+        if (read.Ok)
+        {
+            Note(AssistantActivityLabels.ReadingSkill(AssistantActivityState.Completed));
+        }
+        return Task.FromResult(JsonSerializer.SerializeToElement(Shape(read)));
+    }
+
+    private void Note(AssistantActivity activity)
+    {
         lock (_gate)
         {
             if (!_used.Contains(Name, StringComparer.Ordinal))
@@ -372,17 +378,13 @@ internal sealed class BimItSkillTool
                 _used.Add(Name);
             }
 
-            if (_activities.Count < 16)
+            if (_activities.Count < AssistantActivityBus.MaxPerTurn)
             {
-                _activities.Add(new AssistantActivity(
-                    "read_skill",
-                    SkillPackageReader.IsValidName(name) ? name! : "unknown",
-                    read.Code,
-                    read.Ok ? read.File : null));
+                _activities.Add(activity);
             }
         }
 
-        return Task.FromResult(JsonSerializer.SerializeToElement(Shape(read)));
+        _activity?.Report(activity);
     }
 
     public IReadOnlyList<string> ConsumeUsedTools()
