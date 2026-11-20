@@ -9,9 +9,9 @@
 </head>
 <body>
   <header class="top">
-    <div>
-      <p class="eyebrow">BIM-IT</p>
-      <h1>BIM-IT Assistant</h1>
+    <div class="brand">
+      <img class="logo" src="logo.png" alt="BIM IT, Tetra Tech" />
+      <h1>Assistant</h1>
     </div>
     <div class="header-actions">
       <button id="retry" type="button" hidden>Retry</button>
@@ -20,7 +20,13 @@
       <button id="new-chat" type="button">New chat</button>
     </div>
   </header>
-  <section class="status" id="status" aria-label="Connection status"></section>
+  <section class="status" aria-label="Connection status">
+    <label class="provider" for="provider">AI provider</label>
+    <select id="provider" aria-label="AI provider">
+      <option value="github-copilot">GitHub Copilot</option>
+    </select>
+    <p class="status-line" id="status-line"></p>
+  </section>
   <section class="settings" id="settings" hidden aria-label="Settings">
     <div class="settings-head">
       <h2>Settings</h2>
@@ -63,7 +69,7 @@
   <div class="dock">
     <div id="attachment" class="attachment" hidden></div>
     <form class="composer" id="composer">
-      <button id="attach" type="button" aria-label="Attach document">📎</button>
+      <button id="attach" type="button" aria-label="Attach document"><svg class="attach-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M14 3.5H7.5A1.5 1.5 0 0 0 6 5v14a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V8.2L14 3.5z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M14 3.5V8h4M12 11.5v5M9.5 14h5"/></svg></button>
       <label class="sr" for="command">Message</label>
       <textarea id="command" rows="2" placeholder="Ask about this model, or use /context, /warnings, /active-view"></textarea>
       <button type="submit">Send</button>

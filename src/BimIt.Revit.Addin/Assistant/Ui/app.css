@@ -1,15 +1,15 @@
 :root {
   color-scheme: light dark;
-  --bg: #f4f6f8;
+  --bg: #f3f6f9;
   --panel: #ffffff;
   --ink: #1c2430;
-  --muted: #5c6b7a;
-  --line: #d5dde6;
-  --accent: #0f6e6b;
+  --muted: #5c6e80;
+  --line: #c5d2de;
+  --accent: #005596;
   --accent-ink: #ffffff;
   --warn: #8a4b08;
   --error: #8d1d2c;
-  --chip: #e7eef3;
+  --chip: #e6eef5;
   font-family: "Segoe UI", sans-serif;
 }
 
@@ -18,13 +18,13 @@
     --bg: #1b2128;
     --panel: #242c35;
     --ink: #e8eef4;
-    --muted: #a9b6c3;
-    --line: #3a4653;
-    --accent: #3dbeb6;
-    --accent-ink: #08211f;
+    --muted: #a9b8c3;
+    --line: #3a4a5c;
+    --accent: #3d96d8;
+    --accent-ink: #ffffff;
     --warn: #e2b56a;
     --error: #ffb4bc;
-    --chip: #313b46;
+    --chip: #2c3a48;
   }
 }
 
@@ -52,12 +52,17 @@ body {
   padding-top: 10px;
 }
 
-.eyebrow {
-  margin: 0;
-  color: var(--accent);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.logo {
+  height: 58px;
+  width: auto;
+  display: block;
 }
 
 h1, h2 { margin: 0; font-weight: 650; }
@@ -89,7 +94,26 @@ button[type="submit"], .cards button {
   border-color: transparent;
 }
 
-.status { padding-top: 2px; padding-bottom: 4px; }
+.status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.provider {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+#provider {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 4px 10px;
+}
 
 .status-line {
   margin: 0;
@@ -246,7 +270,7 @@ main {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 18px;
-  align-items: end;
+  align-items: stretch;
 }
 
 .attachment {
@@ -303,12 +327,35 @@ textarea {
   padding: 8px;
 }
 
-.composer button[type="submit"] { border-radius: 12px; padding: 8px 14px; }
+.composer button[type="submit"] {
+  border-radius: 12px;
+  padding: 0 16px;
+  min-height: 44px;
+}
 
 #attach {
-  border: 0;
-  background: transparent;
+  width: 44px;
+  min-height: 44px;
+  height: auto;
+  display: grid;
+  place-items: center;
+  padding: 0;
   border-radius: 12px;
+  color: var(--accent);
+}
+
+#attach:hover { background: var(--chip); }
+
+.attach-icon {
+  width: 20px;
+  height: 20px;
+  display: block;
+}
+
+.clip {
+  display: grid;
+  place-items: center;
+  color: var(--accent);
 }
 
 .sr {

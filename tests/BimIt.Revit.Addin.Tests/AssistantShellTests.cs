@@ -22,7 +22,10 @@ public sealed class AssistantShellTests
 
         var ribbon = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "AssistantRibbonRegistration.cs"));
         Assert.Contains("AssistantRibbon.StartsAssistantWhenRegistered", ribbon, StringComparison.Ordinal);
+        Assert.Contains("button.LargeImage", ribbon, StringComparison.Ordinal);
         Assert.Contains("class ShowBimItAssistantCommand : IExternalCommand", ribbon, StringComparison.Ordinal);
+        Assert.True(File.Exists(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ribbon", "assistant-32.png")));
+        Assert.True(File.Exists(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ribbon", "assistant-16.png")));
         Assert.DoesNotContain("Process.Start", ribbon, StringComparison.Ordinal);
         Assert.DoesNotContain("EnsureStarted", ribbon, StringComparison.Ordinal);
     }
@@ -198,7 +201,8 @@ public sealed class AssistantShellTests
         var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
         Assert.Contains("post({ type: \"confirmProjectAxesPreview\" })", page, StringComparison.Ordinal);
         Assert.Contains("Confirm project axes &amp; preview", page, StringComparison.Ordinal);
-        Assert.Contains("snapshot.placementActions === true", page, StringComparison.Ordinal);
+        Assert.Contains("state === \"ready\" || state === \"needs_calibration\"", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("placementActions", page, StringComparison.Ordinal);
         Assert.DoesNotContain("Confirm project axes", html, StringComparison.Ordinal);
         Assert.DoesNotContain("class=\"confirm-row\"", html, StringComparison.Ordinal);
         Assert.DoesNotContain("data-action=\"confirmProjectAxesPreview\"", html, StringComparison.Ordinal);
@@ -783,6 +787,29 @@ public sealed class AssistantShellTests
     }
 
     [Fact]
+    public void Provider_choice_offers_copilot_and_rejects_any_other_provider()
+    {
+        var parsed = AssistantPageMessages.Parse("""{"type":"selectProvider","action":"github-copilot"}""");
+        Assert.True(parsed.Accepted);
+        Assert.Equal(AssistantPageIntent.SelectProvider, parsed.Intent);
+        Assert.Equal("github-copilot", parsed.Action);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"selectProvider","action":"other"}""").Accepted);
+        Assert.False(AssistantPageMessages.Parse("""{"type":"selectProvider"}""").Accepted);
+
+        var factory = new RecordingProcessFactory();
+        var shell = CreateShell("instance-provider-choice", factory, new ScriptedLink());
+        var snapshot = shell.SerializeSnapshot();
+        Assert.Contains("\"id\":\"github-copilot\"", snapshot, StringComparison.Ordinal);
+        Assert.Contains("\"label\":\"GitHub Copilot\"", snapshot, StringComparison.Ordinal);
+        Assert.Contains("\"active\":true", snapshot, StringComparison.Ordinal);
+
+        shell.ReceivePageMessage("""{"type":"selectProvider","action":"github-copilot"}""");
+        shell.ReceivePageMessage("""{"type":"selectProvider","action":"other"}""");
+        Assert.Contains("\"id\":\"github-copilot\"", shell.SerializeSnapshot(), StringComparison.Ordinal);
+        Assert.Equal(0, factory.Starts);
+    }
+
+    [Fact]
     public void Welcome_actions_remain_and_the_composer_has_no_duplicate_row()
     {
         var html = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "index.html"));
@@ -801,6 +828,11 @@ public sealed class AssistantShellTests
         Assert.Contains("activityCard", script, StringComparison.Ordinal);
         Assert.Contains("prefers-reduced-motion", css, StringComparison.Ordinal);
         Assert.Contains("default-src 'none'", html, StringComparison.Ordinal);
+        Assert.Contains("logo.png", html, StringComparison.Ordinal);
+        Assert.Contains("id=\"provider\"", html, StringComparison.Ordinal);
+        Assert.Contains("class=\"attach-icon\"", html, StringComparison.Ordinal);
+        Assert.DoesNotContain("📎", html, StringComparison.Ordinal);
+        Assert.Contains("selectProvider", script, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -843,7 +875,7 @@ public sealed class AssistantShellTests
         Assert.Contains("\"busy\":false", finished, StringComparison.Ordinal);
         Assert.Contains("Used: revit_get_context", finished, StringComparison.Ordinal);
         Assert.DoesNotContain("Reading Revit data", finished, StringComparison.Ordinal);
-        Assert.DoesNotContain("placementActions", finished, StringComparison.Ordinal);
+        Assert.DoesNotContain("placementProposal", finished, StringComparison.Ordinal);
 
         link.ChatResult = ChatReply("The provider failed.", [], isError: true);
         link.Activities.Clear();
@@ -858,22 +890,88 @@ public sealed class AssistantShellTests
         Assert.Contains("\"busy\":false", failed, StringComparison.Ordinal);
         Assert.DoesNotContain("\"label\":\"Preparing\"", failed, StringComparison.Ordinal);
 
-        link.ChatResult = ChatReply("Stored.", ["bimit_propose_mep_device_placements"]);
+        link.ChatResult = ChatReply("Stored a proposal in state needs_calibration.", ["bimit_propose_mep_device_placements"]);
         link.Activities.Clear();
         shell.ReceivePageMessage("""{"type":"sendCommand","text":"Propose devices."}""");
         await WaitFor(() =>
         {
             var snapshot = shell.SerializeSnapshot();
-            return snapshot.Contains("\"placementActions\":true", StringComparison.Ordinal) && snapshot.Contains("\"busy\":false", StringComparison.Ordinal);
+            return snapshot.Contains("needs_calibration.", StringComparison.Ordinal) && snapshot.Contains("\"busy\":false", StringComparison.Ordinal);
         });
-        Assert.Contains("\"placementActions\":true", shell.SerializeSnapshot(), StringComparison.Ordinal);
+        Assert.DoesNotContain("placementProposal", shell.SerializeSnapshot(), StringComparison.Ordinal);
+
+        link.ChatResult = ChatReply("Stored.", ["bimit_propose_mep_device_placements"], placement: "needs_calibration");
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Store the proposal."}""");
+        await WaitFor(() =>
+        {
+            var snapshot = shell.SerializeSnapshot();
+            return snapshot.Contains("\"placementProposal\":\"needs_calibration\"", StringComparison.Ordinal) && snapshot.Contains("\"busy\":false", StringComparison.Ordinal);
+        });
+        Assert.Contains("\"placementProposal\":\"needs_calibration\"", shell.SerializeSnapshot(), StringComparison.Ordinal);
 
         shell.ReceivePageMessage("""{"type":"newConversation"}""");
         var reset = shell.SerializeSnapshot();
-        Assert.DoesNotContain("placementActions", reset, StringComparison.Ordinal);
+        Assert.DoesNotContain("placementProposal", reset, StringComparison.Ordinal);
         Assert.Contains("\"busy\":false", reset, StringComparison.Ordinal);
         Assert.DoesNotContain("Preparing", reset, StringComparison.Ordinal);
         Assert.Empty(shell.Conversation.Entries);
+    }
+
+    [Fact]
+    public async Task Placement_card_uses_store_state_and_ignores_prose_and_used_tools()
+    {
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus(),
+            ChatResult = ChatReply(
+                "Stored a proposal. State: needs_calibration. Preview ready.",
+                ["bimit_propose_mep_device_placements"],
+                isError: true),
+        };
+        var shell = CreateShell("instance-placement-state", new RecordingProcessFactory(), link, FastTimeouts());
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Place the devices."}""");
+        await WaitFor(() =>
+        {
+            var snapshot = shell.SerializeSnapshot();
+            return snapshot.Contains("Used: Propose MEP placements", StringComparison.Ordinal)
+                && snapshot.Contains("\"busy\":false", StringComparison.Ordinal);
+        });
+        Assert.DoesNotContain("placementProposal", shell.SerializeSnapshot(), StringComparison.Ordinal);
+
+        link.ChatResult = ChatReply("The proposal is stored.", [], placement: "needs_calibration");
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Use the stored proposal."}""");
+        await WaitFor(() => shell.SerializeSnapshot().Contains("\"placementProposal\":\"needs_calibration\"", StringComparison.Ordinal));
+
+        link.ChatResult = ChatReply("Axes are confirmed.", [], placement: "ready");
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"Confirm the axes."}""");
+        await WaitFor(() => shell.SerializeSnapshot().Contains("\"placementProposal\":\"ready\"", StringComparison.Ordinal));
+
+        link.DocumentResult = new AssistantIpcMessage(
+            AssistantIpcKind.DocumentResult,
+            null,
+            null,
+            null,
+            false,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            false,
+            Attached: false);
+        shell.ReceivePageMessage("""{"type":"removeDocument"}""");
+        await WaitFor(() => link.Removes == 1 && !shell.SerializeSnapshot().Contains("placementProposal", StringComparison.Ordinal));
+
+        var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
+        Assert.Contains("Approval still happens in the Revit Approval pane.", page, StringComparison.Ordinal);
+        Assert.Contains("post({ type: \"confirmProjectAxesPreview\" })", page, StringComparison.Ordinal);
+        Assert.Contains("post({ type: \"reviewInRevit\" })", page, StringComparison.Ordinal);
+        Assert.Contains("post({ type: \"applyApprovedPlacements\" })", page, StringComparison.Ordinal);
+        Assert.DoesNotContain("placementActions", page, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -903,7 +1001,7 @@ public sealed class AssistantShellTests
         Assert.DoesNotContain("Reading Revit data", finished, StringComparison.Ordinal);
     }
 
-    private static AssistantIpcMessage ChatReply(string body, IReadOnlyList<string> used, bool isError = false)
+    private static AssistantIpcMessage ChatReply(string body, IReadOnlyList<string> used, bool isError = false, string? placement = null)
     {
         return new AssistantIpcMessage(
             AssistantIpcKind.ChatResult,
@@ -926,7 +1024,8 @@ public sealed class AssistantShellTests
             "auto",
             null,
             "GitHub Copilot · auto",
-            UsedTools: used);
+            UsedTools: used,
+            PlacementProposal: placement);
     }
 
     private static AssistantIpcMessage ActivityFrame(string kind, string state, string label, string? tool)

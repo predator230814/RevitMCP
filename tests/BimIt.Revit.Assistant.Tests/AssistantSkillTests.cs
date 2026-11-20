@@ -219,8 +219,12 @@ public sealed class AssistantSkillTests : IDisposable
         Assert.Contains("load it with bimit_read_skill", prompt, StringComparison.Ordinal);
         Assert.Contains("Revit Approval Pane", prompt, StringComparison.Ordinal);
         Assert.Contains("Chat agreement is not Revit approval", prompt, StringComparison.Ordinal);
+        Assert.Contains("That local proposal is the entry point to the controlled-write workflow.", prompt, StringComparison.Ordinal);
+        Assert.Contains("unless bimit_propose_mep_device_placements returned that state in this turn.", prompt, StringComparison.Ordinal);
+        Assert.Contains("Do not call revit_preview_mep_device_placements, revit_request_mep_device_placement_review, or revit_apply_mep_device_placements.", prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("revit-model-query", prompt, StringComparison.Ordinal);
         Assert.DoesNotContain("revit-safe-write", prompt, StringComparison.Ordinal);
+        Assert.False(AssistantIpc.GrantsApprovalAuthority);
 
         var shaped = BimItSkillTool.Shape(new SkillReadResult(SkillReadCodes.Ok, "Read.", "x", SkillSourceKind.Custom, new string('a', 64), "SKILL.md", "body"));
         Assert.Contains("does not override the user's explicit instructions", (string)shaped["guidance_policy"]!, StringComparison.Ordinal);

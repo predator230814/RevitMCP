@@ -29,7 +29,7 @@ internal sealed class AssistantShell
     private bool _openRequested;
     private bool _diagnostics;
     private bool _busy;
-    private bool _placementActions;
+    private string? _placementProposal;
     private string? _chatRequestId;
     private readonly List<ActivityNote> _activities = [];
     private string _assistantState = "unavailable";
@@ -128,7 +128,7 @@ internal sealed class AssistantShell
                 _patternReview = null;
                 _patternTypes.Clear();
                 _patternPrepared = false;
-                _placementActions = false;
+                _placementProposal = null;
                 ClearChatActivity();
                 PostSnapshot();
                 Sequence(ResetProviderAsync);
@@ -176,6 +176,9 @@ internal sealed class AssistantShell
                 break;
             case AssistantPageIntent.Skills:
                 RequestSkills(parsed.Action!, parsed.Text);
+                break;
+            case AssistantPageIntent.SelectProvider:
+                PostSnapshot();
                 break;
             case AssistantPageIntent.OpenDiagnostics:
                 _diagnostics = !_diagnostics;
@@ -439,10 +442,7 @@ internal sealed class AssistantShell
             }
 
             ApplyProvider(result);
-            if (!result.IsError && result.UsedTools?.Contains("bimit_propose_mep_device_placements") == true)
-            {
-                _placementActions = true;
-            }
+            ApplyPlacement(result.PlacementProposal);
 
             if (result.PatternReview is not null && RoomPatternReview.TryParse(result.PatternReview, out var review))
             {
@@ -874,6 +874,7 @@ internal sealed class AssistantShell
                 _patternReview = null;
                 _patternTypes.Clear();
                 _patternPrepared = false;
+                ApplyPlacement(result.PlacementProposal);
             }
             else
             {
@@ -898,6 +899,8 @@ internal sealed class AssistantShell
             _conversation.Add("error", "Assistant", "The document could not be attached.");
             return;
         }
+
+        ApplyPlacement(result.PlacementProposal);
 
         if (result.Attached == true && !string.IsNullOrWhiteSpace(result.DisplayName) && result.DocumentKind is not null)
         {
@@ -926,6 +929,7 @@ internal sealed class AssistantShell
     private async Task ResetProviderAsync()
     {
         _conversation.Reset();
+        _placementProposal = null;
         _attachment = null;
         _patternReview = null;
         _patternTypes.Clear();
@@ -1089,6 +1093,16 @@ internal sealed class AssistantShell
             ["mcp"] = _mcpState,
             ["aiProvider"] = _providerLabel,
             ["aiProviderState"] = _providerState,
+            ["providers"] = new object[]
+            {
+                new Dictionary<string, object?>
+                {
+                    ["id"] = AssistantProviderChoice.CopilotId,
+                    ["label"] = AssistantProviderChoice.CopilotLabel,
+                    ["state"] = _providerState,
+                    ["active"] = true,
+                },
+            },
             ["providerError"] = _providerError,
             ["toolCount"] = _toolCount,
             ["toolNames"] = _toolNames,
@@ -1118,9 +1132,9 @@ internal sealed class AssistantShell
             ["messages"] = messages,
             ["empty"] = messages.Length == 0,
         };
-        if (_placementActions)
+        if (_placementProposal is not null)
         {
-            snapshot["placementActions"] = true;
+            snapshot["placementProposal"] = _placementProposal;
         }
         if (_attachment is not null)
         {
@@ -1160,6 +1174,11 @@ internal sealed class AssistantShell
         }
 
         return JsonSerializer.Serialize(snapshot);
+    }
+
+    private void ApplyPlacement(string? state)
+    {
+        _placementProposal = state is "ready" or "needs_calibration" ? state : null;
     }
 
     private static string? UsedLabel(IReadOnlyList<string>? names)

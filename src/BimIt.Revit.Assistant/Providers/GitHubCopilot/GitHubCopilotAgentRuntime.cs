@@ -102,7 +102,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         var userText = request.Text ?? "";
         if (string.IsNullOrWhiteSpace(userText))
         {
-            return new AssistantAgentTurn("BIM-IT Assistant", "Enter a question about this Revit session.", true);
+            return Observed("BIM-IT Assistant", "Enter a question about this Revit session.", true);
         }
 
         await InitializeAsync(cancellationToken).ConfigureAwait(false);
@@ -110,7 +110,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
         {
             var detail = Status.SafeError ?? GitHubCopilotSessionBlueprint.SignInRequired;
             var signIn = string.Equals(detail, GitHubCopilotSessionBlueprint.SignInRequired, StringComparison.Ordinal);
-            return new AssistantAgentTurn("BIM-IT Assistant", detail, !signIn);
+            return Observed("BIM-IT Assistant", detail, !signIn);
         }
 
         using var budget = Budget(AssistantProviderTimeouts.Default.Turn, cancellationToken);
@@ -126,7 +126,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             _skills.ConsumeActivities();
             if (_session is null)
             {
-                return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, ConsumeTurnTools());
+                return Observed("BIM-IT Assistant", Status.SafeError ?? "The AI provider is unavailable.", true, ConsumeTurnTools());
             }
 
             _activity.Bind(request.Activity);
@@ -180,7 +180,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                     }
                 }
 
-                return new AssistantAgentTurn("BIM-IT Assistant", content, false, ConsumeTurnTools(), _patternStore.PeekReviewJson(), _skills.ConsumeActivities());
+                return Observed("BIM-IT Assistant", content, false, ConsumeTurnTools(), _patternStore.PeekReviewJson(), _skills.ConsumeActivities());
             }
             finally
             {
@@ -207,7 +207,7 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
                     ? "The AI provider could not read the attached pages."
                     : AssistantSafeText.Clean(exception.Message, 400);
             Status = Unavailable(string.IsNullOrWhiteSpace(safe) ? AssistantProviderTimeouts.TurnTimedOut : safe);
-            return new AssistantAgentTurn("BIM-IT Assistant", Status.SafeError!, true, ConsumeTurnTools());
+            return Observed("BIM-IT Assistant", Status.SafeError!, true, ConsumeTurnTools());
         }
         finally
         {
@@ -217,10 +217,24 @@ internal sealed class GitHubCopilotAgentRuntime : IAssistantAgentRuntime
             }
         }
 
+        AssistantAgentTurn Observed(
+            string title,
+            string body,
+            bool isError,
+            IReadOnlyList<string>? tools = null,
+            string? pattern = null,
+            IReadOnlyList<AssistantActivity>? activities = null)
+            => new(title, body, isError, tools, pattern, activities, _proposalStore.PresentationState);
+
         IReadOnlyList<string> ConsumeTurnTools()
         {
             var names = new List<string>();
             foreach (var name in _tools.ConsumeUsedTools())
+            {
+                AddUsed(names, name);
+            }
+
+            foreach (var name in _proposals.ConsumeUsedTools())
             {
                 AddUsed(names, name);
             }

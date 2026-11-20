@@ -1,4 +1,6 @@
-const statusNode = document.getElementById("status");
+const statusLine = document.getElementById("status-line");
+const providerSelect = document.getElementById("provider");
+const attachIcon = `<svg class="attach-icon" viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M14 3.5H7.5A1.5 1.5 0 0 0 6 5v14a1.5 1.5 0 0 0 1.5 1.5h9A1.5 1.5 0 0 0 18 19V8.2L14 3.5z"/><path fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" d="M14 3.5V8h4M12 11.5v5M9.5 14h5"/></svg>`;
 const welcome = document.getElementById("welcome");
 const timeline = document.getElementById("timeline");
 const diagnostics = document.getElementById("diagnostics-panel");
@@ -46,9 +48,32 @@ function activityCard(activities) {
   return `<li class="msg activity" aria-live="polite"><div class="activity-head"><span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><strong>Working</strong></div>${list}</li>`;
 }
 
+function renderProvider(status) {
+  const providers = Array.isArray(status.providers)
+    ? status.providers.filter((item) => item && typeof item.id === "string" && item.id && typeof item.label === "string" && item.label)
+    : [];
+  const list = providers.length ? providers : [{ id: "github-copilot", label: "GitHub Copilot", active: true }];
+  const active = list.find((item) => item.active) || list[0];
+  const signature = list.map((item) => item.id + "\n" + item.label).join("\n");
+  if (providerSelect.dataset.providers !== signature) {
+    providerSelect.replaceChildren();
+    for (const item of list) {
+      const option = document.createElement("option");
+      option.value = item.id;
+      option.textContent = item.label;
+      providerSelect.appendChild(option);
+    }
+    providerSelect.dataset.providers = signature;
+  }
+  if (active && providerSelect.value !== active.id) {
+    providerSelect.value = active.id;
+  }
+  statusLine.textContent = compactStatus(status);
+}
+
 function render(snapshot) {
   const status = snapshot.status || {};
-  statusNode.innerHTML = `<p class="status-line">${escapeHtml(compactStatus(status))}</p>`;
+  renderProvider(status);
   const unavailable = status.assistant === "unavailable" || status.mcp === "unavailable";
   retry.hidden = !unavailable;
   const messages = snapshot.messages || [];
@@ -77,13 +102,14 @@ function render(snapshot) {
   }
   renderSkills(snapshot.skills);
   renderAttachment(snapshot.attachment);
-  renderPlacement(snapshot.placementActions === true);
+  renderPlacement(snapshot.placementProposal);
   patternTypes = snapshot.patternTypes && typeof snapshot.patternTypes === "object" ? snapshot.patternTypes : {};
   renderPattern(snapshot.patternReview, snapshot.patternPrepared === true);
 }
 
-function renderPlacement(enabled) {
+function renderPlacement(state) {
   const node = document.getElementById("placement");
+  const enabled = state === "ready" || state === "needs_calibration";
   if (!enabled) {
     node.hidden = true;
     node.innerHTML = "";
@@ -104,7 +130,7 @@ function renderAttachment(attachment) {
     return;
   }
   node.hidden = false;
-  node.innerHTML = `<span class="clip" aria-hidden="true">📎</span><span class="attachment-copy"><strong>${escapeHtml(attachment.displayName)}</strong><span class="sub">${escapeHtml(attachment.summary || "")}</span></span><button id="remove-attachment" type="button" aria-label="Remove document">Remove</button>`;
+  node.innerHTML = `<span class="clip" aria-hidden="true">${attachIcon}</span><span class="attachment-copy"><strong>${escapeHtml(attachment.displayName)}</strong><span class="sub">${escapeHtml(attachment.summary || "")}</span></span><button id="remove-attachment" type="button" aria-label="Remove document">Remove</button>`;
   document.getElementById("remove-attachment").addEventListener("click", () => post({ type: "removeDocument" }));
 }
 
@@ -461,6 +487,7 @@ document.getElementById("new-chat").addEventListener("click", () => post({ type:
 retry.addEventListener("click", () => post({ type: "retryConnection" }));
 document.getElementById("diagnostics").addEventListener("click", () => post({ type: "openDiagnostics" }));
 document.getElementById("attach").addEventListener("click", () => post({ type: "attachDocument" }));
+providerSelect.addEventListener("change", () => post({ type: "selectProvider", action: providerSelect.value }));
 document.getElementById("settings-open").addEventListener("click", openSettings);
 document.getElementById("settings-close").addEventListener("click", closeSettings);
 document.getElementById("skills-reload").addEventListener("click", () => post({ type: "skills", action: "reload" }));

@@ -6,7 +6,8 @@ public sealed record AssistantAgentTurn(
     bool IsError,
     IReadOnlyList<string>? UsedTools = null,
     string? PatternReview = null,
-    IReadOnlyList<AssistantActivity>? Activities = null);
+    IReadOnlyList<AssistantActivity>? Activities = null,
+    string? PlacementProposal = null);
 
 /// <param name="Skills">Enabled, ready Skill summaries reloaded for this turn. Metadata only, never Skill content.</param>
 public sealed record AssistantAgentRequest(

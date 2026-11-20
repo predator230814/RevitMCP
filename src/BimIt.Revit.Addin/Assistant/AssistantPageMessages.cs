@@ -21,6 +21,7 @@ internal enum AssistantPageIntent
     ApplyApprovedPattern,
     SearchPatternTypes,
     Skills,
+    SelectProvider,
 }
 
 internal readonly record struct AssistantPageParse(bool Accepted, AssistantPageIntent Intent, string? Action, string? Text, string Reason)
@@ -94,6 +95,7 @@ internal static class AssistantPageMessages
                     : AssistantPageParse.Reject("pattern-apply"),
                 "searchPatternTypes" => ParseTypeSearch(message),
                 "skills" => ParseSkills(message),
+                "selectProvider" => ParseProvider(message.Action),
                 _ => AssistantPageParse.Reject("unknown"),
             };
         }
@@ -101,6 +103,16 @@ internal static class AssistantPageMessages
         {
             return AssistantPageParse.Reject("malformed");
         }
+    }
+
+    private static AssistantPageParse ParseProvider(string? action)
+    {
+        if (!AssistantProviderChoice.IsKnown(action))
+        {
+            return AssistantPageParse.Reject("provider");
+        }
+
+        return AssistantPageParse.Accept(AssistantPageIntent.SelectProvider, action);
     }
 
     private static AssistantPageParse ParseAction(string? action)

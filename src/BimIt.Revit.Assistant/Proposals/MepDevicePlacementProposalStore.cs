@@ -226,6 +226,20 @@ internal sealed class MepDevicePlacementProposalStore
         }
     }
 
+    /// <summary>Bounded presentation state for the DockPanel. Null when no current proposal exists.</summary>
+    public string? PresentationState
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _current?.State is MepDevicePlacementProposalStates.Ready or MepDevicePlacementProposalStates.NeedsCalibration
+                    ? _current.State
+                    : null;
+            }
+        }
+    }
+
     public void Replace(MepDevicePlacementProposal proposal)
     {
         ArgumentNullException.ThrowIfNull(proposal);

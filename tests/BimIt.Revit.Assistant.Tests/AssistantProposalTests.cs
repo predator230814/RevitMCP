@@ -379,6 +379,58 @@ public sealed class AssistantProposalTests
         }
     }
 
+    [Fact]
+    public async Task Presentation_state_comes_from_the_store_and_rejects_invented_states()
+    {
+        var store = new MepDevicePlacementProposalStore();
+        var tool = ProposalTool(store);
+        Assert.Null(store.PresentationState);
+
+        var invalid = await tool.InvokeAsync(Json("{\"length_unit\":\"mm\"}"), CancellationToken.None);
+        Assert.False((bool)invalid["ok"]!);
+        Assert.Null(store.PresentationState);
+        Assert.Null(store.Current);
+
+        var stored = await tool.InvokeAsync(Json(Placement("mm", Item(1000, 0, 0))), CancellationToken.None);
+        Assert.True((bool)stored["ok"]!);
+        Assert.Equal(MepDevicePlacementProposalStates.NeedsCalibration, store.PresentationState);
+        var proposal = Assert.IsAssignableFrom<IReadOnlyDictionary<string, object?>>(stored["proposal"]);
+        Assert.Equal(store.PresentationState, proposal["state"]);
+
+        var message = new AssistantIpcMessage(
+            AssistantIpcKind.ChatResult,
+            null,
+            null,
+            null,
+            false,
+            "chat",
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            "BIM-IT Assistant",
+            "Stored a proposal in state ready.",
+            false,
+            UsedTools: [MepDevicePlacementProposalTool.Name],
+            PlacementProposal: store.PresentationState);
+        var wire = AssistantIpc.Serialize(message);
+        Assert.Contains("\"placementProposal\":\"needs_calibration\"", wire, StringComparison.Ordinal);
+        Assert.DoesNotContain("offset_x", wire, StringComparison.Ordinal);
+        Assert.DoesNotContain("instance_id", wire, StringComparison.Ordinal);
+        Assert.DoesNotContain("template", wire, StringComparison.OrdinalIgnoreCase);
+        var parsed = AssistantIpc.Parse(wire);
+        Assert.True(parsed.Accepted);
+        Assert.Equal("needs_calibration", parsed.Message!.PlacementProposal);
+
+        Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"stored","placementProposal":"stored"}""").Accepted);
+        Assert.False(AssistantIpc.Parse("""{"type":"chatResult","requestId":"abc","title":"BIM-IT Assistant","body":"ready","placementProposal":"approved"}""").Accepted);
+        Assert.False(AssistantIpc.Parse("""{"type":"chatActivity","requestId":"req-a","activityKind":"preparing","activityState":"started","activityLabel":"Preparing","placementProposal":"ready"}""").Accepted);
+        Assert.True(AssistantIpc.Parse("""{"type":"documentResult","attached":false,"placementProposal":"ready"}""").Accepted);
+        Assert.False(AssistantIpc.GrantsApprovalAuthority);
+    }
+
     private static async Task AssertRejected(MepDevicePlacementProposalTool tool, string json, string reason)
     {
         AssertInvalid(await tool.InvokeAsync(Json(json), CancellationToken.None), reason);

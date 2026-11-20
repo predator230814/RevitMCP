@@ -230,16 +230,17 @@ internal static class AssistantHost
                     try
                     {
                         var read = documents.Attach(parsed.Message.DocumentPath);
-                        documentResult = DocumentResult(read);
                         if (read.Artifact is not null)
                         {
                             proposals.NoteAttachmentIdentityChanged(previousArtifactId, CurrentAttachmentId(documents));
                             roomPatterns.NoteAttachmentIdentityChanged(previousArtifactId, CurrentAttachmentId(documents));
                         }
+
+                        documentResult = DocumentResult(read, proposals.PresentationState);
                     }
                     catch (Exception)
                     {
-                        documentResult = DocumentFailure(AssistantDocumentErrors.ReadFailed, AssistantDocumentErrors.ReadFailedMessage);
+                        documentResult = DocumentFailure(AssistantDocumentErrors.ReadFailed, AssistantDocumentErrors.ReadFailedMessage, proposals.PresentationState);
                     }
 
                     await WriteAsync(server, documentResult, cancellationToken).ConfigureAwait(false);
@@ -307,7 +308,7 @@ internal static class AssistantHost
                     documents.Clear();
                     proposals.NoteAttachmentIdentityChanged(previousArtifactId, null);
                     roomPatterns.NoteAttachmentIdentityChanged(previousArtifactId, null);
-                    await WriteAsync(server, DocumentCleared(), cancellationToken).ConfigureAwait(false);
+                    await WriteAsync(server, DocumentCleared(proposals.PresentationState), cancellationToken).ConfigureAwait(false);
                     continue;
                 }
 
@@ -575,7 +576,8 @@ internal static class AssistantHost
             status.Label,
             null,
             UsedToolNames(turn?.UsedTools),
-            PatternReview: turn?.PatternReview);
+            PatternReview: turn?.PatternReview,
+            PlacementProposal: PlacementPresentation(turn?.PlacementProposal));
     }
 
     private static IReadOnlyList<string> UsedToolNames(IReadOnlyList<string>? names)
@@ -602,7 +604,10 @@ internal static class AssistantHost
         return accepted;
     }
 
-    private static AssistantIpcMessage DocumentResult(AssistantDocumentReadResult result)
+    private static string? PlacementPresentation(string? state)
+        => state is "ready" or "needs_calibration" ? state : null;
+
+    private static AssistantIpcMessage DocumentResult(AssistantDocumentReadResult result, string? placement)
     {
         var artifact = result.Artifact;
         if (artifact is { IsDisposed: false })
@@ -629,15 +634,17 @@ internal static class AssistantHost
                 SourceSizeBytes: artifact.SourceSizeBytes,
                 PageCount: artifact.PageCount,
                 VisualCount: artifact.VisualPages.Count > 0 ? artifact.VisualPages.Count : null,
-                Truncated: artifact.TextTruncated || artifact.VisualTruncated);
+                Truncated: artifact.TextTruncated || artifact.VisualTruncated,
+                PlacementProposal: placement);
         }
 
         return DocumentFailure(
             result.Code ?? AssistantDocumentErrors.ReadFailed,
-            result.Message ?? AssistantDocumentErrors.ReadFailedMessage);
+            result.Message ?? AssistantDocumentErrors.ReadFailedMessage,
+            placement);
     }
 
-    private static AssistantIpcMessage DocumentFailure(string code, string message)
+    private static AssistantIpcMessage DocumentFailure(string code, string message, string? placement = null)
     {
         return new AssistantIpcMessage(
             AssistantIpcKind.DocumentResult,
@@ -657,10 +664,11 @@ internal static class AssistantHost
             false,
             Attached: false,
             DocumentCode: code,
-            DocumentMessage: message);
+            DocumentMessage: message,
+            PlacementProposal: placement);
     }
 
-    private static AssistantIpcMessage DocumentCleared()
+    private static AssistantIpcMessage DocumentCleared(string? placement)
     {
         return new AssistantIpcMessage(
             AssistantIpcKind.DocumentResult,
@@ -678,7 +686,8 @@ internal static class AssistantHost
             null,
             null,
             false,
-            Attached: false);
+            Attached: false,
+            PlacementProposal: placement);
     }
 
     private static AssistantIpcMessage Status(AssistantMcpReadiness readiness, AssistantProviderStatus provider)

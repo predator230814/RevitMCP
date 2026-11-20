@@ -75,7 +75,8 @@ public sealed record AssistantIpcMessage(
     string? ActivityKind = null,
     string? ActivityState = null,
     string? ActivityLabel = null,
-    string? ActivityTool = null);
+    string? ActivityTool = null,
+    string? PlacementProposal = null);
 
 public readonly record struct AssistantIpcParse(bool Accepted, AssistantIpcMessage? Message, string Reason)
 {
@@ -140,6 +141,12 @@ public static class AssistantIpc
             if (HasActivity(body) && body.Type != "chatActivity")
             {
                 return AssistantIpcParse.Reject("activity");
+            }
+
+            if (!IsPlacementProposalState(body.PlacementProposal)
+                || (body.PlacementProposal is not null && body.Type is not ("chatResult" or "documentResult")))
+            {
+                return AssistantIpcParse.Reject("placement");
             }
 
             return body.Type switch
@@ -249,6 +256,7 @@ public static class AssistantIpc
                 ProviderLabel = message.ProviderLabel,
                 UsedTools = message.UsedTools ?? [],
                 PatternReview = message.PatternReview,
+                PlacementProposal = message.PlacementProposal,
             },
             AssistantIpcKind.ResetConversation => new Envelope { Type = "resetConversation" },
             AssistantIpcKind.QueryStatus => new Envelope { Type = "queryStatus" },
@@ -311,6 +319,7 @@ public static class AssistantIpc
                 Truncated = message.Truncated,
                 Code = message.DocumentCode,
                 DocumentMessage = message.DocumentMessage,
+                PlacementProposal = message.PlacementProposal,
             },
             _ => throw new ArgumentOutOfRangeException(nameof(message)),
         };
@@ -618,7 +627,8 @@ public static class AssistantIpc
             Bound(body.ProviderLabel, 160),
             null,
             usedTools,
-            PatternReview: patternReview));
+            PatternReview: patternReview,
+            PlacementProposal: body.PlacementProposal));
     }
 
     private static AssistantIpcParse ParsePreparePattern(Envelope body)
@@ -910,7 +920,8 @@ public static class AssistantIpc
                 SourceSizeBytes: body.SourceSizeBytes,
                 PageCount: body.PageCount,
                 VisualCount: body.VisualCount,
-                Truncated: body.Truncated == true));
+                Truncated: body.Truncated == true,
+                PlacementProposal: body.PlacementProposal));
         }
 
         if (body.DisplayName is not null
@@ -941,7 +952,8 @@ public static class AssistantIpc
                 null,
                 null,
                 false,
-                Attached: false));
+                Attached: false,
+                PlacementProposal: body.PlacementProposal));
         }
 
         if (!IsDocumentCode(body.Code)
@@ -970,7 +982,8 @@ public static class AssistantIpc
             false,
             Attached: false,
             DocumentCode: body.Code,
-            DocumentMessage: body.DocumentMessage));
+            DocumentMessage: body.DocumentMessage,
+            PlacementProposal: body.PlacementProposal));
     }
 
     private static bool TryWorkflow(string? value, out AssistantWorkflowName workflow)
@@ -1220,5 +1233,10 @@ public static class AssistantIpc
         public string? ActivityLabel { get; set; }
 
         public string? ActivityTool { get; set; }
+
+        public string? PlacementProposal { get; set; }
     }
+
+    public static bool IsPlacementProposalState(string? value)
+        => value is null or "ready" or "needs_calibration";
 }
