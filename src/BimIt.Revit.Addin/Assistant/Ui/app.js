@@ -102,9 +102,140 @@ function render(snapshot) {
   }
   renderSkills(snapshot.skills);
   renderAttachment(snapshot.attachment);
+  renderApproval(snapshot.approval);
   renderPlacement(snapshot.placementProposal);
   patternTypes = snapshot.patternTypes && typeof snapshot.patternTypes === "object" ? snapshot.patternTypes : {};
   renderPattern(snapshot.patternReview, snapshot.patternPrepared === true);
+}
+
+let approvalExpanded = false;
+let approvalSession = "";
+
+function renderApproval(approval) {
+  const node = document.getElementById("approval");
+  if (!approval || approval.type !== "renderReview" || typeof approval.sessionRef !== "string" || !approval.sessionRef) {
+    node.hidden = true;
+    node.innerHTML = "";
+    approvalExpanded = false;
+    approvalSession = "";
+    return;
+  }
+  if (approval.sessionRef !== approvalSession) {
+    approvalSession = approval.sessionRef;
+    approvalExpanded = false;
+  }
+  const summary = approvalSummary(approval);
+  const context = approvalContext(approval);
+  node.hidden = false;
+  node.innerHTML = `<p class="approval-kicker">Trusted Revit preview</p><h2>Approval required</h2><p class="approval-summary">${escapeHtml(summary)}</p>${context ? `<p class="sub">${escapeHtml(context)}</p>` : ""}<p class="sub">Approve this exact preview. Changes are applied only through the existing controlled apply path.</p><button id="approval-details-toggle" type="button">View details</button><div id="approval-details" class="approval-details"${approvalExpanded ? "" : " hidden"}></div><div class="approval-actions"><button id="approval-cancel" type="button">Cancel</button><button id="approval-reject" type="button">Reject</button><button id="approval-approve" type="button">Approve</button></div>`;
+  const details = document.getElementById("approval-details");
+  fillApprovalDetails(details, approval);
+  document.getElementById("approval-details-toggle").addEventListener("click", () => {
+    approvalExpanded = !approvalExpanded;
+    details.hidden = !approvalExpanded;
+  });
+  const sessionRef = approval.sessionRef;
+  document.getElementById("approval-cancel").addEventListener("click", () => post({ type: "dismissCurrent", sessionRef }));
+  document.getElementById("approval-reject").addEventListener("click", () => post({ type: "rejectCurrent", sessionRef }));
+  document.getElementById("approval-approve").addEventListener("click", () => post({ type: "approveCurrent", sessionRef }));
+}
+
+function approvalSummary(approval) {
+  if (approval.reviewKind === "mep_device_placements") {
+    const count = Array.isArray(approval.placementLines) ? approval.placementLines.length : 0;
+    return (approval.title || "Create MEP devices") + " · " + count + (count === 1 ? " device" : " devices");
+  }
+  if (approval.reviewKind === "pattern_mep_placements") {
+    return (approval.title || "Pattern placement") + " · " + String(approval.deviceCount) + " devices · " + String(approval.roomCount) + " rooms";
+  }
+  const count = Array.isArray(approval.items) ? approval.items.length : 0;
+  return count + (count === 1 ? " parameter update" : " parameter updates");
+}
+
+function approvalContext(approval) {
+  if (approval.reviewKind === "mep_device_placements") {
+    return [approval.levelName, approval.typeName].filter((item) => typeof item === "string" && item).join(" · ");
+  }
+  if (approval.reviewKind === "pattern_mep_placements") {
+    return Array.isArray(approval.roomLabels) ? approval.roomLabels.filter((item) => typeof item === "string" && item).join(", ") : "";
+  }
+  return "";
+}
+
+function fillApprovalDetails(details, approval) {
+  details.textContent = "";
+  if (approval.reviewKind === "mep_device_placements") {
+    addLine(details, "Placement", approval.placementLabel);
+    addLine(details, "Category", approval.categoryName);
+    addLine(details, "Family", approval.familyName);
+    addLine(details, "Type", approval.typeName);
+    addLine(details, "Host", approval.hostName);
+    addLine(details, "Level", approval.levelName);
+    addLines(details, approval.placementLines);
+    return;
+  }
+  if (approval.reviewKind === "pattern_mep_placements") {
+    addLines(details, approval.roomLabels);
+    addLines(details, approval.placementLabels);
+    addLines(details, approval.linkLabels);
+    addLines(details, approval.lines);
+    return;
+  }
+  const items = Array.isArray(approval.items) ? approval.items : [];
+  for (const item of items) {
+    const article = document.createElement("article");
+    addLine(article, "Element", item.elementName);
+    addLine(article, "Category", item.categoryName);
+    addLine(article, "Parameter", item.parameterName);
+    addLine(article, "Before", formatApprovalValue(item.before));
+    addLine(article, "Proposed", formatApprovalValue(item.proposed));
+    details.appendChild(article);
+  }
+}
+
+function addLine(parent, label, value) {
+  if (typeof value !== "string" || !value) {
+    return;
+  }
+  const line = document.createElement("p");
+  const name = document.createElement("strong");
+  name.textContent = label;
+  line.appendChild(name);
+  line.appendChild(document.createTextNode(" " + value));
+  parent.appendChild(line);
+}
+
+function addLines(parent, values) {
+  if (!Array.isArray(values)) {
+    return;
+  }
+  for (const value of values) {
+    if (typeof value === "string" && value) {
+      const line = document.createElement("p");
+      line.textContent = value;
+      parent.appendChild(line);
+    }
+  }
+}
+
+function formatApprovalValue(value) {
+  if (!value || typeof value !== "object") {
+    return "No value";
+  }
+  if (value.hasValue === false) {
+    return "No value";
+  }
+  const shown = value.hasValue === true ? value.value : value;
+  if (!shown || typeof shown !== "object") {
+    return "No value";
+  }
+  if (shown.kind === "quantity") {
+    return String(shown.value) + " (" + String(shown.unitTypeId) + ")";
+  }
+  if (shown.value === undefined || shown.value === null) {
+    return "No value";
+  }
+  return String(shown.value);
 }
 
 function renderPlacement(state) {
@@ -116,7 +247,7 @@ function renderPlacement(state) {
     return;
   }
   node.hidden = false;
-  node.innerHTML = `<h2>Placement proposal</h2><p class="sub">These actions apply to the current proposal. Approval still happens in the Revit Approval pane.</p><div class="pattern-actions"><button id="confirm-axes" type="button">Confirm project axes &amp; preview</button><button id="review-placements" type="button">Review in Revit</button><button id="apply-placements" type="button">Apply approved placements</button></div>`;
+  node.innerHTML = `<h2>Placement proposal</h2><p class="sub">These actions apply to the current proposal. Approve and Reject stay on the trusted approval card. Apply runs only after that approval.</p><div class="pattern-actions"><button id="confirm-axes" type="button">Confirm project axes &amp; preview</button><button id="review-placements" type="button">Review in Revit</button><button id="apply-placements" type="button">Apply approved placements</button></div>`;
   document.getElementById("confirm-axes").addEventListener("click", () => post({ type: "confirmProjectAxesPreview" }));
   document.getElementById("review-placements").addEventListener("click", () => post({ type: "reviewInRevit" }));
   document.getElementById("apply-placements").addEventListener("click", () => post({ type: "applyApprovedPlacements" }));

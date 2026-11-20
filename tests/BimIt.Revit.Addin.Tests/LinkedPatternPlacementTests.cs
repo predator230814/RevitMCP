@@ -1,3 +1,6 @@
+using System.Text.Json;
+using BimIt.Revit.Addin.Approval;
+using BimIt.Revit.Addin.Assistant;
 using BimIt.Revit.Addin.Audit;
 using BimIt.Revit.Addin.Capabilities;
 using BimIt.Revit.Addin.Intents;
@@ -435,8 +438,8 @@ public sealed class LinkedPatternPlacementTests
         var created = store.TryCreatePattern(Instance, Document, intent);
         Assert.Equal(IntentStoreCreateStatus.Created, created.Status);
         Assert.True(store.TryGetControlled(created.IntentRef!, out var controlled));
-        Assert.True(Approval.ApprovalReviewRenderer.TryCreatePattern("session-1", controlled!.Binding, controlled.PatternMepPlacements!, out var model));
-        var json = Approval.ApprovalReviewJson.SerializeRender(model);
+        Assert.True(ApprovalReviewRenderer.TryCreatePattern("session-1", controlled!.Binding, controlled.PatternMepPlacements!, out var model));
+        var json = ApprovalReviewJson.SerializeRender(model);
 
         Assert.Contains("\"linkedRoomCount\":1", json, StringComparison.Ordinal);
         Assert.Contains("WorkPlaneBased linked wall-face placement", json, StringComparison.Ordinal);
@@ -446,6 +449,34 @@ public sealed class LinkedPatternPlacementTests
         {
             Assert.DoesNotContain(hidden, json, StringComparison.Ordinal);
         }
+    }
+
+    [Fact]
+    public void Pattern_review_appears_inline_from_the_same_render_model()
+    {
+        var intent = Intent(Facts(Build(Snapshot())), Boundary());
+        var clock = new ManualTimeProvider();
+        var store = new EphemeralWriteIntentStore(clock);
+        var created = store.TryCreatePattern(Instance, Document, intent);
+        Assert.Equal(IntentStoreCreateStatus.Created, created.Status);
+        var provider = new RevitLocalApprovalProviderStateMachine(store, clock, () => "session");
+        var controller = new RevitLocalApprovalInteractionController(store, provider);
+        var ui = new ApprovalUiRuntime();
+        var shell = new AssistantShell(
+            () => Instance,
+            () => false,
+            () => ("2026", "26.5.0.55"),
+            new IdleProcesses(),
+            new IdleLink());
+        ui.RegisterPrimary(shell);
+        var review = controller.BeginReview(created.IntentRef, Document, ControlledWriteIntentKind.MepDevicePlacements);
+        Assert.Equal(ApprovalReviewStatus.Started, review.Status);
+        Assert.True(ui.TryPresent(review.RenderModel!, () => true, static () => false));
+        using var snapshot = JsonDocument.Parse(shell.SerializeSnapshot());
+        var approval = snapshot.RootElement.GetProperty("approval");
+        Assert.Equal("pattern_mep_placements", approval.GetProperty("reviewKind").GetString());
+        Assert.Equal(review.RenderModel!.SessionRef, approval.GetProperty("sessionRef").GetString());
+        Assert.Empty(snapshot.RootElement.GetProperty("messages").EnumerateArray());
     }
 
     private static void AssertRolledBack(PatternMepPlacementIntent intent, FakeSession session)

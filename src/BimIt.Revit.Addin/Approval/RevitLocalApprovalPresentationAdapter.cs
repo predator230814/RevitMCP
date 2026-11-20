@@ -9,7 +9,7 @@ internal interface IApprovalRevitGate
 {
     Task<ApprovalPresentationResult> InvokeAsync(
         CancellationToken cancellationToken,
-        Func<string?, Func<bool>, ApprovalPresentationResult> present);
+        Func<string?, Func<bool>, Func<bool>, ApprovalPresentationResult> present);
 
     Task<ApprovalUiDispatchResult> DispatchAsync(
         CancellationToken cancellationToken,
@@ -49,7 +49,9 @@ internal sealed class RevitLocalApprovalPresentationAdapter
         ControlledWriteIntentKind expectedKind,
         CancellationToken cancellationToken)
     {
-        return _gate.InvokeAsync(cancellationToken, (documentId, showPane) => PresentResolved(intentRef, expectedKind, documentId, showPane));
+        return _gate.InvokeAsync(
+            cancellationToken,
+            (documentId, showPrimary, showFallback) => PresentResolved(intentRef, expectedKind, documentId, showPrimary, showFallback));
     }
 
     public Task<ApprovalUiDispatchResult> DispatchCurrentAsync(string? json, CancellationToken cancellationToken)
@@ -61,7 +63,8 @@ internal sealed class RevitLocalApprovalPresentationAdapter
         string? intentRef,
         ControlledWriteIntentKind expectedKind,
         string? activeDocumentId,
-        Func<bool> showPane)
+        Func<bool> showPrimary,
+        Func<bool> showFallback)
     {
         var review = _controller.BeginReview(intentRef, activeDocumentId, expectedKind);
         if (review.Status is not (ApprovalReviewStatus.Started or ApprovalReviewStatus.AlreadyActive)
@@ -70,7 +73,7 @@ internal sealed class RevitLocalApprovalPresentationAdapter
             return new ApprovalPresentationResult(review.Status, null);
         }
 
-        if (!_ui.TryPresent(model, showPane))
+        if (!_ui.TryPresent(model, showPrimary, showFallback))
         {
             _controller.DismissCurrent(model.SessionRef);
             _ui.ClearReview();
@@ -90,11 +93,13 @@ internal sealed class RevitLocalApprovalPresentationGate : IApprovalRevitGate
     private readonly RevitExecutionDispatcher _dispatcher;
     private readonly OpenDocumentIdentityService _identity;
     private readonly ApprovalUiRuntime _ui;
+    private readonly Func<UIApplication, bool>? _showPrimary;
 
     public RevitLocalApprovalPresentationGate(
         RevitExecutionDispatcher dispatcher,
         OpenDocumentIdentityService identity,
-        ApprovalUiRuntime ui)
+        ApprovalUiRuntime ui,
+        Func<UIApplication, bool>? showPrimary = null)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(identity);
@@ -102,17 +107,18 @@ internal sealed class RevitLocalApprovalPresentationGate : IApprovalRevitGate
         _dispatcher = dispatcher;
         _identity = identity;
         _ui = ui;
+        _showPrimary = showPrimary;
     }
 
     public Task<ApprovalPresentationResult> InvokeAsync(
         CancellationToken cancellationToken,
-        Func<string?, Func<bool>, ApprovalPresentationResult> present)
+        Func<string?, Func<bool>, Func<bool>, ApprovalPresentationResult> present)
     {
         ArgumentNullException.ThrowIfNull(present);
         return _dispatcher.EnqueueAsync(application =>
         {
             var documentId = ResolveActiveDocumentId(application);
-            return present(documentId, () => ShowRegisteredPane(application));
+            return present(documentId, () => ShowPrimary(application), () => ShowRegisteredPane(application));
         }, cancellationToken);
     }
 
@@ -137,6 +143,24 @@ internal sealed class RevitLocalApprovalPresentationGate : IApprovalRevitGate
         }
 
         return documentId;
+    }
+
+    private bool ShowPrimary(UIApplication application)
+    {
+        var show = _showPrimary;
+        if (show is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return show(application);
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
     private bool ShowRegisteredPane(UIApplication application)
