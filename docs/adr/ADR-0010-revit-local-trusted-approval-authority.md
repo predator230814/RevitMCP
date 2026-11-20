@@ -385,6 +385,16 @@ ADR-0010 does not authorize:
 - WebView2 compatibility remains a Revit-version integration concern for any future presentation implementation.
 - v1 does not claim protection against a compromised Revit process, injected in-process code, tampered binaries or UI assets, or a compromised OS or user session. Stronger isolation is later external-provider and platform-security work.
 
+## Implementation note — 2026-11-20
+
+The accepted authority is unchanged: approval remains Revit-local, in-process, Addin-owned, and bound to the exact stored intent. Presentation is not authority.
+
+The primary presentation is now a trusted approval card inside the BIM-IT Assistant DockablePane. The card is rendered from `ApprovalReviewRenderModel` by the Addin. It does not travel through an LLM, the Assistant process, MCP, or the Server. Approve records the existing provider decision for that exact preview. It does not apply the change.
+
+The standalone BIM-IT Revit Approval pane remains a transitional fallback. It is used only when the Assistant surface cannot be shown. Both surfaces share the same provider session. They are not two approval authorities. A later cleanup may retire the standalone pane after parameter and MEP live validation passes through the inline card.
+
+Chat text such as "yes", "approve", or "go ahead" remains untrusted.
+
 ## Explicitly not decided
 
 - exact provider interfaces and classes;

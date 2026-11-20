@@ -629,16 +629,30 @@ public sealed class ApprovalPresentationTests
 
         public int DispatchEntries { get; private set; }
 
+        public bool PrimarySucceeds { get; set; }
+
+        public int PrimaryShows { get; private set; }
+
+        public int FallbackShows { get; private set; }
+
         public Task<ApprovalPresentationResult> InvokeAsync(
             CancellationToken cancellationToken,
-            Func<string?, Func<bool>, ApprovalPresentationResult> present)
+            Func<string?, Func<bool>, Func<bool>, ApprovalPresentationResult> present)
         {
             PresentEntries++;
-            return Task.FromResult(present(DocumentId, () =>
-            {
-                DuringShow?.Invoke();
-                return ShowSucceeds;
-            }));
+            return Task.FromResult(present(
+                DocumentId,
+                () =>
+                {
+                    PrimaryShows++;
+                    return PrimarySucceeds;
+                },
+                () =>
+                {
+                    FallbackShows++;
+                    DuringShow?.Invoke();
+                    return ShowSucceeds;
+                }));
         }
 
         public Task<ApprovalUiDispatchResult> DispatchAsync(

@@ -581,6 +581,54 @@ textarea {
   color: var(--error);
 }
 
+.approval {
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--accent);
+  border-left-width: 4px;
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.approval-kicker {
+  margin: 0 0 4px;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.approval h2 { margin: 0 0 6px; font-size: 16px; }
+
+.approval-summary { margin: 0 0 6px; font-weight: 600; }
+
+.approval-details {
+  margin: 8px 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.approval-details article { margin: 0 0 8px; }
+
+.approval-details p { margin: 2px 0; }
+
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.approval-actions button {
+  min-height: 36px;
+}
+
+#approval-approve {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border-color: var(--accent);
+}
+
 .badge {
   font-size: 10px;
   letter-spacing: 0.06em;
