@@ -323,10 +323,10 @@ public sealed class RequestParameterUpdateReviewServiceTests
 
         public Task<ApprovalPresentationResult> InvokeAsync(
             CancellationToken cancellationToken,
-            Func<string?, Func<bool>, ApprovalPresentationResult> present)
+            Func<string?, Func<bool>, Func<bool>, ApprovalPresentationResult> present)
         {
             PresentEntries++;
-            return Task.FromResult(present(DocumentId, () => ShowSucceeds));
+            return Task.FromResult(present(DocumentId, () => false, () => ShowSucceeds));
         }
 
         public Task<ApprovalUiDispatchResult> DispatchAsync(

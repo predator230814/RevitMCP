@@ -81,6 +81,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     private IDisposable? _activeDocumentObservation;
     private IDisposable? _queryChangeSubscription;
     private ApprovalUiRuntime? _approvalUi;
+    private Func<UIApplication, bool>? _showTrustedSurface;
     private int _disposed;
 
     internal RevitLocalApprovalProviderStateMachine ApprovalProvider => _approval;
@@ -280,7 +281,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         }
     }
 
-    internal void AttachApprovalUi(ApprovalUiRuntime approvalUi)
+    internal void AttachApprovalUi(ApprovalUiRuntime approvalUi, Func<UIApplication, bool>? showTrustedSurface = null)
     {
         ArgumentNullException.ThrowIfNull(approvalUi);
         if (_approvalUi is not null)
@@ -289,7 +290,8 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
         }
 
         _approvalUi = approvalUi;
-        var gate = new RevitLocalApprovalPresentationGate(_dispatcher, _identity, approvalUi);
+        _showTrustedSurface = showTrustedSurface;
+        var gate = new RevitLocalApprovalPresentationGate(_dispatcher, _identity, approvalUi, _showTrustedSurface);
         var adapter = new RevitLocalApprovalPresentationAdapter(_interaction, approvalUi, gate);
         approvalUi.Attach(adapter, _interaction);
     }
@@ -494,12 +496,14 @@ internal sealed class RevitExecutionDispatcherFactory : ILifecycleDispatcherFact
 
     public ApprovalUiRuntime? ApprovalUi { get; set; }
 
+    public Func<UIApplication, bool>? ShowTrustedSurface { get; set; }
+
     public ILifecycleDispatcher Create()
     {
         var lifetime = new RevitExecutionDispatcherLifetime(RevitExecutionDispatcher.Create(), CloseEvents, ActiveDocumentEvents, QueryChangeEvents);
         if (ApprovalUi is not null)
         {
-            lifetime.AttachApprovalUi(ApprovalUi);
+            lifetime.AttachApprovalUi(ApprovalUi, ShowTrustedSurface);
         }
 
         return lifetime;

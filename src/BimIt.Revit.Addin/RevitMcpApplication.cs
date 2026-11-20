@@ -15,23 +15,28 @@ public sealed class RevitMcpApplication : IExternalApplication
 
     public RevitMcpApplication()
     {
-        _approvalUi = new ApprovalUiRuntime();
+        var approvalUi = new ApprovalUiRuntime();
+        _approvalUi = approvalUi;
         _productionDispatchers = new RevitExecutionDispatcherFactory
         {
-            ApprovalUi = _approvalUi,
+            ApprovalUi = approvalUi,
         };
         _lifecycle = new AddinLifecycleCoordinator(
             _productionDispatchers,
             new NamedPipeLifecycleBridgeFactory(),
             new ProcessRuntimeMetadataSource());
-        _assistant = new AssistantShell(
+        var assistant = new AssistantShell(
             () => _lifecycle.InstanceId,
             () => _lifecycle.State == AddinLifecycleState.Ready,
             () => (_lifecycle.Metadata?.RevitVersion, _lifecycle.Metadata?.RevitBuild),
             new ProcessAssistantFactory(),
             new NamedPipeAssistantLink());
-        AssistantCommandBridge.Attach(_assistant);
-        _assistant.OnRevitStartup();
+        _assistant = assistant;
+        AssistantCommandBridge.Attach(assistant);
+        assistant.AttachApproval(approvalUi);
+        approvalUi.RegisterPrimary(assistant);
+        _productionDispatchers!.ShowTrustedSurface = assistant.ShowForApproval;
+        assistant.OnRevitStartup();
     }
 
     internal RevitMcpApplication(AddinLifecycleCoordinator lifecycle)

@@ -2,6 +2,13 @@ using BimIt.Revit.Addin.Intents;
 
 namespace BimIt.Revit.Addin.Approval;
 
+internal enum ApprovalPresentationRole
+{
+    None,
+    Primary,
+    Fallback,
+}
+
 internal interface IApprovalPaneSurface
 {
     void BeginAfterShow();
@@ -21,7 +28,10 @@ internal sealed class ApprovalUiRuntime
     private RevitLocalApprovalPresentationAdapter? _adapter;
     private RevitLocalApprovalInteractionController? _controller;
     private IApprovalPaneSurface? _surface;
+    private IApprovalPresentationTarget? _primary;
+    private IApprovalPresentationTarget? _fallback;
     private ApprovalReviewRenderModel? _current;
+    private ApprovalPresentationRole _presentedOn;
     private bool _unavailable;
     private bool _stopped;
     private bool _showRequested;
@@ -39,10 +49,17 @@ internal sealed class ApprovalUiRuntime
 
     public void MarkUnavailable() => _unavailable = true;
 
+    public void RegisterPrimary(IApprovalPresentationTarget target)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        _primary = target;
+    }
+
     public void RegisterSurface(IApprovalPaneSurface surface)
     {
         ArgumentNullException.ThrowIfNull(surface);
         _surface = surface;
+        _fallback = new ApprovalPanePresentationTarget(surface);
     }
 
     public void Attach(RevitLocalApprovalPresentationAdapter adapter, RevitLocalApprovalInteractionController controller)
@@ -114,10 +131,11 @@ internal sealed class ApprovalUiRuntime
 
     public void BeginAfterShow() => _surface?.BeginAfterShow();
 
-    public bool TryPresent(ApprovalReviewRenderModel model, Func<bool> showPane)
+    public bool TryPresent(ApprovalReviewRenderModel model, Func<bool> showPrimary, Func<bool> showFallback)
     {
         ArgumentNullException.ThrowIfNull(model);
-        ArgumentNullException.ThrowIfNull(showPane);
+        ArgumentNullException.ThrowIfNull(showPrimary);
+        ArgumentNullException.ThrowIfNull(showFallback);
         if (_stopped || _unavailable)
         {
             return false;
@@ -125,52 +143,54 @@ internal sealed class ApprovalUiRuntime
 
         _current = model;
         _showRequested = true;
-        var shown = false;
-        try
+        var json = ApprovalReviewJson.SerializeRender(model);
+        if (TryOne(_primary, showPrimary, model, json, ApprovalPresentationRole.Primary))
         {
-            shown = showPane();
-        }
-        catch (Exception)
-        {
-            shown = false;
+            _fallback?.Clear();
+            return true;
         }
 
-        if (!shown || !IsCurrentPresentation(model))
+        if (TryOne(_fallback, showFallback, model, json, ApprovalPresentationRole.Fallback))
         {
-            if (_current is null || string.Equals(_current.SessionRef, model.SessionRef, StringComparison.Ordinal))
-            {
-                _current = null;
-                _showRequested = false;
-            }
-
-            return false;
+            _primary?.Clear();
+            return true;
         }
 
-        _surface?.Post(ApprovalReviewJson.SerializeRender(model));
-        return true;
-    }
+        if (_current is null || string.Equals(_current.SessionRef, model.SessionRef, StringComparison.Ordinal))
+        {
+            _current = null;
+            _showRequested = false;
+            _presentedOn = ApprovalPresentationRole.None;
+        }
 
-    private bool IsCurrentPresentation(ApprovalReviewRenderModel model)
-    {
-        return !_stopped
-            && _surface is not null
-            && _current is not null
-            && string.Equals(_current.SessionRef, model.SessionRef, StringComparison.Ordinal);
+        return false;
     }
 
     public void ClearReview()
     {
         _current = null;
         _showRequested = false;
-        _surface?.Post(ApprovalReviewJson.SerializeClear());
+        _presentedOn = ApprovalPresentationRole.None;
+        _primary?.Clear();
+        _fallback?.Clear();
     }
 
-    public void NotifyInitializationFailed() => DismissPendingWithoutDecision();
+    public void NotifyInitializationFailed()
+    {
+        if (_presentedOn != ApprovalPresentationRole.Primary)
+        {
+            DismissPendingWithoutDecision();
+        }
+    }
 
     public void NotifyHostDisposed()
     {
         _surface = null;
-        DismissPendingWithoutDecision();
+        _fallback = null;
+        if (_presentedOn == ApprovalPresentationRole.Fallback)
+        {
+            DismissPendingWithoutDecision();
+        }
     }
 
     public ApprovalUiDispatchResult Dispatch(string? json, string? activeDocumentId)
@@ -224,18 +244,66 @@ internal sealed class ApprovalUiRuntime
         }
     }
 
+    private bool TryOne(
+        IApprovalPresentationTarget? target,
+        Func<bool> show,
+        ApprovalReviewRenderModel model,
+        string json,
+        ApprovalPresentationRole role)
+    {
+        if (target is null)
+        {
+            return false;
+        }
+
+        var shown = false;
+        try
+        {
+            shown = show();
+        }
+        catch (Exception)
+        {
+            shown = false;
+        }
+
+        if (!shown || _stopped || _current is null || !string.Equals(_current.SessionRef, model.SessionRef, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        target.Publish(json);
+        _presentedOn = role;
+        return true;
+    }
+
     private void DismissPendingWithoutDecision()
     {
         var session = _current?.SessionRef;
         _current = null;
         _showRequested = false;
+        _presentedOn = ApprovalPresentationRole.None;
         if (_stopped || _controller is null || session is null)
         {
             return;
         }
 
         _controller.DismissCurrent(session);
-        _surface?.Post(ApprovalReviewJson.SerializeClear());
+        _primary?.Clear();
+        _fallback?.Clear();
+    }
+
+    private sealed class ApprovalPanePresentationTarget : IApprovalPresentationTarget
+    {
+        private readonly IApprovalPaneSurface _surface;
+
+        public ApprovalPanePresentationTarget(IApprovalPaneSurface surface)
+        {
+            _surface = surface;
+        }
+
+        public void Publish(string json) => _surface.Post(json);
+
+        public void Clear() => _surface.Post(ApprovalReviewJson.SerializeClear());
     }
 
     private ApprovalUiDispatchResult Post(ApprovalUiDispatchResult result)
