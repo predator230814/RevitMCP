@@ -13,7 +13,7 @@ internal static class AssistantContent
 
     public const string LocalOrigin = "https://bimit-revit-assistant.local/";
 
-    public const string AssetRevision = "2026-11-20.1";
+    public const string AssetRevision = "2026-11-20.2";
 
     public static string IndexUri => LocalOrigin + "index.html?rev=" + AssetRevision;
 }
