@@ -6,7 +6,7 @@
 - Product Owner: Dave
 - Contract: [CAP-0017](../capabilities/CAP-0017-bounded-revit-api-property-access.md)
 
-Accepted architecture. It does not implement the operations. ADR-0023 stays Accepted and unchanged. ADR-0024 stays Accepted and is amended only as §9 describes.
+Accepted architecture. Implemented by `revit_api.metadata` v1 and `revit_api.element_properties` v1. Live Revit validation has not been run. ADR-0023 stays Accepted and unchanged. ADR-0024 stays Accepted and is amended only as §9 describes.
 
 ## Context
 

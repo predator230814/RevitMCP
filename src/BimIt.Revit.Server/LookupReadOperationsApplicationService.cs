@@ -23,6 +23,9 @@ internal sealed class LookupReadOperationsApplicationService
         CapabilityErrorCodes.ResultTooLarge,
         CapabilityErrorCodes.ExecutionTimeout,
         CapabilityErrorCodes.ExecutionFailed,
+        CapabilityErrorCodes.RevitApiTypeRejected,
+        CapabilityErrorCodes.DocumentIsModifiable,
+        CapabilityErrorCodes.DocumentBecameModifiable,
         BridgeErrorCodes.ProtocolIncompatible
     };
 

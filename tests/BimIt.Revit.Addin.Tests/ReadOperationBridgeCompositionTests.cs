@@ -14,14 +14,20 @@ public sealed class ReadOperationBridgeCompositionTests
     private const string ClosedObject = """{"type":"object","additionalProperties":false}""";
 
     [Fact]
-    public void Production_list_is_exactly_user_worksets_version_1()
+    public void Production_registry_is_worksets_and_the_two_revit_api_operations()
     {
-        var operation = Assert.Single(ReadOperationComposition.ProductionOperations());
-        Assert.Equal(ProjectUserWorksetsReadOperation.OperationId, operation.Descriptor.Id);
-        Assert.Equal(ProjectUserWorksetsReadOperation.Version, operation.Descriptor.ContractVersion);
-        var image = Encoding.Unicode.GetString(File.ReadAllBytes(typeof(ReadOperationComposition).Assembly.Location));
-        Assert.DoesNotContain("experimental.revit_api_lookup", image, StringComparison.Ordinal);
-        Assert.DoesNotContain("experimental.revit_api_read", image, StringComparison.Ordinal);
+        var operations = ReadOperationComposition.ProductionOperations();
+        Assert.Equal(
+            [
+                ProjectUserWorksetsReadOperation.OperationId,
+                RevitApiElementPropertiesReadOperation.OperationId,
+                RevitApiMetadataReadOperation.OperationId
+            ],
+            operations.Select(operation => operation.Descriptor.Id).Order(StringComparer.Ordinal).ToArray());
+        Assert.All(operations, operation => Assert.Equal(1, operation.Descriptor.ContractVersion));
+        var image = File.ReadAllBytes(typeof(ReadOperationComposition).Assembly.Location);
+        Assert.False(ContainsUtf16(image, "experimental.revit_api_lookup"));
+        Assert.False(ContainsUtf16(image, "experimental.revit_api_read"));
     }
 
     [Fact]
@@ -182,9 +188,14 @@ public sealed class ReadOperationBridgeCompositionTests
         Assert.True(bridges.LastBridge?.HasRegistration);
         var service = Assert.IsAssignableFrom<IRevitReadOperationsService>(bridges.LastReadOperations);
         var result = await service.LookupReadOperationsAsync(new LookupReadOperationsRequest(), CancellationToken.None);
-        var operation = Assert.Single(result.Operations);
-        Assert.Equal(ProjectUserWorksetsReadOperation.OperationId, operation.Id);
-        Assert.Equal(1, operation.ContractVersion);
+        Assert.Equal(
+            [
+                ProjectUserWorksetsReadOperation.OperationId,
+                RevitApiElementPropertiesReadOperation.OperationId,
+                RevitApiMetadataReadOperation.OperationId
+            ],
+            result.Operations.Select(operation => operation.Id).ToArray());
+        Assert.All(result.Operations, operation => Assert.Equal(1, operation.ContractVersion));
     }
 
     [Fact]
@@ -213,6 +224,35 @@ public sealed class ReadOperationBridgeCompositionTests
         Assert.True(bridges.LastBridge?.HasRegistration);
         Assert.Contains("readoperations.create", events);
         Assert.Contains("registration.publish", events);
+    }
+
+    private static bool ContainsUtf16(byte[] bytes, string value)
+    {
+        var needle = Encoding.Unicode.GetBytes(value);
+        return IndexOf(bytes, needle, 0) >= 0 || IndexOf(bytes, needle, 1) >= 0;
+    }
+
+    private static int IndexOf(byte[] bytes, byte[] needle, int start)
+    {
+        for (var index = start; index <= bytes.Length - needle.Length; index++)
+        {
+            var matched = true;
+            for (var offset = 0; offset < needle.Length; offset++)
+            {
+                if (bytes[index + offset] != needle[offset])
+                {
+                    matched = false;
+                    break;
+                }
+            }
+
+            if (matched)
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private static async Task AssertInvalid(LookupReadOperationsRequest request)

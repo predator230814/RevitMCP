@@ -22,13 +22,19 @@ public sealed class ApiAccessSpikeTests
     {
         var operations = ReadOperationComposition.ProductionOperations();
         Assert.Equal(
-            ["experimental.revit_api_lookup", "experimental.revit_api_read", "project.user_worksets"],
+            [
+                "experimental.revit_api_lookup",
+                "experimental.revit_api_read",
+                "project.user_worksets",
+                "revit_api.element_properties",
+                "revit_api.metadata"
+            ],
             operations.Select(operation => operation.Descriptor.Id).Order(StringComparer.Ordinal).ToArray());
         Assert.All(operations, operation => Assert.Equal(1, operation.Descriptor.ContractVersion));
 
         var registry = new ReadOperationRegistry(operations);
         var search = registry.Search("revit_api", 0, 10);
-        Assert.Equal(2, search.Total);
+        Assert.Equal(4, search.Total);
         Assert.All(search.Operations, operation =>
         {
             Assert.Null(operation.InputSchema);
@@ -54,9 +60,9 @@ public sealed class ApiAccessSpikeTests
             "Release",
             "net8.0-windows",
             "BimIt.Revit.Addin.dll");
-        var image = System.Text.Encoding.Unicode.GetString(File.ReadAllBytes(spikeDll));
-        Assert.Contains("experimental.revit_api_lookup", image, StringComparison.Ordinal);
-        Assert.Contains("experimental.revit_api_read", image, StringComparison.Ordinal);
+        var image = File.ReadAllBytes(spikeDll);
+        Assert.True(ContainsUtf16(image, "experimental.revit_api_lookup"));
+        Assert.True(ContainsUtf16(image, "experimental.revit_api_read"));
     }
 
     [Fact]
@@ -207,6 +213,35 @@ public sealed class ApiAccessSpikeTests
         var server = string.Join("\n", Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Server"), "*.cs").Select(File.ReadAllText));
         Assert.DoesNotContain("experimental.revit_api_lookup", server, StringComparison.Ordinal);
         Assert.DoesNotContain("experimental.revit_api_read", server, StringComparison.Ordinal);
+    }
+
+    private static bool ContainsUtf16(byte[] bytes, string value)
+    {
+        var needle = System.Text.Encoding.Unicode.GetBytes(value);
+        return IndexOf(bytes, needle, 0) >= 0 || IndexOf(bytes, needle, 1) >= 0;
+    }
+
+    private static int IndexOf(byte[] bytes, byte[] needle, int start)
+    {
+        for (var index = start; index <= bytes.Length - needle.Length; index++)
+        {
+            var matched = true;
+            for (var offset = 0; offset < needle.Length; offset++)
+            {
+                if (bytes[index + offset] != needle[offset])
+                {
+                    matched = false;
+                    break;
+                }
+            }
+
+            if (matched)
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private static MetadataLoadContext OpenRevitApi(out Assembly assembly)

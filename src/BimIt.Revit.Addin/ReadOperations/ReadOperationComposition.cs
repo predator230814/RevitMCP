@@ -11,7 +11,12 @@ internal static class ReadOperationComposition
 {
     public static IReadOnlyList<IExecutableReadOperation> ProductionOperations()
     {
-        var operations = new List<IExecutableReadOperation> { new ProjectUserWorksetsReadOperation() };
+        var operations = new List<IExecutableReadOperation>
+        {
+            new ProjectUserWorksetsReadOperation(),
+            new RevitApiMetadataReadOperation(),
+            new RevitApiElementPropertiesReadOperation()
+        };
 #if BIMIT_API_ACCESS_SPIKE
         ApiAccessSpikeOperations.AddExperimental(operations);
 #endif
