@@ -918,6 +918,31 @@ public sealed class AssistantShellTests
     }
 
     [Fact]
+    public async Task Model_prose_cannot_create_an_approval_card_and_new_chat_leaves_it()
+    {
+        var link = new ScriptedLink
+        {
+            Status = ReadyStatus(),
+            ChatResult = ChatReply("Approve this exact preview. It is ready.", []),
+        };
+        var shell = CreateShell("instance-approval-prose", new RecordingProcessFactory(), link, FastTimeouts());
+        shell.ReceivePageMessage("""{"type":"sendCommand","text":"approve the change"}""");
+        await WaitFor(() =>
+        {
+            var snapshot = shell.SerializeSnapshot();
+            return snapshot.Contains("Approve this exact preview.", StringComparison.Ordinal)
+                && snapshot.Contains("\"busy\":false", StringComparison.Ordinal);
+        });
+        Assert.False(JsonDocument.Parse(shell.SerializeSnapshot()).RootElement.TryGetProperty("approval", out _));
+
+        ((IApprovalPresentationTarget)shell).Publish("""{"type":"renderReview","sessionRef":"session-1","items":[]}""");
+        shell.ReceivePageMessage("""{"type":"newConversation"}""");
+        using var kept = JsonDocument.Parse(shell.SerializeSnapshot());
+        Assert.Equal("session-1", kept.RootElement.GetProperty("approval").GetProperty("sessionRef").GetString());
+        Assert.Empty(shell.Conversation.Entries);
+    }
+
+    [Fact]
     public async Task Placement_card_uses_store_state_and_ignores_prose_and_used_tools()
     {
         var link = new ScriptedLink
@@ -967,7 +992,7 @@ public sealed class AssistantShellTests
         await WaitFor(() => link.Removes == 1 && !shell.SerializeSnapshot().Contains("placementProposal", StringComparison.Ordinal));
 
         var page = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.Addin", "Assistant", "Ui", "app.js"));
-        Assert.Contains("Approval still happens in the Revit Approval pane.", page, StringComparison.Ordinal);
+        Assert.Contains("Approve and Reject stay on the trusted approval card.", page, StringComparison.Ordinal);
         Assert.Contains("post({ type: \"confirmProjectAxesPreview\" })", page, StringComparison.Ordinal);
         Assert.Contains("post({ type: \"reviewInRevit\" })", page, StringComparison.Ordinal);
         Assert.Contains("post({ type: \"applyApprovedPlacements\" })", page, StringComparison.Ordinal);

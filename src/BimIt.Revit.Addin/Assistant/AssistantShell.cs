@@ -3,11 +3,12 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using Autodesk.Revit.UI;
+using BimIt.Revit.Addin.Approval;
 using BimIt.Revit.Assistant.Ipc;
 
 namespace BimIt.Revit.Addin.Assistant;
 
-internal sealed class AssistantShell
+internal sealed class AssistantShell : IApprovalPresentationTarget
 {
     private readonly Func<string> _instanceId;
     private readonly Func<bool> _bridgeReady;
@@ -30,6 +31,8 @@ internal sealed class AssistantShell
     private bool _diagnostics;
     private bool _busy;
     private string? _placementProposal;
+    private JsonElement? _approvalReview;
+    private ApprovalUiRuntime? _approvalRuntime;
     private string? _chatRequestId;
     private readonly List<ActivityNote> _activities = [];
     private string _assistantState = "unavailable";
@@ -73,6 +76,12 @@ internal sealed class AssistantShell
 
     public bool OpenRequested => _openRequested;
 
+    public void AttachApproval(ApprovalUiRuntime approval)
+    {
+        ArgumentNullException.ThrowIfNull(approval);
+        _approvalRuntime = approval;
+    }
+
     public void AttachPane(AssistantPaneHost pane)
     {
         _pane = pane;
@@ -101,10 +110,63 @@ internal sealed class AssistantShell
         _ = OpenSessionAsync();
     }
 
+    /// <summary>
+    /// Shows the Assistant pane for a trusted review. It does not start the Assistant process or an AI provider.
+    /// </summary>
+    public bool ShowForApproval(UIApplication application)
+    {
+        ArgumentNullException.ThrowIfNull(application);
+        try
+        {
+            var pane = application.GetDockablePane(new DockablePaneId(AssistantPaneIds.PaneId));
+            pane.Show();
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+
+        _openRequested = true;
+        _pane?.NotifyOpened();
+        PostSnapshot();
+        return true;
+    }
+
+    void IApprovalPresentationTarget.Publish(string json) => PublishApproval(json);
+
+    void IApprovalPresentationTarget.Clear() => ClearApproval();
+
+    private void PublishApproval(string json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            _approvalReview = document.RootElement.Clone();
+        }
+        catch (JsonException)
+        {
+            _approvalReview = null;
+        }
+
+        PostSnapshot();
+    }
+
+    private void ClearApproval()
+    {
+        _approvalReview = null;
+        PostSnapshot();
+    }
+
     internal Task OpenSessionAsync() => EnsureAssistantAsync();
 
     public void ReceivePageMessage(string json)
     {
+        if (ApprovalMessageParser.Parse(json).Accepted)
+        {
+            _approvalRuntime?.ReceivePageMessage(json);
+            return;
+        }
+
         var parsed = AssistantPageMessages.Parse(json);
         if (!parsed.Accepted)
         {
@@ -124,6 +186,7 @@ internal sealed class AssistantShell
                 break;
             case AssistantPageIntent.NewConversation:
                 _conversation.Reset();
+                // Chat reset does not approve, reject, or dismiss the Addin-owned review.
                 _attachment = null;
                 _patternReview = null;
                 _patternTypes.Clear();
@@ -1135,6 +1198,11 @@ internal sealed class AssistantShell
         if (_placementProposal is not null)
         {
             snapshot["placementProposal"] = _placementProposal;
+        }
+
+        if (_approvalReview is { } approval)
+        {
+            snapshot["approval"] = approval;
         }
         if (_attachment is not null)
         {
