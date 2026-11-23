@@ -208,7 +208,7 @@ public sealed class AddinLifecycleCoordinatorTests
     }
 
     [Fact]
-    public async Task Reentrant_shutdown_while_stopping_owns_cleanup_once()
+    public void Reentrant_shutdown_while_stopping_owns_cleanup_once()
     {
         var events = new List<string>();
         using var disposeEntered = new ManualResetEventSlim(false);
@@ -218,13 +218,31 @@ public sealed class AddinLifecycleCoordinatorTests
             new RecordingBridgeFactory(events, disposeEntered: disposeEntered, disposeRelease: disposeRelease));
         coordinator.TryBootstrap(Runtime);
 
-        var first = Task.Run(coordinator.Shutdown);
+        // A pool thread can stay queued longer than this wait when the suite saturates the
+        // thread pool. Shutdown itself only needs an ordinary thread.
+        Exception? failure = null;
+        var first = new Thread(() =>
+        {
+            try
+            {
+                coordinator.Shutdown();
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        })
+        {
+            IsBackground = true
+        };
+        first.Start();
         Assert.True(disposeEntered.Wait(TimeSpan.FromSeconds(5)));
         Assert.Equal(AddinLifecycleState.Stopping, coordinator.State);
 
         coordinator.Shutdown();
         disposeRelease.Set();
-        await first.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(first.Join(TimeSpan.FromSeconds(5)));
+        Assert.Null(failure);
 
         Assert.Equal(AddinLifecycleState.Stopped, coordinator.State);
         Assert.Equal(1, events.Count(item => item == "dispatcher.stop"));
@@ -250,7 +268,7 @@ public sealed class AddinLifecycleCoordinatorTests
     }
 
     [Fact]
-    public async Task Bootstrap_cannot_become_ready_after_shutdown_begins()
+    public void Bootstrap_cannot_become_ready_after_shutdown_begins()
     {
         var events = new List<string>();
         using var entered = new ManualResetEventSlim(false);
@@ -258,11 +276,27 @@ public sealed class AddinLifecycleCoordinatorTests
         var dispatchers = new RecordingDispatcherFactory(events, entered, release);
         var coordinator = Prepare(dispatchers, new RecordingBridgeFactory(events));
 
-        var bootstrap = Task.Run(() => coordinator.TryBootstrap(Runtime));
+        Exception? failure = null;
+        var bootstrap = new Thread(() =>
+        {
+            try
+            {
+                coordinator.TryBootstrap(Runtime);
+            }
+            catch (Exception exception)
+            {
+                failure = exception;
+            }
+        })
+        {
+            IsBackground = true
+        };
+        bootstrap.Start();
         Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
         coordinator.Shutdown();
         release.Set();
-        await bootstrap.WaitAsync(TimeSpan.FromSeconds(5));
+        Assert.True(bootstrap.Join(TimeSpan.FromSeconds(5)));
+        Assert.Null(failure);
 
         Assert.NotEqual(AddinLifecycleState.Ready, coordinator.State);
         Assert.Equal(AddinLifecycleState.Stopped, coordinator.State);
