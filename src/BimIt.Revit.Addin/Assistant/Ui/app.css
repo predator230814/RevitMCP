@@ -192,6 +192,23 @@ main {
   color: var(--muted);
 }
 .msg p { margin: 0; white-space: pre-wrap; color: var(--ink); }
+.msg .plain { margin: 0; white-space: pre-wrap; }
+.msg .rich > * + * { margin-top: 8px; }
+.msg .rich p { margin: 0; white-space: normal; }
+.msg .rich h4, .msg .rich h5, .msg .rich h6 { margin: 0; font-weight: 650; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.msg .rich h4 { font-size: 15px; }
+.msg .rich h5 { font-size: 14px; }
+.msg .rich h6 { font-size: 13px; }
+.msg .rich ul, .msg .rich ol { margin: 0; padding-left: 18px; }
+.msg .rich li { margin: 1px 0; }
+.msg .rich code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; background: var(--chip); border-radius: 4px; padding: 0 3px; }
+.msg .rich pre { margin: 0; overflow-x: auto; }
+.msg .rich pre code { display: block; padding: 8px; white-space: pre; }
+.msg .table-scroll { overflow-x: auto; max-width: 100%; }
+.msg table { border-collapse: collapse; width: max-content; font-size: 13px; }
+.msg th, .msg td { padding: 3px 8px; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); white-space: normal; overflow-wrap: break-word; max-width: 16rem; }
+.msg th { font-size: 12px; font-weight: 650; color: var(--muted); }
+.msg tbody tr:nth-child(even) { background: var(--chip); }
 .msg .used { margin: 8px 0 0; color: var(--muted); font-size: 12px; }
 
 .activity-head {

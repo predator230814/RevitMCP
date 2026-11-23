@@ -81,7 +81,10 @@ function render(snapshot) {
   timeline.innerHTML = messages.map((message) => {
     const role = message.role === "error" ? "error" : message.role === "user" ? "user" : "assistant";
     const used = message.used ? `<p class="used">${escapeHtml(message.used)}</p>` : "";
-    return `<li class="msg ${role}"><h3>${escapeHtml(message.title || "")}</h3><p>${escapeHtml(message.body || "")}</p>${used}</li>`;
+    const body = role === "user"
+      ? `<p class="plain">${escapeHtml(message.body || "")}</p>`
+      : `<div class="rich">${renderAssistantMarkdown(message.body || "")}</div>`;
+    return `<li class="msg ${role}"><h3>${escapeHtml(message.title || "")}</h3>${body}${used}</li>`;
   }).join("");
   if (status.diagnostics) {
     const names = (status.toolNames || []).join("\n");
