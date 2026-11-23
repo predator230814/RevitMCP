@@ -11,7 +11,7 @@ internal static partial class AssistantSafeText
             return "";
         }
 
-        var text = value.Trim().Replace("\r", " ").Replace("\n", " ");
+        var text = value.Replace("\r\n", "\n", StringComparison.Ordinal).Replace('\r', '\n').Trim();
         text = BearerPattern().Replace(text, "$1[redacted]");
         text = TokenPattern().Replace(text, "[redacted]");
         text = PathPattern().Replace(text, "[path]");
