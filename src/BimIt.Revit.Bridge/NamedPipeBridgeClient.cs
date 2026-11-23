@@ -132,7 +132,7 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
                 request,
                 timeout,
                 cancellationToken,
-                EnsureQueryElementsAllowed,
+                () => EnsureQueryElementsAllowed(request),
                 "The Revit query request timed out.",
                 "The Revit query could not be executed.")
             .ConfigureAwait(false);
@@ -372,7 +372,7 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         }
     }
 
-    private void EnsureQueryElementsAllowed()
+    private void EnsureQueryElementsAllowed(QueryElementsRequest request)
     {
         EnsureCapabilityReady();
         if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsQueryElements(version))
@@ -380,6 +380,13 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             throw new BridgeException(
                 BridgeErrorCodes.ProtocolIncompatible,
                 "revit.query_elements requires a negotiated bridge protocol version that explicitly supports it.");
+        }
+
+        if (request.Predicates is not null && !BridgeProtocol.SupportsQueryElementPredicates(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.query_elements predicates require bridge protocol 25.");
         }
     }
 

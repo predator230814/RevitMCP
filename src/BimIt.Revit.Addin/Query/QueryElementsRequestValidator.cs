@@ -29,7 +29,9 @@ internal static class QueryElementsRequestValidator
             throw InvalidQuery();
         }
 
-        ValidateFilters(request.Filters, request.Scope != QueryScope.ActiveView);
+        var hasPredicates = ValidatePredicates(request.Predicates);
+        var documentNeedsCoarseFilter = request.Scope != QueryScope.ActiveView && !hasPredicates;
+        ValidateFilters(request.Filters, documentNeedsCoarseFilter);
     }
 
     public static void ValidateFilters(QueryElementFilters filters)
@@ -87,6 +89,35 @@ internal static class QueryElementsRequestValidator
         if (value.Length is < 1 or > MaxFilterLength)
         {
             throw InvalidQuery();
+        }
+
+        return true;
+    }
+
+    private static bool ValidatePredicates(IReadOnlyList<QueryElementPredicate>? predicates)
+    {
+        if (predicates is null)
+        {
+            return false;
+        }
+
+        if (predicates.Count is < 1 or > QueryPredicateLimits.MaxPredicates)
+        {
+            throw InvalidQuery();
+        }
+
+        foreach (var predicate in predicates)
+        {
+            if (predicate is null
+                || !string.Equals(predicate.Source, QueryPredicateRules.ParameterSource, StringComparison.Ordinal)
+                || predicate.ParameterRef is null
+                || predicate.ParameterRef.Length is < 1 or > QueryPredicateLimits.MaxParameterRefLength
+                || !QueryPredicateRules.TryParseOperator(predicate.Operator, out var parsed)
+                || !QueryPredicateRules.ValueMatches(parsed, predicate.Value)
+                || predicate.Value is not null && !QueryPredicateRules.PayloadValid(predicate.Value))
+            {
+                throw InvalidQuery();
+            }
         }
 
         return true;

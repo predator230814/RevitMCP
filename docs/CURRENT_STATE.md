@@ -28,6 +28,10 @@ State of the main lines of work:
 
 Read next: ADR-0022, ADR-0023, [SKILLS.md](SKILLS.md), CAP-0014, CAP-0015, and the natural-agent validation records linked above.
 
+### Later implementation note (2026-11-23)
+
+[CAP-0018](capabilities/CAP-0018-revit-query-element-predicates.md) adds optional typed parameter predicates to the existing `revit_query_elements` tool. Bridge protocol is 25 ([BRIDGE-0021](bridge/BRIDGE-0021-query-element-predicates.md)). Production `tools/list` is unchanged at 22. The 2026-11-07 snapshot table above is historical. Live Revit validation of CAP-0018 is pending.
+
 ## Historical accumulated detail (last revised 2026-10-30)
 
 RevitMCP was renamed to BIM-IT Revit MCP. Current projects are `BimIt.Revit.Contracts`, `BimIt.Revit.Bridge`, `BimIt.Revit.Addin`, `BimIt.Revit.Server`, `BimIt.Revit.Assistant`, and `BimIt.Revit.Skills`. MCP tool names, Bridge method names, protocol versions, the Approval pane GUID, audit domain strings, and the `LocalAppData\RevitMCP` storage root are unchanged. The historical validation narrative below keeps the RevitMCP names and SHAs it recorded.

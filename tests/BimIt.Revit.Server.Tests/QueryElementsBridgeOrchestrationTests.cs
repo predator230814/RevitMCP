@@ -25,7 +25,7 @@ public sealed class QueryElementsBridgeOrchestrationTests
         Assert.NotNull(request);
         Assert.Equal("id-2", request.ExpectedInstanceId);
         Assert.Equal(BridgeProtocol.SupportedVersions, request.SupportedProtocolVersions);
-        Assert.Equal(new[] { 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
+        Assert.Equal(new[] { 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, request.SupportedProtocolVersions);
         Assert.Equal("RevitMCP.Server", request.ClientName);
     }
 
@@ -151,6 +151,7 @@ public sealed class QueryElementsBridgeOrchestrationTests
     [InlineData(CapabilityErrorCodes.InvalidQuery, "The query request is invalid.")]
     [InlineData(CapabilityErrorCodes.NoActiveDocument, "No active document is available.")]
     [InlineData(CapabilityErrorCodes.NoActiveView, "The active view cannot be queried.")]
+    [InlineData(CapabilityErrorCodes.QueryCandidateLimit, "The query exceeded the candidate limit.")]
     [InlineData(CapabilityErrorCodes.ExecutionFailed, "The Revit query could not be executed.")]
     public async Task Accepted_capability_errors_are_preserved(string code, string message)
     {
@@ -201,11 +202,78 @@ public sealed class QueryElementsBridgeOrchestrationTests
     }
 
     [Fact]
+    public async Task Live_handshake_below_25_does_not_send_predicates()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("id-25", "pipe-25", protocolVersion: 25));
+        var factory = Factory((pipe, _, _) =>
+        {
+            var registration = TestSupport.CreateRegistration("id-25", pipe);
+            return Task.FromResult(new RecordingBridgeClient
+            {
+                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 24)),
+                QueryElements = (_, _, _) => throw new InvalidOperationException("Predicates must not be sent below protocol 25.")
+            });
+        });
+
+        var outcome = await CreateService(discovery, factory).ExecuteAsync(null, PredicateRequest(), CancellationToken.None);
+
+        Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, outcome.ErrorCode);
+        Assert.Equal("revit.query_elements predicates require bridge protocol 25.", outcome.ErrorMessage);
+        Assert.Equal(0, factory.Clients[0].QueryElementsCalls);
+    }
+
+    [Fact]
+    public async Task Protocol_25_forwards_predicates_unchanged()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("id-25", "pipe-25", protocolVersion: 25));
+        var request = PredicateRequest();
+        var factory = Factory((pipe, _, _) =>
+        {
+            var registration = TestSupport.CreateRegistration("id-25", pipe);
+            return Task.FromResult(new RecordingBridgeClient
+            {
+                Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, selectedProtocolVersion: 25)),
+                QueryElements = (_, _, _) => Task.FromResult(TestSupport.CreateQueryResult("id-25", "doc", 0, false))
+            });
+        });
+
+        var outcome = await CreateService(discovery, factory).ExecuteAsync(null, request, CancellationToken.None);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(1, factory.Clients[0].QueryElementsCalls);
+        Assert.Same(request.Predicates, factory.Clients[0].LastQueryRequest!.Predicates);
+        Assert.Equal(0, outcome.Result!.MatchedCount);
+        Assert.Empty(outcome.Result.ElementRefs);
+    }
+
+    [Fact]
     public void Application_service_does_not_reference_streamjsonrpc()
     {
         var source = File.ReadAllText(Path.Combine(FindRepositoryRoot(), "src", "BimIt.Revit.Server", "QueryElementsApplicationService.cs"));
         Assert.DoesNotContain("StreamJsonRpc", source, StringComparison.Ordinal);
         Assert.DoesNotContain("JsonRpc", source, StringComparison.Ordinal);
+    }
+
+    private static QueryElementsRequest PredicateRequest()
+    {
+        return new QueryElementsRequest
+        {
+            Scope = QueryScope.Document,
+            Filters = new QueryElementFilters(),
+            Predicates =
+            [
+                new QueryElementPredicate
+                {
+                    Source = "parameter",
+                    ParameterRef = "pref",
+                    Operator = "equals",
+                    Value = new QueryPredicateStringValue { Value = "Mark" }
+                }
+            ],
+            Limit = 10
+        };
     }
 
     private static async Task<InvocationContext> InvokeReadyAsync(

@@ -72,6 +72,75 @@ internal static class Cap0002JsonSchemas
                 }
               }
             },
+            "predicates": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["source", "parameter_ref", "operator"],
+                "properties": {
+                  "source": {
+                    "type": "string",
+                    "enum": ["parameter"]
+                  },
+                  "parameter_ref": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256
+                  },
+                  "operator": {
+                    "type": "string",
+                    "enum": [
+                      "is_missing",
+                      "is_present",
+                      "is_empty",
+                      "is_not_empty",
+                      "equals",
+                      "not_equals",
+                      "contains",
+                      "greater_than",
+                      "greater_or_equal",
+                      "less_than",
+                      "less_or_equal"
+                    ]
+                  },
+                  "value": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["kind", "value"],
+                        "properties": {
+                          "kind": { "const": "string" },
+                          "value": { "type": "string", "maxLength": 512 }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["kind", "value"],
+                        "properties": {
+                          "kind": { "const": "integer" },
+                          "value": { "type": "integer" }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": ["kind", "value", "unit_type_id"],
+                        "properties": {
+                          "kind": { "const": "quantity" },
+                          "value": { "type": "number" },
+                          "unit_type_id": { "type": "string", "minLength": 1, "maxLength": 256 }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            },
             "limit": {
               "type": "integer",
               "minimum": 1,
@@ -86,9 +155,19 @@ internal static class Cap0002JsonSchemas
                 "required": ["scope"]
               },
               "then": {
-                "properties": {
-                  "filters": { "minProperties": 1 }
-                }
+                "anyOf": [
+                  {
+                    "properties": {
+                      "filters": { "minProperties": 1 }
+                    }
+                  },
+                  {
+                    "required": ["predicates"],
+                    "properties": {
+                      "predicates": { "minItems": 1 }
+                    }
+                  }
+                ]
               }
             }
           ]

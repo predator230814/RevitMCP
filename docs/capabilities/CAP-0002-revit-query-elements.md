@@ -20,6 +20,8 @@ Typical agent use cases:
 
 The design follows ADR-0005: RevitMCP filters, counts, sorts, limits, and projects before returning data.
 
+[CAP-0018](CAP-0018-revit-query-element-predicates.md) extends this capability with optional typed parameter predicates. A request that omits `predicates` keeps the behavior in this specification, including the candidate scan and the absence of the predicate candidate budget.
+
 ## MCP tool
 
 ### Name
@@ -439,7 +441,7 @@ CAP-0002 is acceptable when:
 4. omitted `document_id` targets the active document and returns its identity;
 5. explicit mismatched `document_id` fails with `DOCUMENT_CONTEXT_CHANGED` and does not query another document;
 6. document and active-view scopes behave deterministically and active-view failure never widens silently to document scope;
-7. document scope requires at least one filter, and active-view scope accepts an empty filter object only on Bridge v12;
+7. document scope requires at least one coarse filter when `predicates` are omitted, and active-view scope accepts an empty filter object only on Bridge v12;
 8. filter arrays are bounded to 20 values and filter strings to 256 characters;
 9. supported filters follow the exact AND/OR/text semantics above;
 10. Revit `ElementType` objects are excluded from returned query population;
@@ -458,7 +460,7 @@ CAP-0002 is acceptable when:
 ## Explicitly deferred
 
 - CAP-0003 element inspection/details;
-- parameter-value filters;
+- parameter-value filters other than the bounded predicates in [CAP-0018](CAP-0018-revit-query-element-predicates.md);
 - bounding-box/spatial filters;
 - arbitrary/specific view targeting;
 - linked-document traversal;

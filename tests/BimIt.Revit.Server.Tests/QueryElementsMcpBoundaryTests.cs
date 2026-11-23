@@ -33,7 +33,7 @@ public sealed class QueryElementsMcpBoundaryTests
             schema.GetProperty("required").EnumerateArray().Select(value => value.GetString()).ToArray());
 
         var names = schema.GetProperty("properties").EnumerateObject().Select(property => property.Name).ToArray();
-        Assert.Equal(new[] { "instance_id", "document_id", "scope", "filters", "limit" }, names);
+        Assert.Equal(new[] { "instance_id", "document_id", "scope", "filters", "predicates", "limit" }, names);
 
         Assert.Equal(
             new[] { "document", "active_view" },
@@ -57,7 +57,9 @@ public sealed class QueryElementsMcpBoundaryTests
         Assert.False(filters.TryGetProperty("minProperties", out _));
         var documentScope = CreateProtocolTool().InputSchema.GetProperty("allOf")[0];
         Assert.Equal("document", documentScope.GetProperty("if").GetProperty("properties").GetProperty("scope").GetProperty("const").GetString());
-        Assert.Equal(1, documentScope.GetProperty("then").GetProperty("properties").GetProperty("filters").GetProperty("minProperties").GetInt32());
+        var documentBranches = documentScope.GetProperty("then").GetProperty("anyOf");
+        Assert.Equal(1, documentBranches[0].GetProperty("properties").GetProperty("filters").GetProperty("minProperties").GetInt32());
+        Assert.Equal(1, documentBranches[1].GetProperty("properties").GetProperty("predicates").GetProperty("minItems").GetInt32());
 
         var names = filters.GetProperty("properties").EnumerateObject().Select(property => property.Name).ToArray();
         Assert.Equal(new[] { "category_names", "family_names", "type_names", "level_names", "text_contains" }, names);
@@ -78,6 +80,34 @@ public sealed class QueryElementsMcpBoundaryTests
         var text = filters.GetProperty("properties").GetProperty("text_contains");
         Assert.Equal(1, text.GetProperty("minLength").GetInt32());
         Assert.Equal(256, text.GetProperty("maxLength").GetInt32());
+    }
+
+    [Fact]
+    public void Predicate_schema_is_closed_and_bounded()
+    {
+        var predicates = CreateProtocolTool().InputSchema.GetProperty("properties").GetProperty("predicates");
+        Assert.Equal(1, predicates.GetProperty("minItems").GetInt32());
+        Assert.Equal(8, predicates.GetProperty("maxItems").GetInt32());
+        var item = predicates.GetProperty("items");
+        Assert.False(item.GetProperty("additionalProperties").GetBoolean());
+        Assert.Equal(
+            new[] { "source", "parameter_ref", "operator" },
+            item.GetProperty("required").EnumerateArray().Select(value => value.GetString()).ToArray());
+        Assert.Equal(
+            new[] { "parameter" },
+            item.GetProperty("properties").GetProperty("source").GetProperty("enum")
+                .EnumerateArray().Select(value => value.GetString()).ToArray());
+        Assert.Equal(
+            new[]
+            {
+                "is_missing", "is_present", "is_empty", "is_not_empty", "equals", "not_equals",
+                "contains", "greater_than", "greater_or_equal", "less_than", "less_or_equal"
+            },
+            item.GetProperty("properties").GetProperty("operator").GetProperty("enum")
+                .EnumerateArray().Select(value => value.GetString()).ToArray());
+        Assert.Equal(3, item.GetProperty("properties").GetProperty("value").GetProperty("oneOf").GetArrayLength());
+        Assert.Contains("typed parameter conditions", QueryElementsToolMetadata.Description, StringComparison.Ordinal);
+        Assert.Contains("Coarse filters", QueryElementsToolMetadata.Description, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -308,6 +338,58 @@ public sealed class QueryElementsMcpBoundaryTests
         Assert.Equal(QueryElementsToolMetadata.DefaultLimit, factory.Clients[0].LastQueryRequest!.Limit);
     }
 
+    [Fact]
+    public async Task Empty_or_oversized_predicates_are_rejected_without_discovery()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool();
+        var empty = ValidQueryArguments(("predicates", TestSupport.JsonValue("[]")));
+        var oversized = ValidQueryArguments((
+            "predicates",
+            TestSupport.JsonValue("[" + string.Join(',', Enumerable.Repeat("""{"source":"parameter","parameter_ref":"pref","operator":"is_present"}""", 9)) + "]")));
+
+        AssertInvalidRequest(await McpToolInvoke.InvokeAsync(tool, empty));
+        AssertInvalidRequest(await McpToolInvoke.InvokeAsync(tool, oversized));
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Predicates_are_not_sent_to_a_protocol_3_instance()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var result = await McpToolInvoke.InvokeAsync(
+            tool,
+            ValidQueryArguments(("predicates", TestSupport.JsonValue("""[{"source":"parameter","parameter_ref":"pref","operator":"is_present"}]"""))));
+
+        AssertError(result, McpToolErrorCodes.NoRevitInstance);
+        Assert.Empty(factory.Clients);
+        Assert.Equal(1, discovery.CallCount);
+    }
+
+    [Fact]
+    public async Task Document_scope_predicates_without_coarse_filters_execute_on_protocol_25()
+    {
+        var (tool, _, factory) = CreateInvocableTool(readyInstance: true, protocolVersion: 25);
+        var arguments = ValidQueryArguments((
+            "predicates",
+            TestSupport.JsonValue("""[{"source":"parameter","parameter_ref":"pref","operator":"contains","value":{"kind":"string","value":"Mark"}}]""")));
+        arguments["filters"] = TestSupport.JsonValue("{}");
+
+        var result = await McpToolInvoke.InvokeAsync(tool, arguments);
+
+        Assert.False(result.IsError);
+        Assert.True(result.StructuredContent.HasValue);
+        Assert.Equal(
+            new[] { "context", "matched_count", "truncated", "element_refs" },
+            result.StructuredContent!.Value.EnumerateObject().Select(property => property.Name).ToArray());
+        Assert.False(result.StructuredContent.Value.TryGetProperty("parameters", out _));
+        var sent = factory.Clients[0].LastQueryRequest!;
+        Assert.False(sent.Filters.HasAny());
+        var value = Assert.IsType<QueryPredicateStringValue>(Assert.Single(sent.Predicates!).Value);
+        Assert.Equal("contains", sent.Predicates![0].Operator);
+        Assert.Equal("Mark", value.Value);
+    }
+
     private static Tool CreateProtocolTool()
     {
         return CreateInvocableTool().Tool.ProtocolTool;
@@ -316,13 +398,13 @@ public sealed class QueryElementsMcpBoundaryTests
     private static (
         McpServerTool Tool,
         FakeDiscovery Discovery,
-        RecordingBridgeClientFactory Factory) CreateInvocableTool(bool readyInstance = false)
+        RecordingBridgeClientFactory Factory) CreateInvocableTool(bool readyInstance = false, int protocolVersion = 3)
     {
         var discovery = new FakeDiscovery();
         RecordingBridgeClientFactory factory;
         if (readyInstance)
         {
-            discovery.Instances.Add(TestSupport.Ready("only", "pipe-only", protocolVersion: 3));
+            discovery.Instances.Add(TestSupport.Ready("only", "pipe-only", protocolVersion: protocolVersion));
             factory = new RecordingBridgeClientFactory
             {
                 Connect = (pipe, _, _) =>
@@ -331,7 +413,7 @@ public sealed class QueryElementsMcpBoundaryTests
                     var registration = TestSupport.CreateRegistration("only", "pipe-only");
                     return Task.FromResult(new RecordingBridgeClient
                     {
-                        Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, 3)),
+                        Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(registration, protocolVersion)),
                         QueryElements = (request, _, _) => Task.FromResult(
                             TestSupport.CreateQueryResult("only", request.DocumentId ?? "doc", 0, false))
                     });
@@ -368,6 +450,15 @@ public sealed class QueryElementsMcpBoundaryTests
         }
 
         return arguments;
+    }
+
+    private static void AssertError(CallToolResult result, string code)
+    {
+        Assert.True(result.IsError);
+        Assert.False(result.StructuredContent.HasValue);
+        var text = Assert.IsType<TextContentBlock>(Assert.Single(result.Content));
+        using var document = JsonDocument.Parse(text.Text);
+        Assert.Equal(code, document.RootElement.GetProperty("code").GetString());
     }
 
     private static void AssertInvalidRequest(CallToolResult result)

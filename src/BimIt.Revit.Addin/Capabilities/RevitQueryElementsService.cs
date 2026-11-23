@@ -13,18 +13,37 @@ internal sealed class RevitQueryElementsService : IRevitQueryElementsService
     private readonly RevitExecutionDispatcher _dispatcher;
     private readonly BridgeInstanceMetadata _metadata;
     private readonly OpenDocumentIdentityService _identity;
+    private readonly OpenDocumentParameterIdentityService _parameterRefs;
+    private readonly IQueryQuantityConverter _quantities;
+    private readonly QueryPredicateEvaluator _predicates;
 
     public RevitQueryElementsService(
         RevitExecutionDispatcher dispatcher,
         BridgeInstanceMetadata metadata,
-        OpenDocumentIdentityService identity)
+        OpenDocumentIdentityService identity,
+        OpenDocumentParameterIdentityService parameterRefs)
+        : this(dispatcher, metadata, identity, parameterRefs, new RevitQueryQuantityConverter())
+    {
+    }
+
+    internal RevitQueryElementsService(
+        RevitExecutionDispatcher dispatcher,
+        BridgeInstanceMetadata metadata,
+        OpenDocumentIdentityService identity,
+        OpenDocumentParameterIdentityService parameterRefs,
+        IQueryQuantityConverter quantities)
     {
         ArgumentNullException.ThrowIfNull(dispatcher);
         ArgumentNullException.ThrowIfNull(metadata);
         ArgumentNullException.ThrowIfNull(identity);
+        ArgumentNullException.ThrowIfNull(parameterRefs);
+        ArgumentNullException.ThrowIfNull(quantities);
         _dispatcher = dispatcher;
         _metadata = metadata;
         _identity = identity;
+        _parameterRefs = parameterRefs;
+        _quantities = quantities;
+        _predicates = new QueryPredicateEvaluator(quantities);
     }
 
     public async Task<QueryElementsResult> QueryElementsAsync(
@@ -83,21 +102,37 @@ internal sealed class RevitQueryElementsService : IRevitQueryElementsService
 
         var collector = CreateCollector(document, uiDocument, request.Scope);
         var metadata = new ElementBasicMetadataResolver(document);
-        var matches = new List<string>();
+        var enumerated = collector.WhereElementIsNotElementType();
 
-        foreach (var element in collector.WhereElementIsNotElementType())
+        QueryElementsMatch match;
+        if (!request.HasPredicates)
         {
-            var candidate = Project(element, metadata);
-            if (QueryElementMatcher.Matches(candidate, request.Filters))
-            {
-                matches.Add(candidate.ElementRef);
-            }
+            match = QueryElementsMatchPlan.Match(
+                enumerated,
+                element => QueryElementMatcher.Matches(Project(element, metadata), request.Filters),
+                element => element.UniqueId,
+                predicateMatch: null,
+                request.Limit,
+                QueryPredicateLimits.MaxPredicateCandidates);
         }
-
-        matches.Sort(StringComparer.Ordinal);
-        var limited = matches.Count <= request.Limit
-            ? matches
-            : matches.GetRange(0, request.Limit);
+        else
+        {
+            var resolved = QueryPredicatePreparer.Prepare(
+                request.Predicates!,
+                parameterRef => _parameterRefs.TryResolve(document, parameterRef, out var binding)
+                    ? binding
+                    : null,
+                _quantities);
+            match = QueryElementsMatchPlan.Match(
+                enumerated,
+                element => QueryElementMatcher.Matches(Project(element, metadata), request.Filters),
+                element => element.UniqueId,
+                element => _predicates.MatchesAll(
+                    resolved,
+                    binding => RevitQueryParameterSurfaceReader.Read(document, element, metadata, binding)),
+                request.Limit,
+                QueryPredicateLimits.MaxPredicateCandidates);
+        }
 
         return new QueryElementsResult
         {
@@ -106,9 +141,9 @@ internal sealed class RevitQueryElementsService : IRevitQueryElementsService
                 InstanceId = _metadata.InstanceId,
                 DocumentId = documentId
             },
-            MatchedCount = matches.Count,
-            Truncated = matches.Count > limited.Count,
-            ElementRefs = limited
+            MatchedCount = match.MatchedCount,
+            Truncated = match.Truncated,
+            ElementRefs = match.ElementRefs
         };
     }
 

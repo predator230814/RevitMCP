@@ -50,7 +50,9 @@ public static class BridgeProtocol
 
     public const int ReadOperationsVersion = 24;
 
-    public const int CurrentVersion = ReadOperationsVersion;
+    public const int QueryElementPredicatesVersion = 25;
+
+    public const int CurrentVersion = QueryElementPredicatesVersion;
 
     public static IReadOnlyList<int> HandshakeOnlyVersions { get; } = [HandshakeVersion];
 
@@ -257,7 +259,10 @@ public static class BridgeProtocol
     public static IReadOnlyList<int> ReadOperationsVersions { get; } =
         [ReadOperationsVersion, .. QueryParameterBindingsVersions];
 
-    public static IReadOnlyList<int> SupportedVersions => ReadOperationsVersions;
+    public static IReadOnlyList<int> QueryElementPredicatesVersions { get; } =
+        [QueryElementPredicatesVersion, .. ReadOperationsVersions];
+
+    public static IReadOnlyList<int> SupportedVersions => QueryElementPredicatesVersions;
 
     public static bool SupportsGetContext(int version) =>
         version is GetContextVersion
@@ -282,7 +287,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsQueryElements(int version) =>
         version is QueryElementsVersion
@@ -306,7 +312,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsGetElements(int version) =>
         version is GetElementsVersion
@@ -329,7 +336,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsDescribeParameters(int version) =>
         version is DescribeParametersVersion
@@ -351,7 +359,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsGetParameterValues(int version) =>
         version is GetParameterValuesVersion
@@ -372,7 +381,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsGetMepTopology(int version) =>
         version is GetMepTopologyVersion
@@ -392,7 +402,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsPreviewParameterUpdates(int version) =>
         version is PreviewParameterUpdatesVersion
@@ -411,7 +422,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsRequestParameterUpdateReview(int version) =>
         version is RequestParameterUpdateReviewVersion
@@ -429,7 +441,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsApplyParameterUpdates(int version) =>
         version is ApplyParameterUpdatesVersion
@@ -446,7 +459,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsGetWarnings(int version) =>
         version is GetWarningsVersion
@@ -462,7 +476,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsContextDocumentId(int version) =>
         version is ContextDocumentIdentityVersion
@@ -477,7 +492,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsActiveViewUnfilteredQuery(int version) =>
         version is ContextDocumentIdentityVersion
@@ -492,7 +508,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsGetSelection(int version) =>
         version is GetSelectionVersion
@@ -506,7 +523,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsPreviewMepDevicePlacements(int version) =>
         version is PreviewMepDevicePlacementsVersion
@@ -519,7 +537,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsRequestMepDevicePlacementReview(int version) =>
         version is RequestMepDevicePlacementReviewVersion
@@ -531,7 +550,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsApplyMepDevicePlacements(int version) =>
         version is ApplyMepDevicePlacementsVersion
@@ -542,7 +562,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsGetRoomLayouts(int version) =>
         version is GetRoomLayoutsVersion
@@ -552,7 +573,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsGetMepDeviceTypes(int version) =>
         version is GetMepDeviceTypesVersion
@@ -561,7 +583,8 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsPreviewRoomPatternPlacements(int version) =>
         version is PreviewRoomPatternPlacementsVersion
@@ -569,30 +592,39 @@ public static class BridgeProtocol
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsReadSpatialRooms(int version) =>
         version is ReadSpatialRoomsVersion
             or LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsLinkedRoomPatternPreview(int version) =>
         version is LinkedRoomPatternPreviewVersion
             or QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsQueryFamilyTypes(int version) =>
         version is QueryFamilyTypesVersion
             or QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsQueryParameterBindings(int version) =>
         version is QueryParameterBindingsVersion
-            or ReadOperationsVersion;
+            or ReadOperationsVersion
+            or QueryElementPredicatesVersion;
 
     public static bool SupportsReadOperations(int version) =>
-        version is ReadOperationsVersion;
+        version is ReadOperationsVersion
+            or QueryElementPredicatesVersion;
+
+    public static bool SupportsQueryElementPredicates(int version) =>
+        version is QueryElementPredicatesVersion;
 }

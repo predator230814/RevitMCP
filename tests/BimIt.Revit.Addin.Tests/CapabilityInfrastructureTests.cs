@@ -79,7 +79,7 @@ public sealed class CapabilityInfrastructureTests
         Assert.DoesNotContain("PathName", context, StringComparison.Ordinal);
         Assert.DoesNotContain("GetCloudModelPath", context, StringComparison.Ordinal);
         Assert.DoesNotContain("Username", context, StringComparison.Ordinal);
-        Assert.Contains("new RevitQueryElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitQueryElementsService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitDescribeParametersService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetParameterValuesService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);

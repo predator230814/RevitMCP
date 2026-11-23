@@ -49,7 +49,7 @@ public sealed class RevitUserWorksetReaderStructureTests
         Assert.Contains("ReadOperationComposition.ProductionOperations()", lifecycle, StringComparison.Ordinal);
         Assert.Contains("new RevitReadOperationWorkQueue(_dispatcher, _identity)", lifecycle, StringComparison.Ordinal);
         Assert.DoesNotContain("Assembly.GetTypes", lifecycle, StringComparison.Ordinal);
-        Assert.Equal(24, BridgeProtocol.CurrentVersion);
+        Assert.Equal(25, BridgeProtocol.CurrentVersion);
 
         foreach (var file in new[]
         {

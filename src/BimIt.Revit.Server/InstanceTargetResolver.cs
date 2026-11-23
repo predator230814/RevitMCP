@@ -19,6 +19,11 @@ internal static class InstanceTargetResolver
         return Resolve(discovered, instanceId, IsQueryElementsEligible);
     }
 
+    public static TargetResolution ResolveForQueryElementPredicates(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        return Resolve(discovered, instanceId, IsQueryElementPredicatesEligible);
+    }
+
     public static TargetResolution ResolveForGetElements(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
     {
         return Resolve(discovered, instanceId, IsGetElementsEligible);
@@ -67,6 +72,11 @@ internal static class InstanceTargetResolver
     public static bool IsQueryElementsEligible(DiscoveredInstance instance)
     {
         return IsEligible(instance, BridgeProtocol.SupportsQueryElements);
+    }
+
+    public static bool IsQueryElementPredicatesEligible(DiscoveredInstance instance)
+    {
+        return IsEligible(instance, BridgeProtocol.SupportsQueryElementPredicates);
     }
 
     public static bool IsGetElementsEligible(DiscoveredInstance instance)

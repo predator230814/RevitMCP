@@ -348,7 +348,7 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
     public IRevitQueryElementsService CreateQuery(BridgeInstanceMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
-        return new RevitQueryElementsService(_dispatcher, metadata, _identity);
+        return new RevitQueryElementsService(_dispatcher, metadata, _identity, _parameterRefs);
     }
 
     public IRevitGetElementsService CreateGetElements(BridgeInstanceMetadata metadata)

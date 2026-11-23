@@ -39,7 +39,9 @@ public sealed class QueryElementsContractTests
             [
                 nameof(QueryElementsRequest.DocumentId),
                 nameof(QueryElementsRequest.Filters),
+                nameof(QueryElementsRequest.HasPredicates),
                 nameof(QueryElementsRequest.Limit),
+                nameof(QueryElementsRequest.Predicates),
                 nameof(QueryElementsRequest.Scope)
             ],
             typeof(QueryElementsRequest).GetProperties().Select(property => property.Name).OrderBy(name => name).ToArray());
@@ -274,6 +276,68 @@ public sealed class QueryElementsContractTests
         Assert.Equal("INVALID_QUERY", CapabilityErrorCodes.InvalidQuery);
         Assert.Equal("REVIT_EXECUTION_TIMEOUT", CapabilityErrorCodes.ExecutionTimeout);
         Assert.Equal("REVIT_EXECUTION_FAILED", CapabilityErrorCodes.ExecutionFailed);
+    }
+
+    [Fact]
+    public void Predicates_round_trip_and_do_not_add_result_fields()
+    {
+        var request = new QueryElementsRequest
+        {
+            Scope = QueryScope.Document,
+            Filters = new QueryElementFilters(),
+            Limit = 10,
+            Predicates =
+            [
+                new QueryElementPredicate
+                {
+                    Source = "parameter",
+                    ParameterRef = "pref",
+                    Operator = "is_present"
+                },
+                new QueryElementPredicate
+                {
+                    Source = "parameter",
+                    ParameterRef = "pref",
+                    Operator = "equals",
+                    Value = new QueryPredicateStringValue { Value = "Mark" }
+                },
+                new QueryElementPredicate
+                {
+                    Source = "parameter",
+                    ParameterRef = "pref",
+                    Operator = "greater_than",
+                    Value = new QueryPredicateIntegerValue { Value = 3 }
+                },
+                new QueryElementPredicate
+                {
+                    Source = "parameter",
+                    ParameterRef = "pref",
+                    Operator = "less_than",
+                    Value = new QueryPredicateQuantityValue
+                    {
+                        Value = 1.5,
+                        UnitTypeId = "autodesk.unit.unit:feet-1.0.1"
+                    }
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(request, ContractJson.Options);
+        Assert.DoesNotContain("has_predicates", json, StringComparison.Ordinal);
+        var restored = JsonSerializer.Deserialize<QueryElementsRequest>(json, ContractJson.Options);
+
+        Assert.NotNull(restored);
+        Assert.Equal(4, restored.Predicates!.Count);
+        Assert.Null(restored.Predicates[0].Value);
+        Assert.Equal("Mark", Assert.IsType<QueryPredicateStringValue>(restored.Predicates[1].Value).Value);
+        Assert.Equal(3, Assert.IsType<QueryPredicateIntegerValue>(restored.Predicates[2].Value).Value);
+        var quantity = Assert.IsType<QueryPredicateQuantityValue>(restored.Predicates[3].Value);
+        Assert.Equal(1.5, quantity.Value);
+        Assert.Equal("autodesk.unit.unit:feet-1.0.1", quantity.UnitTypeId);
+        Assert.Equal("QUERY_CANDIDATE_LIMIT", CapabilityErrorCodes.QueryCandidateLimit);
+        Assert.Equal(
+            new[] { "Context", "ElementRefs", "MatchedCount", "Truncated" },
+            typeof(QueryElementsResult).GetProperties().Select(property => property.Name).OrderBy(name => name).ToArray());
     }
 
     [Fact]

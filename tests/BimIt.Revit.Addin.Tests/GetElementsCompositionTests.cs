@@ -12,7 +12,7 @@ public sealed class GetElementsCompositionTests
     public void Production_lifetime_creates_get_elements_with_the_shared_identity()
     {
         var adapters = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", "Lifecycle", "RevitLifecycleAdapters.cs"));
-        Assert.Contains("new RevitQueryElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
+        Assert.Contains("new RevitQueryElementsService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetElementsService(_dispatcher, metadata, _identity)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitDescribeParametersService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
         Assert.Contains("new RevitGetParameterValuesService(_dispatcher, metadata, _identity, _parameterRefs)", adapters, StringComparison.Ordinal);
