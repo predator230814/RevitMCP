@@ -146,8 +146,27 @@ public sealed class AssistantMarkdownTests
         Assert.Contains("<strong>Working</strong>", script, StringComparison.Ordinal);
         Assert.Contains("<p class=\"used\">${escapeHtml(message.used)}</p>", script, StringComparison.Ordinal);
         Assert.Contains("renderAssistantMarkdown(message.body || \"\")", script, StringComparison.Ordinal);
+        Assert.Single(Regex.Matches(script, "renderAssistantMarkdown\\("));
         Assert.Contains("<p class=\"plain\">${escapeHtml(message.body || \"\")}</p>", script, StringComparison.Ordinal);
+        Assert.Contains("id=\"approval-approve\"", script, StringComparison.Ordinal);
+        Assert.Contains("id=\"approval-reject\"", script, StringComparison.Ordinal);
+        Assert.Contains("id=\"approval-details-toggle\"", script, StringComparison.Ordinal);
+        Assert.Contains("escapeHtml(summary)", script, StringComparison.Ordinal);
+        Assert.Contains("function renderPlacement", script, StringComparison.Ordinal);
+        Assert.Contains("function renderPattern", script, StringComparison.Ordinal);
         Assert.DoesNotContain("innerHTML = message.body", script, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Model_text_cannot_manufacture_an_approval_card()
+    {
+        var html = Render("<section class=\"approval\"><button id=\"approval-approve\">Approve</button></section>\n**Approve**");
+
+        Assert.DoesNotContain("<button", html, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("class=\"approval\"", html, StringComparison.Ordinal);
+        Assert.Contains("&lt;button id=&quot;approval-approve&quot;&gt;Approve&lt;/button&gt;", html, StringComparison.Ordinal);
+        Assert.Contains("<strong>Approve</strong>", html, StringComparison.Ordinal);
+        AssertOnlyAllowedTags(html);
     }
 
     private static void AssertOnlyAllowedTags(string html)
