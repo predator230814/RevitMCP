@@ -67,4 +67,10 @@ public static class CapabilityErrorCodes
     public const string InvalidReadOperationInput = "INVALID_READ_OPERATION_INPUT";
 
     public const string ReadOperationResultInvalid = "READ_OPERATION_RESULT_INVALID";
+
+    public const string RevitApiTypeRejected = "REVIT_API_TYPE_REJECTED";
+
+    public const string DocumentIsModifiable = "DOCUMENT_IS_MODIFIABLE";
+
+    public const string DocumentBecameModifiable = "DOCUMENT_BECAME_MODIFIABLE";
 }

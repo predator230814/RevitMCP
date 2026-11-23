@@ -6,7 +6,7 @@ The question is whether one bounded generic reader can return long-tail Revit fa
 
 ## What an opted-in build adds
 
-Normal Addin builds are unchanged: registry contains only `project.user_worksets` v1, Bridge protocol stays 24, and `tools/list` stays the production 22 tools.
+Normal Addin builds register the accepted production operations, including `project.user_worksets` v1, `revit_api.metadata` v1, and `revit_api.element_properties` v1. They do not register the experimental ids. Bridge protocol stays 24, and `tools/list` stays the production 22 tools.
 
 Pass `-p:BimItApiAccessSpike=true` to compile the sources in this directory into `BimIt.Revit.Addin` and register two extra read operations:
 

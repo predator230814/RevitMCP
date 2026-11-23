@@ -1,13 +1,13 @@
 # CAP-0017: Bounded Revit API property access
 
-- Status: Accepted on 2026-11-19. Not implemented.
+- Status: Accepted on 2026-11-19. Implemented. Live Revit validation has not been run.
 - Operation class: Read
 - Date: 2026-11-19
 - Architecture: Accepted [ADR-0025](../adr/ADR-0025-bounded-revit-api-property-access.md). ADR-0023 stays Accepted and unchanged. ADR-0024 stays Accepted and is amended only as ADR-0025 describes.
 - Bridge: no new RPC and no protocol bump. Reuses protocol 24 and [CAP-0016](CAP-0016-revit-read-operations.md) `revit_lookup` / `revit_read`.
 - MCP: no new tool. `revit_lookup` remains a lookup of BIM-IT registered operations.
 
-This specification is the accepted contract. It is not the implementation. Production code, tests, Skills, and the Server catalogue stay unchanged until a later implementation task.
+This specification is the accepted contract. The two operations are implemented in the Addin registry. Live Revit validation has not been run. Skills, Assistant behavior, controlled writes, and the MCP tool list are unchanged.
 
 ## Purpose
 
@@ -49,7 +49,9 @@ Schemas are closed objects: `additionalProperties: false` on every object node, 
 
 ## Search normalization
 
-Used by `revit_api.metadata` search over two corpora: the simple name of each Element type, and the names of its public instance properties. Methods are not searched. Namespace segments are not tokens. The rule is plural equivalence. It is not a stemmer, not a fuzzy match, and not a table of BIM aliases.
+Used by `revit_api.metadata` search. Methods are not searched. Namespace segments are not tokens. The rule is plural equivalence. It is not a stemmer, not a fuzzy match, and not a table of BIM aliases.
+
+Search has two stages. Stage 1 matches the query against simple Element type names. If that stage has at least one match, the result is those type-name matches only. Stage 2 searches public instance property names only when stage 1 has zero matches. A property-only hit is not added to a result that already has a type-name hit. The 200-match failure applies to the selected stage.
 
 **Tokens.** Split the string before an uppercase letter that follows a lowercase letter or a digit, and on every character that is not an ASCII letter or digit. Lowercase each piece with the invariant culture. Drop empty pieces. Do not strip characters from the token.
 
@@ -60,9 +62,9 @@ Used by `revit_api.metadata` search over two corpora: the simple name of each El
 - the query token equals the API token plus `es`;
 - the API token ends in `y`, and the query token equals that token without the final `y`, plus `ies`.
 
-**Type match.** Every query token matches at least one token of the type's simple name, or at least one token of a public instance property name on that type. A property match uses the same equivalence. The search reads property metadata only. It invokes no getter.
+**Stage 1, type-name discovery.** The query names that simple type. Either the query tokens and the simple-name tokens have the same count, every query token matches a simple-name token, and every simple-name token is matched by a query token; or the query with non-letters and non-digits removed equals the simple name, ordinal-ignore-case. A longer simple name that only contains the query is not a stage 1 match, so `elevation` does not stop at `ElevationMarker`. A stage 1 summary has an empty `matched_members` list. The search reads property metadata only when it reaches stage 2. It invokes no getter.
 
-**Simple-name substring.** The raw query also matches when it is an ordinal-ignore-case substring of the type's simple name. This rule does not apply to property names, so a short fragment does not hit every property that contains those letters. A type matches when the token rule or this substring rule hits. Results are ordered by full type name, ordinal.
+**Stage 2, property discovery.** Used only when stage 1 returns nothing. Every query token matches at least one token of a public instance property name on that type, using the same equivalence. `matched_members` lists the property simple names that satisfied a query token. Results in either stage are ordered by full type name, ordinal.
 
 | Query | Matches |
 |---|---|
@@ -95,7 +97,7 @@ Neither field, or both, is `INVALID_READ_OPERATION_INPUT`.
 
 Public types in the trusted assembly that are `Autodesk.Revit.DB.Element` or a subclass, including abstract types. Non-element types are not search hits.
 
-If more than 200 types match, the operation fails with `INVALID_READ_OPERATION_INPUT`, names `query`, and returns no types. The agent must narrow the query.
+If the selected stage matches more than 200 types, the operation fails with `INVALID_READ_OPERATION_INPUT`, names `query`, and returns no types. The agent must narrow the query. Matches from the other stage are not counted.
 
 Each summary:
 
@@ -105,7 +107,7 @@ Each summary:
 | `base_type_name` | Full name of `BaseType` when that type is in the trusted assembly; otherwise null |
 | `is_element` | True |
 | `is_abstract` | As declared |
-| `matched_members` | Property simple names that satisfied a query token, ordinal, at most 8. Empty when the type matched on its simple name alone |
+| `matched_members` | Property simple names that satisfied a query token, ordinal, at most 8. Empty for a stage 1 type-name match |
 
 No property schemas and no methods in a search summary. `matched_type_count` is the full match count. `returned_count` is the page. `complete` and `next_cursor` follow CAP-0016. When more than 8 properties match, the summary keeps the first 8 in ordinal order and sets `matched_members_omitted_count` to the remainder. Zero means the property-name list is complete.
 
@@ -177,7 +179,7 @@ After type and property checks succeed:
 
 1. If `Document.IsModifiable` is true, fail immediately with `DOCUMENT_IS_MODIFIABLE`. Do not wait, retry, or queue. Do not call `OfClass`. Do not call a getter.
 2. Collect with `new FilteredElementCollector(document).OfClass(resolvedType)`. No `WhereElementIsNotElementType`, no category filter, no per-class fallback.
-3. If `OfClass` throws `ArgumentException` because the type exists in the API but not in Revit's native object model, fail with `REVIT_API_TYPE_REJECTED`, reason `not_collectable`, and no rows. Do not consult a handwritten list and do not switch filters.
+3. If the `OfClass` call itself throws `Autodesk.Revit.Exceptions.ArgumentException`, fail with `REVIT_API_TYPE_REJECTED`, reason `not_collectable`, and no rows. The type check already rejected a type that is not a concrete Element subclass, so this exception is the API type Revit will not collect. Do not read the exception message. Do not apply the same mapping to an exception thrown later by `ToElements` or by unrelated logic. Do not consult a handwritten list and do not switch filters.
 4. If the matched count is greater than 2,000, fail with `RESULT_TOO_LARGE` and no rows.
 5. Order by the same stable Revit identity the existing element-query path uses internally. Do not serialize that key as `UniqueId` or as an `ElementId` integer.
 6. Project the current page. Invoke each selected getter as `getter.Invoke(target, null)` and no other member.
@@ -283,8 +285,8 @@ New codes:
 ```text
 REVIT_API_TYPE_REJECTED
     reason unknown | not_element | abstract | not_collectable
-    No payload. not_collectable is only the OfClass ArgumentException
-    for a type that exists in the API but not in the native object model.
+    No payload. not_collectable is the ArgumentException thrown by the
+    OfClass call itself. The decision does not read the exception message.
 
 DOCUMENT_IS_MODIFIABLE
     IsModifiable was true before collection. Fail immediately.
@@ -311,7 +313,7 @@ These apply to a future implementation. They are not executed by this proposal.
 1. A normal build that does not opt into the spike registers `project.user_worksets` v1 plus, once this contract is implemented and approved, exactly the two operations above. The spike ids are absent. `tools/list` remains the CAP-0016 tools. Protocol remains 24.
 2. In a metadata-only fixture, with no alias table and no benchmark type names in the production operation sources, `levels`, `phases`, `design options`, `classes`, and `properties` match the simple names `Level`, `Phase`, `DesignOption`, `Class`, and `Property`. `elevation` matches `Level` through property `Elevation`. `primary` matches `DesignOption` through `IsPrimary`. Search does not consult methods and does not invoke a getter.
 3. The same projector accepts `Name` and `Elevation` on `Level`, `Name` on `Phase`, and `Name` and `IsPrimary` on `DesignOption`, and rejects `Id` as `unsupported_return_type`.
-4. `OfClass` is the only collector. An `ArgumentException` for a native-model mismatch becomes `not_collectable` and does not call `RoomFilter` or any other class-specific filter.
+4. `OfClass` is the only collector. An `ArgumentException` thrown by that call becomes `not_collectable` without reading the exception message, and the operation does not call `RoomFilter` or any other class-specific filter.
 5. `IsModifiable == true` before the read fails immediately and prevents `OfClass` and getters. The operation does not wait, retry, or queue. A change to true during the read returns `DOCUMENT_BECAME_MODIFIABLE` and no rows. A false flag is not asserted to mean that no transaction is open.
 6. No `Transaction`, `SubTransaction`, or `TransactionGroup`. The only `Invoke` is `getter.Invoke(target, null)`.
 7. Every row includes `element_ref` from the existing element-query identity path. Results contain no raw `ElementId` and no separate `UniqueId` field. Ordering is stable across pages.
@@ -332,6 +334,10 @@ These apply to a future implementation. They are not executed by this proposal.
 ## Accepted decisions
 
 The six Tech Lead decisions are recorded in [ADR-0025](../adr/ADR-0025-bounded-revit-api-property-access.md) and are applied in this contract. Acceptance date: 2026-11-19.
+
+## Amendment
+
+2026-11-19. Implementation review. Metadata search is two-stage. Type-name discovery uses the accepted tokenization and plural equivalence against the whole simple name: the two token lists have the same count, and each side matches the other. A query also matches when, with non-letters and non-digits removed, it equals that simple name. A longer simple name that only contains the query does not take this stage, so property discovery still runs for `elevation`. When the type-name stage has any match, the result contains only those matches. Property-name discovery runs only when the type-name stage is empty and keeps the accepted property metadata rules. The 200-match failure applies inside the selected stage. `not_collectable` is the `ArgumentException` from the `OfClass` call itself; the decision does not inspect exception text. ADR-0025 is unchanged.
 
 ## Evidence
 
