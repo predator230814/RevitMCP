@@ -354,6 +354,24 @@ public sealed class QueryElementsMcpBoundaryTests
     }
 
     [Fact]
+    public async Task Incompatible_operator_and_value_are_rejected_before_discovery()
+    {
+        var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);
+        var containsInteger = ValidQueryArguments((
+            "predicates",
+            TestSupport.JsonValue("""[{"source":"parameter","parameter_ref":"pref","operator":"contains","value":{"kind":"integer","value":1}}]""")));
+        var equalsWithoutValue = ValidQueryArguments((
+            "predicates",
+            TestSupport.JsonValue("""[{"source":"parameter","parameter_ref":"pref","operator":"equals"}]""")));
+
+        AssertError(await McpToolInvoke.InvokeAsync(tool, containsInteger), CapabilityErrorCodes.InvalidQuery);
+        AssertError(await McpToolInvoke.InvokeAsync(tool, equalsWithoutValue), CapabilityErrorCodes.InvalidQuery);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+        Assert.Empty(factory.Clients);
+    }
+
+    [Fact]
     public async Task Predicates_are_not_sent_to_a_protocol_3_instance()
     {
         var (tool, discovery, factory) = CreateInvocableTool(readyInstance: true);

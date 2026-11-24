@@ -97,10 +97,12 @@ internal static class QueryPredicateRules
     {
         return value switch
         {
-            QueryPredicateStringValue text => text.Value.Length <= QueryPredicateLimits.MaxStringLength,
+            QueryPredicateStringValue text =>
+                text.Value is not null && text.Value.Length <= QueryPredicateLimits.MaxStringLength,
             QueryPredicateIntegerValue => true,
             QueryPredicateQuantityValue quantity =>
                 double.IsFinite(quantity.Value)
+                && quantity.UnitTypeId is not null
                 && quantity.UnitTypeId.Length is >= 1 and <= QueryPredicateLimits.MaxUnitTypeIdLength,
             _ => false
         };

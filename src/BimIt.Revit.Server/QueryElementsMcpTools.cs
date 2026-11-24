@@ -42,6 +42,7 @@ internal sealed class QueryElementsMcpTools
 
         if (filters is null
             || predicates is { Count: 0 }
+            || (predicates is not null && !OperatorAcceptsValues(predicates))
             || (parsedScope == QueryScope.Document && !filters.HasAny() && predicates is not { Count: > 0 }))
         {
             return McpCallResultFactory.Error(
@@ -62,6 +63,36 @@ internal sealed class QueryElementsMcpTools
         return outcome.IsSuccess
             ? McpCallResultFactory.Success(outcome.Result!, ResolveProtocolVersion(server))
             : McpCallResultFactory.Error(outcome.ErrorCode!, outcome.ErrorMessage!, outcome.Candidates);
+    }
+
+    private static bool OperatorAcceptsValues(IReadOnlyList<QueryElementPredicate> predicates)
+    {
+        foreach (var predicate in predicates)
+        {
+            if (predicate is null || !OperatorAcceptsValue(predicate.Operator, predicate.Value))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool OperatorAcceptsValue(string? op, QueryPredicateValue? value)
+    {
+        if (op is "is_missing" or "is_present" or "is_empty" or "is_not_empty")
+        {
+            return value is null;
+        }
+
+        return op switch
+        {
+            "contains" => value is QueryPredicateStringValue,
+            "equals" or "not_equals" => value is QueryPredicateStringValue or QueryPredicateIntegerValue,
+            "greater_than" or "greater_or_equal" or "less_than" or "less_or_equal" =>
+                value is QueryPredicateIntegerValue or QueryPredicateQuantityValue,
+            _ => false
+        };
     }
 
     private static bool TryParseScope(string? scope, out QueryScope parsed)

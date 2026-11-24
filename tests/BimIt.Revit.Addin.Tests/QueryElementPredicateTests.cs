@@ -1,3 +1,4 @@
+using System.Text.Json;
 using BimIt.Revit.Addin.Identity;
 using BimIt.Revit.Addin.Inspection;
 using BimIt.Revit.Addin.Query;
@@ -254,6 +255,38 @@ public sealed class QueryElementPredicateTests
     }
 
     [Fact]
+    public void Null_typed_members_are_invalid_queries()
+    {
+        var missingText = new QueryPredicateStringValue { Value = null! };
+        var missingUnit = new QueryPredicateQuantityValue { Value = 1, UnitTypeId = null! };
+        Assert.False(QueryPredicateRules.PayloadValid(missingText));
+        Assert.False(QueryPredicateRules.PayloadValid(missingUnit));
+
+        AssertInvalid(Request(new QueryElementPredicate
+        {
+            Source = "parameter",
+            ParameterRef = "pref",
+            Operator = "equals",
+            Value = missingText
+        }));
+        AssertInvalid(Request(new QueryElementPredicate
+        {
+            Source = "parameter",
+            ParameterRef = "pref",
+            Operator = "greater_than",
+            Value = missingUnit
+        }));
+
+        var transported = JsonSerializer.Deserialize<QueryElementsRequest>(
+            """
+            {"scope":"document","filters":{"category_names":["Walls"]},"limit":10,"predicates":[{"source":"parameter","parameter_ref":"pref","operator":"equals","value":{"kind":"string","value":null}},{"source":"parameter","parameter_ref":"pref","operator":"less_than","value":{"kind":"quantity","value":1,"unit_type_id":null}}]}
+            """,
+            ContractJson.Options);
+        Assert.NotNull(transported);
+        AssertInvalid(transported);
+    }
+
+    [Fact]
     public void Predicate_bounds_and_applicability_are_rejected()
     {
         AssertInvalid(Request(predicates: []));
@@ -376,6 +409,23 @@ public sealed class QueryElementPredicateTests
         var convert = converter.IndexOf("UnitUtils.ConvertToInternalUnits(", StringComparison.Ordinal);
         Assert.True(isUnit >= 0 && isValid > isUnit && convert > isValid);
 
+        var isUnitMethod = Slice(converter, "public bool IsUnit(", "public bool IsValidUnit(");
+        var isValidMethod = Slice(converter, "public bool IsValidUnit(", "public double ConvertToInternalUnits(");
+        var convertMethod = Slice(converter, "public double ConvertToInternalUnits(", "private static bool TryCreate(");
+        var tryCreate = Slice(converter, "private static bool TryCreate(", "private static BridgeException InvalidQuery(");
+        Assert.Contains("TryCreate(", isUnitMethod, StringComparison.Ordinal);
+        Assert.Contains("return false;", isUnitMethod, StringComparison.Ordinal);
+        Assert.Contains("catch (ArgumentException)", isUnitMethod, StringComparison.Ordinal);
+        Assert.DoesNotContain("InvalidQuery()", isUnitMethod, StringComparison.Ordinal);
+        Assert.Contains("return false;", isValidMethod, StringComparison.Ordinal);
+        Assert.Contains("catch (ArgumentException)", isValidMethod, StringComparison.Ordinal);
+        Assert.Contains("throw InvalidQuery()", convertMethod, StringComparison.Ordinal);
+        Assert.Contains("catch (ArgumentException)", convertMethod, StringComparison.Ordinal);
+        Assert.Contains("new ForgeTypeId(typeId)", tryCreate, StringComparison.Ordinal);
+        Assert.Contains("catch (ArgumentException)", tryCreate, StringComparison.Ordinal);
+        Assert.Contains("return false;", tryCreate, StringComparison.Ordinal);
+        Assert.Contains("CapabilityErrorCodes.InvalidQuery", converter, StringComparison.Ordinal);
+
         var evaluator = File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Addin", "Query", "QueryPredicateEvaluator.cs"));
         var validCall = evaluator.IndexOf(".IsValidUnit(", StringComparison.Ordinal);
         var convertCall = evaluator.IndexOf(".ConvertToInternalUnits(", StringComparison.Ordinal);
@@ -488,6 +538,14 @@ public sealed class QueryElementPredicateTests
             SpecTypeId = spec,
             MeasurableSpec = measurable
         };
+    }
+
+    private static string Slice(string source, string start, string end)
+    {
+        var from = source.IndexOf(start, StringComparison.Ordinal);
+        var to = source.IndexOf(end, from + start.Length, StringComparison.Ordinal);
+        Assert.True(from >= 0 && to > from);
+        return source[from..to];
     }
 
     private static string FindRepoRoot()

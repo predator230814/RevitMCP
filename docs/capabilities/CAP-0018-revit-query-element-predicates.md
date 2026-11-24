@@ -94,13 +94,13 @@ Before conversion, all of the following must hold:
 - the requested unit token is a unit;
 - that unit is valid for the parameter spec.
 
-Only then is the requested value converted to internal units and compared with the parameter's double value. An incompatible spec/unit pair, a non-finite requested value, or a non-finite converted value is an invalid query. A double that is not a measurable spec is an invalid query when a quantity comparison reaches it. A parameter that is missing, has no value, or is not stored as a double does not match the comparison and does not attempt conversion.
+Only then is the requested value converted to internal units and compared with the parameter's double value. A unit token that cannot be constructed as a Forge type id is an invalid query. An incompatible spec/unit pair, a non-finite requested value, or a non-finite converted value is an invalid query. A double that is not a measurable spec is an invalid query when a quantity comparison reaches it. A parameter that is missing, has no value, or is not stored as a double does not match the comparison and does not attempt conversion.
 
 ## Result and errors
 
 The result shape is unchanged: `context`, `matched_count`, `truncated`, `element_refs`.
 
-There is no partial success. Malformed predicates, invalid operator/value combinations, unknown parameter refs, incompatible quantity units or specs, non-finite quantities, and invalid bounds are `INVALID_QUERY`. Candidate-budget exhaustion is `QUERY_CANDIDATE_LIMIT`, which is distinct from a zero-match result. Unexpected Revit failures remain execution failures.
+There is no partial success. Malformed predicates, invalid operator/value combinations, unknown parameter refs, incompatible quantity units or specs, non-finite quantities, and invalid bounds are `INVALID_QUERY`. A typed member that arrives as JSON `null`, and a unit token that is not a Forge type id, are invalid queries rather than execution failures. The MCP tool rejects an operator that does not accept the supplied value kind before instance discovery. Candidate-budget exhaustion is `QUERY_CANDIDATE_LIMIT`, which is distinct from a zero-match result. Unexpected Revit failures remain execution failures.
 
 The schemas stay closed. They do not expose Revit API types, numeric element ids, paths, or implementation details.
 
