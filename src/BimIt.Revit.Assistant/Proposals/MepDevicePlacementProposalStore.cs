@@ -209,11 +209,42 @@ internal sealed class MepDevicePlacementApplyReceipt
 
 internal sealed class MepDevicePlacementProposalStore
 {
+    public const string StaleAuthorityMessage = "This placement proposal is no longer current.";
+
     private readonly object _gate = new();
+    private readonly AssistantProposalRegistry _registry;
     private MepDevicePlacementProposal? _current;
     private long _generation;
+    private AssistantProposalAuthority _authority;
     private MepDevicePlacementPreviewReceipt? _preview;
     private MepDevicePlacementApplyReceipt? _apply;
+
+    public MepDevicePlacementProposalStore(AssistantProposalRegistry? registry = null)
+    {
+        _registry = registry ?? new AssistantProposalRegistry();
+    }
+
+    public AssistantProposalAuthority Authority
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _authority;
+            }
+        }
+    }
+
+    public bool HasCurrentAuthority
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return IsAuthoritativeUnlocked();
+            }
+        }
+    }
 
     public MepDevicePlacementProposal? Current
     {
@@ -233,6 +264,11 @@ internal sealed class MepDevicePlacementProposalStore
         {
             lock (_gate)
             {
+                if (!IsAuthoritativeUnlocked())
+                {
+                    return null;
+                }
+
                 return _current?.State is MepDevicePlacementProposalStates.Ready or MepDevicePlacementProposalStates.NeedsCalibration
                     ? _current.State
                     : null;
@@ -249,6 +285,9 @@ internal sealed class MepDevicePlacementProposalStore
             _generation++;
             _preview = null;
             _apply = null;
+            _authority = _registry.Activate(
+                AssistantProposalKind.MepDevicePlacement,
+                proposal.SourceArtifactId);
         }
     }
 
@@ -256,10 +295,7 @@ internal sealed class MepDevicePlacementProposalStore
     {
         lock (_gate)
         {
-            _current = null;
-            _generation++;
-            _preview = null;
-            _apply = null;
+            ClearUnlocked();
         }
     }
 
@@ -280,10 +316,8 @@ internal sealed class MepDevicePlacementProposalStore
 
             if (string.Equals(source, previousArtifactId, StringComparison.Ordinal))
             {
-                _current = null;
-                _generation++;
-                _preview = null;
-                _apply = null;
+                ClearUnlocked();
+                _registry.InvalidateCurrentIfSourceChanged(previousArtifactId, currentArtifactId);
             }
         }
     }
@@ -292,7 +326,7 @@ internal sealed class MepDevicePlacementProposalStore
     {
         lock (_gate)
         {
-            if (_preview is null || _preview.Generation != _generation || _preview.ExpiresAt <= utcNow)
+            if (!IsAuthoritativeUnlocked() || _preview is null || _preview.Generation != _generation || _preview.ExpiresAt <= utcNow)
             {
                 summary = "";
                 return false;
@@ -309,7 +343,7 @@ internal sealed class MepDevicePlacementProposalStore
         ArgumentException.ThrowIfNullOrWhiteSpace(summary);
         lock (_gate)
         {
-            if (_apply is not null && _apply.Generation == _generation)
+            if (!IsAuthoritativeUnlocked() || (_apply is not null && _apply.Generation == _generation))
             {
                 return false;
             }
@@ -342,7 +376,8 @@ internal sealed class MepDevicePlacementProposalStore
     {
         lock (_gate)
         {
-            if (_preview is null
+            if (!IsAuthoritativeUnlocked()
+                || _preview is null
                 || _preview.Generation != _generation
                 || _preview.ExpiresAt <= utcNow
                 || string.IsNullOrWhiteSpace(_preview.IntentRef))
@@ -360,7 +395,7 @@ internal sealed class MepDevicePlacementProposalStore
     {
         lock (_gate)
         {
-            if (_apply is null || _apply.Generation != _generation)
+            if (!IsAuthoritativeUnlocked() || _apply is null || _apply.Generation != _generation)
             {
                 summary = "";
                 isError = false;
@@ -379,7 +414,8 @@ internal sealed class MepDevicePlacementProposalStore
         ArgumentException.ThrowIfNullOrWhiteSpace(summary);
         lock (_gate)
         {
-            if (_preview is null
+            if (!IsAuthoritativeUnlocked()
+                || _preview is null
                 || _preview.Generation != _generation
                 || !string.Equals(_preview.IntentRef, intentRef, StringComparison.Ordinal))
             {
@@ -406,7 +442,7 @@ internal sealed class MepDevicePlacementProposalStore
         ArgumentNullException.ThrowIfNull(calibration);
         lock (_gate)
         {
-            if (_current is not { HasTemplateBinding: true } proposal)
+            if (!IsAuthoritativeUnlocked() || _current is not { HasTemplateBinding: true } proposal)
             {
                 return false;
             }
@@ -414,5 +450,26 @@ internal sealed class MepDevicePlacementProposalStore
             _current = proposal.AsReady();
             return true;
         }
+    }
+
+    private void ClearUnlocked()
+    {
+        _current = null;
+        _generation++;
+        _preview = null;
+        _apply = null;
+        ReleaseUnlocked();
+    }
+
+    private void ReleaseUnlocked()
+    {
+        var authority = _authority;
+        _authority = default;
+        _registry.Release(authority);
+    }
+
+    private bool IsAuthoritativeUnlocked()
+    {
+        return _registry.IsCurrent(_authority);
     }
 }

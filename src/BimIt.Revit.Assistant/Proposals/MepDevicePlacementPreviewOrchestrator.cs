@@ -43,6 +43,11 @@ internal sealed class MepDevicePlacementPreviewOrchestrator
             return Fail("There is no placement proposal to preview.");
         }
 
+        if (!_store.HasCurrentAuthority)
+        {
+            return Fail(MepDevicePlacementProposalStore.StaleAuthorityMessage);
+        }
+
         if (_store.TryReuseTerminalApply(out _, out _))
         {
             return Fail(TerminalGenerationMessage);
@@ -136,7 +141,9 @@ internal sealed class MepDevicePlacementPreviewOrchestrator
         var summary = Describe(proposal, result);
         if (!_store.RememberPreview(result.IntentRef!, result.IntentFingerprint, result.ExpiresAt!.Value, summary))
         {
-            return Fail(TerminalGenerationMessage);
+            return Fail(_store.HasCurrentAuthority
+                ? TerminalGenerationMessage
+                : MepDevicePlacementProposalStore.StaleAuthorityMessage);
         }
 
         return Ok(summary);
