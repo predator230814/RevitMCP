@@ -38,7 +38,7 @@ Read next: ADR-0022, ADR-0023, [SKILLS.md](SKILLS.md), CAP-0014, CAP-0015, and t
 
 ### Later implementation note (2026-11-24)
 
-[ADR-0027](adr/ADR-0027-layered-revit-capability-admission.md) records the capability admission order: existing generic primitive, then Skill or composition, then future bounded C#, then a compiled specialized capability. Bounded C# execution is not production-authorized. ADR-0023 §1 remains in force. ADR-0025 flexible C# remains Research Only. [CAP-0019](capabilities/CAP-0019-revit-api-symbol-discovery.md) adds descriptive `revit_api.symbols` v1 behind the existing `revit_lookup` and `revit_read` tools. No generated code is executed. No new MCP tool, Bridge RPC, or protocol version. Production `tools/list` stays 22. Bridge protocol stays 25. Live Revit validation of this operation has not been run.
+[ADR-0027](adr/ADR-0027-layered-revit-capability-admission.md) records the capability admission order: existing generic primitive, then Skill or composition, then future bounded C#, then a compiled specialized capability. Bounded C# execution is not production-authorized. ADR-0023 §1 remains in force. ADR-0025 flexible C# remains Research Only. [CAP-0019](capabilities/CAP-0019-revit-api-symbol-discovery.md) adds descriptive `revit_api.symbols` v1 behind the existing `revit_lookup` and `revit_read` tools. No generated code is executed. No new MCP tool, Bridge RPC, or protocol version. Production `tools/list` stays 22. Bridge protocol stays 25. Live Revit validation of this operation is **PASS** on `889e5bebe0f87d51e224fbb8ac9f517006908133`: [CAP_0019_REVIT_API_SYMBOLS_VALIDATION.md](CAP_0019_REVIT_API_SYMBOLS_VALIDATION.md).
 
 ## Historical accumulated detail (last revised 2026-10-30)
 

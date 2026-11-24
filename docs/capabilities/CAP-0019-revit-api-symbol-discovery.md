@@ -1,6 +1,6 @@
 # CAP-0019: Revit API symbol discovery
 
-- Status: Accepted on 2026-11-24. Implemented. Live Revit validation has not been run.
+- Status: Accepted on 2026-11-24. Implemented. Live Revit validation is **PASS** on `889e5bebe0f87d51e224fbb8ac9f517006908133`: [CAP_0019_REVIT_API_SYMBOLS_VALIDATION.md](../CAP_0019_REVIT_API_SYMBOLS_VALIDATION.md).
 - Operation class: Read
 - Date: 2026-11-24
 - Architecture: Accepted [ADR-0027](../adr/ADR-0027-layered-revit-capability-admission.md). [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md) §1 stays in force. [ADR-0025](../adr/ADR-0025-bounded-revit-api-property-access.md) flexible C# stays Research Only.
