@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<RevitAddIns>
+  <AddIn Type="Command">
+    <Name>BIM-IT Query Runtime Spike</Name>
+    <Assembly>BimIt.Revit.QueryRuntimeSpike.Live.dll</Assembly>
+    <AddInId>8f3e2c1a-7b64-4d5e-9a10-6c2b4e8d1f30</AddInId>
+    <FullClassName>BimIt.Revit.QueryRuntimeSpike.Live.QueryRuntimeLiveCommand</FullClassName>
+    <VendorId>BIMIT</VendorId>
+    <VendorDescription>Opt-in spike command. Not part of the production Addin.</VendorDescription>
+  </AddIn>
+</RevitAddIns>
