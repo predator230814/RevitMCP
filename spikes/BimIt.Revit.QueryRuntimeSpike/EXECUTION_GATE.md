@@ -1,6 +1,7 @@
 # Query runtime EXEC-0001 live gate
 
 - Status: **PASS**
+- Tested spike sources: `d6307450e05aaebac95cccc9c2b6c7714bcebf27`. This sentence does not change those binaries.
 - Conclusion: **PASS — ready for an ADR decision on a narrowly authorized production read executor.**
 - This does not authorize that executor. ADR-0023 §1 and ADR-0027 are unchanged. ADR-0025 flexible C# stays Research Only.
 - This is bounded read execution through the existing Revit dispatcher. It is not an operating-system sandbox.
