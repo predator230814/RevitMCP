@@ -287,7 +287,6 @@ internal sealed class MepDevicePlacementProposalStore
             _apply = null;
             _authority = _registry.Activate(
                 AssistantProposalKind.MepDevicePlacement,
-                proposal.State,
                 proposal.SourceArtifactId);
         }
     }
@@ -448,13 +447,7 @@ internal sealed class MepDevicePlacementProposalStore
                 return false;
             }
 
-            var ready = proposal.AsReady();
-            if (!_registry.TryUpdatePresentation(_authority, ready.State))
-            {
-                return false;
-            }
-
-            _current = ready;
+            _current = proposal.AsReady();
             return true;
         }
     }

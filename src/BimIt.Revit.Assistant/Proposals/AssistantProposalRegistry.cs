@@ -10,20 +10,6 @@ internal enum AssistantProposalKind
     RoomPattern = 2,
 }
 
-internal static class AssistantProposalPresentation
-{
-    public const string NeedsCalibration = "needs_calibration";
-
-    public const string Ready = "ready";
-
-    public const string Proposed = "proposed";
-
-    public static bool IsAllowed(string? presentation)
-    {
-        return presentation is NeedsCalibration or Ready or Proposed;
-    }
-}
-
 /// <summary>
 /// In-process generation for one registration. Generation 0 is unassigned.
 /// This value is not model authority and is not an intent reference.
@@ -36,7 +22,6 @@ internal readonly record struct AssistantProposalAuthority(AssistantProposalKind
 internal sealed record AssistantProposalRegistration(
     AssistantProposalKind Kind,
     long Generation,
-    string Presentation,
     string? SourceArtifactId);
 
 internal sealed class AssistantProposalRegistry
@@ -56,16 +41,11 @@ internal sealed class AssistantProposalRegistry
         }
     }
 
-    public AssistantProposalAuthority Activate(AssistantProposalKind kind, string presentation, string? sourceArtifactId)
+    public AssistantProposalAuthority Activate(AssistantProposalKind kind, string? sourceArtifactId)
     {
         if (!Enum.IsDefined(kind))
         {
             throw new ArgumentOutOfRangeException(nameof(kind));
-        }
-
-        if (!AssistantProposalPresentation.IsAllowed(presentation))
-        {
-            throw new ArgumentOutOfRangeException(nameof(presentation));
         }
 
         lock (_gate)
@@ -74,7 +54,6 @@ internal sealed class AssistantProposalRegistry
             _current = new AssistantProposalRegistration(
                 kind,
                 generation,
-                presentation,
                 string.IsNullOrEmpty(sourceArtifactId) ? null : sourceArtifactId);
             return new AssistantProposalAuthority(kind, generation);
         }
@@ -92,27 +71,6 @@ internal sealed class AssistantProposalRegistry
             return _current is not null
                 && _current.Kind == authority.Kind
                 && _current.Generation == authority.Generation;
-        }
-    }
-
-    public bool TryUpdatePresentation(AssistantProposalAuthority authority, string presentation)
-    {
-        if (!AssistantProposalPresentation.IsAllowed(presentation))
-        {
-            throw new ArgumentOutOfRangeException(nameof(presentation));
-        }
-
-        lock (_gate)
-        {
-            if (_current is null
-                || _current.Kind != authority.Kind
-                || _current.Generation != authority.Generation)
-            {
-                return false;
-            }
-
-            _current = _current with { Presentation = presentation };
-            return true;
         }
     }
 

@@ -24,7 +24,6 @@ public sealed class AssistantProposalRegistryTests
         Assert.NotNull(current);
         Assert.Equal(AssistantProposalKind.MepDevicePlacement, current.Kind);
         Assert.Equal(1, current.Generation);
-        Assert.Equal(AssistantProposalPresentation.NeedsCalibration, current.Presentation);
         Assert.Equal("artifact-a", current.SourceArtifactId);
         Assert.True(registry.IsCurrent(mep.Authority));
         Assert.True(mep.HasCurrentAuthority);
@@ -32,10 +31,8 @@ public sealed class AssistantProposalRegistryTests
 
         Assert.True(mep.TryPromoteToReady(new TrustedProjectAxisCalibration()));
         Assert.Equal(1, registry.Current!.Generation);
-        Assert.Equal(AssistantProposalPresentation.Ready, registry.Current.Presentation);
+        Assert.Equal(MepDevicePlacementProposalStates.Ready, mep.PresentationState);
         Assert.True(registry.IsCurrent(mep.Authority));
-        Assert.Throws<ArgumentOutOfRangeException>(() => registry.Activate(AssistantProposalKind.MepDevicePlacement, "approved", null));
-        Assert.Equal(AssistantProposalPresentation.Ready, registry.Current.Presentation);
     }
 
     [Fact]
@@ -69,7 +66,6 @@ public sealed class AssistantProposalRegistryTests
         Assert.Null(mep.PresentationState);
         Assert.True(patterns.HasCurrentAuthority);
         Assert.Equal(AssistantProposalKind.RoomPattern, registry.Current!.Kind);
-        Assert.Equal(AssistantProposalPresentation.Proposed, registry.Current.Presentation);
         Assert.Equal("artifact-b", registry.Current.SourceArtifactId);
     }
 
@@ -85,6 +81,21 @@ public sealed class AssistantProposalRegistryTests
         Assert.False(patterns.HasCurrentAuthority);
         Assert.True(mep.HasCurrentAuthority);
         Assert.Equal(AssistantProposalKind.MepDevicePlacement, registry.Current!.Kind);
+    }
+
+    [Fact]
+    public void Displaced_room_pattern_review_is_not_emitted()
+    {
+        var (registry, mep, patterns) = Pair();
+        patterns.Replace(Pattern("artifact-b"), "{\"rooms\":[]}", Generation());
+        Assert.Equal("{\"rooms\":[]}", patterns.PeekReviewJson());
+
+        mep.Replace(Placement("artifact-a", 1000));
+
+        Assert.False(registry.IsCurrent(patterns.Authority));
+        Assert.Null(patterns.PeekReviewJson());
+        Assert.Equal("artifact-b", patterns.CurrentRecord!.SourceArtifactId);
+        Assert.Equal(MepDevicePlacementProposalStates.NeedsCalibration, mep.PresentationState);
     }
 
     [Fact]
@@ -242,14 +253,14 @@ public sealed class AssistantProposalRegistryTests
 
         var registrationNames = typeof(AssistantProposalRegistration).GetProperties().Select(item => item.Name).ToArray();
         Assert.Equal(
-            ["Kind", "Generation", "Presentation", "SourceArtifactId"],
+            ["Kind", "Generation", "SourceArtifactId"],
             registrationNames);
         var surface = string.Join(
             " ",
             new[] { typeof(AssistantProposalRegistry), typeof(AssistantProposalRegistration), typeof(AssistantProposalAuthority) }
                 .SelectMany(type => type.GetMembers(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static))
                 .Select(member => member.Name));
-        foreach (var banned in new[] { "Intent", "Approval", "Audit", "Document", "Element", "Fingerprint", "Ephemeral" })
+        foreach (var banned in new[] { "Intent", "Approval", "Audit", "Document", "Element", "Fingerprint", "Ephemeral", "Presentation" })
         {
             Assert.DoesNotContain(banned, surface, StringComparison.Ordinal);
         }

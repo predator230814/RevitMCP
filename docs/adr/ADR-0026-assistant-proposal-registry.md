@@ -23,7 +23,8 @@ Preview, review, and apply stay on the existing Assistant orchestration. Approva
 
 - At most one proposal is current in a conversation, across proposal kinds.
 - A new proposal, including a same-kind replacement, invalidates the previous generation.
-- Domain preview, review, and apply fail closed when their generation is no longer current.
+- Domain preview, review, apply, and the conversation read that presents a proposal fail closed when their generation is no longer current.
+- Presentation state stays in the domain store. The registry does not learn a presentation vocabulary.
 - Reset, New Chat, and Assistant shutdown invalidate proposal authority.
 - Replacing or removing an attachment invalidates a current proposal that depends on that artifact, and leaves a proposal that does not.
 - The model does not receive the coordination token and cannot use it as authority.
@@ -50,7 +51,7 @@ Disadvantages:
 
 ### Option B: A thin Assistant-local registry beside the existing stores
 
-The Assistant process keeps one volatile registry. The registry records the current kind, a monotonic in-process generation, a bounded presentation state, and an optional source-artifact id. The existing stores keep their typed state. They register when they accept a proposal and they refuse preview, review, and apply when their generation is no longer current.
+The Assistant process keeps one volatile registry. The registry records the current kind, a monotonic in-process generation, and an optional source-artifact id. The existing stores keep their typed state, including presentation. They register when they accept a proposal and they refuse preview, review, apply, and presentation reads when their generation is no longer current.
 
 Advantages:
 
@@ -93,7 +94,6 @@ The registry holds either nothing or one current registration:
 |---|---|
 | Kind | `MepDevicePlacement` or `RoomPattern` |
 | Generation | A `long` that increases when a proposal becomes current and when that current registration is released. It is never reused. |
-| Presentation | A closed set: `needs_calibration`, `ready`, or `proposed` |
 | Source artifact | Optional id of the attachment the proposal depends on. Empty means unbound. |
 
 The generation is an internal coordination token. It is not an `intent_ref`, not a document id, not an element reference, and not model authority. Model results, IPC messages, and MCP schemas do not gain this token.
@@ -102,7 +102,7 @@ The generation is an internal coordination token. It is not an `intent_ref`, not
 
 Activating a proposal replaces the current registration and returns a new generation. The previous generation, including a previous proposal of the same kind, is stale. Domain stores still replace their own payloads on same-kind replacement. They do not delete the other family's payload merely because it became stale.
 
-A domain operation that previews, reviews, applies, or otherwise commits the proposal as current must fail closed when its generation is not the registry's current generation. A stale payload is still owned by its store. It cannot open a preview, a Revit review, or an apply. An in-flight operation that finishes after its generation was replaced does not record a new receipt.
+A domain operation that previews, reviews, applies, presents, or otherwise commits the proposal as current must fail closed when its generation is not the registry's current generation. A stale payload is still owned by its store. It cannot open a preview, a Revit review, or an apply, and its review text is not emitted on a later turn. An in-flight operation that finishes after its generation was replaced does not record a new receipt.
 
 Reset and New Chat clear both stores. Assistant shutdown clears both stores. The store that holds the current generation releases it. A second clear finds nothing current and does not create a new current registration. After either path, no generation is current.
 
@@ -118,13 +118,13 @@ A current proposal with no source artifact stays current. A current proposal bou
 
 ### 4. What the registry does not own
 
-The registry does not store placement offsets, pattern geometry, preview receipts, apply receipts, `intent_ref`, approval state, audit events, document identity, element identity, or Revit API state. Those remain in the domain stores and on the existing controlled-write path.
+The registry does not store placement offsets, pattern geometry, presentation state, preview receipts, apply receipts, `intent_ref`, approval state, audit events, document identity, element identity, or Revit API state. Those remain in the domain stores and on the existing controlled-write path.
 
 The registry is not `EphemeralWriteIntentStore`, not an approval provider, not an audit store, not an MCP capability, not a Bridge service, and not a Revit identity authority. This decision adds no MCP tool, no Bridge RPC, no protocol version, and no Revit transaction.
 
-### 5. Presentation
+### 5. Presentation stays in the domain store
 
-MEP registration uses the proposal's existing `needs_calibration` or `ready` state. Promoting a current MEP proposal to `ready` updates that presentation without a new generation. Room-pattern registration uses `proposed`. Any other presentation is rejected. The registry does not invent preview, review, or apply states.
+`needs_calibration`, `ready`, and the room-pattern review document are domain state. The MEP store reports placement presentation only while its generation is current. `RoomPatternStore.PeekReviewJson` returns the review document only while that pattern is current. A later proposal of either kind hides the previous presentation without deleting the displaced payload. A new proposal family does not add a presentation value to the registry.
 
 ### 6. Deferred
 
@@ -134,7 +134,7 @@ This slice does not add parameter-update proposals, a model-facing registry sche
 
 - ADR-0016's one-active-proposal rule now applies across MEP device placement and room pattern. ADR-0016's MEP contract is otherwise unchanged. This ADR does not supersede ADR-0016, ADR-0008, ADR-0010, or ADR-0011.
 - A room pattern accepted while an MEP proposal is current makes that MEP proposal unable to preview, review, or apply. The reverse is also true. The displaced payload remains in its store until that store's own clear rule runs.
-- The placement presentation reported to the pane follows the MEP store only while that MEP proposal is current.
+- The placement presentation reported to the pane follows the MEP store only while that MEP proposal is current. A room-pattern review is emitted only while that pattern is current.
 - Production `tools/list` stays 22. Bridge protocol stays 25.
 - Tests that construct one store keep a private registry, so a single-family test stays current until that store replaces, clears, or loses its attachment. The Assistant host is what shares one registry between the two families.
 

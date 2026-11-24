@@ -82,7 +82,6 @@ internal sealed class RoomPatternStore
             _pending = null;
             _authority = _registry.Activate(
                 AssistantProposalKind.RoomPattern,
-                AssistantProposalPresentation.Proposed,
                 record.SourceArtifactId);
         }
     }
@@ -99,7 +98,7 @@ internal sealed class RoomPatternStore
     {
         lock (_gate)
         {
-            return _reviewJson;
+            return IsAuthoritativeUnlocked() ? _reviewJson : null;
         }
     }
 
