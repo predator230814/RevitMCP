@@ -171,8 +171,9 @@ internal static class AssistantHost
             : await session.InitializeAsync(cancellationToken).ConfigureAwait(false);
         var timeouts = providerTimeouts ?? AssistantProviderTimeouts.Default;
         var documents = new AssistantDocumentStore();
-        proposals ??= new MepDevicePlacementProposalStore();
-        roomPatterns ??= new RoomPatternStore();
+        var proposalRegistry = new AssistantProposalRegistry();
+        proposals ??= new MepDevicePlacementProposalStore(proposalRegistry);
+        roomPatterns ??= new RoomPatternStore(proposalRegistry);
         previewClient ??= session as IMepDevicePlacementPreviewClient;
         reviewClient ??= session as IMepDevicePlacementReviewClient;
         applyClient ??= session as IMepDevicePlacementApplyClient;

@@ -31,6 +31,13 @@ internal sealed class RoomPatternTypeSearchService
             return Failure("The type search is not valid.");
         }
 
+        if (!_store.HasCurrentAuthority)
+        {
+            return Failure(_store.HasDomainPayload
+                ? RoomPatternStore.StaleAuthorityMessage
+                : "There is no pattern to configure.");
+        }
+
         var generation = _store.CurrentGeneration;
         if (generation is null || _store.HasTerminalApply)
         {

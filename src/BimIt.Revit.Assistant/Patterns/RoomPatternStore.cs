@@ -1,3 +1,4 @@
+using BimIt.Revit.Assistant;
 using BimIt.Revit.Contracts;
 using BimIt.Revit.Assistant.Ipc;
 
@@ -5,7 +6,10 @@ namespace BimIt.Revit.Assistant.Patterns;
 
 internal sealed class RoomPatternStore
 {
+    public const string StaleAuthorityMessage = "This room pattern is no longer current.";
+
     private readonly object _gate = new();
+    private readonly AssistantProposalRegistry _registry;
     private RoomPatternRecord? _current;
     private string? _reviewJson;
     private RoomPatternGeneration? _generation;
@@ -13,6 +17,56 @@ internal sealed class RoomPatternStore
     private PatternPreviewBinding? _preview;
     private PatternTerminalApply? _terminal;
     private PatternTargetPending? _pending;
+    private AssistantProposalAuthority _authority;
+
+    public RoomPatternStore(AssistantProposalRegistry? registry = null)
+    {
+        _registry = registry ?? new AssistantProposalRegistry();
+    }
+
+    public AssistantProposalAuthority Authority
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _authority;
+            }
+        }
+    }
+
+    public bool HasCurrentAuthority
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return IsAuthoritativeUnlocked();
+            }
+        }
+    }
+
+    public bool HasDomainPayload
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _current is not null;
+            }
+        }
+    }
+
+    public RoomPatternRecord? CurrentRecord
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _current;
+            }
+        }
+    }
 
     public void Replace(RoomPatternRecord record, string? reviewJson, RoomPatternGeneration? generation = null)
     {
@@ -26,6 +80,10 @@ internal sealed class RoomPatternStore
             _preview = null;
             _terminal = null;
             _pending = null;
+            _authority = _registry.Activate(
+                AssistantProposalKind.RoomPattern,
+                AssistantProposalPresentation.Proposed,
+                record.SourceArtifactId);
         }
     }
 
@@ -33,13 +91,7 @@ internal sealed class RoomPatternStore
     {
         lock (_gate)
         {
-            _current = null;
-            _reviewJson = null;
-            _generation = null;
-            _configuration = null;
-            _preview = null;
-            _terminal = null;
-            _pending = null;
+            ClearUnlocked();
         }
     }
 
@@ -68,7 +120,10 @@ internal sealed class RoomPatternStore
         {
             lock (_gate)
             {
-                return _terminal is not null && _generation is not null && _terminal.GenerationId == _generation.GenerationId;
+                return IsAuthoritativeUnlocked()
+                && _terminal is not null
+                && _generation is not null
+                && _terminal.GenerationId == _generation.GenerationId;
             }
         }
     }
@@ -78,7 +133,7 @@ internal sealed class RoomPatternStore
         ArgumentNullException.ThrowIfNull(configuration);
         lock (_gate)
         {
-            if (_generation is null || _terminal is not null || !configuration.Matches(_generation))
+            if (!IsAuthoritativeUnlocked() || _generation is null || _terminal is not null || !configuration.Matches(_generation))
             {
                 return false;
             }
@@ -107,7 +162,10 @@ internal sealed class RoomPatternStore
         lock (_gate)
         {
             added = [];
-            if (_generation is null || _terminal is not null || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal))
+            if (!IsAuthoritativeUnlocked()
+                || _generation is null
+                || _terminal is not null
+                || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal))
             {
                 return false;
             }
@@ -165,6 +223,14 @@ internal sealed class RoomPatternStore
         {
             generation = null!;
             configuration = null!;
+            if (!IsAuthoritativeUnlocked())
+            {
+                failure = _current is null
+                    ? "There is no pattern to prepare."
+                    : StaleAuthorityMessage;
+                return false;
+            }
+
             if (_generation is null || _configuration is null)
             {
                 failure = "There is no pattern to prepare.";
@@ -188,7 +254,7 @@ internal sealed class RoomPatternStore
     {
         lock (_gate)
         {
-            if (_generation is null || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal))
+            if (!IsAuthoritativeUnlocked() || _generation is null || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal))
             {
                 return;
             }
@@ -203,7 +269,7 @@ internal sealed class RoomPatternStore
         {
             intentRef = "";
             placementCount = 0;
-            if (_preview is null || _generation is null || _terminal is not null || _preview.GenerationId != _generation.GenerationId)
+            if (!IsAuthoritativeUnlocked() || _preview is null || _generation is null || _terminal is not null || _preview.GenerationId != _generation.GenerationId)
             {
                 return false;
             }
@@ -218,7 +284,7 @@ internal sealed class RoomPatternStore
     {
         lock (_gate)
         {
-            if (_generation is null || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal))
+            if (!IsAuthoritativeUnlocked() || _generation is null || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal))
             {
                 return;
             }
@@ -233,7 +299,7 @@ internal sealed class RoomPatternStore
         ArgumentNullException.ThrowIfNull(pending);
         lock (_gate)
         {
-            if (!PendingIsCurrent(pending))
+            if (!IsAuthoritativeUnlocked() || !PendingIsCurrent(pending))
             {
                 return;
             }
@@ -247,7 +313,7 @@ internal sealed class RoomPatternStore
         lock (_gate)
         {
             pending = null!;
-            if (_pending is null || !PendingIsCurrent(_pending))
+            if (!IsAuthoritativeUnlocked() || _pending is null || !PendingIsCurrent(_pending))
             {
                 return false;
             }
@@ -261,7 +327,8 @@ internal sealed class RoomPatternStore
     {
         lock (_gate)
         {
-            return _pending is not null
+            return IsAuthoritativeUnlocked()
+                && _pending is not null
                 && string.Equals(_pending.GenerationId, pending.GenerationId, StringComparison.Ordinal)
                 && PendingIsCurrent(pending);
         }
@@ -271,7 +338,10 @@ internal sealed class RoomPatternStore
     {
         lock (_gate)
         {
-            if (_pending is null || !string.Equals(_pending.GenerationId, generationId, StringComparison.Ordinal) || !PendingIsCurrent(_pending))
+            if (!IsAuthoritativeUnlocked()
+                || _pending is null
+                || !string.Equals(_pending.GenerationId, generationId, StringComparison.Ordinal)
+                || !PendingIsCurrent(_pending))
             {
                 return false;
             }
@@ -299,7 +369,8 @@ internal sealed class RoomPatternStore
         ArgumentNullException.ThrowIfNull(outcome);
         lock (_gate)
         {
-            if (_pending is null
+            if (!IsAuthoritativeUnlocked()
+                || _pending is null
                 || _generation is null
                 || !string.Equals(_pending.GenerationId, generationId, StringComparison.Ordinal)
                 || !string.Equals(_generation.GenerationId, generationId, StringComparison.Ordinal)
@@ -369,7 +440,7 @@ internal sealed class RoomPatternStore
         {
             summary = "";
             isError = false;
-            if (_terminal is null || _generation is null || _terminal.GenerationId != _generation.GenerationId)
+            if (!IsAuthoritativeUnlocked() || _terminal is null || _generation is null || _terminal.GenerationId != _generation.GenerationId)
             {
                 return false;
             }
@@ -398,6 +469,7 @@ internal sealed class RoomPatternStore
             if (string.Equals(source, previousArtifactId, StringComparison.Ordinal))
             {
                 ClearUnlocked();
+                _registry.InvalidateCurrentIfSourceChanged(previousArtifactId, currentArtifactId);
             }
         }
     }
@@ -411,6 +483,19 @@ internal sealed class RoomPatternStore
         _preview = null;
         _terminal = null;
         _pending = null;
+        ReleaseUnlocked();
+    }
+
+    private void ReleaseUnlocked()
+    {
+        var authority = _authority;
+        _authority = default;
+        _registry.Release(authority);
+    }
+
+    private bool IsAuthoritativeUnlocked()
+    {
+        return _registry.IsCurrent(_authority);
     }
 }
 

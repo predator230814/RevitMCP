@@ -37,6 +37,11 @@ internal sealed class MepDevicePlacementReviewApplyOrchestrator
 
     public async Task<MepDevicePlacementPreviewOutcome> ReviewAsync(CancellationToken cancellationToken)
     {
+        if (_store.Current is not null && !_store.HasCurrentAuthority)
+        {
+            return Fail(ReviewTitle, MepDevicePlacementProposalStore.StaleAuthorityMessage);
+        }
+
         if (_store.TryReuseTerminalApply(out _, out _))
         {
             return Fail(ReviewTitle, TerminalGenerationMessage);
@@ -93,6 +98,11 @@ internal sealed class MepDevicePlacementReviewApplyOrchestrator
 
     public async Task<MepDevicePlacementPreviewOutcome> ApplyAsync(CancellationToken cancellationToken)
     {
+        if (_store.Current is not null && !_store.HasCurrentAuthority)
+        {
+            return Fail(ApplyTitle, MepDevicePlacementProposalStore.StaleAuthorityMessage);
+        }
+
         if (_store.TryReuseTerminalApply(out var cached, out var cachedError))
         {
             return new MepDevicePlacementPreviewOutcome(cachedError, ApplyTitle, cached);

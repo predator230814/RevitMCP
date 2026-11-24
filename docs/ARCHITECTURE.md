@@ -120,6 +120,8 @@ Significant architecture changes require an ADR. If code and architecture docume
 
 External MCP clients launch `BimIt.Revit.Server` directly. They do not need the Assistant. The Approval DockablePane remains the trusted approval authority. The Assistant pane cannot approve, preview, or apply a controlled write.
 
+[ADR-0026](adr/ADR-0026-assistant-proposal-registry.md) is **Accepted**. The Assistant process keeps one volatile registry that decides which proposal is current for the conversation. MEP device placement and room-pattern payloads stay in `MepDevicePlacementProposalStore` and `RoomPatternStore`. The registry records kind, an in-process generation, a bounded presentation state, and an optional source artifact. It does not store intent, approval, or Revit identity. Production `tools/list` stays 22 and Bridge protocol stays 25.
+
 Implemented:
 
 - one BIM-IT Assistant ribbon button and one DockablePane;

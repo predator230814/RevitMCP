@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-10-18
 - Product Owner: Dave
+- Later: [ADR-0026](ADR-0026-assistant-proposal-registry.md) extends the one-active-proposal rule across MEP device placement and room pattern. The MEP contract in this ADR is unchanged.
 
 ## Context
 

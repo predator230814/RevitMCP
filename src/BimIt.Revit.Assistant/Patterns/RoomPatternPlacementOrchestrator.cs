@@ -247,6 +247,11 @@ internal sealed class RoomPatternPlacementOrchestrator
         }
 
         _store.RememberPreview(generation.GenerationId, result.IntentRef, result.Items.Count);
+        if (!_store.HasCurrentAuthority)
+        {
+            return Fail(PreviewTitle, RoomPatternStore.StaleAuthorityMessage);
+        }
+
         return Ok(
             PreviewTitle,
             "Pattern preview is ready for "
@@ -258,6 +263,11 @@ internal sealed class RoomPatternPlacementOrchestrator
 
     public async Task<MepDevicePlacementPreviewOutcome> ReviewAsync(CancellationToken cancellationToken)
     {
+        if (_store.HasDomainPayload && !_store.HasCurrentAuthority)
+        {
+            return Fail(ReviewTitle, RoomPatternStore.StaleAuthorityMessage);
+        }
+
         if (_store.TryTerminal(out var summary, out _))
         {
             return Fail(ReviewTitle, summary);
@@ -273,6 +283,11 @@ internal sealed class RoomPatternPlacementOrchestrator
 
     public async Task<MepDevicePlacementPreviewOutcome> ApplyAsync(CancellationToken cancellationToken)
     {
+        if (_store.HasDomainPayload && !_store.HasCurrentAuthority)
+        {
+            return Fail(ApplyTitle, RoomPatternStore.StaleAuthorityMessage);
+        }
+
         if (_store.TryTerminal(out var summary, out var isError))
         {
             return new MepDevicePlacementPreviewOutcome(isError, ApplyTitle, summary);
