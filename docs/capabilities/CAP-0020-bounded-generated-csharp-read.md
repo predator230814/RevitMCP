@@ -13,9 +13,11 @@ Run one bounded C# method body against the active project document and return a 
 
 ## Trusted surface
 
-The model supplies source text only. The Addin is the execution authority. The Server cannot compile, cannot supply IL, and cannot skip the compiler policy. Roslyn runs only in the trusted local CompilerHost process. The Addin loads compilation bytes only from the CompilerHost process it started.
+The model supplies source text only. The Addin is the execution authority. The Server cannot compile, cannot supply IL, and cannot skip the compiler policy. Roslyn runs only in the CompilerHost child process. The Addin loads compilation bytes only from the child it launched for that request.
 
-The CompilerHost receives the loaded `RevitAPI` path and identity from the Addin. The path is not returned to the client.
+The Addin launches that process from a fixed absolute path under the product directory of the loaded Addin assembly. It does not search `PATH`. `UseShellExecute` is false. Standard input and standard output are redirected. The process serves one request and then exits. The request is at most 32,768 bytes and the response is at most 262,144 bytes. The CompilerHost opens no named pipe, network socket, or other listener. A missing executable, a malformed response, an oversized response, a nonzero exit, or no exit within 30 seconds returns `CSHARP_QUERY_COMPILER_FAILED`. The Addin loads nothing from that process.
+
+The CompilerHost receives the loaded `RevitAPI` path and identity from the Addin. The path is not returned to the client. Policy version 1 runs only when that identity is `RevitAPI` 26.5.0.0. Any other loaded identity returns `CSHARP_QUERY_API_UNSUPPORTED` before the process starts.
 
 ## MCP tool
 
@@ -64,25 +66,28 @@ The Bridge request carries `document_id` and `source`. It does not carry IL or a
 
 1. If the local opt-in is missing or false, return `CSHARP_QUERY_DISABLED`. Do not start the CompilerHost. Do not enqueue.
 2. Reject an invalid envelope before compile.
-3. The Addin starts the trusted CompilerHost, passes the loaded Revit API identity, and applies policy version 1. Policy failure returns `CSHARP_QUERY_POLICY_REJECTED` and does not emit. Compiler errors return `CSHARP_QUERY_COMPILE_FAILED` and do not emit.
-4. Enqueue one EXEC-0001 work item. The Addin does not overlap a second generated execution. It does not create a second dispatcher.
-5. Inside that work item, require the exact active project document, reject a family document, and require `Document.IsModifiable == false`. Open no transaction.
-6. Load the compilation in a collectible `AssemblyLoadContext`. Resolve `RevitAPI` from the default context. Invoke the host entry with `doc` and `elementRef`.
-7. Copy the allowed result graph into host objects. Unload the query context. Do not unload `RevitAPI`.
+3. If the loaded assembly is not `RevitAPI` 26.5.0.0, return `CSHARP_QUERY_API_UNSUPPORTED`. Do not start the CompilerHost. Do not reuse the 26.5.0.0 deny inventory for another identity.
+4. The Addin launches the CompilerHost child described above and passes the loaded Revit API identity. A process failure returns `CSHARP_QUERY_COMPILER_FAILED` and loads nothing. Policy failure returns `CSHARP_QUERY_POLICY_REJECTED` and does not emit. Compiler errors return `CSHARP_QUERY_COMPILE_FAILED` and do not emit.
+5. Enqueue one EXEC-0001 work item. The Addin does not overlap a second generated execution. It does not create a second dispatcher.
+6. Inside that work item, require the exact active project document, reject a family document, and require `Document.IsModifiable == false`. Open no transaction.
+7. Load the compilation in a collectible `AssemblyLoadContext`. Resolve `RevitAPI` from the default context. Invoke the host entry with `doc` and `elementRef`.
+8. Copy the allowed result graph into host objects. Unload the query context. Do not unload `RevitAPI`.
 
-The loop budget is 10,000 charges. Each instrumented loop-body entry charges one. A blocking Revit API call is not interrupted.
+The loop budget is 10,000 charges. Each instrumented loop-body entry charges one. A blocking Revit API call is not interrupted. The in-process executor cannot guarantee protection against all CPU, memory, or blocking-call denial of service.
 
 ## Result graph
 
-Allowed: null, boolean, bounded string, numeric primitives (`byte`, `sbyte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `char`), arrays or lists, string-keyed dictionaries, and compiler-generated anonymous types composed only of allowed values.
+Allowed: null, boolean, bounded string, numeric primitives (`byte`, `sbyte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, `char`), a single-dimensional array of allowed values, exactly `List<T>`, exactly `Dictionary<string, T>`, and compiler-generated anonymous projections composed only of allowed values.
 
-Depth limit 8. Serialized `result` limit 16,000 characters. Anything else is `CSHARP_QUERY_INVALID_RESULT` or `CSHARP_QUERY_RESULT_TOO_LARGE`. There is no partial result.
+`IEnumerable`, `IList`, `IDictionary`, any other collection, a subclass of `List<T>` or `Dictionary<string, T>`, and a deferred LINQ iterator are `CSHARP_QUERY_INVALID_RESULT`. The copier does not call `GetEnumerator` on an arbitrary enumerable. It copies an array by length and index, a `List<T>` by `Count` and indexer, and a `Dictionary<string, T>` through that concrete type.
+
+Depth limit 8. Node limit 1,024. Each scalar, array element, list element, dictionary entry, and anonymous property counts as one node. Serialized `result` limit 16,000 characters. The node count is applied while copying, before serialization. There is no partial result.
 
 The copier calls property getters only on compiler-generated anonymous types in the generated assembly. It does not walk an arbitrary object and does not call getters on a Revit object, an `ElementId`, or an enum. Return those through an allowed projection or through `elementRef`.
 
 ## Policy version 1
 
-Reject before emit. Details and the Revit API names inspected on `RevitAPI` 26.5.0.0 are in ADR-0028. The closed categories are transactions, Revit UI, application services, filesystem, network, process creation, reflection, dynamic assembly load, Roslyn, P/Invoke, unsafe code, threads, preprocessor directives, the listed C# escape statements, event subscription, and the effect-bearing Revit API save, sync, export, print, document-lifecycle, external-resource, worksharing, and file-affecting members named in that ADR.
+The reviewed identity is loaded `RevitAPI` 26.5.0.0. Reject before emit. The closed categories are in ADR-0028: transactions, Revit UI, application services, filesystem, network, process creation, reflection, dynamic assembly load, `System.Type` member calls, `System.Environment`, `System.Console`, `System.GC`, `AppDomain`, local functions, self-referential delegate locals, Roslyn, P/Invoke, unsafe code, threads, preprocessor directives, the listed C# escape statements, event subscription, and the effect-bearing Revit API save, sync, export, print, document-lifecycle, external-resource, worksharing, and file-affecting members named in that ADR. `typeof` of an allowed type remains available as a type token.
 
 ## Local enablement
 
@@ -94,13 +99,15 @@ Default off. Persistent Addin setting for the Windows user under `%LOCALAPPDATA%
 | --- | --- |
 | `CSHARP_QUERY_DISABLED` | Local opt-in is off or unreadable. |
 | `INVALID_CSHARP_QUERY` | Source missing, empty, over 8,000 characters, or the envelope has an unknown or forbidden field. |
+| `CSHARP_QUERY_API_UNSUPPORTED` | The loaded assembly is not `RevitAPI` 26.5.0.0. |
 | `CSHARP_QUERY_POLICY_REJECTED` | Policy version 1 rejected the body before emit. |
 | `CSHARP_QUERY_COMPILE_FAILED` | Roslyn reported errors. |
+| `CSHARP_QUERY_COMPILER_FAILED` | The CompilerHost child was missing, exceeded a payload bound, returned a malformed response, exited nonzero, or did not exit within 30 seconds. No bytes are loaded. |
 | `CSHARP_QUERY_DOCUMENT_NOT_READY` | No active document, family document, `IsModifiable` is true, or `document_id` does not match. `reason` is `no_active_document`, `project_document_required`, `document_modifiable`, or `document_mismatch`. |
 | `CSHARP_QUERY_BUDGET_EXCEEDED` | The cooperative loop budget was exhausted. |
 | `CSHARP_QUERY_EXECUTION_FAILED` | The method threw for another reason. No exception text. |
 | `CSHARP_QUERY_INVALID_RESULT` | The returned graph is outside the closed set. |
-| `CSHARP_QUERY_RESULT_TOO_LARGE` | The serialized result exceeds 16,000 characters or depth 8. |
+| `CSHARP_QUERY_RESULT_TOO_LARGE` | The result exceeds 1,024 nodes, depth 8, or 16,000 serialized characters. |
 | `BRIDGE_PROTOCOL_INCOMPATIBLE` | The connection does not advertise protocol 26. |
 
 Policy and compile failures include at most 8 diagnostics. Each diagnostic has `code`, `line`, `column`, and `message`. Compiler `code` is the C# diagnostic id. Policy `code` is `CSHARP_QUERY_POLICY_REJECTED`. `message` is flattened to 180 characters. The spike ids `BIMQ100`, `BIMQ101`, `BIMQ110`, `BIMQ120`, `BIMQ130`, and `BIMQ140` are research evidence only. Production clients match the codes in this table.
@@ -109,11 +116,11 @@ Policy and compile failures include at most 8 diagnostics. Each diagnostic has `
 
 ## Security
 
-ADR-0028 is the threat model. This capability is not an OS sandbox. No transaction prevents ordinary transactional edits. It does not prove every `RevitAPI` member is free of external effects. Policy version 1 is the deny list for the effects inspected on `RevitAPI` 26.5.0.0. A newly discovered external effect is a policy-version bump, not a new wrapper tool.
+ADR-0028 is the threat model. This capability is not an OS sandbox. No transaction prevents ordinary transactional edits. It does not prove every `RevitAPI` member is free of external effects. Policy version 1 is the deny list reviewed for `RevitAPI` 26.5.0.0 only. The in-process executor cannot guarantee protection against all CPU, memory, or blocking-call denial of service. A newly discovered external effect on that identity is a reviewed policy update, not a new wrapper tool. Another Revit API identity needs its own reviewed manifest.
 
 ## Performance
 
-One compile and one execution per call in v1. A compiler daemon and a persistent cache are deferred. The cache key is still returned so a later cache can use it. The result budget is 16,000 characters, tighter than the 120,000-character compiled-read budget, because the result shape is model-defined and the spike validated 16,000.
+One CompilerHost child and one execution per call in v1. A compiler daemon and a persistent cache are deferred. The cache key is still returned so a later cache can use it. The result budget is 1,024 nodes, depth 8, and 16,000 characters. The character cap stays tighter than the 120,000-character compiled-read budget because the result shape is model-defined and the spike validated 16,000 characters. The node cap stops the copier before serialization.
 
 ## Observability
 
@@ -132,13 +139,17 @@ An implementation is acceptable when:
 - the tool exists, `tools/list` is 23, and protocol 26 is advertised only by a host that implements this contract
 - Roslyn is absent from the Addin, Server, Bridge, and Contracts projects
 - a disabled setting returns `CSHARP_QUERY_DISABLED` without starting the compiler
-- a transaction body is policy-rejected and is not enqueued
+- a loaded assembly other than `RevitAPI` 26.5.0.0 returns `CSHARP_QUERY_API_UNSUPPORTED` without starting the CompilerHost
+- the CompilerHost is launched from the fixed absolute product path, with `UseShellExecute` false, redirected stdio, one request, and no listener; a malformed response or nonzero exit returns `CSHARP_QUERY_COMPILER_FAILED` and loads nothing
+- a transaction body, a local function, and a `System.Environment` use are policy-rejected and are not enqueued
 - a read body runs only through EXEC-0001 against the exact project document with `IsModifiable == false`
 - `elementRef` returns an ADR-0006 `element_ref`
-- the result is the closed graph, the query context can be collected, and `RevitAPI` stays loaded
+- the result is the closed graph of arrays, `List<T>`, `Dictionary<string, T>`, and anonymous projections; another enumerable is `CSHARP_QUERY_INVALID_RESULT`
+- a result over 1,024 nodes is `CSHARP_QUERY_RESULT_TOO_LARGE`
+- the query context can be collected, and `RevitAPI` stays loaded
 - a tight loop returns `CSHARP_QUERY_BUDGET_EXCEEDED`, and a later read still succeeds
 - no MCP response contains the Revit API path, the source echo, a stack trace, or raw exception text
 
 ## Deferred
 
-Generated writes. Per-call approval. Arbitrary references or IL. Python and Dynamo. A remote compiler. A persistent compiler process. A persistent compilation cache. The ribbon control that edits the local opt-in. Any claim that policy version 1 names every externally effectful Revit API member.
+Generated writes. Per-call approval. Arbitrary references or IL. Python and Dynamo. A remote compiler. A named pipe or network compiler listener. A persistent compiler process. A persistent compilation cache. The ribbon control that edits the local opt-in. Reviewed policy manifests for Revit 2025, Revit 2027, and any loaded identity other than `RevitAPI` 26.5.0.0. Any claim that policy version 1 names every externally effectful Revit API member, or that the executor prevents every CPU, memory, or blocking-call denial of service.

@@ -71,11 +71,22 @@ The Addin is the execution authority. It supplies the CompilerHost with the path
 
 The CompilerHost does not execute generated code. It returns diagnostics or compilation bytes to the Addin that started it.
 
-The Addin accepts compilation bytes only from that trusted workflow. It rejects arbitrary caller-provided IL. The Bridge payload carries the method body, not an assembly.
+The Addin accepts compilation bytes only from the CompilerHost child process it launched for that request. It rejects arbitrary caller-provided IL. The Bridge payload carries the method body, not an assembly.
+
+CompilerHost v1 is that child process:
+
+- The Addin launches it from a fixed absolute path under the product directory that contains the loaded Addin assembly. The path is product-relative and resolved to an absolute path before launch.
+- The Addin does not resolve the executable through `PATH`, the working directory, an MCP argument, or the Bridge payload.
+- `UseShellExecute` is false.
+- Standard input and standard output are redirected. Standard error is not returned to the MCP client.
+- The process handles one request. The Addin writes one request, reads one response, and waits for that process to exit. It does not reuse the process and does not keep a compiler daemon.
+- The request is at most 32,768 bytes. The response is at most 262,144 bytes. A larger payload is refused.
+- The CompilerHost opens no named pipe, network socket, or other listener.
+- A missing executable, a launch failure, a response that exceeds the bound, a malformed response, a nonzero exit, or no exit within 30 seconds returns `CSHARP_QUERY_COMPILER_FAILED`. The Addin loads no bytes from that process.
 
 The Server routes the call and enforces transport rules. It does not compile, does not hold a compiler policy bypass, and does not execute.
 
-v1 may start the CompilerHost on demand for each compile. A persistent compiler process and a persistent compilation cache are later optimizations. v1 still computes the cache key.
+v1 still computes the cache key. A persistent compiler process and a persistent compilation cache are later optimizations.
 
 The out-of-process host was not part of the PR #133 gate. The gate proved in-process compilation, EXEC-0001 execution, the budget, and collectible unload. Moving Roslyn out of process is a production constraint, not a claim the gate already demonstrated.
 
@@ -101,6 +112,7 @@ Bounds, carried from the spike unless noted:
 | Diagnostic message | 180 characters, flattened |
 | Serialized result | 16,000 characters |
 | JSON depth | 8 |
+| Result nodes | 1,024 |
 | Loop budget | 10,000 charges |
 | Concurrent generated executions | one work item at a time on the existing EXEC-0001 queue |
 
@@ -120,12 +132,18 @@ Before any generated method runs, on EXEC-0001:
 
 Policy version 1. Rejection happens before emit. The spike analyzer in `ForbiddenApiAnalyzer` is the floor, not the whole policy. v1 also rejects the effect-bearing Revit API surfaces below. The policy is a deny rule inside the compiler. It is not a wrapper per API method, and it does not describe the loaded Revit API as safe.
 
+The v1 deny inventory was reviewed against loaded `RevitAPI` 26.5.0.0. Production support for policy version 1 is that identity only: assembly name `RevitAPI`, version `26.5.0.0`. The Addin compares the assembly loaded by the running Revit process before it launches the CompilerHost. Any other name or version returns `CSHARP_QUERY_API_UNSUPPORTED` and does not compile. The 26.5.0.0 inventory is not reused on an unreviewed identity. Revit 2025, Revit 2027, and any other build are admitted later by a reviewed policy manifest for that exact loaded identity. That admission does not require a new architecture.
+
 Reject before emit:
 
 - `Transaction`, `SubTransaction`, `TransactionGroup`
 - `Autodesk.Revit.UI` and `Autodesk.Revit.ApplicationServices`
 - filesystem, network, and process APIs (`System.IO`, `System.Net`, `System.Diagnostics`)
-- reflection and dynamic assembly load (`System.Reflection`, `System.Reflection.Emit`, `System.Runtime.Loader`, `System.Linq.Expressions`, `dynamic`, `Activator`, `Assembly.Load` and the related spike reflection names)
+- reflection and dynamic assembly load (`System.Reflection`, `System.Reflection.Emit`, `System.Runtime.Loader`, `System.Linq.Expressions`, `dynamic`, `Activator`, `Assembly.Load`, `AppDomain`, and the related spike reflection names)
+- reflection through `System.Type`: `typeof` of an allowed type may be passed as a type token, and calling members on a `System.Type` value, including `GetType`, is rejected
+- process-wide BCL escape and availability surfaces: `System.Environment`, `System.Console`, and `System.GC`
+- local functions
+- a lambda or anonymous method that references the local variable it is assigned to, including a delegate local initialized from such a lambda
 - Roslyn (`Microsoft.CodeAnalysis`, `System.CodeDom`)
 - P/Invoke and unsafe code, including `DllImport`, `LibraryImport`, and `UnmanagedCallersOnly`
 - threads, `Parallel`, and `Task.Run` (`System.Threading`)
@@ -143,13 +161,13 @@ Reject these Revit API effect categories even though the members live in `RevitA
 - external resources and transmission: `TransmissionData`, `ExternalResourceUtils`, `ExternalResourceServerUtils`, `ExternalResourceServiceUtils`, `IExternalResourceServer`
 - worksharing utilities that act on a central or a file: `WorksharingUtils`
 
-Reading `Document.IsWorkshared` or a central GUID is not in that effect list. A later policy version may add names. It may not turn this list into one MCP operation per method.
+Reading `Document.IsWorkshared` or a central GUID is not in that effect list. A later reviewed manifest for this same identity may add names. A different loaded identity needs its own reviewed manifest. Neither change turns this list into one MCP operation per method.
 
 ## What read-only means
 
 This is not an operating-system sandbox. Generated code runs in the Revit process with the Windows user's permissions once the Addin loads it.
 
-A blocking Revit API call cannot be forcibly interrupted. The budget runs when an instrumented loop body is entered.
+A blocking Revit API call cannot be forcibly interrupted. The budget runs when an instrumented loop body is entered. The in-process executor cannot guarantee protection against all CPU, memory, or blocking-call denial of service. The loop budget, the result bounds, and the rejected BCL surfaces reduce obvious escapes. They do not bound every allocation, every blocking call, or every amount of CPU the generated method can consume.
 
 No open transaction stops ordinary model mutation that Revit requires a transaction to perform. It does not prove that every `RevitAPI` member has no external side effect. The static policy exists because that proof is unavailable.
 
@@ -157,7 +175,8 @@ Threat model for v1:
 
 - A hostile or mistaken method body tries to escape the host, touch the machine, open a transaction, or call a file, network, sync, export, print, or document-lifecycle API.
 - The compiler rejects those shapes before emit. The document gate refuses a modifiable or family document before execution. The result copier refuses a live Revit object.
-- What remains possible is a Revit API member that changes something outside a transaction and is not yet named by policy version 1. That is a policy gap to close by adding a deny rule, not a claim of purity.
+- What remains possible is a Revit API member that changes something outside a transaction and is not yet named by the reviewed policy for that loaded identity. That is a policy gap to close by a reviewed manifest, not a claim of purity.
+- A generated method can still exhaust CPU, memory, or block inside an uninterruptible Revit API call. That residual denial of service is outside what this executor can guarantee.
 - The local opt-in limits who can reach the tool on that machine. It does not inspect the body.
 
 ## Enablement
@@ -184,9 +203,14 @@ The v1 result graph is closed:
 - boolean
 - string
 - numeric primitives: `byte`, `sbyte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`, `float`, `double`, `decimal`, and `char`
-- arrays or lists of allowed values
-- string-keyed dictionaries of allowed values
-- compiler-generated anonymous types in the generated assembly whose properties are allowed values
+- a single-dimensional array whose element type is an allowed value
+- exactly `System.Collections.Generic.List<T>`, where `T` is an allowed value
+- exactly `System.Collections.Generic.Dictionary<string, T>`, where `T` is an allowed value
+- a compiler-generated anonymous type in the generated assembly whose properties are allowed values
+
+`IEnumerable`, `IList`, `IDictionary`, a subclass, another collection type, and a deferred LINQ iterator are rejected. The host does not call `GetEnumerator` on an arbitrary enumerable. Copying an array uses its length and indexer. Copying a `List<T>` uses `Count` and the indexer. Copying a `Dictionary<string, T>` uses that concrete type. A LINQ operator that has not been materialized into one of those shapes is not a result.
+
+Each scalar, array element, list element, dictionary entry, and anonymous property counts as one node. v1 allows 1,024 nodes, depth 8, and 16,000 serialized characters. The node count is checked while copying, before serialization.
 
 Enums and `ElementId` are not allowed nodes. A number that happens to equal an element id is not an `element_ref` and must not be sent to another tool as one. Cross-call element identity is only the string returned by `elementRef`.
 
@@ -212,7 +236,7 @@ Record source hash, cache key, policy version, Revit API name and version, compi
 
 ## Out of scope
 
-Generated writes, a `run_modify` analogue, a transaction rollback sandbox, per-call approval, arbitrary DLL references, arbitrary IL, Python, Dynamo, a remote compiler, a persistent compiler daemon, and a wrapper catalogue of the Revit API. A generated write needs its own ADR.
+Generated writes, a `run_modify` analogue, a transaction rollback sandbox, per-call approval, arbitrary DLL references, arbitrary IL, Python, Dynamo, a remote compiler, a named pipe or network compiler listener, a persistent compiler daemon, and a wrapper catalogue of the Revit API. A generated write needs its own ADR. Reviewed manifests for identities other than `RevitAPI` 26.5.0.0, including Revit 2025 and Revit 2027, are later admissions under this same architecture. This ADR does not claim the executor can stop every CPU, memory, or blocking-call denial of service.
 
 ## Consequences
 
