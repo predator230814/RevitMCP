@@ -650,9 +650,13 @@ internal static class RevitApiSymbolIndex
                 return (true, message, truncated);
             }
         }
-        catch (Exception exception) when (IsLoadFailure(exception))
+        catch (BridgeException)
         {
-            return (false, null, false);
+            throw;
+        }
+        catch (Exception)
+        {
+            throw Unreadable();
         }
 
         return (false, null, false);
@@ -704,16 +708,31 @@ internal static class RevitApiSymbolIndex
         var text = prefix + TypeText(field.FieldType) + " " + field.Name;
         if (field.IsLiteral)
         {
+            object? raw;
             try
             {
-                var raw = field.GetRawConstantValue();
-                if (raw is not null && FormatConstant(raw) is { } formatted)
-                {
-                    text += " = " + formatted;
-                }
+                raw = field.GetRawConstantValue();
             }
-            catch (Exception exception) when (exception is InvalidOperationException or NotSupportedException or FormatException)
+            catch (BridgeException)
             {
+                throw;
+            }
+            catch (Exception)
+            {
+                throw Unreadable();
+            }
+
+            if (raw is null)
+            {
+                text += " = null";
+            }
+            else if (FormatConstant(raw) is { } formatted)
+            {
+                text += " = " + formatted;
+            }
+            else
+            {
+                throw Unreadable();
             }
         }
 

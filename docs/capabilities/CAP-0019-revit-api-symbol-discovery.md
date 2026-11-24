@@ -48,7 +48,7 @@ The operation never:
 - invokes a getter on a model element
 - mutates Revit
 
-Enum constant values are read from metadata literals. They are not obtained by executing code. There is no preferred-value list.
+Enum constant values are read from metadata literals. They are not obtained by executing code. There is no preferred-value list. If the obsolete marker or a literal constant value cannot be read, the operation fails with `REVIT_EXECUTION_FAILED` and returns no description. The error text is the stable message and does not include the runtime exception text.
 
 ## Inputs
 
