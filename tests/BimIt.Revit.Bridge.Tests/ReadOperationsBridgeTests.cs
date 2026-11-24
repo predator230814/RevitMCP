@@ -15,7 +15,7 @@ public sealed class ReadOperationsBridgeTests
 {
     [Theory]
     [InlineData(23)]
-    [InlineData(25)]
+    [InlineData(26)]
     public async Task Versions_other_than_24_reject_both_rpcs_before_the_service(int version)
     {
         var read = new RecordingReadOperations();
@@ -161,8 +161,9 @@ public sealed class ReadOperationsBridgeTests
 
         var full = Advertise(metadata, read);
         Assert.Equal(BridgeProtocol.SupportedVersions, full.SupportedProtocolVersions);
-        Assert.Equal(BridgeProtocol.ReadOperationsVersions, full.SupportedProtocolVersions);
-        Assert.Equal(24, full.SupportedProtocolVersions[0]);
+        Assert.Equal(BridgeProtocol.QueryElementPredicatesVersions, full.SupportedProtocolVersions);
+        Assert.Equal(25, full.SupportedProtocolVersions[0]);
+        Assert.Equal(BridgeProtocol.ReadOperationsVersions, full.SupportedProtocolVersions.Skip(1));
 
         var missingRead = Advertise(metadata, readOperations: null);
         Assert.Equal(BridgeProtocol.QueryParameterBindingsVersions, missingRead.SupportedProtocolVersions);
@@ -276,8 +277,58 @@ public sealed class ReadOperationsBridgeTests
             readOperations);
     }
 
-    private static async Task<HostContext> StartHostAsync(IRevitReadOperationsService read)
+    [Fact]
+    public async Task Protocol_25_delivers_predicates_and_protocol_24_does_not()
     {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var query = new FakeQueryElementsService();
+        await using var context = await StartHostAsync(new RecordingReadOperations(), query);
+        await using var client = await ConnectAsync(context, BridgeProtocol.SupportedVersions);
+        var request = new QueryElementsRequest
+        {
+            Scope = QueryScope.Document,
+            Filters = new QueryElementFilters(),
+            Predicates =
+            [
+                new QueryElementPredicate
+                {
+                    Source = "parameter",
+                    ParameterRef = "pref",
+                    Operator = "equals",
+                    Value = new QueryPredicateStringValue { Value = "Mark" }
+                }
+            ],
+            Limit = 10
+        };
+
+        await client.QueryElementsAsync(request, TimeSpan.FromSeconds(3), CancellationToken.None);
+
+        Assert.Equal(1, query.InvokeCount);
+        var delivered = Assert.IsType<QueryPredicateStringValue>(Assert.Single(query.LastRequest!.Predicates!).Value);
+        Assert.Equal("Mark", delivered.Value);
+
+        var olderQuery = new FakeQueryElementsService();
+        await using var olderContext = await StartHostAsync(new RecordingReadOperations(), olderQuery);
+        await using var older = await ConnectAsync(olderContext, BridgeProtocol.ReadOperationsVersions);
+        var rejected = await Assert.ThrowsAsync<BridgeException>(() =>
+            older.QueryElementsAsync(request, TimeSpan.FromSeconds(3), CancellationToken.None));
+
+        Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, rejected.ErrorCode);
+        Assert.Equal(0, olderQuery.InvokeCount);
+        await older.QueryElementsAsync(FakeQueryElementsService.CreateValidRequest(), TimeSpan.FromSeconds(3), CancellationToken.None);
+        Assert.Equal(1, olderQuery.InvokeCount);
+        Assert.Null(olderQuery.LastRequest!.Predicates);
+    }
+
+    private static async Task<HostContext> StartHostAsync(
+        IRevitReadOperationsService read,
+        FakeQueryElementsService? query = null)
+    {
+        query ??= new FakeQueryElementsService();
         var process = Process.GetCurrentProcess();
         var metadata = TestSupport.CreateMetadata(
             processId: process.Id,
@@ -288,7 +339,7 @@ public sealed class ReadOperationsBridgeTests
             metadata,
             new FileRegistrationStore(root),
             new FakeCapabilityService(),
-            new FakeQueryElementsService(),
+            query,
             new FakeGetElementsService(),
             new FakeDescribeParametersService(),
             new FakeGetParameterValuesService(),
@@ -309,7 +360,7 @@ public sealed class ReadOperationsBridgeTests
             new RecordingBindings(),
             read,
             CancellationToken.None);
-        Assert.Equal(BridgeProtocol.ReadOperationsVersions, host.Metadata.SupportedProtocolVersions);
+        Assert.Equal(BridgeProtocol.SupportedVersions, host.Metadata.SupportedProtocolVersions);
         return new HostContext(host, metadata);
     }
 

@@ -22,7 +22,7 @@ public sealed class QueryElementsRoutingTests
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 25)));
+        Assert.False(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 26)));
     }
 
     [Fact]
@@ -41,7 +41,7 @@ public sealed class QueryElementsRoutingTests
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v11", "pipe-v11", protocolVersion: 11)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v12", "pipe-v12", protocolVersion: 12)));
         Assert.True(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v13", "pipe-v13", protocolVersion: 13)));
-        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 25)));
+        Assert.False(InstanceTargetResolver.IsGetContextEligible(TestSupport.Ready("v14", "pipe-v14", protocolVersion: 26)));
     }
 
     [Fact]
@@ -154,6 +154,81 @@ public sealed class QueryElementsRoutingTests
     }
 
     [Fact]
+    public void Predicate_eligibility_is_protocol_25_only()
+    {
+        Assert.False(InstanceTargetResolver.IsQueryElementPredicatesEligible(TestSupport.Ready("v24", "pipe-24", protocolVersion: 24)));
+        Assert.True(InstanceTargetResolver.IsQueryElementPredicatesEligible(TestSupport.Ready("v25", "pipe-25", protocolVersion: 25)));
+        Assert.False(InstanceTargetResolver.IsQueryElementPredicatesEligible(TestSupport.Ready("v26", "pipe-26", protocolVersion: 26)));
+        Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v24", "pipe-24", protocolVersion: 24)));
+        Assert.True(InstanceTargetResolver.IsQueryElementsEligible(TestSupport.Ready("v25", "pipe-25", protocolVersion: 25)));
+    }
+
+    [Fact]
+    public async Task Mixed_instances_without_predicates_still_require_an_id()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("v25", "pipe-25", protocolVersion: 25));
+        discovery.Instances.Add(TestSupport.Ready("v3", "pipe-3", protocolVersion: 3));
+        var factory = UnusedFactory();
+
+        var outcome = await CreateService(discovery, factory).ExecuteAsync(null, TestSupport.CreateQueryRequest(), CancellationToken.None);
+
+        Assert.Equal(McpToolErrorCodes.InstanceRequired, outcome.ErrorCode);
+        Assert.Equal(new[] { "v25", "v3" }, outcome.Candidates!.Select(candidate => candidate.InstanceId));
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Predicates_auto_select_only_a_protocol_25_instance()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("v3", "pipe-3", protocolVersion: 3));
+        discovery.Instances.Add(TestSupport.Ready("v25", "pipe-25", protocolVersion: 25));
+        var factory = ProtocolFactory("v25", "pipe-25", selectedProtocolVersion: 25);
+
+        var outcome = await CreateService(discovery, factory).ExecuteAsync(null, PredicateRequest(), CancellationToken.None);
+
+        Assert.True(outcome.IsSuccess);
+        Assert.Equal(new[] { "pipe-25" }, factory.RequestedPipes);
+        Assert.Equal("is_present", factory.Clients[0].LastQueryRequest!.Predicates![0].Operator);
+    }
+
+    [Fact]
+    public async Task Explicit_older_instance_with_predicates_does_not_connect()
+    {
+        var discovery = new FakeDiscovery();
+        discovery.Instances.Add(TestSupport.Ready("v24", "pipe-24", protocolVersion: 24));
+        discovery.Instances.Add(TestSupport.Ready("v25", "pipe-25", protocolVersion: 25));
+        var factory = UnusedFactory();
+
+        var outcome = await CreateService(discovery, factory).ExecuteAsync("v24", PredicateRequest(), CancellationToken.None);
+
+        Assert.Equal(McpToolErrorCodes.InstanceUnavailable, outcome.ErrorCode);
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Fact]
+    public async Task Empty_predicates_are_invalid_before_discovery()
+    {
+        var discovery = new FakeDiscovery();
+        var factory = UnusedFactory();
+        var request = TestSupport.CreateQueryRequest();
+        request = new QueryElementsRequest
+        {
+            Scope = request.Scope,
+            Filters = request.Filters,
+            Predicates = [],
+            Limit = request.Limit
+        };
+
+        var outcome = await CreateService(discovery, factory).ExecuteAsync(null, request, CancellationToken.None);
+
+        Assert.Equal(CapabilityErrorCodes.InvalidQuery, outcome.ErrorCode);
+        Assert.Equal(0, discovery.CallCount);
+        Assert.Empty(factory.RequestedPipes);
+    }
+
+    [Fact]
     public async Task Each_invocation_performs_fresh_discovery()
     {
         var discovery = new FakeDiscovery();
@@ -183,6 +258,47 @@ public sealed class QueryElementsRoutingTests
         return new RecordingBridgeClientFactory
         {
             Connect = (_, _, _) => throw new InvalidOperationException("Bridge invocation should not occur.")
+        };
+    }
+
+    private static QueryElementsRequest PredicateRequest()
+    {
+        return new QueryElementsRequest
+        {
+            Scope = QueryScope.Document,
+            Filters = new QueryElementFilters(),
+            Predicates =
+            [
+                new QueryElementPredicate
+                {
+                    Source = "parameter",
+                    ParameterRef = "pref",
+                    Operator = "is_present"
+                }
+            ],
+            Limit = 25
+        };
+    }
+
+    private static RecordingBridgeClientFactory ProtocolFactory(
+        string instanceId,
+        string expectedPipe,
+        int selectedProtocolVersion)
+    {
+        return new RecordingBridgeClientFactory
+        {
+            Connect = (pipe, _, _) =>
+            {
+                Assert.Equal(expectedPipe, pipe);
+                var registration = TestSupport.CreateRegistration(instanceId, expectedPipe);
+                var client = new RecordingBridgeClient
+                {
+                    Handshake = (_, _) => Task.FromResult(
+                        TestSupport.CreateHandshake(registration, selectedProtocolVersion: selectedProtocolVersion)),
+                    QueryElements = (_, _, _) => Task.FromResult(TestSupport.CreateQueryResult(instanceId, "doc", 0, false))
+                };
+                return Task.FromResult(client);
+            }
         };
     }
 

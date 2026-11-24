@@ -18,7 +18,7 @@ Protocol 24 preserves every capability from protocol 23 by explicit membership, 
 
 After implementation, `BridgeProtocol.CurrentVersion` is 24 for that build. It is not conditional on runtime registry state. `ReadOperationsVersion` is 24. `SupportsReadOperations` is true only for 24. Every existing `Supports…` predicate that is true for 23 becomes true for 24 by explicit membership, in the same style as `SupportsQueryParameterBindings`.
 
-Host advertisement is separate from `CurrentVersion`. A host advertises `[24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1]` only when the read-operation service is composed, its registry passed startup validation, and the complete v23 prefix is present. Otherwise it advertises the highest valid earlier prefix, normally `[23..1]`. A read-operation service without the v23 prefix does not advertise 24. Unknown protocol 25 supports nothing.
+Host advertisement is separate from `CurrentVersion`. A host advertises `[24,23,22,21,20,19,18,17,16,15,14,13,12,11,10,9,8,7,6,5,4,3,2,1]` only when the read-operation service is composed, its registry passed startup validation, and the complete v23 prefix is present. Otherwise it advertises the highest valid earlier prefix, normally `[23..1]`. A read-operation service without the v23 prefix does not advertise 24. At the time of BRIDGE-0020, unknown protocol 25 supported nothing. [BRIDGE-0021](BRIDGE-0021-query-element-predicates.md) specifies protocol 25.
 
 A connection below 24 is refused with `BRIDGE_PROTOCOL_INCOMPATIBLE` before either method runs. There is no fallback to `revit.query_family_types`, `revit.query_parameter_bindings`, or any other RPC.
 

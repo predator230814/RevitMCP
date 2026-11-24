@@ -26,9 +26,10 @@ internal sealed class QueryElementsMcpTools
     public async Task<CallToolResult> QueryElementsAsync(
         McpServer server,
         [Description("Query scope: document or active_view.")] string scope,
-        [Description("Bounded element filters. Document scope requires at least one filter. Active view accepts an empty filter object.")] QueryElementFilters filters,
+        [Description("Coarse filters that narrow candidates by category, family, type, level, and name. Document scope requires at least one coarse filter or predicate. Active view accepts an empty filter object.")] QueryElementFilters filters,
         [Description("Opaque RevitMCP instance identifier.")] string? instance_id = null,
         [Description("Opaque active-document guard.")] string? document_id = null,
+        [Description("Optional typed parameter predicates. Every predicate must match. At most 8.")] IReadOnlyList<QueryElementPredicate>? predicates = null,
         [Description("Maximum number of element references to return.")] int limit = QueryElementsToolMetadata.DefaultLimit,
         CancellationToken cancellationToken = default)
     {
@@ -39,7 +40,10 @@ internal sealed class QueryElementsMcpTools
                 "The query request is invalid.");
         }
 
-        if (filters is null || (parsedScope == QueryScope.Document && !filters.HasAny()))
+        if (filters is null
+            || predicates is { Count: 0 }
+            || (predicates is not null && !OperatorAcceptsValues(predicates))
+            || (parsedScope == QueryScope.Document && !filters.HasAny() && predicates is not { Count: > 0 }))
         {
             return McpCallResultFactory.Error(
                 CapabilityErrorCodes.InvalidQuery,
@@ -51,6 +55,7 @@ internal sealed class QueryElementsMcpTools
             DocumentId = document_id,
             Scope = parsedScope,
             Filters = filters,
+            Predicates = predicates,
             Limit = limit
         };
 
@@ -58,6 +63,36 @@ internal sealed class QueryElementsMcpTools
         return outcome.IsSuccess
             ? McpCallResultFactory.Success(outcome.Result!, ResolveProtocolVersion(server))
             : McpCallResultFactory.Error(outcome.ErrorCode!, outcome.ErrorMessage!, outcome.Candidates);
+    }
+
+    private static bool OperatorAcceptsValues(IReadOnlyList<QueryElementPredicate> predicates)
+    {
+        foreach (var predicate in predicates)
+        {
+            if (predicate is null || !OperatorAcceptsValue(predicate.Operator, predicate.Value))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool OperatorAcceptsValue(string? op, QueryPredicateValue? value)
+    {
+        if (op is "is_missing" or "is_present" or "is_empty" or "is_not_empty")
+        {
+            return value is null;
+        }
+
+        return op switch
+        {
+            "contains" => value is QueryPredicateStringValue,
+            "equals" or "not_equals" => value is QueryPredicateStringValue or QueryPredicateIntegerValue,
+            "greater_than" or "greater_or_equal" or "less_than" or "less_or_equal" =>
+                value is QueryPredicateIntegerValue or QueryPredicateQuantityValue,
+            _ => false
+        };
     }
 
     private static bool TryParseScope(string? scope, out QueryScope parsed)

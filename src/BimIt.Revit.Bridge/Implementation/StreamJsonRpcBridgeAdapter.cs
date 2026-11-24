@@ -141,6 +141,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         try
         {
             EnsureQueryFiltersMatchSelectedProtocol(request);
+            EnsureQueryPredicatesMatchSelectedProtocol(request);
             return await _query.QueryElementsAsync(request, cancellationToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -922,6 +923,24 @@ internal sealed class StreamJsonRpcBridgeAdapter
         throw new BridgeException(
             CapabilityErrorCodes.InvalidQuery,
             "The query request is invalid.");
+    }
+
+    private void EnsureQueryPredicatesMatchSelectedProtocol(QueryElementsRequest request)
+    {
+        if (request.Predicates is null)
+        {
+            return;
+        }
+
+        var selected = Volatile.Read(ref _selectedProtocolVersion);
+        if (BridgeProtocol.SupportsQueryElementPredicates(selected))
+        {
+            return;
+        }
+
+        throw new BridgeException(
+            BridgeErrorCodes.ProtocolIncompatible,
+            "revit.query_elements predicates are not available on this connection.");
     }
 
     private void EnsureLinkedRoomsMatchSelectedProtocol(PreviewRoomPatternPlacementsRequest request)

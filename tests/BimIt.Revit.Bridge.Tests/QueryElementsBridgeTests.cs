@@ -104,8 +104,8 @@ public sealed class QueryElementsBridgeTests
         Assert.True(BridgeProtocol.SupportsQueryElements(8));
         Assert.True(BridgeProtocol.SupportsGetContext(9));
         Assert.True(BridgeProtocol.SupportsQueryElements(9));
-        Assert.True(BridgeProtocol.SupportsGetContext(11)); Assert.True(BridgeProtocol.SupportsGetContext(12)); Assert.True(BridgeProtocol.SupportsGetContext(13)); Assert.True(BridgeProtocol.SupportsGetContext(14)); Assert.True(BridgeProtocol.SupportsGetContext(15)); Assert.True(BridgeProtocol.SupportsGetContext(16)); Assert.True(BridgeProtocol.SupportsGetContext(20)); Assert.True(BridgeProtocol.SupportsGetContext(21)); Assert.True(BridgeProtocol.SupportsGetContext(23)); Assert.True(BridgeProtocol.SupportsGetContext(24)); Assert.False(BridgeProtocol.SupportsGetContext(25));
-        Assert.True(BridgeProtocol.SupportsQueryElements(11)); Assert.True(BridgeProtocol.SupportsQueryElements(12)); Assert.True(BridgeProtocol.SupportsQueryElements(13)); Assert.True(BridgeProtocol.SupportsQueryElements(14)); Assert.True(BridgeProtocol.SupportsQueryElements(15)); Assert.True(BridgeProtocol.SupportsQueryElements(16)); Assert.True(BridgeProtocol.SupportsQueryElements(20)); Assert.True(BridgeProtocol.SupportsQueryElements(21)); Assert.True(BridgeProtocol.SupportsQueryElements(23)); Assert.True(BridgeProtocol.SupportsQueryElements(24)); Assert.False(BridgeProtocol.SupportsQueryElements(25));
+        Assert.True(BridgeProtocol.SupportsGetContext(11)); Assert.True(BridgeProtocol.SupportsGetContext(12)); Assert.True(BridgeProtocol.SupportsGetContext(13)); Assert.True(BridgeProtocol.SupportsGetContext(14)); Assert.True(BridgeProtocol.SupportsGetContext(15)); Assert.True(BridgeProtocol.SupportsGetContext(16)); Assert.True(BridgeProtocol.SupportsGetContext(20)); Assert.True(BridgeProtocol.SupportsGetContext(21)); Assert.True(BridgeProtocol.SupportsGetContext(23)); Assert.True(BridgeProtocol.SupportsGetContext(24)); Assert.True(BridgeProtocol.SupportsGetContext(25)); Assert.False(BridgeProtocol.SupportsGetContext(26));
+        Assert.True(BridgeProtocol.SupportsQueryElements(11)); Assert.True(BridgeProtocol.SupportsQueryElements(12)); Assert.True(BridgeProtocol.SupportsQueryElements(13)); Assert.True(BridgeProtocol.SupportsQueryElements(14)); Assert.True(BridgeProtocol.SupportsQueryElements(15)); Assert.True(BridgeProtocol.SupportsQueryElements(16)); Assert.True(BridgeProtocol.SupportsQueryElements(20)); Assert.True(BridgeProtocol.SupportsQueryElements(21)); Assert.True(BridgeProtocol.SupportsQueryElements(23)); Assert.True(BridgeProtocol.SupportsQueryElements(24)); Assert.True(BridgeProtocol.SupportsQueryElements(25)); Assert.False(BridgeProtocol.SupportsQueryElements(26));
     }
 
     [Fact]
@@ -288,6 +288,49 @@ public sealed class QueryElementsBridgeTests
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
         query.Hold.TrySetCanceled();
+    }
+
+    [Fact]
+    public async Task Negotiated_v3_refuses_predicates_and_still_runs_a_legacy_query()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var query = new FakeQueryElementsService();
+        await using var context = await StartFullHostAsync(query: query);
+        await using var client = await ConnectAndHandshakeAsync(context, [3, 2, 1]);
+        var predicates = new QueryElementsRequest
+        {
+            Scope = QueryScope.Document,
+            Filters = new QueryElementFilters { CategoryNames = ["Walls"] },
+            Predicates =
+            [
+                new QueryElementPredicate
+                {
+                    Source = "parameter",
+                    ParameterRef = "pref",
+                    Operator = "is_present"
+                }
+            ],
+            Limit = 10
+        };
+
+        var rejected = await Assert.ThrowsAsync<BridgeException>(() =>
+            client.QueryElementsAsync(predicates, TimeSpan.FromSeconds(3), CancellationToken.None));
+
+        Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, rejected.ErrorCode);
+        Assert.Equal(0, query.InvokeCount);
+
+        var result = await client.QueryElementsAsync(
+            FakeQueryElementsService.CreateValidRequest(),
+            TimeSpan.FromSeconds(3),
+            CancellationToken.None);
+        Assert.Equal(1, query.InvokeCount);
+        Assert.Null(query.LastRequest!.Predicates);
+        Assert.Equal(0, result.MatchedCount);
+        Assert.Empty(result.ElementRefs);
     }
 
     private static BridgeHandshakeRequest CreateHandshakeRequest(string instanceId, IReadOnlyList<int> versions)

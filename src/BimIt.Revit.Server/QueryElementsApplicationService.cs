@@ -11,6 +11,7 @@ internal sealed class QueryElementsApplicationService
         CapabilityErrorCodes.DocumentContextChanged,
         CapabilityErrorCodes.NoActiveView,
         CapabilityErrorCodes.InvalidQuery,
+        CapabilityErrorCodes.QueryCandidateLimit,
         CapabilityErrorCodes.ExecutionTimeout,
         CapabilityErrorCodes.ExecutionFailed
     };
@@ -36,8 +37,17 @@ internal sealed class QueryElementsApplicationService
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        if (request.Predicates is { Count: 0 })
+        {
+            return QueryElementsOutcome.Failure(
+                CapabilityErrorCodes.InvalidQuery,
+                "The query request is invalid.");
+        }
+
         var discovered = await _discovery.DiscoverAsync(cancellationToken).ConfigureAwait(false);
-        var resolution = InstanceTargetResolver.ResolveForQueryElements(discovered, instanceId);
+        var resolution = request.HasPredicates
+            ? InstanceTargetResolver.ResolveForQueryElementPredicates(discovered, instanceId)
+            : InstanceTargetResolver.ResolveForQueryElements(discovered, instanceId);
         if (resolution.Target is null)
         {
             return QueryElementsOutcome.Failure(
@@ -72,8 +82,23 @@ internal sealed class QueryElementsApplicationService
                     cancellationToken)
                 .ConfigureAwait(false);
 
-            if (!string.Equals(handshake.InstanceId, registration.InstanceId, StringComparison.Ordinal)
-                || !BridgeProtocol.SupportsQueryElements(handshake.SelectedProtocolVersion))
+            if (!string.Equals(handshake.InstanceId, registration.InstanceId, StringComparison.Ordinal))
+            {
+                return QueryElementsOutcome.Failure(
+                    McpToolErrorCodes.InstanceUnavailable,
+                    ToolErrorMessages.InstanceUnavailable);
+            }
+
+            if (request.HasPredicates)
+            {
+                if (!BridgeProtocol.SupportsQueryElementPredicates(handshake.SelectedProtocolVersion))
+                {
+                    return QueryElementsOutcome.Failure(
+                        BridgeErrorCodes.ProtocolIncompatible,
+                        "revit.query_elements predicates require bridge protocol 25.");
+                }
+            }
+            else if (!BridgeProtocol.SupportsQueryElements(handshake.SelectedProtocolVersion))
             {
                 return QueryElementsOutcome.Failure(
                     McpToolErrorCodes.InstanceUnavailable,
