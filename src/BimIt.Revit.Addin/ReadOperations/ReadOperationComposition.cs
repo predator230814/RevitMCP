@@ -15,7 +15,8 @@ internal static class ReadOperationComposition
         {
             new ProjectUserWorksetsReadOperation(),
             new RevitApiMetadataReadOperation(),
-            new RevitApiElementPropertiesReadOperation()
+            new RevitApiElementPropertiesReadOperation(),
+            new RevitApiSymbolsReadOperation()
         };
 #if BIMIT_API_ACCESS_SPIKE
         ApiAccessSpikeOperations.AddExperimental(operations);
