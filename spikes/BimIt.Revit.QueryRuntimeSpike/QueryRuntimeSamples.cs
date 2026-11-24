@@ -20,4 +20,15 @@ public static class QueryRuntimeSamples
             sample = levels.Take(3).Select(level => new { id = elementRef(level), name = level.Name }).ToArray()
         };
         """;
+
+    public const string TightLoop = """
+        while (true)
+        {
+        }
+        return 0;
+        """;
+
+    public const string TransactionAttempt = """
+        return new Transaction(doc, "spike");
+        """;
 }
