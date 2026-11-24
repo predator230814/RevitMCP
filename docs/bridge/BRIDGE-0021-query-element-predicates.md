@@ -1,6 +1,6 @@
 # BRIDGE-0021: Query-element predicates
 
-- Status: Implemented. Live Revit validation is pending.
+- Status: Implemented. Live Revit validation is **PASS** on `e66bb76b702cf89aa963ffdbab7ec4d47d0597fc`. Record: [CAP_0018_QUERY_ELEMENT_PREDICATES_VALIDATION.md](../CAP_0018_QUERY_ELEMENT_PREDICATES_VALIDATION.md).
 - Date: 2026-11-23
 - Capability: [CAP-0018](../capabilities/CAP-0018-revit-query-element-predicates.md)
 - Extends: [BRIDGE-0003](BRIDGE-0003-query-elements-capability-rpc.md) `revit.query_elements`

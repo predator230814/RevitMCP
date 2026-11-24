@@ -30,7 +30,7 @@ Read next: ADR-0022, ADR-0023, [SKILLS.md](SKILLS.md), CAP-0014, CAP-0015, and t
 
 ### Later implementation note (2026-11-23)
 
-[CAP-0018](capabilities/CAP-0018-revit-query-element-predicates.md) adds optional typed parameter predicates to the existing `revit_query_elements` tool. Bridge protocol is 25 ([BRIDGE-0021](bridge/BRIDGE-0021-query-element-predicates.md)). Production `tools/list` is unchanged at 22. The 2026-11-07 snapshot table above is historical. Live Revit validation of CAP-0018 is pending.
+[CAP-0018](capabilities/CAP-0018-revit-query-element-predicates.md) adds optional typed parameter predicates to the existing `revit_query_elements` tool. Bridge protocol is 25 ([BRIDGE-0021](bridge/BRIDGE-0021-query-element-predicates.md)). Production `tools/list` is unchanged at 22. The 2026-11-07 snapshot table above is historical. Live Revit validation of CAP-0018 is **PASS** on `e66bb76b702cf89aa963ffdbab7ec4d47d0597fc`: [CAP_0018_QUERY_ELEMENT_PREDICATES_VALIDATION.md](CAP_0018_QUERY_ELEMENT_PREDICATES_VALIDATION.md).
 
 ## Historical accumulated detail (last revised 2026-10-30)
 

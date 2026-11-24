@@ -1,6 +1,6 @@
 # CAP-0018: Typed parameter predicates on `revit_query_elements`
 
-- Status: Implemented. Live Revit validation is pending.
+- Status: Implemented. Live Revit validation is **PASS** on `e66bb76b702cf89aa963ffdbab7ec4d47d0597fc`. Record: [CAP_0018_QUERY_ELEMENT_PREDICATES_VALIDATION.md](../CAP_0018_QUERY_ELEMENT_PREDICATES_VALIDATION.md).
 - Operation class: Read
 - Date: 2026-11-23
 - Extends: [CAP-0002](CAP-0002-revit-query-elements.md)
@@ -116,7 +116,6 @@ Predicate-aware `revit.query_elements` requires bridge protocol 25. Predicate-fr
 - geometry and topology predicates
 - generated code, writes, and transactions
 - Assistant proposal logic and the Proposal Registry
-- live Revit validation
 
 ## Acceptance
 
