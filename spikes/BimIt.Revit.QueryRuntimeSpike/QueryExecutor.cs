@@ -221,7 +221,7 @@ internal static class QueryResultSerializer
 
         try
         {
-            var json = JsonSerializer.Serialize(value, Options);
+            var json = JsonSerializer.Serialize(Materialize(value, 0), Options);
             if (json.Length > QueryPolicy.MaxResultCharacters)
             {
                 throw new QueryResultException("BIMQ101", "result exceeds the size bound");
@@ -237,6 +237,74 @@ internal static class QueryResultSerializer
         {
             throw new QueryResultException("BIMQ140", "result must be JSON data");
         }
+    }
+
+    private static object? Materialize(object? value, int depth)
+    {
+        if (value is null || value is string || value is bool || value is byte || value is sbyte
+            || value is short || value is ushort || value is int || value is uint
+            || value is long || value is ulong || value is float || value is double || value is decimal
+            || value is char)
+        {
+            return value;
+        }
+
+        if (depth > 8)
+        {
+            throw new QueryResultException("BIMQ140", "result exceeds the depth bound");
+        }
+
+        var space = value.GetType().Namespace ?? "";
+        if (space.StartsWith("Autodesk.Revit", StringComparison.Ordinal)
+            || space.StartsWith("BimIt.Revit.QueryRuntimeSpike.Generated", StringComparison.Ordinal))
+        {
+            if (value is not System.Collections.IEnumerable)
+            {
+                throw new QueryResultException("BIMQ140", "result must be JSON data");
+            }
+        }
+
+        if (value is System.Collections.IDictionary dictionary)
+        {
+            var map = new Dictionary<string, object?>(StringComparer.Ordinal);
+            foreach (System.Collections.DictionaryEntry entry in dictionary)
+            {
+                map[Convert.ToString(entry.Key, System.Globalization.CultureInfo.InvariantCulture) ?? ""] =
+                    Materialize(entry.Value, depth + 1);
+            }
+
+            return map;
+        }
+
+        if (value is System.Collections.IEnumerable enumerable)
+        {
+            var list = new List<object?>();
+            foreach (var item in enumerable)
+            {
+                list.Add(Materialize(item, depth + 1));
+            }
+
+            return list;
+        }
+
+        if (space.StartsWith("Autodesk.Revit", StringComparison.Ordinal)
+            || space.StartsWith("BimIt.Revit.QueryRuntimeSpike.Generated", StringComparison.Ordinal))
+        {
+            throw new QueryResultException("BIMQ140", "result must be JSON data");
+        }
+
+        var properties = new Dictionary<string, object?>(StringComparer.Ordinal);
+        foreach (var property in value.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
+        {
+            if (property.GetIndexParameters().Length > 0 || property.GetMethod is null)
+            {
+                continue;
+            }
+
+            properties[property.Name] = Materialize(property.GetValue(value), depth + 1);
+        }
+
+        return properties;
     }
 }
 

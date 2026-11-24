@@ -68,19 +68,21 @@ internal static class CompilationReferences
         var runtimeDirectory = Path.GetDirectoryName(typeof(object).Assembly.Location)
             ?? throw new InvalidOperationException("The runtime directory was not found.");
         var version = new DirectoryInfo(runtimeDirectory).Name;
+        var moniker = "net" + version.Split('.')[0] + ".0";
         var dotnetRoot = Directory.GetParent(runtimeDirectory)?.Parent?.Parent?.FullName
             ?? throw new InvalidOperationException("The dotnet root was not found.");
-        var exact = Path.Combine(dotnetRoot, "packs", "Microsoft.NETCore.App.Ref", version, "ref", "net8.0");
+        var exact = Path.Combine(dotnetRoot, "packs", "Microsoft.NETCore.App.Ref", version, "ref", moniker);
         if (Directory.Exists(exact))
         {
             return exact;
         }
 
         var packRoot = Path.Combine(dotnetRoot, "packs", "Microsoft.NETCore.App.Ref");
+        var majorPrefix = version.Split('.')[0] + ".";
         return Directory.GetDirectories(packRoot)
-            .Where(path => new DirectoryInfo(path).Name.StartsWith("8.", StringComparison.Ordinal))
+            .Where(path => new DirectoryInfo(path).Name.StartsWith(majorPrefix, StringComparison.Ordinal))
             .OrderByDescending(path => new DirectoryInfo(path).Name, StringComparer.Ordinal)
-            .Select(path => Path.Combine(path, "ref", "net8.0"))
+            .Select(path => Path.Combine(path, "ref", moniker))
             .First(Directory.Exists);
     }
 }

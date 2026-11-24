@@ -22,7 +22,23 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BimIt.Revit.QueryRuntimeSpike\BimIt.Revit.QueryRuntimeSpike.csproj" />
+    <ProjectReference Include="..\..\src\BimIt.Revit.Addin\BimIt.Revit.Addin.csproj">
+      <ReferenceOutputAssembly>true</ReferenceOutputAssembly>
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </ProjectReference>
   </ItemGroup>
+
+  <Target Name="RejectCopiedProductionAddin" AfterTargets="Build">
+    <ItemGroup>
+      <_CopiedProduction Include="$(OutputPath)BimIt.Revit.Addin.dll" />
+      <_CopiedProduction Include="$(OutputPath)BimIt.Revit.Bridge.dll" />
+      <_CopiedProduction Include="$(OutputPath)BimIt.Revit.Contracts.dll" />
+      <_CopiedProduction Include="$(OutputPath)BimIt.Revit.Assistant.Ipc.dll" />
+    </ItemGroup>
+    <Delete Files="@(_CopiedProduction)" />
+    <Error Text="The spike output must not deploy the production Addin." Condition="Exists('$(OutputPath)BimIt.Revit.Addin.dll')" />
+  </Target>
 
   <ItemGroup>
     <None Include="BimIt.Revit.QueryRuntimeSpike.Live.addin" CopyToOutputDirectory="PreserveNewest" />

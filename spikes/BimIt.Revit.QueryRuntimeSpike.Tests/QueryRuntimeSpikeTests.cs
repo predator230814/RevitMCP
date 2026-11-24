@@ -183,6 +183,14 @@ public sealed class QueryRuntimeSpikeTests
     }
 
     [Fact]
+    public void Anonymous_result_does_not_pin_the_collectible_context()
+    {
+        var evidence = Run("return new { count = 1, name = elementRef(null) };");
+        Assert.Equal("""{"count":1,"name":"none"}""", evidence.Result.Json);
+        Assert.True(QueryExecSequence.TryRelease(evidence.Context));
+    }
+
+    [Fact]
     public void Same_source_has_a_stable_cache_identity()
     {
         var compiler = QueryCompiler.ForRevitApi(RevitApiPath);
@@ -276,8 +284,123 @@ public sealed class QueryRuntimeSpikeTests
             "BimIt.Revit.QueryRuntimeSpike.Live",
             "QueryRuntimeLiveCommand.cs"));
         Assert.DoesNotContain("new Transaction", live, StringComparison.Ordinal);
-        Assert.DoesNotContain("ExternalEvent", live, StringComparison.Ordinal);
+        Assert.Contains("RevitExecutionDispatcher.Create", live, StringComparison.Ordinal);
+        Assert.Contains("EnqueueAsync", live, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Wait(", live, StringComparison.Ordinal);
+        Assert.DoesNotContain(".Result", live, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetAwaiter", live, StringComparison.Ordinal);
         Assert.Contains("TransactionMode.ReadOnly", live, StringComparison.Ordinal);
+
+        var dispatcher = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Addin", "Execution", "RevitExecutionDispatcher.cs"));
+        Assert.DoesNotContain("QueryRuntime", dispatcher, StringComparison.Ordinal);
+
+        var liveProject = File.ReadAllText(Path.Combine(
+            root,
+            "spikes",
+            "BimIt.Revit.QueryRuntimeSpike.Live",
+            "BimIt.Revit.QueryRuntimeSpike.Live.csproj"));
+        Assert.Contains("<Private>false</Private>", liveProject, StringComparison.Ordinal);
+        Assert.Contains("BimIt.Revit.Addin.csproj", liveProject, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void One_loaded_assembly_is_selected_and_a_duplicate_is_rejected()
+    {
+        var loaded = new Assembly[] { typeof(QueryExecGate).Assembly, typeof(string).Assembly };
+        Assert.Same(typeof(QueryExecGate).Assembly, LoadedAssemblySelection.SingleNamed(loaded, "BimIt.Revit.QueryRuntimeSpike"));
+        Assert.Null(LoadedAssemblySelection.SingleNamed(loaded, "Missing.Assembly"));
+        Assert.Null(LoadedAssemblySelection.SingleNamed(
+            [typeof(QueryExecGate).Assembly, typeof(QueryExecGate).Assembly],
+            "BimIt.Revit.QueryRuntimeSpike"));
+        Assert.True(LoadedAssemblySelection.SharesDirectory(
+            typeof(QueryExecGate).Assembly.Location,
+            typeof(QueryRuntimeSpikeTests).Assembly.Location));
+        Assert.False(LoadedAssemblySelection.SharesDirectory(typeof(QueryExecGate).Assembly.Location, null));
+    }
+
+    [Fact]
+    public void Transaction_source_is_not_submitted_to_execution()
+    {
+        var gate = QueryExecGate.Prepare(QueryCompiler.ForRevitApi(RevitApiPath));
+        Assert.True(gate.LevelQuery.Success, Format(gate.LevelQuery.Diagnostics));
+        Assert.True(gate.TightLoop.Success, Format(gate.TightLoop.Diagnostics));
+        Assert.False(gate.TransactionAttempt.Success);
+        Assert.Null(gate.TransactionAttempt.Assembly);
+        Assert.False(gate.TransactionExecutionEnqueued);
+        Assert.Contains(gate.TransactionAttempt.Diagnostics, diagnostic => diagnostic.Code == "BIMQ110");
+
+        var submitted = new List<QueryCompilation>();
+        QueryExecSequence.Run(
+            gate,
+            (compilation, _) =>
+            {
+                submitted.Add(compilation);
+                return Evidence(compilation.CacheKey);
+            },
+            () => false);
+
+        Assert.Equal(4, submitted.Count);
+        Assert.DoesNotContain(submitted, compilation => ReferenceEquals(compilation, gate.TransactionAttempt));
+        Assert.Equal(3, submitted.Count(compilation => ReferenceEquals(compilation, gate.LevelQuery)));
+        Assert.Single(submitted, compilation => ReferenceEquals(compilation, gate.TightLoop));
+    }
+
+    [Fact]
+    public void Repeated_query_is_collectible_and_a_budget_failure_does_not_block_the_next_query()
+    {
+        var compiler = QueryCompiler.ForHostProbe();
+        var query = compiler.Compile("return elementRef(null);");
+        var tight = compiler.Compile(QueryRuntimeSamples.TightLoop);
+        var transaction = QueryCompiler.ForRevitApi(RevitApiPath).Compile(QueryRuntimeSamples.TransactionAttempt);
+        Assert.True(query.Success, Format(query.Diagnostics));
+        Assert.True(tight.Success, Format(tight.Diagnostics));
+        var gate = QueryExecGate.ForCompilations(query, tight, transaction);
+        var modified = false;
+        var steps = QueryExecSequence.Run(
+            gate,
+            (compilation, budget) => QueryExecutor.Execute(
+                compilation,
+                ReadOnlyProject,
+                null,
+                (Func<object?, string>)(value => value is null ? "none" : "ref"),
+                new QueryBudget(budget)),
+            () => modified);
+
+        Assert.Equal(4, steps.Count);
+        Assert.Equal(["level", "level-repeat", "tight-loop", "level-after-budget"], steps.Select(step => step.Name).ToArray());
+        Assert.True(steps[0].Success, steps[0].Code);
+        Assert.Equal("\"none\"", steps[0].Json);
+        Assert.Equal(steps[0].Json, steps[1].Json);
+        Assert.Equal(steps[0].CacheKey, steps[1].CacheKey);
+        Assert.Equal(steps[0].CacheKey, steps[3].CacheKey);
+        Assert.True(steps[0].ContextCollected);
+        Assert.True(steps[1].ContextCollected);
+        Assert.False(steps[2].Success);
+        Assert.Equal("BIMQ120", steps[2].Code);
+        Assert.True(steps[2].ContextCollected);
+        Assert.True(steps[3].Success, steps[3].Code);
+        Assert.True(steps[3].ContextCollected);
+        Assert.All(steps, step =>
+        {
+            Assert.False(step.ModifiedBefore);
+            Assert.False(step.ModifiedAfter);
+        });
+        Assert.False(modified);
+    }
+
+    private static QueryExecutionEvidence Evidence(string cacheKey)
+    {
+        return new QueryExecutionEvidence
+        {
+            Result = new QueryRunResult
+            {
+                Success = true,
+                Json = "{}",
+                CacheKey = cacheKey,
+                Diagnostics = []
+            },
+            Context = new WeakReference(new object())
+        };
     }
 
     private static QueryExecutionEvidence Run(string source, int budget = 100)
