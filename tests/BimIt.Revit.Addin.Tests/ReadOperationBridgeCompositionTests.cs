@@ -14,14 +14,15 @@ public sealed class ReadOperationBridgeCompositionTests
     private const string ClosedObject = """{"type":"object","additionalProperties":false}""";
 
     [Fact]
-    public void Production_registry_is_worksets_and_the_two_revit_api_operations()
+    public void Production_registry_is_worksets_metadata_properties_and_symbols()
     {
         var operations = ReadOperationComposition.ProductionOperations();
         Assert.Equal(
             [
                 ProjectUserWorksetsReadOperation.OperationId,
                 RevitApiElementPropertiesReadOperation.OperationId,
-                RevitApiMetadataReadOperation.OperationId
+                RevitApiMetadataReadOperation.OperationId,
+                RevitApiSymbolsReadOperation.OperationId
             ],
             operations.Select(operation => operation.Descriptor.Id).Order(StringComparer.Ordinal).ToArray());
         Assert.All(operations, operation => Assert.Equal(1, operation.Descriptor.ContractVersion));
@@ -192,7 +193,8 @@ public sealed class ReadOperationBridgeCompositionTests
             [
                 ProjectUserWorksetsReadOperation.OperationId,
                 RevitApiElementPropertiesReadOperation.OperationId,
-                RevitApiMetadataReadOperation.OperationId
+                RevitApiMetadataReadOperation.OperationId,
+                RevitApiSymbolsReadOperation.OperationId
             ],
             result.Operations.Select(operation => operation.Id).ToArray());
         Assert.All(result.Operations, operation => Assert.Equal(1, operation.ContractVersion));

@@ -27,14 +27,15 @@ public sealed class ApiAccessSpikeTests
                 "experimental.revit_api_read",
                 "project.user_worksets",
                 "revit_api.element_properties",
-                "revit_api.metadata"
+                "revit_api.metadata",
+                "revit_api.symbols"
             ],
             operations.Select(operation => operation.Descriptor.Id).Order(StringComparer.Ordinal).ToArray());
         Assert.All(operations, operation => Assert.Equal(1, operation.Descriptor.ContractVersion));
 
         var registry = new ReadOperationRegistry(operations);
         var search = registry.Search("revit_api", 0, 10);
-        Assert.Equal(4, search.Total);
+        Assert.Equal(5, search.Total);
         Assert.All(search.Operations, operation =>
         {
             Assert.Null(operation.InputSchema);

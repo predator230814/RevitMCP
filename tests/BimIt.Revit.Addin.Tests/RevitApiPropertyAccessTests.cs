@@ -335,6 +335,7 @@ public sealed class RevitApiPropertyAccessTests
         var server = string.Join("\n", Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Server"), "*.cs").Select(File.ReadAllText));
         Assert.DoesNotContain("revit_api.metadata", server, StringComparison.Ordinal);
         Assert.DoesNotContain("revit_api.element_properties", server, StringComparison.Ordinal);
+        Assert.DoesNotContain("revit_api.symbols", server, StringComparison.Ordinal);
         Assert.Contains("CapabilityErrorCodes.RevitApiTypeRejected", File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ReadOperationApplicationService.cs")), StringComparison.Ordinal);
         Assert.Contains("CapabilityErrorCodes.DocumentIsModifiable", File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "LookupReadOperationsApplicationService.cs")), StringComparison.Ordinal);
         Assert.Equal(25, BridgeProtocol.CurrentVersion);
