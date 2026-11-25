@@ -6,13 +6,13 @@
 - Product Owner: Dave
 - Contract: [CAP-0019](../capabilities/CAP-0019-revit-api-symbol-discovery.md)
 
-Accepted architecture. This ADR records the order in which Revit behavior is admitted so the same strategy does not have to be rediscovered. It does not authorize an executor.
+Accepted architecture. This ADR records the order in which Revit behavior is admitted so the same strategy does not have to be rediscovered. It does not specify an executor. [ADR-0028](ADR-0028-bounded-generated-csharp-read-executor.md) is the later read-executor authorization this ADR allowed.
 
 ## Context
 
 [ADR-0022](ADR-0022-agent-skills-and-knowledge-architecture.md) separates MCP tools, Skills, and the Revit execution kernel. A Skill over generic capabilities is preferred when the workflow can be expressed by orchestration.
 
-[ADR-0023](ADR-0023-declarative-revit-read-query-architecture.md) §1 prohibits model-supplied Python, C#, Dynamo, macro, expression, or Revit API source in the production capability layer. The production layer runs only code that BIM-IT compiled, reviewed, and tested. That prohibition remains in force.
+[ADR-0023](ADR-0023-declarative-revit-read-query-architecture.md) §1 prohibits model-supplied Python, C#, Dynamo, macro, expression, or Revit API source in the production capability layer. [ADR-0028](ADR-0028-bounded-generated-csharp-read-executor.md) is the narrow exception for CAP-0020. The prohibition remains in force everywhere else.
 
 [ADR-0024](ADR-0024-registry-driven-compiled-revit-read-operations.md) keeps new compiled reads behind `revit_lookup` and `revit_read` instead of adding one MCP tool per fact.
 
@@ -35,11 +35,10 @@ CAP-0019 `revit_api.symbols` v1 is a descriptive read of the Revit API assembly 
 
 ## What this ADR does not authorize
 
-- ADR-0023 §1 still prohibits model-supplied C# in production. This ADR does not change that sentence.
-- ADR-0025 flexible or generated C# remains Research Only.
-- No production C# executor is authorized. Bounded C# is the intended direction only.
-- A later revision may narrowly supersede ADR-0023 only after a real Revit/EXEC-0001 runtime gate and explicit Product Owner acceptance.
-- No new MCP tool, Bridge RPC, or protocol version. Production `tools/list` stays 22. Bridge protocol stays 25.
+- ADR-0023 §1 still prohibits model-supplied code outside CAP-0020. ADR-0028 is the exception, and only for that capability.
+- ADR-0025 flexible or generated C# remains Research Only as a property-access mechanism.
+- This ADR does not specify the executor. ADR-0028 does, for one read-only surface. The EXEC-0001 gate is PR #133.
+- CAP-0019 added no MCP tool, Bridge RPC, or protocol version. ADR-0028 plans `revit_run_csharp_query` and protocol 26. Neither is implemented. Production `tools/list` stays 22. Bridge protocol stays 25.
 
 ## Consequences
 

@@ -32,7 +32,7 @@ The same run showed the limits this ADR keeps:
 ## Decision drivers
 
 - A long-tail factual read should not require a compiled operation per Revit class when a bounded property read can return it.
-- ADR-0023 §1 stays in force for arbitrary and model-supplied code.
+- ADR-0023 §1 stays in force for arbitrary and model-supplied code outside CAP-0020.
 - ADR-0024 stays the registry. `revit_lookup` stays a lookup of BIM-IT operations. It does not become a Revit API browser.
 - No new MCP tool, no new Bridge RPC, no protocol bump.
 - The only executable member is a public instance property getter on the Revit API assembly already loaded by the process.
@@ -174,7 +174,7 @@ That is the anti-wrapper rule. A scalar name on an Element subclass that `OfClas
 
 ### 9. Relationship to ADR-0023 and ADR-0024
 
-- **ADR-0023 remains correct for arbitrary and model-supplied code.** §1 is unchanged. Generated C#, Python, Dynamo, expressions, and Revit API source stay prohibited in the production layer. This ADR does not supersede ADR-0023.
+- **ADR-0023 remains correct for arbitrary and model-supplied code.** This ADR does not supersede ADR-0023. [ADR-0028](ADR-0028-bounded-generated-csharp-read-executor.md) later narrows §1 for CAP-0020 only. Generated C# is still not the property-access mechanism of this ADR. Python, Dynamo, expressions, and Revit API source outside CAP-0020 stay prohibited.
 - **ADR-0024 remains the compiled registry.** Operations are still explicit, versioned, schema-checked, and executed only through `revit_read`. `revit_lookup` remains a registry lookup. ADR-0024 §4 said reflection must not be the execution selector and must not be reached through `revit_lookup`. This ADR does not relax that sentence for arbitrary members. It adds two registered operations whose compiled code may reflect one trusted assembly and invoke the getters named above. The agent still selects a registered operation id, not a method.
 - **ADR-0025 narrowly permits that getter reflection as a new read mechanism.** That is the only amendment to ADR-0024. It does not amend ADR-0023 §1.
 - **Not authorized:** arbitrary API method execution, generic writes, generated C#, arbitrary assemblies, `RevitAPIUI` reflection, and class-specific fallback collectors.
@@ -183,7 +183,7 @@ The Class A spike is the evidence for this narrow change. The accepted decisions
 
 ### 10. Generated C#
 
-Generated or flexible C# stays Research Only. The Class A result means it is not needed for basic scalar Element facts. It remains a candidate only for a later ADR about traversal, joins, calculations, or APIs that cannot be expressed safely as bounded property reads. This ADR does not implement it and does not authorize it.
+Generated or flexible C# stays Research Only as a substitute for bounded property reads. The Class A result means it is not needed for basic scalar Element facts. [ADR-0028](ADR-0028-bounded-generated-csharp-read-executor.md) is the later read-executor ADR. This ADR does not implement that executor and does not authorize property access through generated C#.
 
 ## Consequences
 

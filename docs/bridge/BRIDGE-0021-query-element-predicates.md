@@ -13,7 +13,7 @@ Predicate support is the explicit set `{25}`. `SupportsQueryElementPredicates` i
 
 `revit.query_elements` itself stays on its existing explicit set, extended with 25. A predicate-free request is valid on every version that already supported CAP-0002, including 3 through 25. A request whose `predicates` field is present requires protocol 25. Omission is not the same as an empty array. An empty array is `INVALID_QUERY` and is not treated as a legacy query.
 
-Protocol 25 preserves every protocol-24 capability by explicit membership, including `revit.lookup_read_operations`, `revit.read_operation`, `revit.query_parameter_bindings`, and `revit.query_family_types`. Unknown protocol 26 supports nothing.
+Protocol 25 preserves every protocol-24 capability by explicit membership, including `revit.lookup_read_operations`, `revit.read_operation`, `revit.query_parameter_bindings`, and `revit.query_family_types`. At the time of this specification, unknown protocol 26 supported nothing. [CAP-0020](../capabilities/CAP-0020-bounded-generated-csharp-read.md) later specifies protocol 26. Until that RPC is implemented, a host still does not advertise 26. This v25 record is otherwise unchanged.
 
 ## Advertisement
 
