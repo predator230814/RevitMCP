@@ -17,7 +17,7 @@ public sealed class QueryParameterBindingsBridgeTests
     [InlineData(1)]
     [InlineData(21)]
     [InlineData(22)]
-    [InlineData(26)]
+    [InlineData(27)]
     public async Task Versions_other_than_23_refuse_the_rpc_without_invoking_the_service(int version)
     {
         var bindings = new RecordingBindings();

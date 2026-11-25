@@ -208,6 +208,13 @@ internal sealed class RecordingDispatcher : ILifecycleDispatcher
                 new LifecycleReadOperationQueue())
             : ReadOperationsFactory(metadata);
     }
+
+    public IRevitRunCSharpQueryService? CreateRunCSharpQuery(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        _events.Add("csharpquery.create");
+        return null;
+    }
 }
 
 internal sealed class RecordingCapabilityService : IRevitCapabilityService
@@ -512,6 +519,7 @@ internal sealed class RecordingBridgeFactory : ILifecycleBridgeFactory
         IRevitQueryFamilyTypesService? queryFamilyTypes,
         IRevitQueryParameterBindingsService? queryParameterBindings,
         IRevitReadOperationsService? readOperations,
+        IRevitRunCSharpQueryService? runCSharpQuery,
         CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();

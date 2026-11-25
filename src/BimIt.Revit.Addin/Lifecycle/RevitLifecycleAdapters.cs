@@ -5,6 +5,7 @@ using BimIt.Revit.Addin.Apply;
 using BimIt.Revit.Addin.Approval;
 using BimIt.Revit.Addin.Audit;
 using BimIt.Revit.Addin.Capabilities;
+using BimIt.Revit.Addin.CSharpQuery;
 using BimIt.Revit.Addin.Execution;
 using BimIt.Revit.Addin.Identity;
 using BimIt.Revit.Addin.Intents;
@@ -465,6 +466,15 @@ internal sealed class RevitExecutionDispatcherLifetime : ILifecycleDispatcher
             new RevitReadOperationWorkQueue(_dispatcher, _identity));
     }
 
+    public IRevitRunCSharpQueryService? CreateRunCSharpQuery(BridgeInstanceMetadata metadata)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        return new RevitRunCSharpQueryService(
+            new CSharpQueryEnablementStore(),
+            new CSharpQueryCompilationService(),
+            new CSharpQueryExecutionService(_dispatcher, _identity));
+    }
+
     public IRevitGetRoomLayoutsService CreateGetRoomLayouts(BridgeInstanceMetadata metadata)
     {
         ArgumentNullException.ThrowIfNull(metadata);
@@ -557,10 +567,11 @@ internal sealed class NamedPipeLifecycleBridgeFactory : ILifecycleBridgeFactory
         IRevitQueryFamilyTypesService? queryFamilyTypes,
         IRevitQueryParameterBindingsService? queryParameterBindings,
         IRevitReadOperationsService? readOperations,
+        IRevitRunCSharpQueryService? runCSharpQuery,
         CancellationToken cancellationToken)
     {
         var host = NamedPipeBridgeHost
-            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, readSpatialRooms, queryFamilyTypes, queryParameterBindings, readOperations, cancellationToken)
+            .StartAsync(metadata, _store, capability, query, getElements, describeParameters, getParameterValues, getMepTopology, previewParameterUpdates, requestParameterUpdateReview, applyParameterUpdates, getWarnings, getSelection, previewMepDevicePlacements, requestMepDevicePlacementReview, applyMepDevicePlacements, getRoomLayouts, getMepDeviceTypes, previewRoomPatternPlacements, readSpatialRooms, queryFamilyTypes, queryParameterBindings, readOperations, runCSharpQuery, cancellationToken)
             .GetAwaiter()
             .GetResult();
         return new NamedPipeLifecycleBridge(host);

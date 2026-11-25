@@ -35,7 +35,7 @@ public sealed class RevitApiSymbolDiscoveryTests
         Assert.NotNull(exact.Result);
         Assert.NotNull(exact.Result.Operations[0].InputSchema);
         Assert.NotNull(exact.Result.Operations[0].OutputSchema);
-        Assert.Equal(25, BridgeProtocol.CurrentVersion);
+        Assert.Equal(26, BridgeProtocol.CurrentVersion);
         Assert.Equal(22, Regex.Matches(
             File.ReadAllText(Path.Combine(FindRepoRoot(), "src", "BimIt.Revit.Server", "ServerHost.cs")),
             @"\.With[A-Za-z]+Tool\(\)").Count);

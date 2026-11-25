@@ -279,9 +279,9 @@ public sealed class AssistantProposalRegistryTests
     [Fact]
     public void Mcp_bridge_and_tool_count_surfaces_are_unchanged()
     {
-        Assert.Equal(25, BridgeProtocol.CurrentVersion);
-        Assert.Equal(25, BridgeProtocol.SupportedVersions[0]);
-        Assert.DoesNotContain(26, BridgeProtocol.SupportedVersions);
+        Assert.Equal(26, BridgeProtocol.CurrentVersion);
+        Assert.Equal(26, BridgeProtocol.SupportedVersions[0]);
+        Assert.DoesNotContain(27, BridgeProtocol.SupportedVersions);
         Assert.Equal(3, AssistantModelTools.LocalNames.Length);
         Assert.DoesNotContain("bimit_propose_parameter_updates", AssistantModelTools.LocalNames);
 

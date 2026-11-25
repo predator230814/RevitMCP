@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>BimIt.Revit.CSharpQueryBridgeHarness</RootNamespace>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <Description>Non-MCP Bridge client for the CAP-0020 protocol-26 live gate. Not installed and not an MCP tool.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BimIt.Revit.Bridge\BimIt.Revit.Bridge.csproj" />
+  </ItemGroup>
+</Project>

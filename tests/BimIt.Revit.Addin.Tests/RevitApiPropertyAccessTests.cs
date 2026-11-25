@@ -233,7 +233,7 @@ public sealed class RevitApiPropertyAccessTests
         var registry = new ReadOperationRegistry(ReadOperationComposition.ProductionOperations());
         Assert.Equal(ReadOperationResolution.Found, registry.LookupExact(RevitApiMetadataReadOperation.OperationId, 1).Resolution);
         Assert.Equal(ReadOperationResolution.Found, registry.LookupExact(RevitApiElementPropertiesReadOperation.OperationId, 1).Resolution);
-        Assert.Equal(25, BridgeProtocol.CurrentVersion);
+        Assert.Equal(26, BridgeProtocol.CurrentVersion);
         Assert.True(BridgeProtocol.SupportsReadOperations(24));
         Assert.False(BridgeProtocol.SupportsReadOperations(23));
 
@@ -338,7 +338,7 @@ public sealed class RevitApiPropertyAccessTests
         Assert.DoesNotContain("revit_api.symbols", server, StringComparison.Ordinal);
         Assert.Contains("CapabilityErrorCodes.RevitApiTypeRejected", File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ReadOperationApplicationService.cs")), StringComparison.Ordinal);
         Assert.Contains("CapabilityErrorCodes.DocumentIsModifiable", File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "LookupReadOperationsApplicationService.cs")), StringComparison.Ordinal);
-        Assert.Equal(25, BridgeProtocol.CurrentVersion);
+        Assert.Equal(26, BridgeProtocol.CurrentVersion);
     }
 
     private static void AssertTypeName(Assembly assembly, string query, string typeName)

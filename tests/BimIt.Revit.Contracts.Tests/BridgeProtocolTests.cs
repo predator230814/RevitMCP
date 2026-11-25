@@ -30,7 +30,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Get_context_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetContext(version));
@@ -62,7 +63,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Query_elements_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsQueryElements(version));
@@ -94,7 +96,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Get_elements_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetElements(version));
@@ -126,7 +129,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Describe_parameters_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsDescribeParameters(version));
@@ -158,7 +162,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Get_parameter_values_support_is_an_explicit_set(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetParameterValues(version));
@@ -167,7 +172,7 @@ public sealed class BridgeProtocolTests
     [Fact]
     public void Current_supported_versions_are_explicit_and_ordered()
     {
-        Assert.Equal(25, BridgeProtocol.CurrentVersion);
+        Assert.Equal(26, BridgeProtocol.CurrentVersion);
         Assert.Equal(new[] { 1 }, BridgeProtocol.HandshakeOnlyVersions);
         Assert.Equal(new[] { 2, 1 }, BridgeProtocol.GetContextVersions);
         Assert.Equal(new[] { 3, 2, 1 }, BridgeProtocol.QueryElementsVersions);
@@ -192,34 +197,41 @@ public sealed class BridgeProtocolTests
         Assert.Equal(new[] { 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.QueryParameterBindingsVersions);
         Assert.Equal(new[] { 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.ReadOperationsVersions);
         Assert.Equal(new[] { 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.QueryElementPredicatesVersions);
-        Assert.Equal(BridgeProtocol.QueryElementPredicatesVersions, BridgeProtocol.SupportedVersions);
+        Assert.Equal(new[] { 26, 25, 24, 23, 22, 21, 20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1 }, BridgeProtocol.RunCSharpQueryVersions);
+        Assert.Equal(BridgeProtocol.RunCSharpQueryVersions, BridgeProtocol.SupportedVersions);
+        Assert.Equal(26, BridgeProtocol.RunCSharpQueryVersion);
+        Assert.True(BridgeProtocol.SupportsRunCSharpQuery(26));
+        Assert.False(BridgeProtocol.SupportsRunCSharpQuery(25));
+        Assert.False(BridgeProtocol.SupportsRunCSharpQuery(27));
+        Assert.True(BridgeProtocol.SupportsQueryElementPredicates(26));
+        Assert.True(BridgeProtocol.SupportsReadOperations(26));
         Assert.Equal(24, BridgeProtocol.ReadOperationsVersion);
         Assert.Equal(25, BridgeProtocol.QueryElementPredicatesVersion);
         Assert.True(BridgeProtocol.SupportsReadOperations(24));
         Assert.True(BridgeProtocol.SupportsReadOperations(25));
         Assert.False(BridgeProtocol.SupportsReadOperations(23));
-        Assert.False(BridgeProtocol.SupportsReadOperations(26));
+        Assert.False(BridgeProtocol.SupportsReadOperations(27));
         Assert.True(BridgeProtocol.SupportsQueryElementPredicates(25));
         Assert.False(BridgeProtocol.SupportsQueryElementPredicates(24));
-        Assert.False(BridgeProtocol.SupportsQueryElementPredicates(26));
+        Assert.False(BridgeProtocol.SupportsQueryElementPredicates(27));
         Assert.Equal(new[] { BridgeProtocol.ReadOperationsVersion }.Concat(BridgeProtocol.QueryParameterBindingsVersions), BridgeProtocol.ReadOperationsVersions);
         Assert.Equal(new[] { BridgeProtocol.QueryParameterBindingsVersion }.Concat(BridgeProtocol.QueryFamilyTypesVersions), BridgeProtocol.QueryParameterBindingsVersions);
         Assert.True(BridgeProtocol.SupportsQueryFamilyTypes(22));
         Assert.False(BridgeProtocol.SupportsQueryFamilyTypes(21));
-        Assert.True(BridgeProtocol.SupportsQueryFamilyTypes(23)); Assert.True(BridgeProtocol.SupportsQueryFamilyTypes(24)); Assert.True(BridgeProtocol.SupportsQueryFamilyTypes(25)); Assert.False(BridgeProtocol.SupportsQueryFamilyTypes(26));
+        Assert.True(BridgeProtocol.SupportsQueryFamilyTypes(23)); Assert.True(BridgeProtocol.SupportsQueryFamilyTypes(24)); Assert.True(BridgeProtocol.SupportsQueryFamilyTypes(25)); Assert.False(BridgeProtocol.SupportsQueryFamilyTypes(27));
         Assert.True(BridgeProtocol.SupportsLinkedRoomPatternPreview(21));
         Assert.True(BridgeProtocol.SupportsLinkedRoomPatternPreview(22));
         Assert.False(BridgeProtocol.SupportsLinkedRoomPatternPreview(20));
         Assert.False(BridgeProtocol.SupportsLinkedRoomPatternPreview(19));
-        Assert.True(BridgeProtocol.SupportsLinkedRoomPatternPreview(23)); Assert.True(BridgeProtocol.SupportsLinkedRoomPatternPreview(24)); Assert.True(BridgeProtocol.SupportsLinkedRoomPatternPreview(25)); Assert.False(BridgeProtocol.SupportsLinkedRoomPatternPreview(26));
+        Assert.True(BridgeProtocol.SupportsLinkedRoomPatternPreview(23)); Assert.True(BridgeProtocol.SupportsLinkedRoomPatternPreview(24)); Assert.True(BridgeProtocol.SupportsLinkedRoomPatternPreview(25)); Assert.False(BridgeProtocol.SupportsLinkedRoomPatternPreview(27));
         Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(21));
         Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(22));
-        Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(23)); Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(24)); Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(25)); Assert.False(BridgeProtocol.SupportsPreviewRoomPatternPlacements(26));
+        Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(23)); Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(24)); Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(25)); Assert.False(BridgeProtocol.SupportsPreviewRoomPatternPlacements(27));
         Assert.True(BridgeProtocol.SupportsReadSpatialRooms(20));
         Assert.False(BridgeProtocol.SupportsReadSpatialRooms(19));
         Assert.True(BridgeProtocol.SupportsReadSpatialRooms(21));
         Assert.True(BridgeProtocol.SupportsReadSpatialRooms(22));
-        Assert.True(BridgeProtocol.SupportsReadSpatialRooms(23)); Assert.True(BridgeProtocol.SupportsReadSpatialRooms(24)); Assert.True(BridgeProtocol.SupportsReadSpatialRooms(25)); Assert.False(BridgeProtocol.SupportsReadSpatialRooms(26));
+        Assert.True(BridgeProtocol.SupportsReadSpatialRooms(23)); Assert.True(BridgeProtocol.SupportsReadSpatialRooms(24)); Assert.True(BridgeProtocol.SupportsReadSpatialRooms(25)); Assert.False(BridgeProtocol.SupportsReadSpatialRooms(27));
         Assert.False(BridgeProtocol.SupportsPreviewMepDevicePlacements(13));
         Assert.True(BridgeProtocol.SupportsPreviewMepDevicePlacements(14));
         Assert.False(BridgeProtocol.SupportsRequestMepDevicePlacementReview(14));
@@ -232,7 +244,7 @@ public sealed class BridgeProtocolTests
         Assert.True(BridgeProtocol.SupportsGetRoomLayouts(18));
         Assert.True(BridgeProtocol.SupportsGetRoomLayouts(19));
         Assert.False(BridgeProtocol.SupportsGetRoomLayouts(16));
-        Assert.True(BridgeProtocol.SupportsGetRoomLayouts(20)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(21)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(22)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(23)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(24)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(25)); Assert.False(BridgeProtocol.SupportsGetRoomLayouts(26));
+        Assert.True(BridgeProtocol.SupportsGetRoomLayouts(20)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(21)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(22)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(23)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(24)); Assert.True(BridgeProtocol.SupportsGetRoomLayouts(25)); Assert.False(BridgeProtocol.SupportsGetRoomLayouts(27));
         Assert.False(BridgeProtocol.SupportsGetMepDeviceTypes(17));
         Assert.True(BridgeProtocol.SupportsGetMepDeviceTypes(18));
         Assert.True(BridgeProtocol.SupportsGetMepDeviceTypes(19));
@@ -240,7 +252,7 @@ public sealed class BridgeProtocolTests
         Assert.True(BridgeProtocol.SupportsPreviewRoomPatternPlacements(19));
         Assert.True(BridgeProtocol.SupportsGetContext(18));
         Assert.True(BridgeProtocol.SupportsGetContext(19));
-        Assert.True(BridgeProtocol.SupportsGetContext(20)); Assert.True(BridgeProtocol.SupportsGetContext(21)); Assert.True(BridgeProtocol.SupportsGetContext(22)); Assert.True(BridgeProtocol.SupportsGetContext(23)); Assert.True(BridgeProtocol.SupportsGetContext(24)); Assert.True(BridgeProtocol.SupportsGetContext(25)); Assert.False(BridgeProtocol.SupportsGetContext(26));
+        Assert.True(BridgeProtocol.SupportsGetContext(20)); Assert.True(BridgeProtocol.SupportsGetContext(21)); Assert.True(BridgeProtocol.SupportsGetContext(22)); Assert.True(BridgeProtocol.SupportsGetContext(23)); Assert.True(BridgeProtocol.SupportsGetContext(24)); Assert.True(BridgeProtocol.SupportsGetContext(25)); Assert.False(BridgeProtocol.SupportsGetContext(27));
     }
 
     [Theory]
@@ -269,7 +281,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Get_mep_topology_support_includes_v7_through_v11(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetMepTopology(version));
@@ -296,7 +309,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Preview_parameter_updates_support_includes_v8_through_v11(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsPreviewParameterUpdates(version));
@@ -328,7 +342,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Request_parameter_update_review_support_is_protocol_v9_through_v11(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsRequestParameterUpdateReview(version));
@@ -351,7 +366,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Get_warnings_support_is_protocol_v11_and_v12(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetWarnings(version));
@@ -373,7 +389,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Context_document_id_is_a_v12_guarantee(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsContextDocumentId(version));
@@ -395,7 +412,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Active_view_unfiltered_query_is_a_v12_guarantee(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsActiveViewUnfilteredQuery(version));
@@ -417,7 +435,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     public void Get_selection_support_is_protocol_v13_only(int version, bool expected)
     {
         Assert.Equal(expected, BridgeProtocol.SupportsGetSelection(version));
@@ -430,7 +449,8 @@ public sealed class BridgeProtocolTests
     [InlineData(23, true)]
     [InlineData(24, true)]
     [InlineData(25, true)]
-    [InlineData(26, false)]
+    [InlineData(26, true)]
+    [InlineData(27, false)]
     [InlineData(int.MaxValue, false)]
     public void Query_parameter_bindings_support_is_v23_and_v24(int version, bool expected)
     {
@@ -453,6 +473,15 @@ public sealed class BridgeProtocolTests
         foreach (var method in supports)
         {
             bool At(int version) => (bool)method.Invoke(null, [version])!;
+            if (method.Name == nameof(BridgeProtocol.SupportsRunCSharpQuery))
+            {
+                Assert.False(At(25));
+                Assert.True(At(26));
+                Assert.False(At(27), method.Name + " must not support unknown 27");
+                Assert.False(At(0), method.Name + " must not support 0");
+                continue;
+            }
+
             if (method.Name == nameof(BridgeProtocol.SupportsQueryElementPredicates))
             {
                 Assert.False(At(24));
@@ -478,7 +507,8 @@ public sealed class BridgeProtocolTests
                 Assert.True(At(25), method.Name + " must be preserved on 25");
             }
 
-            Assert.False(At(26), method.Name + " must not support unknown 26");
+            Assert.True(At(26), method.Name + " must be preserved on 26");
+            Assert.False(At(27), method.Name + " must not support unknown 27");
             Assert.False(At(0), method.Name + " must not support 0");
         }
     }

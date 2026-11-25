@@ -89,7 +89,7 @@ internal sealed class LoadedRevitApi
     }
 }
 
-internal sealed class CSharpQueryCompilationService
+internal sealed class CSharpQueryCompilationService : ICSharpQueryCompiler
 {
     public CSharpQueryCompilation Compile(string source)
     {

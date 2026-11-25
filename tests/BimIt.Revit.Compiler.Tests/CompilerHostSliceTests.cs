@@ -360,7 +360,7 @@ public sealed class CompilerHostSliceTests
         Assert.DoesNotContain("AssemblyLoadContext", service, StringComparison.Ordinal);
         Assert.DoesNotContain("EnqueueAsync", service, StringComparison.Ordinal);
         Assert.DoesNotContain("Assembly.Load", service, StringComparison.Ordinal);
-        Assert.Equal(25, BridgeProtocol.CurrentVersion);
+        Assert.Equal(26, BridgeProtocol.CurrentVersion);
         var server = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ServerHost.cs"));
         Assert.Equal(22, Regex.Matches(server, @"\.With\w+Tool\(\)").Count);
     }

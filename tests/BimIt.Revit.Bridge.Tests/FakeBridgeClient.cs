@@ -238,6 +238,17 @@ internal sealed class FakeBridgeClient : IRevitBridgeClient
         throw new NotSupportedException("This fake client does not implement revit.read_operation.");
     }
 
+    public Task<RunCSharpQueryResult> RunCSharpQueryAsync(
+        RunCSharpQueryRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This fake client does not implement revit.run_csharp_query.");
+    }
+
     public Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(
         ReadSpatialRoomsRequest request,
         TimeSpan timeout,
