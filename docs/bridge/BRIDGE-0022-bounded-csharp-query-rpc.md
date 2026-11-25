@@ -1,6 +1,6 @@
 # BRIDGE-0022: Bounded C# query RPC
 
-- Status: Implemented in the Bridge and Addin. The MCP tool is implemented by [SERVER-0016](../server/SERVER-0016-stdio-run-csharp-query-tool.md). Its official MCP-client live gate has not been run. The Bridge live gate is prepared and has not been recorded as passed.
+- Status: Implemented in the Bridge and Addin. The Bridge live gate is **PASS** in [CAP_0020_CSHARP_QUERY_BRIDGE_VALIDATION.md](../CAP_0020_CSHARP_QUERY_BRIDGE_VALIDATION.md). The MCP tool is implemented by [SERVER-0016](../server/SERVER-0016-stdio-run-csharp-query-tool.md), and its official MCP-client live gate is **PASS** in [CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md](../CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md).
 - Date: 2026-11-25
 - Capability: [CAP-0020](../capabilities/CAP-0020-bounded-generated-csharp-read.md)
 - Architecture: [ADR-0028](../adr/ADR-0028-bounded-generated-csharp-read-executor.md)
@@ -33,7 +33,7 @@ CAP-0020 errors may include structured `details`: `reason`, `source_sha256`, `po
 
 ## What protocol 26 does not change
 
-- The MCP tool is the separate `revit_run_csharp_query`. Production `tools/list` is 23. The official MCP-client live gate has not been run.
+- The MCP tool is the separate `revit_run_csharp_query`. Production `tools/list` is 23. The official MCP-client live gate is **PASS**.
 - No Assistant model tool.
 - No ribbon or settings UI.
 - No generated write and no new transaction.

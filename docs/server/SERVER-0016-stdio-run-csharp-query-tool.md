@@ -1,6 +1,6 @@
 # SERVER-0016: Run bounded C# query
 
-- Status: Implemented. The official MCP-client live gate has not been run.
+- Status: Implemented. The official MCP-client live gate is **PASS** in [CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md](../CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md).
 - Date: 2026-11-25
 - Capability: [CAP-0020](../capabilities/CAP-0020-bounded-generated-csharp-read.md)
 - Bridge: [BRIDGE-0022](../bridge/BRIDGE-0022-bounded-csharp-query-rpc.md)
@@ -55,7 +55,7 @@ Production `tools/list` contains exactly 23 tools. Bridge current version stays 
 
 ## Official MCP-client live gate
 
-This gate has not been run. Do not record it as passed until the cases below are observed.
+This gate passed on 2026-11-25. The observed result is [CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md](../CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md). The cases below are the procedure that was run.
 
 Use the official `ModelContextProtocol` 2.2.0 `McpClient` with `StdioClientTransport`, the Release `BimIt.Revit.Server.exe` built from the PR SHA, Bridge protocol 26, the Release Addin built with `RevitVersion=2026` from that same SHA, and Revit 2026.5 build `26.5.0.55`. Open Snowdon Towers Sample Electrical with `Document.IsModified` false. Restart Revit once so that Addin build is loaded. Use one MCP client and server session for A through D. Do not restart Revit or that session between the cases.
 
