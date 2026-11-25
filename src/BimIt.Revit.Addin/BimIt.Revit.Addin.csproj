@@ -185,7 +185,7 @@
   </PropertyGroup>
 
   <Target Name="PackageCompilerHost" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">
-    <MSBuild Projects="$(CompilerHostProject)" Targets="Build" Properties="Configuration=$(Configuration)" />
+    <Exec Command="dotnet build &quot;$(CompilerHostProject)&quot; --configuration $(Configuration) --nologo" />
     <ItemGroup>
       <_CompilerHostFiles Include="$(CompilerHostOutput)**\*.*" />
     </ItemGroup>

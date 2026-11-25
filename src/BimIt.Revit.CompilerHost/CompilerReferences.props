@@ -1,6 +1,5 @@
 <Project>
   <PropertyGroup>
-    <CompilerReferencePackVersion>10.0.15</CompilerReferencePackVersion>
     <CompilerReferenceMoniker>net10.0</CompilerReferenceMoniker>
   </PropertyGroup>
 

@@ -17,14 +17,18 @@
   <ItemGroup>
     <ProjectReference Include="..\BimIt.Revit.Compiler\BimIt.Revit.Compiler.csproj" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.NETCore.App.Ref" GeneratePathProperty="true">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>all</ExcludeAssets>
+    </PackageReference>
   </ItemGroup>
 
   <Target Name="PackageCompilerReferenceAssemblies" AfterTargets="Build">
     <PropertyGroup>
-      <_CompilerReferencePack>$(NetCoreTargetingPackRoot)\Microsoft.NETCore.App.Ref\$(CompilerReferencePackVersion)\ref\$(CompilerReferenceMoniker)\</_CompilerReferencePack>
+      <_CompilerReferencePack>$(PkgMicrosoft_NETCore_App_Ref)\ref\$(CompilerReferenceMoniker)\</_CompilerReferencePack>
     </PropertyGroup>
     <Error
-      Text="Pinned compiler reference pack $(CompilerReferencePackVersion) ($(CompilerReferenceMoniker)) was not found."
+      Text="Pinned compiler reference pack ($(CompilerReferenceMoniker)) was not found."
       Condition="!Exists('$(_CompilerReferencePack)System.Runtime.dll')" />
     <ItemGroup>
       <_CompilerReferenceAssembly Include="$(_CompilerReferencePack)*.dll" />
