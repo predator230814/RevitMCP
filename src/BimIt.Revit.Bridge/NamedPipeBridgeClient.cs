@@ -786,6 +786,39 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
             .ConfigureAwait(false);
     }
 
+    public async Task<RunCSharpQueryResult> RunCSharpQueryAsync(
+        RunCSharpQueryRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        if (timeout <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(nameof(timeout), "A positive capability timeout is required.");
+        }
+
+        return await InvokeCapabilityAsync<RunCSharpQueryResult>(
+                "revit.run_csharp_query",
+                request,
+                timeout,
+                cancellationToken,
+                EnsureRunCSharpQueryAllowed,
+                "The C# query timed out.",
+                "The C# query could not be completed.")
+            .ConfigureAwait(false);
+    }
+
+    private void EnsureRunCSharpQueryAllowed()
+    {
+        EnsureCapabilityReady();
+        if (_selectedProtocolVersion is not int version || !BridgeProtocol.SupportsRunCSharpQuery(version))
+        {
+            throw new BridgeException(
+                BridgeErrorCodes.ProtocolIncompatible,
+                "revit.run_csharp_query requires bridge protocol 26.");
+        }
+    }
+
     private void EnsureReadOperationsAllowed()
     {
         EnsureCapabilityReady();

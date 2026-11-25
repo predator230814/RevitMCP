@@ -27,6 +27,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
     private readonly IRevitQueryFamilyTypesService? _queryFamilyTypes;
     private readonly IRevitQueryParameterBindingsService? _queryParameterBindings;
     private readonly IRevitReadOperationsService? _readOperations;
+    private readonly IRevitRunCSharpQueryService? _runCSharpQuery;
     private int _selectedProtocolVersion;
 
     public StreamJsonRpcBridgeAdapter(
@@ -51,7 +52,8 @@ internal sealed class StreamJsonRpcBridgeAdapter
         IRevitReadSpatialRoomsService? readSpatialRooms = null,
         IRevitQueryFamilyTypesService? queryFamilyTypes = null,
         IRevitQueryParameterBindingsService? queryParameterBindings = null,
-        IRevitReadOperationsService? readOperations = null)
+        IRevitReadOperationsService? readOperations = null,
+        IRevitRunCSharpQueryService? runCSharpQuery = null)
     {
         _handshake = handshake;
         _capability = capability;
@@ -75,6 +77,7 @@ internal sealed class StreamJsonRpcBridgeAdapter
         _queryFamilyTypes = queryFamilyTypes;
         _queryParameterBindings = queryParameterBindings;
         _readOperations = readOperations;
+        _runCSharpQuery = runCSharpQuery;
     }
 
     [JsonRpcMethod("bridge.handshake")]
@@ -907,6 +910,42 @@ internal sealed class StreamJsonRpcBridgeAdapter
                 new BridgeException(
                     CapabilityErrorCodes.ExecutionFailed,
                     "The read operation could not be read."));
+        }
+    }
+
+    [JsonRpcMethod("revit.run_csharp_query")]
+    public async Task<RunCSharpQueryResult> RunCSharpQueryAsync(RunCSharpQueryRequest request, CancellationToken cancellationToken)
+    {
+        EnsureCapabilityAllowed(
+            BridgeProtocol.SupportsRunCSharpQuery,
+            "revit.run_csharp_query is not available on this connection.");
+        if (_runCSharpQuery is null)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    BridgeErrorCodes.ProtocolIncompatible,
+                    "revit.run_csharp_query is not available on this endpoint."));
+        }
+
+        try
+        {
+            ArgumentNullException.ThrowIfNull(request);
+            return await _runCSharpQuery.RunCSharpQueryAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (BridgeException exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(exception);
+        }
+        catch (Exception)
+        {
+            throw StreamJsonRpcExceptionMapper.ToLocalRpc(
+                new BridgeException(
+                    CapabilityErrorCodes.ExecutionFailed,
+                    "The C# query could not be completed."));
         }
     }
 

@@ -6,7 +6,7 @@ using BimIt.Revit.Compiler;
 
 namespace BimIt.Revit.Addin.CSharpQuery;
 
-internal sealed class CSharpQueryExecutionService
+internal sealed class CSharpQueryExecutionService : ICSharpQueryExecutor
 {
     private readonly RevitExecutionDispatcher _dispatcher;
     private readonly OpenDocumentIdentityService _identity;

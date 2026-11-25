@@ -11,7 +11,8 @@ internal sealed class CSharpQueryCompilation
         string sourceSha256,
         string cacheKey,
         RevitApiIdentity? api,
-        IReadOnlyList<CompilerDiagnostic> diagnostics)
+        IReadOnlyList<CompilerDiagnostic> diagnostics,
+        string? compileOutcome)
     {
         Success = success;
         Code = code;
@@ -20,6 +21,7 @@ internal sealed class CSharpQueryCompilation
         CacheKey = cacheKey;
         Api = api;
         Diagnostics = diagnostics;
+        CompileOutcome = compileOutcome;
     }
 
     public bool Success { get; }
@@ -36,6 +38,8 @@ internal sealed class CSharpQueryCompilation
 
     public IReadOnlyList<CompilerDiagnostic> Diagnostics { get; }
 
+    public string? CompileOutcome { get; }
+
     public static CSharpQueryCompilation Failed(string code, string source, RevitApiIdentity? api)
     {
         var text = source ?? "";
@@ -47,7 +51,8 @@ internal sealed class CSharpQueryCompilation
             text.Length == 0 ? "" : CompilerHashes.SourceSha256(text),
             text.Length == 0 ? "" : CompilerHashes.CacheKey(text, identity, CompilerProtocol.PolicyVersion),
             api,
-            []);
+            [],
+            null);
     }
 
     public static CSharpQueryCompilation From(CompilerCallResult result)
@@ -60,7 +65,8 @@ internal sealed class CSharpQueryCompilation
             response?.SourceSha256 ?? "",
             response?.CacheKey ?? "",
             response?.RevitApi,
-            response?.Diagnostics ?? []);
+            response?.Diagnostics ?? [],
+            string.IsNullOrWhiteSpace(response?.Outcome) ? null : response.Outcome);
     }
 }
 
@@ -89,7 +95,7 @@ internal sealed class LoadedRevitApi
     }
 }
 
-internal sealed class CSharpQueryCompilationService
+internal sealed class CSharpQueryCompilationService : ICSharpQueryCompiler
 {
     public CSharpQueryCompilation Compile(string source)
     {

@@ -102,6 +102,11 @@ public interface IRevitBridgeClient : IAsyncDisposable
         TimeSpan timeout,
         CancellationToken cancellationToken);
 
+    Task<RunCSharpQueryResult> RunCSharpQueryAsync(
+        RunCSharpQueryRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken);
+
     Task<ReadSpatialRoomsResult> ReadSpatialRoomsAsync(
         ReadSpatialRoomsRequest request,
         TimeSpan timeout,

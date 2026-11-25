@@ -14,7 +14,8 @@ internal static class StreamJsonRpcExceptionMapper
             ErrorData = new BridgeError
             {
                 Code = exception.ErrorCode,
-                Message = exception.Message
+                Message = exception.Message,
+                Details = exception.Details
             }
         };
     }
@@ -23,18 +24,21 @@ internal static class StreamJsonRpcExceptionMapper
         RemoteInvocationException exception,
         string fallbackCode = BridgeErrorCodes.HandshakeFailed)
     {
-        if (TryReadError(exception.ErrorData, out var code, out var message))
+        if (TryReadError(exception.ErrorData, out var code, out var message, out var details))
         {
-            return new BridgeException(code, message, exception);
+            return details is null
+                ? new BridgeException(code, message, exception)
+                : new BridgeException(code, message, details.Value, exception);
         }
 
         return new BridgeException(fallbackCode, exception.Message, exception);
     }
 
-    private static bool TryReadError(object? errorData, out string code, out string message)
+    private static bool TryReadError(object? errorData, out string code, out string message, out JsonElement? details)
     {
         code = string.Empty;
         message = string.Empty;
+        details = null;
 
         if (errorData is null)
         {
@@ -45,6 +49,7 @@ internal static class StreamJsonRpcExceptionMapper
         {
             code = typed.Code;
             message = typed.Message;
+            details = typed.Details;
             return true;
         }
 
@@ -61,6 +66,7 @@ internal static class StreamJsonRpcExceptionMapper
 
             code = parsed.Code;
             message = parsed.Message;
+            details = parsed.Details;
             return true;
         }
         catch (JsonException)

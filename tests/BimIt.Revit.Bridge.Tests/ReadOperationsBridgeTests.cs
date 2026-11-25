@@ -15,7 +15,7 @@ public sealed class ReadOperationsBridgeTests
 {
     [Theory]
     [InlineData(23)]
-    [InlineData(26)]
+    [InlineData(27)]
     public async Task Versions_other_than_24_reject_both_rpcs_before_the_service(int version)
     {
         var read = new RecordingReadOperations();
@@ -160,7 +160,6 @@ public sealed class ReadOperationsBridgeTests
         var read = new RecordingReadOperations();
 
         var full = Advertise(metadata, read);
-        Assert.Equal(BridgeProtocol.SupportedVersions, full.SupportedProtocolVersions);
         Assert.Equal(BridgeProtocol.QueryElementPredicatesVersions, full.SupportedProtocolVersions);
         Assert.Equal(25, full.SupportedProtocolVersions[0]);
         Assert.Equal(BridgeProtocol.ReadOperationsVersions, full.SupportedProtocolVersions.Skip(1));
@@ -359,8 +358,8 @@ public sealed class ReadOperationsBridgeTests
             new RecordingFamilyTypes(),
             new RecordingBindings(),
             read,
-            CancellationToken.None);
-        Assert.Equal(BridgeProtocol.SupportedVersions, host.Metadata.SupportedProtocolVersions);
+            cancellationToken: CancellationToken.None);
+        Assert.Equal(BridgeProtocol.QueryElementPredicatesVersions, host.Metadata.SupportedProtocolVersions);
         return new HostContext(host, metadata);
     }
 

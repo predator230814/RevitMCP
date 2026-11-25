@@ -1,11 +1,11 @@
 # CAP-0020: Bounded generated-C# read
 
-- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented, and the out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55 against loaded `RevitAPI` 26.5.0.0. The production execution kernel is implemented. Its live execution gate passed on the same Revit build: host-owned JSON, unchanged document, budget failure, recovery, invalid result, recovery, and all six collectible contexts collected. The MCP tool, local enablement, and Bridge protocol 26 are not implemented. Production `tools/list` stays 22. Bridge protocol stays 25.
+- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented, and the out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55 against loaded `RevitAPI` 26.5.0.0. The production execution kernel is implemented. Its live execution gate passed in PR #136 on the same Revit build: host-owned JSON, unchanged document, budget failure, recovery, invalid result, recovery, and all six collectible contexts collected. Local enablement and Bridge protocol 26 `revit.run_csharp_query` are implemented. The MCP tool is not implemented. Production `tools/list` stays 22. Bridge current version is 26. CAP-0020 is not fully complete until the Server tool and the official MCP-client gate exist.
 - Operation class: Read
 - Date: 2026-11-24
 - Architecture: Accepted [ADR-0028](../adr/ADR-0028-bounded-generated-csharp-read-executor.md). This is the only exception to [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md) §1. [ADR-0027](../adr/ADR-0027-layered-revit-capability-admission.md) remains the admission order.
-- Bridge: planned `revit.run_csharp_query` on protocol 26 only. Not implemented. A current host does not advertise 26.
-- MCP: planned tool `revit_run_csharp_query`. After implementation, production `tools/list` is 23.
+- Bridge: `revit.run_csharp_query` on protocol 26 only. Implemented by [BRIDGE-0022](../bridge/BRIDGE-0022-bounded-csharp-query-rpc.md). A full host advertises 26 when the service is composed. Advertisement does not mean the local opt-in is on.
+- MCP: planned tool `revit_run_csharp_query`. Not implemented. Production `tools/list` stays 22 until that tool exists, when it becomes 23.
 
 ## Purpose
 
@@ -35,7 +35,7 @@ Arguments:
 
 No `references`, `usings`, `options`, `entry_point`, `assembly`, or `il` field exists. Unknown fields are rejected.
 
-The host-visible names inside `source` are `doc` and `elementRef`. `elementRef(element)` returns the ADR-0006 `element_ref` for that element, or a deterministic host string when the element is null. It does not return `UniqueId`. The spike gate's `UniqueId` delegate is not this contract.
+The host-visible names inside `source` are `doc` and `elementRef`. `elementRef(element)` returns an opaque ADR-0006 `element_ref`, or a deterministic host string when the element is null. The current implementation is based on `Element.UniqueId`. Clients must not parse that value or depend on its format. The spike gate's separate `UniqueId` delegate is not this contract.
 
 Fixed host usings, not supplied by the caller: `System`, `System.Collections.Generic`, `System.Linq`, `Autodesk.Revit.DB`.
 
@@ -91,7 +91,7 @@ The reviewed identity is loaded `RevitAPI` 26.5.0.0. Reject before emit. The clo
 
 ## Local enablement
 
-Default off. Persistent Addin setting for the Windows user under `%LOCALAPPDATA%\RevitMCP`. Not an MCP field. Not the write-approval pipeline. Enabling this tool grants no write authority. A missing or unreadable setting is disabled.
+Default off. The Addin reads `%LOCALAPPDATA%\RevitMCP\capabilities.json` on every call. Schema version 1 is an object with exactly `schema_version` equal to `1` and `csharp_query_enabled` equal to a boolean. Any missing file, unreadable file, malformed JSON, wrong schema, missing or wrong-type property, or unknown property is disabled. The product does not create or enable the file. No MCP or Bridge argument changes the setting. A future local Revit UI may replace the same file atomically. This is not the write-approval pipeline. Enabling the query grants no write authority.
 
 ## Deterministic errors
 
@@ -132,7 +132,7 @@ Log `source_sha256`, `cache_key`, `policy_version`, Revit API name and version, 
 
 ## Acceptance
 
-This document is the contract. The compiler and execution kernel are implemented, and their live gates passed on Revit 2026.5 build 26.5.0.55. `revit_run_csharp_query` is not implemented. Live validation of that tool has not been run. The accepted feasibility evidence is PR #133.
+This document is the contract. The compiler and execution kernel are implemented. The execution-kernel live gate passed in PR #136 on Revit 2026.5 build 26.5.0.55. Local enablement and Bridge protocol 26 are implemented. `revit_run_csharp_query` is not implemented. Live validation of that MCP tool has not been run. The Bridge live gate is prepared and has not been recorded as passed. The accepted feasibility evidence is PR #133.
 
 An implementation is acceptable when:
 

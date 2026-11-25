@@ -47,6 +47,7 @@ internal static class TestSupport
             AddinVersion = registration.AddinVersion,
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
+                BridgeProtocol.RunCSharpQueryVersion => BridgeProtocol.RunCSharpQueryVersions,
                 BridgeProtocol.QueryElementPredicatesVersion => BridgeProtocol.QueryElementPredicatesVersions,
                 BridgeProtocol.GetSelectionVersion => BridgeProtocol.GetSelectionVersions,
                 BridgeProtocol.PreviewRoomPatternPlacementsVersion => BridgeProtocol.PreviewRoomPatternPlacementsVersions,
@@ -909,6 +910,17 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
         return ReadOperation is null
             ? throw new NotSupportedException("This recording client does not implement revit.read_operation.")
             : ReadOperation(request, timeout, cancellationToken);
+    }
+
+    public Task<RunCSharpQueryResult> RunCSharpQueryAsync(
+        RunCSharpQueryRequest request,
+        TimeSpan timeout,
+        CancellationToken cancellationToken)
+    {
+        _ = request;
+        _ = timeout;
+        _ = cancellationToken;
+        throw new NotSupportedException("This recording client does not implement revit.run_csharp_query.");
     }
 
     public int GetMepDeviceTypesCalls { get; private set; }
