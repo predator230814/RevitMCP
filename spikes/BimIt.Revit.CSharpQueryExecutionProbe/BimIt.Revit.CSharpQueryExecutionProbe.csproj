@@ -1,0 +1,29 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>BimIt.Revit.CSharpQueryExecutionProbe</RootNamespace>
+    <RevitVersion>2026</RevitVersion>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Description>Opt-in execution probe. Not installed and not referenced by production.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPIUI">
+      <Private>false</Private>
+      <ExcludeAssets>runtime</ExcludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BimIt.Revit.Addin\BimIt.Revit.Addin.csproj">
+      <AdditionalProperties>RevitVersion=2026</AdditionalProperties>
+      <Private>false</Private>
+    </ProjectReference>
+  </ItemGroup>
+</Project>

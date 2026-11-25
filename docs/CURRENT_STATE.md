@@ -46,7 +46,7 @@ Read next: ADR-0022, ADR-0023, [SKILLS.md](SKILLS.md), CAP-0014, CAP-0015, and t
 
 ### Later implementation note (2026-11-24)
 
-CAP-0020's trusted CompilerHost and Addin compiler client are implemented. The Addin can send one method body to a one-shot CompilerHost child and receive diagnostics or PE bytes. Those bytes are not loaded or executed. Policy v1 compiles with the pinned .NET 10 reference assemblies packaged at `compiler/refs/net10.0`. The CompilerHost does not read a machine targeting pack. `revit_run_csharp_query` is absent. Bridge protocol stays 25. Production `tools/list` stays 22. Policy v1 still admits only loaded `RevitAPI` 26.5.0.0. The live out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55: loaded `RevitAPI` 26.5.0.0, outcome success, and PE bytes returned. Those bytes were not loaded or executed. CAP-0020 is not fully implemented.
+CAP-0020's trusted CompilerHost and Addin compiler client are implemented. Policy v1 compiles with the pinned .NET 10 reference assemblies packaged at `compiler/refs/net10.0`. The live out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55: loaded `RevitAPI` 26.5.0.0, outcome success, and PE bytes returned. The production execution kernel can run that PE through `RevitExecutionDispatcher`, a collectible load context, and the closed result copier. Generated execution has not had its live gate. `revit_run_csharp_query`, local enablement, and Bridge protocol 26 are absent. Bridge protocol stays 25. Production `tools/list` stays 22. Policy v1 still admits only loaded `RevitAPI` 26.5.0.0. CAP-0020 is not fully implemented.
 
 ## Historical accumulated detail (last revised 2026-10-30)
 
