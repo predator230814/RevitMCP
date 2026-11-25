@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Fixtures\*.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\..\src\BimIt.Revit.Addin\BimIt.Revit.Addin.csproj">
       <AdditionalProperties>RevitVersion=$(RevitVersion)</AdditionalProperties>
     </ProjectReference>
@@ -29,5 +33,10 @@
 
   <Target Name="CopyRevitApiReference" AfterTargets="ResolveAssemblyReferences">
     <Copy SourceFiles="@(ReferencePath)" DestinationFolder="$(OutputPath)revit-ref\" Condition="'%(Filename)' == 'RevitAPI'" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- Loadable stand-in for the Nice3point 26.4.10 reference assembly, which cannot be executed. -->
+  <Target Name="CopyLoadableRevitApi" AfterTargets="Build">
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)RevitApiLoad\RevitApiLoadStub.dll" DestinationFiles="$(OutputPath)revit-load\RevitAPI.dll" SkipUnchangedFiles="true" />
   </Target>
 </Project>
