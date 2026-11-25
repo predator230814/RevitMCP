@@ -2,7 +2,7 @@
 
 This command is not registered by the production add-in. It compiles one fixed level-count body through the packaged production CompilerHost. It does not load the PE, execute the query, call EXEC-0001, or change the model.
 
-Build the 2026 add-in first so `compiler\BimIt.Revit.CompilerHost.exe` sits beside `BimIt.Revit.Addin.dll`:
+Build the 2026 add-in first so `compiler\BimIt.Revit.CompilerHost.exe` and `compiler\refs\net10.0` sit beside `BimIt.Revit.Addin.dll`. The host uses that packaged reference set and does not use a machine targeting pack:
 
 ```text
 dotnet build src/BimIt.Revit.Addin/BimIt.Revit.Addin.csproj -c Release -p:RevitVersion=2026

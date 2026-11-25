@@ -1,0 +1,26 @@
+<Project>
+  <PropertyGroup>
+    <CompilerReferencePackVersion>10.0.15</CompilerReferencePackVersion>
+    <CompilerReferenceMoniker>net10.0</CompilerReferenceMoniker>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <CompilerReferenceRequired Include="System.Runtime.dll" />
+    <CompilerReferenceRequired Include="System.Linq.dll" />
+    <CompilerReferenceRequired Include="System.Collections.dll" />
+    <CompilerReferenceRequired Include="System.Console.dll" />
+    <CompilerReferenceRequired Include="System.Diagnostics.Process.dll" />
+    <CompilerReferenceRequired Include="System.IO.FileSystem.dll" />
+    <CompilerReferenceRequired Include="System.Linq.Expressions.dll" />
+    <CompilerReferenceRequired Include="System.Net.Http.dll" />
+    <CompilerReferenceRequired Include="System.Net.Primitives.dll" />
+    <CompilerReferenceRequired Include="System.Reflection.dll" />
+    <CompilerReferenceRequired Include="System.Reflection.Emit.dll" />
+    <CompilerReferenceRequired Include="System.Runtime.Extensions.dll" />
+    <CompilerReferenceRequired Include="System.Runtime.InteropServices.dll" />
+    <CompilerReferenceRequired Include="System.Runtime.Loader.dll" />
+    <CompilerReferenceRequired Include="System.Threading.dll" />
+    <CompilerReferenceRequired Include="System.Threading.Tasks.dll" />
+    <CompilerReferenceRequired Include="System.Threading.Tasks.Parallel.dll" />
+  </ItemGroup>
+</Project>

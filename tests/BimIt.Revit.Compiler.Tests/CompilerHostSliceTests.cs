@@ -293,6 +293,48 @@ public sealed class CompilerHostSliceTests
         Assert.False(File.Exists(Path.Combine(output, "Microsoft.CodeAnalysis.dll")));
         Assert.False(File.Exists(Path.Combine(output, "Microsoft.CodeAnalysis.CSharp.dll")));
         Assert.True(File.Exists(Path.Combine(output, "compiler", "Microsoft.CodeAnalysis.dll")));
+        Assert.True(File.Exists(Path.Combine(output, "compiler", "refs", "net10.0", "System.Runtime.dll")));
+        Assert.True(File.Exists(Path.Combine(output, "compiler", "refs", "net10.0", "System.Collections.dll")));
+        Assert.False(File.Exists(Path.Combine(output, "refs", "net10.0", "System.Runtime.dll")));
+    }
+
+    [Fact]
+    public void Compilation_references_come_only_from_the_packaged_directory()
+    {
+        var packaged = CompilationReferences.PackagedDirectory();
+        Assert.EndsWith(Path.Combine("refs", CompilationReferences.Moniker), packaged, StringComparison.OrdinalIgnoreCase);
+        Assert.StartsWith(AppContext.BaseDirectory, packaged, StringComparison.OrdinalIgnoreCase);
+        var references = CompilationReferences.Create(ReferenceApi);
+        Assert.Contains(references, reference => reference.Display!.EndsWith("System.Runtime.dll", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains(references, reference => reference.Display!.EndsWith("System.Collections.dll", StringComparison.OrdinalIgnoreCase));
+        foreach (var reference in references)
+        {
+            var display = reference.Display ?? "";
+            var packagedReference = display.StartsWith(packaged + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase);
+            var revitReference = display.Equals(Path.GetFullPath(ReferenceApi), StringComparison.OrdinalIgnoreCase)
+                || display.Equals(ReferenceApi, StringComparison.OrdinalIgnoreCase);
+            Assert.True(packagedReference || revitReference, display);
+            Assert.DoesNotContain("Microsoft.NETCore.App.Ref", display, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain($"{Path.DirectorySeparatorChar}packs{Path.DirectorySeparatorChar}", display, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var incomplete = Path.Combine(Path.GetTempPath(), "bimit-compiler-refs", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(incomplete);
+        try
+        {
+            File.Copy(Path.Combine(packaged, "System.Collections.dll"), Path.Combine(incomplete, "System.Collections.dll"));
+            Assert.Throws<ReferencePackUnavailableException>(() => CompilationReferences.Create(ReferenceApi, incomplete));
+        }
+        finally
+        {
+            Directory.Delete(incomplete, true);
+        }
+
+        var source = File.ReadAllText(Path.Combine(RepoRoot(), "src", "BimIt.Revit.CompilerHost", "CompilationReferences.cs"));
+        Assert.DoesNotContain("Microsoft.NETCore.App.Ref", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("GetEnvironmentVariable", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("DOTNET_ROOT", source, StringComparison.Ordinal);
+        Assert.DoesNotContain("packs", source, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]

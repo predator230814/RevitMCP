@@ -1,12 +1,13 @@
-using System.Reflection.Metadata;
-using System.Reflection.PortableExecutable;
 using Microsoft.CodeAnalysis;
 
 namespace BimIt.Revit.CompilerHost;
 
 internal static class CompilationReferences
 {
-    private static readonly string[] ReferenceNames =
+    internal const string RelativeDirectory = "refs";
+    internal const string Moniker = "net10.0";
+
+    private static readonly string[] RequiredNames =
     [
         "System.Runtime.dll",
         "System.Linq.dll",
@@ -29,70 +30,60 @@ internal static class CompilationReferences
 
     public static IReadOnlyList<MetadataReference> Create(string revitApiPath)
     {
-        var pack = ReferencePack(revitApiPath);
-        var references = new List<MetadataReference>();
-        foreach (var name in ReferenceNames)
-        {
-            var path = Path.Combine(pack, name);
-            if (File.Exists(path))
-            {
-                references.Add(MetadataReference.CreateFromFile(path));
-            }
-        }
+        return Create(revitApiPath, PackagedDirectory());
+    }
 
-        if (!references.Exists(reference => reference.Display?.EndsWith("System.Runtime.dll", StringComparison.OrdinalIgnoreCase) == true))
+    internal static IReadOnlyList<MetadataReference> Create(string revitApiPath, string referenceDirectory)
+    {
+        if (string.IsNullOrWhiteSpace(referenceDirectory))
         {
             throw new ReferencePackUnavailableException();
+        }
+
+        var root = Path.GetFullPath(referenceDirectory);
+        if (!Directory.Exists(root))
+        {
+            throw new ReferencePackUnavailableException();
+        }
+
+        var references = new List<MetadataReference>(RequiredNames.Length + 1);
+        var included = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in RequiredNames)
+        {
+            var path = Path.Combine(root, name);
+            if (!File.Exists(path))
+            {
+                throw new ReferencePackUnavailableException();
+            }
+
+            references.Add(MetadataReference.CreateFromFile(path));
+            included.Add(name);
+        }
+
+        foreach (var path in Directory.GetFiles(root, "*.dll").OrderBy(path => Path.GetFileName(path), StringComparer.Ordinal))
+        {
+            var name = Path.GetFileName(path);
+            if (!included.Add(name))
+            {
+                continue;
+            }
+
+            references.Add(MetadataReference.CreateFromFile(path));
         }
 
         references.Add(MetadataReference.CreateFromFile(revitApiPath));
         return references;
     }
 
-    private static string ReferencePack(string revitApiPath)
+    internal static string PackagedDirectory()
     {
-        var runtime = ReferencedRuntime(revitApiPath);
-        var major = runtime.Major;
-        var moniker = "net" + major.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".0";
-        var root = DotNetRoot();
-        var packRoot = Path.Combine(root, "packs", "Microsoft.NETCore.App.Ref");
-        if (!Directory.Exists(packRoot))
+        var assemblyDirectory = Path.GetDirectoryName(typeof(CompilationReferences).Assembly.Location);
+        if (string.IsNullOrWhiteSpace(assemblyDirectory))
         {
             throw new ReferencePackUnavailableException();
         }
 
-        var match = Directory.GetDirectories(packRoot)
-            .Select(path => new DirectoryInfo(path).Name)
-            .Where(name => name.StartsWith(major.ToString(System.Globalization.CultureInfo.InvariantCulture) + ".", StringComparison.Ordinal))
-            .OrderByDescending(name => name, StringComparer.Ordinal)
-            .Select(name => Path.Combine(packRoot, name, "ref", moniker))
-            .FirstOrDefault(Directory.Exists);
-        return match ?? throw new ReferencePackUnavailableException();
-    }
-
-    private static Version ReferencedRuntime(string revitApiPath)
-    {
-        using var stream = File.OpenRead(revitApiPath);
-        using var pe = new PEReader(stream);
-        var reader = pe.GetMetadataReader();
-        foreach (var handle in reader.AssemblyReferences)
-        {
-            var reference = reader.GetAssemblyReference(handle);
-            if (reader.GetString(reference.Name) == "System.Runtime")
-            {
-                return reference.Version;
-            }
-        }
-
-        throw new ReferencePackUnavailableException();
-    }
-
-    private static string DotNetRoot()
-    {
-        var runtime = Path.GetDirectoryName(typeof(object).Assembly.Location)
-            ?? throw new ReferencePackUnavailableException();
-        var root = Directory.GetParent(runtime)?.Parent?.Parent?.FullName;
-        return root ?? throw new ReferencePackUnavailableException();
+        return Path.Combine(assemblyDirectory, RelativeDirectory, Moniker);
     }
 }
 

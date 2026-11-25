@@ -177,6 +177,8 @@
       Condition="!Exists('$(OutputPath)assistant-ui\index.html') OR !Exists('$(OutputPath)assistant-ui\assistant-markdown.js') OR !Exists('$(OutputPath)assistant-ui\app.js') OR !Exists('$(OutputPath)assistant-ui\app.css') OR !Exists('$(OutputPath)assistant-ui\logo.png') OR !Exists('$(OutputPath)assistant-ribbon\assistant-16.png') OR !Exists('$(OutputPath)assistant-ribbon\assistant-32.png')" />
   </Target>
 
+  <Import Project="$(MSBuildThisFileDirectory)..\BimIt.Revit.CompilerHost\CompilerReferences.props" />
+
   <PropertyGroup>
     <CompilerHostProject>$(MSBuildThisFileDirectory)..\BimIt.Revit.CompilerHost\BimIt.Revit.CompilerHost.csproj</CompilerHostProject>
     <CompilerHostOutput>$(MSBuildThisFileDirectory)..\BimIt.Revit.CompilerHost\bin\$(Configuration)\net8.0\</CompilerHostOutput>
@@ -197,6 +199,12 @@
     <Error
       Text="Roslyn compiler assemblies must not be copied to the Addin output root."
       Condition="Exists('$(OutputPath)Microsoft.CodeAnalysis.dll') OR Exists('$(OutputPath)Microsoft.CodeAnalysis.CSharp.dll')" />
+    <ItemGroup>
+      <_MissingPackagedCompilerReference Include="@(CompilerReferenceRequired)" Condition="!Exists('$(OutputPath)compiler\refs\$(CompilerReferenceMoniker)\%(Identity)')" />
+    </ItemGroup>
+    <Error
+      Text="Packaged compiler reference %(_MissingPackagedCompilerReference.Identity) is missing from $(OutputPath)compiler\refs\$(CompilerReferenceMoniker)."
+      Condition="'@(_MissingPackagedCompilerReference)' != ''" />
   </Target>
 
   <Target Name="ReportRevitBuild" AfterTargets="Build" Condition="'$(RevitVersion)' == '2025' OR '$(RevitVersion)' == '2026' OR '$(RevitVersion)' == '2027'">

@@ -94,7 +94,7 @@ public static class CSharpCompilationPipeline
         }
         catch (ReferencePackUnavailableException)
         {
-            return Reject(CompilerOutcomes.CompileFailed, CompilerResultCodes.CompileFailed, hash, cacheKey, identity, "reference assemblies for this Revit API are unavailable");
+            return Reject(CompilerOutcomes.CompileFailed, CompilerResultCodes.CompileFailed, hash, cacheKey, identity, "packaged reference assemblies are unavailable");
         }
         catch (Exception)
         {
