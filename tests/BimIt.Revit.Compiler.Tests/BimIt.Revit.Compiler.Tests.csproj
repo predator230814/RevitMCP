@@ -1,0 +1,43 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <RootNamespace>BimIt.Revit.Compiler.Tests</RootNamespace>
+    <IsTestProject>true</IsTestProject>
+    <RevitVersion>2026</RevitVersion>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="Nice3point.Revit.Api.RevitAPI">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BimIt.Revit.Compiler\BimIt.Revit.Compiler.csproj" />
+    <ProjectReference Include="..\..\src\BimIt.Revit.CompilerHost\BimIt.Revit.CompilerHost.csproj" />
+    <ProjectReference Include="..\..\src\BimIt.Revit.Addin\BimIt.Revit.Addin.csproj">
+      <AdditionalProperties>RevitVersion=$(RevitVersion)</AdditionalProperties>
+    </ProjectReference>
+    <ProjectReference Include="..\BimIt.Revit.Compiler.ProcessStub\BimIt.Revit.Compiler.ProcessStub.csproj">
+      <ReferenceOutputAssembly>false</ReferenceOutputAssembly>
+    </ProjectReference>
+  </ItemGroup>
+
+  <Target Name="CopyRevitApiReference" AfterTargets="ResolveAssemblyReferences">
+    <Copy SourceFiles="@(ReferencePath)" DestinationFolder="$(OutputPath)revit-ref\" Condition="'%(Filename)' == 'RevitAPI'" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="CopyProcessStub" AfterTargets="Build">
+    <ItemGroup>
+      <_StubFiles Include="..\BimIt.Revit.Compiler.ProcessStub\bin\$(Configuration)\net8.0\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_StubFiles)" DestinationFiles="@(_StubFiles->'$(OutputPath)compiler-stub\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

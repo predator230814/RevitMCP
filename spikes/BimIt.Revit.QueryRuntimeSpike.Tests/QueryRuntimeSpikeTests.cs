@@ -268,7 +268,10 @@ public sealed class QueryRuntimeSpikeTests
         {
             var text = File.ReadAllText(project);
             Assert.DoesNotContain("QueryRuntimeSpike", text, StringComparison.Ordinal);
-            Assert.DoesNotContain("Microsoft.CodeAnalysis", text, StringComparison.Ordinal);
+            if (!project.EndsWith("BimIt.Revit.CompilerHost.csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                Assert.DoesNotContain("PackageReference Include=\"Microsoft.CodeAnalysis", text, StringComparison.Ordinal);
+            }
         }
 
         var protocol = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Contracts", "BridgeProtocol.cs"));

@@ -321,7 +321,15 @@ public sealed class RevitApiSymbolDiscoveryTests
 
         Assert.Contains("GetRawConstantValue", symbols, StringComparison.Ordinal);
         var projects = Directory.GetFiles(Path.Combine(root, "src"), "*.csproj", SearchOption.AllDirectories);
-        Assert.All(projects, project => Assert.DoesNotContain("Microsoft.CodeAnalysis", File.ReadAllText(project), StringComparison.Ordinal));
+        Assert.All(projects, project =>
+        {
+            if (project.EndsWith("BimIt.Revit.CompilerHost.csproj", StringComparison.OrdinalIgnoreCase))
+            {
+                return;
+            }
+
+            Assert.DoesNotContain("PackageReference Include=\"Microsoft.CodeAnalysis", File.ReadAllText(project), StringComparison.Ordinal);
+        });
 
         var metadata = RevitApiMetadataIndex.Search(RevitApi, "Grid");
         var grid = Assert.Single(metadata, type => type.TypeName == "Autodesk.Revit.DB.Grid");

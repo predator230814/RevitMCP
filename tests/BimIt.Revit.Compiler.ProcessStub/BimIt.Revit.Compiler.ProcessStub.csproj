@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>BimIt.Revit.Compiler.ProcessStub</RootNamespace>
+    <AssemblyName>BimIt.Revit.Compiler.ProcessStub</AssemblyName>
+    <Description>Test double for CompilerHost process failures. Not a production compiler.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BimIt.Revit.Compiler\BimIt.Revit.Compiler.csproj" />
+  </ItemGroup>
+</Project>

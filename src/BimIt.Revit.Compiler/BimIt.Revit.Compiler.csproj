@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <RootNamespace>BimIt.Revit.Compiler</RootNamespace>
+    <AssemblyName>BimIt.Revit.Compiler</AssemblyName>
+    <Description>CompilerHost wire contract and process client. No Roslyn and no Revit API reference.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="BimIt.Revit.Compiler.Tests" />
+    <InternalsVisibleTo Include="BimIt.Revit.CompilerHost" />
+  </ItemGroup>
+</Project>

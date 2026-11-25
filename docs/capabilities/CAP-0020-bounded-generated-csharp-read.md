@@ -1,6 +1,6 @@
 # CAP-0020: Bounded generated-C# read
 
-- Status: Accepted on 2026-11-24. Not implemented. Production `tools/list` stays 22. Bridge protocol stays 25.
+- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented. Generated execution, the MCP tool, and Bridge protocol 26 are not implemented. Production `tools/list` stays 22. Bridge protocol stays 25. The out-of-process live compile gate has not been run.
 - Operation class: Read
 - Date: 2026-11-24
 - Architecture: Accepted [ADR-0028](../adr/ADR-0028-bounded-generated-csharp-read-executor.md). This is the only exception to [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md) §1. [ADR-0027](../adr/ADR-0027-layered-revit-capability-admission.md) remains the admission order.

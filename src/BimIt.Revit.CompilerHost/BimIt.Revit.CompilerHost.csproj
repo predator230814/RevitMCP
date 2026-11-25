@@ -1,0 +1,19 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <RootNamespace>BimIt.Revit.CompilerHost</RootNamespace>
+    <AssemblyName>BimIt.Revit.CompilerHost</AssemblyName>
+    <Description>One-shot trusted compiler process. Roslyn stays in this executable.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="BimIt.Revit.Compiler.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BimIt.Revit.Compiler\BimIt.Revit.Compiler.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+  </ItemGroup>
+</Project>

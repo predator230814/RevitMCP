@@ -44,6 +44,10 @@ Read next: ADR-0022, ADR-0023, [SKILLS.md](SKILLS.md), CAP-0014, CAP-0015, and t
 
 [ADR-0028](adr/ADR-0028-bounded-generated-csharp-read-executor.md) accepts one bounded generated-C# read, [CAP-0020](capabilities/CAP-0020-bounded-generated-csharp-read.md). Model-supplied C# stays prohibited except when supplied to that capability and processed by the ADR-0028 compiler and execution policy. The planned tool is `revit_run_csharp_query`. The planned Bridge method is `revit.run_csharp_query` on protocol 26. Neither is implemented. Production `tools/list` stays 22. Bridge protocol stays 25. The local opt-in defaults off. There is no per-call approval. Feasibility evidence is PR #133. Live validation of the production tool has not been run.
 
+### Later implementation note (2026-11-24)
+
+CAP-0020's trusted CompilerHost and Addin compiler client are implemented. The Addin can send one method body to a one-shot CompilerHost child and receive diagnostics or PE bytes. Those bytes are not loaded or executed. `revit_run_csharp_query` is absent. Bridge protocol stays 25. Production `tools/list` stays 22. Policy v1 still admits only loaded `RevitAPI` 26.5.0.0. The live out-of-process compile gate has not been run. CAP-0020 is not fully implemented.
+
 ## Historical accumulated detail (last revised 2026-10-30)
 
 RevitMCP was renamed to BIM-IT Revit MCP. Current projects are `BimIt.Revit.Contracts`, `BimIt.Revit.Bridge`, `BimIt.Revit.Addin`, `BimIt.Revit.Server`, `BimIt.Revit.Assistant`, and `BimIt.Revit.Skills`. MCP tool names, Bridge method names, protocol versions, the Approval pane GUID, audit domain strings, and the `LocalAppData\RevitMCP` storage root are unchanged. The historical validation narrative below keeps the RevitMCP names and SHAs it recorded.
