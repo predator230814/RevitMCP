@@ -37,7 +37,7 @@ Expected: negotiated protocol 26, success, real Level `element_ref` / `name` / `
 
 Leave the file enabled. Run `C`. The body is `return Environment.TickCount;`.
 
-Expected: `CSHARP_QUERY_POLICY_REJECTED` with at most 8 diagnostics (`code`, `line`, `column`, `message`). No result and no model change.
+Expected exactly: `CSHARP_QUERY_POLICY_REJECTED`, `compile_outcome` `policy_rejected`, and at most 8 diagnostics (`code`, `line`, `column`, `message`). The body is rejected before emit. No result and no model change.
 
 ## D — disable again
 

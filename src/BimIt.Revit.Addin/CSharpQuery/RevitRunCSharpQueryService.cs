@@ -119,7 +119,9 @@ internal sealed class RevitRunCSharpQueryService : IRevitRunCSharpQueryService
                     Version = execution?.ApiVersion ?? compilation.Api?.Version ?? ""
                 },
             Diagnostics = diagnostics.Length == 0 ? null : diagnostics,
-            CompileOutcome = execution?.CompileOutcome
+            CompileOutcome = string.IsNullOrWhiteSpace(execution?.CompileOutcome)
+                ? compilation.CompileOutcome
+                : execution.CompileOutcome
         };
     }
 

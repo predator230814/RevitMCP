@@ -144,6 +144,7 @@ public sealed class RunCSharpQuerySliceTests
         Assert.Equal("hash", details.GetProperty("source_sha256").GetString());
         Assert.Equal(1, details.GetProperty("policy_version").GetInt32());
         Assert.Equal("RevitAPI", details.GetProperty("revit_api").GetProperty("name").GetString());
+        Assert.Equal(CompilerOutcomes.PolicyRejected, details.GetProperty("compile_outcome").GetString());
         Assert.Equal(8, details.GetProperty("diagnostics").GetArrayLength());
         Assert.False(details.TryGetProperty("cache_key", out _));
         Assert.False(details.TryGetProperty("source", out _));

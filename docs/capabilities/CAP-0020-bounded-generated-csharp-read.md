@@ -35,7 +35,7 @@ Arguments:
 
 No `references`, `usings`, `options`, `entry_point`, `assembly`, or `il` field exists. Unknown fields are rejected.
 
-The host-visible names inside `source` are `doc` and `elementRef`. `elementRef(element)` returns the ADR-0006 `element_ref` for that element, or a deterministic host string when the element is null. It does not return `UniqueId`. The spike gate's `UniqueId` delegate is not this contract.
+The host-visible names inside `source` are `doc` and `elementRef`. `elementRef(element)` returns an opaque ADR-0006 `element_ref`, or a deterministic host string when the element is null. The current implementation is based on `Element.UniqueId`. Clients must not parse that value or depend on its format. The spike gate's separate `UniqueId` delegate is not this contract.
 
 Fixed host usings, not supplied by the caller: `System`, `System.Collections.Generic`, `System.Linq`, `Autodesk.Revit.DB`.
 

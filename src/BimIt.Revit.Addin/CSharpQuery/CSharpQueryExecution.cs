@@ -109,7 +109,7 @@ internal sealed class CSharpQueryExecution
             CompilerProtocol.PolicyVersion,
             compilation.Api?.Name,
             compilation.Api?.Version,
-            compilation.Success ? CompilerOutcomes.Success : compilation.Code,
+            compilation.CompileOutcome ?? (compilation.Success ? CompilerOutcomes.Success : compilation.Code),
             DurationMilliseconds,
             ResultCharacters);
     }

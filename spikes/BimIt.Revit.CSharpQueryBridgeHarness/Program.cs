@@ -82,6 +82,19 @@ catch (BridgeException exception)
     }
 
     var expectedDisabled = mode is "A" or "D" && exception.ErrorCode == "CSHARP_QUERY_DISABLED";
-    var expectedFailure = mode == "C" && exception.ErrorCode is "CSHARP_QUERY_POLICY_REJECTED" or "CSHARP_QUERY_COMPILE_FAILED";
-    return expectedDisabled || expectedFailure ? 0 : 1;
+    var expectedPolicy = mode == "C" && IsPolicyRejection(exception);
+    return expectedDisabled || expectedPolicy ? 0 : 1;
+}
+
+static bool IsPolicyRejection(BridgeException exception)
+{
+    if (exception.ErrorCode != "CSHARP_QUERY_POLICY_REJECTED" || exception.Details is not JsonElement details)
+    {
+        return false;
+    }
+
+    return details.TryGetProperty("compile_outcome", out var outcome)
+        && outcome.GetString() == "policy_rejected"
+        && details.TryGetProperty("diagnostics", out var diagnostics)
+        && diagnostics.GetArrayLength() <= 8;
 }
