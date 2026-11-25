@@ -11,7 +11,7 @@ dotnet build spikes/BimIt.Revit.CSharpQueryExecutionProbe/BimIt.Revit.CSharpQuer
 
 In Revit 2026.5, load the production add-in. Open one disposable project document whose `Document.IsModified` is false. Invoke `BimIt.Revit.CSharpQueryExecutionProbe.CSharpQueryExecutionProbeCommand` through Add-In Manager or a local command you do not commit.
 
-The report is `%LOCALAPPDATA%\RevitMCP\spikes\csharp-query-execution-probe.json`. A passing run has `passed` true, `contexts_collected` true, and six steps:
+The report is `%LOCALAPPDATA%\RevitMCP\spikes\csharp-query-execution-probe.json`. The execution work item returns the six host-owned steps and one weak reference per run. Collection runs only after that work item has returned, for at most 10 GC and finalizer cycles. A passing run has `passed` true, every context `state` equal to `collected`, and six steps:
 
 1. `normal` success, `api_version` `26.5.0.0`, host-owned JSON, `modified_before` and `modified_after` false.
 2. `repeat` success with the same source hash and cache key.
@@ -19,5 +19,7 @@ The report is `%LOCALAPPDATA%\RevitMCP\spikes\csharp-query-execution-probe.json`
 4. `after_budget` success.
 5. `invalid` code `CSHARP_QUERY_INVALID_RESULT` and no result JSON.
 6. `after_invalid` success.
+
+`contexts` records each run as `collected` or `alive`, and `gc_cycles` is the cycle that collected them, at most 10.
 
 `csharp-query-execution-probe.enqueue.json` has `completed_before_return` false. The report does not contain the method body or the Revit API path.

@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Autodesk.Revit.Attributes;
@@ -43,7 +44,7 @@ public sealed class CSharpQueryExecutionProbeCommand : IExternalCommand
         var invalid = compiler.Compile(InvalidResult);
         if (!level.Success || !loop.Success || !invalid.Success)
         {
-            WriteReport(new ProbeReport(false, "compile_failed", level.Code, [], false));
+            WriteReport(new ProbeReport(false, "compile_failed", level.Code, [], [], false, 0));
             return "compile_failed";
         }
 
@@ -51,18 +52,34 @@ public sealed class CSharpQueryExecutionProbeCommand : IExternalCommand
         var identity = new OpenDocumentIdentityService();
         var service = new CSharpQueryExecutionService(_dispatcher, identity);
         var task = _dispatcher.EnqueueAsync(
-            uiApplication =>
-            {
-                RunQueued(uiApplication, service, identity, level, loop, invalid);
-                return 0;
-            },
+            uiApplication => ExecuteRuns(uiApplication, service, identity, level, loop, invalid),
             CancellationToken.None,
             "csharp-query-execution-probe");
+        ObserveAfterReturn(task);
         WriteEnqueue(task.IsCompleted);
         return task.IsCompleted ? "completed_before_return" : "scheduled";
     }
 
-    private static void RunQueued(
+    private static void ObserveAfterReturn(Task<ProbePayload> task)
+    {
+        task.ContinueWith(
+            completed =>
+            {
+                if (completed.IsFaulted)
+                {
+                    WriteReport(new ProbeReport(false, "probe_failed", "", [], [], false, 0));
+                    return;
+                }
+
+                Publish(completed.Result);
+            },
+            CancellationToken.None,
+            TaskContinuationOptions.None,
+            TaskScheduler.Default);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static ProbePayload ExecuteRuns(
         UIApplication application,
         CSharpQueryExecutionService service,
         OpenDocumentIdentityService identity,
@@ -70,56 +87,101 @@ public sealed class CSharpQueryExecutionProbeCommand : IExternalCommand
         CSharpQueryCompilation loop,
         CSharpQueryCompilation invalid)
     {
-        var steps = new List<ProbeStep>();
-        var contexts = new List<WeakReference>();
+        var payload = new ProbePayload();
         try
         {
             var document = application.ActiveUIDocument?.Document;
             if (document is null || document.IsFamilyDocument || document.IsModified || document.IsModifiable)
             {
-                WriteReport(new ProbeReport(false, "document_not_clean", "", steps, false));
-                return;
+                payload.Status = "document_not_clean";
+                return payload;
             }
 
             var documentId = identity.GetId(document);
-            steps.Add(Run("normal", service, application, documentId, level, document, contexts));
-            steps.Add(Run("repeat", service, application, documentId, level, document, contexts));
-            steps.Add(Run("budget", service, application, documentId, loop, document, contexts));
-            steps.Add(Run("after_budget", service, application, documentId, level, document, contexts));
-            steps.Add(Run("invalid", service, application, documentId, invalid, document, contexts));
-            steps.Add(Run("after_invalid", service, application, documentId, level, document, contexts));
-            contexts.TrimExcess();
-            GC.Collect();
-            GC.WaitForPendingFinalizers();
-            GC.Collect();
-            var collected = contexts.Count > 0 && contexts.TrueForAll(context => !context.IsAlive);
-            var passed = CollectedPass(steps, collected, document.IsModified);
-            WriteReport(new ProbeReport(passed, passed ? "pass" : "fail", "", steps, collected));
+            payload.Modified = document.IsModified;
+            AddRun(payload, "normal", service, application, documentId, level, document);
+            AddRun(payload, "repeat", service, application, documentId, level, document);
+            AddRun(payload, "budget", service, application, documentId, loop, document);
+            AddRun(payload, "after_budget", service, application, documentId, level, document);
+            AddRun(payload, "invalid", service, application, documentId, invalid, document);
+            AddRun(payload, "after_invalid", service, application, documentId, level, document);
+            payload.Modified = document.IsModified;
+            return payload;
         }
         catch (Exception)
         {
-            WriteReport(new ProbeReport(false, "probe_failed", "", steps, false));
+            payload.Status = "probe_failed";
+            return payload;
         }
     }
 
-    private static ProbeStep Run(
+    private static void Publish(ProbePayload payload)
+    {
+        if (payload.Status != "ready")
+        {
+            WriteReport(new ProbeReport(false, payload.Status, payload.CompileCode, payload.Steps, [], false, 0));
+            return;
+        }
+
+        var cycles = Collect(payload.Contexts);
+        var observations = new List<ProbeContextObservation>(payload.Contexts.Count);
+        foreach (var context in payload.Contexts)
+        {
+            observations.Add(new ProbeContextObservation(context.Name, StateOf(context.Reference)));
+        }
+
+        var collected = observations.Count == 6 && observations.TrueForAll(item => item.State == "collected");
+        var passed = collected && CollectedPass(payload.Steps, payload.Modified);
+        WriteReport(new ProbeReport(
+            passed,
+            passed ? "pass" : "fail",
+            "",
+            payload.Steps,
+            observations,
+            collected,
+            cycles));
+    }
+
+    private static int Collect(List<ProbeContext> contexts)
+    {
+        for (var cycle = 1; cycle <= 10; cycle++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            if (contexts.TrueForAll(context => context.Reference is not null && !context.Reference.IsAlive))
+            {
+                return cycle;
+            }
+        }
+
+        return 10;
+    }
+
+    private static string StateOf(WeakReference? reference)
+    {
+        if (reference is null)
+        {
+            return "missing";
+        }
+
+        return reference.IsAlive ? "alive" : "collected";
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void AddRun(
+        ProbePayload payload,
         string name,
         CSharpQueryExecutionService service,
         UIApplication application,
         string documentId,
         CSharpQueryCompilation compilation,
-        Document document,
-        List<WeakReference> contexts)
+        Document document)
     {
         var before = document.IsModified;
         var evidence = service.ExecuteNow(application, documentId, compilation);
-        if (evidence.LoadContext is not null)
-        {
-            contexts.Add(evidence.LoadContext);
-        }
-
+        payload.Contexts.Add(new ProbeContext(name, evidence.LoadContext));
         var result = evidence.Result;
-        return new ProbeStep(
+        payload.Steps.Add(new ProbeStep(
             name,
             result.Success,
             result.Code,
@@ -134,12 +196,12 @@ public sealed class CSharpQueryExecutionProbeCommand : IExternalCommand
             result.DurationMilliseconds,
             before,
             document.IsModified,
-            result.ResultJson);
+            result.ResultJson));
     }
 
-    private static bool CollectedPass(IReadOnlyList<ProbeStep> steps, bool collected, bool modified)
+    private static bool CollectedPass(IReadOnlyList<ProbeStep> steps, bool modified)
     {
-        if (modified || !collected || steps.Count != 6)
+        if (modified || steps.Count != 6)
         {
             return false;
         }
@@ -214,9 +276,30 @@ internal sealed record ProbeStep(
     [property: JsonPropertyName("modified_after")] bool ModifiedAfter,
     [property: JsonPropertyName("result_json")] string? ResultJson);
 
+internal sealed class ProbePayload
+{
+    public string Status { get; set; } = "ready";
+
+    public string CompileCode { get; set; } = "";
+
+    public List<ProbeStep> Steps { get; } = [];
+
+    public List<ProbeContext> Contexts { get; } = [];
+
+    public bool Modified { get; set; }
+}
+
+internal sealed record ProbeContext(string Name, WeakReference? Reference);
+
+internal sealed record ProbeContextObservation(
+    [property: JsonPropertyName("name")] string Name,
+    [property: JsonPropertyName("state")] string State);
+
 internal sealed record ProbeReport(
     [property: JsonPropertyName("passed")] bool Passed,
     [property: JsonPropertyName("status")] string Status,
     [property: JsonPropertyName("compile_code")] string CompileCode,
     [property: JsonPropertyName("steps")] IReadOnlyList<ProbeStep> Steps,
-    [property: JsonPropertyName("contexts_collected")] bool ContextsCollected);
+    [property: JsonPropertyName("contexts")] IReadOnlyList<ProbeContextObservation> Contexts,
+    [property: JsonPropertyName("contexts_collected")] bool ContextsCollected,
+    [property: JsonPropertyName("gc_cycles")] int GcCycles);

@@ -165,11 +165,18 @@ public sealed class CSharpQueryExecutionTests
     }
 
     [Fact]
-    public void Generated_context_is_collectible_and_the_result_keeps_no_generated_type()
+    public void Generated_contexts_are_collectible_after_the_execution_method_returns()
     {
-        var weak = RunReturnOne();
-        Collect();
-        Assert.False(weak.IsAlive);
+        var scalar = RunIsolated(Fixture("return-one.dll"), null);
+        var projection = RunIsolated(Fixture("anonymous.dll"), null);
+        var budget = RunIsolated(Fixture("budget.dll"), CSharpQueryCodes.BudgetExceeded);
+        var invalid = RunIsolated(Fixture("invalid-object.dll"), CSharpQueryCodes.InvalidResult);
+        var cycles = CollectUntilDead(scalar, projection, budget, invalid);
+        Assert.False(scalar.IsAlive);
+        Assert.False(projection.IsAlive);
+        Assert.False(budget.IsAlive);
+        Assert.False(invalid.IsAlive);
+        Assert.InRange(cycles, 1, 10);
     }
 
     [Fact]
@@ -327,19 +334,39 @@ public sealed class CSharpQueryExecutionTests
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static WeakReference RunReturnOne()
+    private static WeakReference RunIsolated(byte[] assembly, string? failureCode)
     {
-        var evidence = Execute(Fixture("return-one.dll"));
-        Assert.Equal(1, evidence.Result.ResultValue);
+        var evidence = Execute(assembly);
+        if (failureCode is null)
+        {
+            Assert.True(evidence.Result.Success);
+            Assert.NotNull(evidence.Result.ResultValue);
+            Assert.NotEqual("BimIt.Revit.GeneratedQuery", evidence.Result.ResultValue.GetType().Assembly.GetName().Name);
+        }
+        else
+        {
+            Assert.Equal(failureCode, evidence.Result.Code);
+            Assert.Null(evidence.Result.ResultJson);
+            Assert.Null(evidence.Result.ResultValue);
+        }
+
         return evidence.LoadContext ?? throw new InvalidOperationException("missing context");
     }
 
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void Collect()
+    private static int CollectUntilDead(params WeakReference[] references)
     {
-        GC.Collect();
-        GC.WaitForPendingFinalizers();
-        GC.Collect();
+        for (var cycle = 1; cycle <= 10; cycle++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            if (references.All(reference => !reference.IsAlive))
+            {
+                return cycle;
+            }
+        }
+
+        return 10;
     }
 
     private static void AssertDecision(CSharpQueryDocumentObservation observation, string code, string? reason)

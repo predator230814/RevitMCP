@@ -1,6 +1,6 @@
 # CAP-0020: Bounded generated-C# read
 
-- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented, and the out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55 against loaded `RevitAPI` 26.5.0.0. The production execution kernel is implemented. Its live execution gate has not been run. The MCP tool, local enablement, and Bridge protocol 26 are not implemented. Production `tools/list` stays 22. Bridge protocol stays 25.
+- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented, and the out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55 against loaded `RevitAPI` 26.5.0.0. The production execution kernel is implemented. Its live execution gate passed on the same Revit build: host-owned JSON, unchanged document, budget failure, recovery, invalid result, recovery, and all six collectible contexts collected. The MCP tool, local enablement, and Bridge protocol 26 are not implemented. Production `tools/list` stays 22. Bridge protocol stays 25.
 - Operation class: Read
 - Date: 2026-11-24
 - Architecture: Accepted [ADR-0028](../adr/ADR-0028-bounded-generated-csharp-read-executor.md). This is the only exception to [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md) §1. [ADR-0027](../adr/ADR-0027-layered-revit-capability-admission.md) remains the admission order.
@@ -132,7 +132,7 @@ Log `source_sha256`, `cache_key`, `policy_version`, Revit API name and version, 
 
 ## Acceptance
 
-This document is the contract. Implementation is not done. Live validation of `revit_run_csharp_query` has not been run. The accepted feasibility evidence is PR #133.
+This document is the contract. The compiler and execution kernel are implemented, and their live gates passed on Revit 2026.5 build 26.5.0.55. `revit_run_csharp_query` is not implemented. Live validation of that tool has not been run. The accepted feasibility evidence is PR #133.
 
 An implementation is acceptable when:
 
