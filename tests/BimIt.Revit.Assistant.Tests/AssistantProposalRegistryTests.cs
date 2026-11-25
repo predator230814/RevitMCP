@@ -287,7 +287,8 @@ public sealed class AssistantProposalRegistryTests
 
         var root = SkillRegistryTests.RepoRoot();
         var serverHost = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ServerHost.cs"));
-        Assert.Equal(22, Regex.Matches(serverHost, @"\.With[A-Za-z]+Tool\(\)").Count);
+        Assert.Equal(23, Regex.Matches(serverHost, @"\.With[A-Za-z]+Tool\(\)").Count);
+        Assert.DoesNotContain("revit_run_csharp_query", AssistantModelTools.LocalNames);
         var assistant = string.Join(
             '\n',
             Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Assistant"), "*.cs", SearchOption.AllDirectories).Select(File.ReadAllText));

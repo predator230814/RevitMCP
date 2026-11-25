@@ -42,6 +42,7 @@ internal sealed class BimItAgentReadTools
         "revit_request_mep_device_placement_review",
         "revit_apply_mep_device_placements",
         "revit_preview_room_pattern_placements",
+        "revit_run_csharp_query",
         "runCSharp",
         "runPython",
         "executeRevitApi",

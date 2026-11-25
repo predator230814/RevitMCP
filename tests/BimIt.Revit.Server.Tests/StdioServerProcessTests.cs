@@ -28,7 +28,7 @@ public sealed class StdioServerProcessTests
             }));
 
         var tools = await client.ListToolsAsync();
-        Assert.Equal(22, tools.Count);
+        Assert.Equal(23, tools.Count);
         Assert.Equal(
             new[]
             {
@@ -53,7 +53,8 @@ public sealed class StdioServerProcessTests
                 ReadOperationToolMetadata.Name,
                 ReadSpatialRoomsToolMetadata.Name,
                 RequestMepDevicePlacementReviewToolMetadata.Name,
-                RequestParameterUpdateReviewToolMetadata.Name
+                RequestParameterUpdateReviewToolMetadata.Name,
+                RunCSharpQueryToolMetadata.Name
             },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
         Assert.Equal(
@@ -80,7 +81,8 @@ public sealed class StdioServerProcessTests
                 "revit_read",
                 "revit_read_spatial_rooms",
                 "revit_request_mep_device_placement_review",
-                "revit_request_parameter_update_review"
+                "revit_request_parameter_update_review",
+                "revit_run_csharp_query"
             },
             tools.Select(tool => tool.Name).OrderBy(name => name, StringComparer.Ordinal).ToArray());
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("handshake", StringComparison.OrdinalIgnoreCase));
@@ -90,6 +92,11 @@ public sealed class StdioServerProcessTests
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.preview_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.request_", StringComparison.Ordinal));
         Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.apply_", StringComparison.Ordinal));
+        Assert.DoesNotContain(tools, tool => tool.Name.Contains("revit.run_", StringComparison.Ordinal));
+        var csharp = Assert.Single(tools, tool => tool.Name == RunCSharpQueryToolMetadata.Name);
+        Assert.Equal(RunCSharpQueryToolMetadata.Title, csharp.Title);
+        Assert.True(csharp.ProtocolTool.Annotations?.ReadOnlyHint);
+        Assert.False(csharp.ProtocolTool.Annotations?.OpenWorldHint);
 
         var getContext = Assert.Single(tools, tool => tool.Name == GetContextToolMetadata.Name);
         Assert.Equal(GetContextToolMetadata.Title, getContext.Title);
