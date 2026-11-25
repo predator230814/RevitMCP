@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using ModelContextProtocol.Protocol;
 
 namespace BimIt.Revit.Server;
@@ -31,13 +32,18 @@ internal static class McpCallResultFactory
     public static CallToolResult Error(
         string code,
         string message,
-        IReadOnlyList<InstanceCandidate>? candidates = null)
+        IReadOnlyList<InstanceCandidate>? candidates = null,
+        JsonElement? details = null)
     {
-        var payload = candidates is null
-            ? JsonSerializer.SerializeToElement(new McpToolError { Code = code, Message = message }, McpJson.Options)
-            : JsonSerializer.SerializeToElement(
-                new McpToolError { Code = code, Message = message, Candidates = candidates },
-                McpJson.Options);
+        var payload = JsonSerializer.SerializeToElement(
+            new McpToolError
+            {
+                Code = code,
+                Message = message,
+                Candidates = candidates,
+                Details = details
+            },
+            McpJson.Options);
 
         return new CallToolResult
         {
@@ -63,5 +69,8 @@ internal static class McpCallResultFactory
         public required string Message { get; init; }
 
         public IReadOnlyList<InstanceCandidate>? Candidates { get; init; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public JsonElement? Details { get; init; }
     }
 }

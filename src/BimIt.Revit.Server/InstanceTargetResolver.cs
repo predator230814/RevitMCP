@@ -138,6 +138,18 @@ internal static class InstanceTargetResolver
         return ResolveExplicit(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsGetContext));
     }
 
+    public static TargetResolution ResolveForRunCSharpQuery(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
+    {
+        ArgumentNullException.ThrowIfNull(discovered);
+        if (instanceId is null)
+        {
+            return ResolveUnspecified(discovered, instance => IsEligible(instance, BridgeProtocol.SupportsRunCSharpQuery));
+        }
+
+        // An explicit id still reaches handshake. A ready protocol 25 host then returns BRIDGE_PROTOCOL_INCOMPATIBLE.
+        return ResolveExplicit(discovered, instanceId, instance => IsEligible(instance, BridgeProtocol.SupportsGetContext));
+    }
+
     public static TargetResolution ResolveForReadOperations(IReadOnlyList<DiscoveredInstance> discovered, string? instanceId)
     {
         ArgumentNullException.ThrowIfNull(discovered);

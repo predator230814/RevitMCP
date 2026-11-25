@@ -27,7 +27,7 @@ public sealed class AssistantMcpReadFacadeTests
     public void Every_current_server_read_is_discovered_from_metadata_and_no_write_is()
     {
         var descriptors = ServerToolMetadata.Descriptors;
-        Assert.Equal(22, descriptors.Count);
+        Assert.Equal(23, descriptors.Count);
         var facade = Facade(new ScriptedSession(), descriptors);
 
         Assert.Equal(AssistantAgentTests.ExpectedGenericReads, facade.Tools.Select(tool => tool.Name).ToArray());
@@ -46,8 +46,11 @@ public sealed class AssistantMcpReadFacadeTests
             .Select(tool => tool.Name)
             .Order(StringComparer.Ordinal)
             .ToArray();
-        Assert.Equal(serverReads, facade.Tools.Select(tool => tool.Name).ToArray());
-        Assert.Equal(7, facade.Rejected.Count);
+        Assert.DoesNotContain("revit_run_csharp_query", facade.Tools.Select(tool => tool.Name));
+        Assert.Equal(
+            serverReads.Where(name => !BimItAgentReadTools.DeniedTools.Contains(name, StringComparer.Ordinal)).ToArray(),
+            facade.Tools.Select(tool => tool.Name).ToArray());
+        Assert.Equal(8, facade.Rejected.Count);
         Assert.Equal(ReadResultBudget.MaxCharacters, AssistantMcpReadFacade.MaxResultCharacters);
         Assert.Contains("revit_query_family_types", facade.Tools.Select(tool => tool.Name));
         Assert.Contains("revit_query_parameter_bindings", facade.Tools.Select(tool => tool.Name));

@@ -217,10 +217,10 @@ public sealed class CSharpQueryExecutionTests
 
         Assert.Equal(26, BridgeProtocol.CurrentVersion);
         var server = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ServerHost.cs"));
-        Assert.Equal(22, Regex.Matches(server, @"\.With\w+Tool\(\)").Count);
-        Assert.DoesNotContain("revit_run_csharp_query", server, StringComparison.Ordinal);
+        Assert.Equal(23, Regex.Matches(server, @"\.With\w+Tool\(\)").Count);
+        Assert.Contains(".WithRunCSharpQueryTool()", server, StringComparison.Ordinal);
         var assistant = string.Join('\n', Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Assistant"), "*.cs", SearchOption.AllDirectories).Select(File.ReadAllText));
-        Assert.DoesNotContain("run_csharp_query", assistant, StringComparison.Ordinal);
+        Assert.True(Regex.Matches(assistant, "revit_run_csharp_query").Count == 1);
         var bridge = string.Join('\n', Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Bridge"), "*.cs", SearchOption.AllDirectories).Select(File.ReadAllText));
         Assert.Contains("revit.run_csharp_query", bridge, StringComparison.Ordinal);
     }

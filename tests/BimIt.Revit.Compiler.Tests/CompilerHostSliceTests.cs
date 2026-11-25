@@ -362,7 +362,7 @@ public sealed class CompilerHostSliceTests
         Assert.DoesNotContain("Assembly.Load", service, StringComparison.Ordinal);
         Assert.Equal(26, BridgeProtocol.CurrentVersion);
         var server = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ServerHost.cs"));
-        Assert.Equal(22, Regex.Matches(server, @"\.With\w+Tool\(\)").Count);
+        Assert.Equal(23, Regex.Matches(server, @"\.With\w+Tool\(\)").Count);
     }
 
     private static CompilerResponse CompileTest(string source)

@@ -331,11 +331,17 @@ public sealed class RevitApiPropertyAccessTests
         Assert.True(typeCheck >= 0 && propertyCheck > typeCheck && collect > propertyCheck && read > collect);
 
         var host = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ServerHost.cs"));
-        Assert.Equal(22, Regex.Matches(host, @"\.With[A-Za-z]+Tool\(\)").Count);
-        var server = string.Join("\n", Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Server"), "*.cs").Select(File.ReadAllText));
+        Assert.Equal(23, Regex.Matches(host, @"\.With[A-Za-z]+Tool\(\)").Count);
+        var serverFiles = Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Server"), "*.cs");
+        var server = string.Join("\n", serverFiles.Select(File.ReadAllText));
         Assert.DoesNotContain("revit_api.metadata", server, StringComparison.Ordinal);
         Assert.DoesNotContain("revit_api.element_properties", server, StringComparison.Ordinal);
-        Assert.DoesNotContain("revit_api.symbols", server, StringComparison.Ordinal);
+        Assert.Equal(
+            ["RunCSharpQueryToolMetadata.cs"],
+            serverFiles
+                .Where(path => File.ReadAllText(path).Contains("revit_api.symbols", StringComparison.Ordinal))
+                .Select(path => Path.GetFileName(path)!)
+                .ToArray());
         Assert.Contains("CapabilityErrorCodes.RevitApiTypeRejected", File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ReadOperationApplicationService.cs")), StringComparison.Ordinal);
         Assert.Contains("CapabilityErrorCodes.DocumentIsModifiable", File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "LookupReadOperationsApplicationService.cs")), StringComparison.Ordinal);
         Assert.Equal(26, BridgeProtocol.CurrentVersion);

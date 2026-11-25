@@ -82,6 +82,8 @@ internal static class ServerHost
         services.AddSingleton<LookupReadOperationsMcpTools>();
         services.AddSingleton<ReadOperationApplicationService>();
         services.AddSingleton<ReadOperationMcpTools>();
+        services.AddSingleton<RunCSharpQueryApplicationService>();
+        services.AddSingleton<RunCSharpQueryMcpTools>();
         services.AddMcpServer(options =>
             {
                 options.ServerInfo = new Implementation
@@ -112,6 +114,7 @@ internal static class ServerHost
             .WithQueryFamilyTypesTool()
             .WithQueryParameterBindingsTool()
             .WithLookupReadOperationsTool()
-            .WithReadOperationTool();
+            .WithReadOperationTool()
+            .WithRunCSharpQueryTool();
     }
 }

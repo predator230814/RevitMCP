@@ -912,15 +912,25 @@ internal sealed class RecordingBridgeClient : IRevitBridgeClient
             : ReadOperation(request, timeout, cancellationToken);
     }
 
+    public int RunCSharpQueryCalls { get; private set; }
+
+    public RunCSharpQueryRequest? LastRunCSharpQueryRequest { get; private set; }
+
+    public TimeSpan? LastRunCSharpQueryTimeout { get; private set; }
+
+    public Func<RunCSharpQueryRequest, TimeSpan, CancellationToken, Task<RunCSharpQueryResult>>? RunCSharpQuery { get; set; }
+
     public Task<RunCSharpQueryResult> RunCSharpQueryAsync(
         RunCSharpQueryRequest request,
         TimeSpan timeout,
         CancellationToken cancellationToken)
     {
-        _ = request;
-        _ = timeout;
-        _ = cancellationToken;
-        throw new NotSupportedException("This recording client does not implement revit.run_csharp_query.");
+        RunCSharpQueryCalls++;
+        LastRunCSharpQueryRequest = request;
+        LastRunCSharpQueryTimeout = timeout;
+        return RunCSharpQuery is null
+            ? throw new NotSupportedException("This recording client does not implement revit.run_csharp_query.")
+            : RunCSharpQuery(request, timeout, cancellationToken);
     }
 
     public int GetMepDeviceTypesCalls { get; private set; }

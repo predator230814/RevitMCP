@@ -279,7 +279,7 @@ public sealed class QueryRuntimeSpikeTests
         Assert.Contains("public const int CurrentVersion = RunCSharpQueryVersion;", protocol, StringComparison.Ordinal);
 
         var server = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ServerHost.cs"));
-        Assert.Equal(22, Regex.Matches(server, @"\.With\w+Tool\(\)").Count);
+        Assert.Equal(23, Regex.Matches(server, @"\.With\w+Tool\(\)").Count);
 
         var live = File.ReadAllText(Path.Combine(
             root,

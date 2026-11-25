@@ -1,11 +1,11 @@
 # CAP-0020: Bounded generated-C# read
 
-- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented, and the out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55 against loaded `RevitAPI` 26.5.0.0. The production execution kernel is implemented. Its live execution gate passed in PR #136 on the same Revit build: host-owned JSON, unchanged document, budget failure, recovery, invalid result, recovery, and all six collectible contexts collected. Local enablement and Bridge protocol 26 `revit.run_csharp_query` are implemented. The MCP tool is not implemented. Production `tools/list` stays 22. Bridge current version is 26. CAP-0020 is not fully complete until the Server tool and the official MCP-client gate exist.
+- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented, and the out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55 against loaded `RevitAPI` 26.5.0.0. The production execution kernel is implemented. Its live execution gate passed in PR #136 on the same Revit build: host-owned JSON, unchanged document, budget failure, recovery, invalid result, recovery, and all six collectible contexts collected. Local enablement and Bridge protocol 26 `revit.run_csharp_query` are implemented. The MCP tool `revit_run_csharp_query` is implemented by [SERVER-0016](../server/SERVER-0016-stdio-run-csharp-query-tool.md). Production `tools/list` is 23. Bridge current version is 26. The Bridge live gate and the official MCP-client live gate are **PASS**. CAP-0020 is live-complete.
 - Operation class: Read
 - Date: 2026-11-24
 - Architecture: Accepted [ADR-0028](../adr/ADR-0028-bounded-generated-csharp-read-executor.md). This is the only exception to [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md) §1. [ADR-0027](../adr/ADR-0027-layered-revit-capability-admission.md) remains the admission order.
 - Bridge: `revit.run_csharp_query` on protocol 26 only. Implemented by [BRIDGE-0022](../bridge/BRIDGE-0022-bounded-csharp-query-rpc.md). A full host advertises 26 when the service is composed. Advertisement does not mean the local opt-in is on.
-- MCP: planned tool `revit_run_csharp_query`. Not implemented. Production `tools/list` stays 22 until that tool exists, when it becomes 23.
+- MCP: `revit_run_csharp_query`, specified by [SERVER-0016](../server/SERVER-0016-stdio-run-csharp-query-tool.md). Implemented. It is a separate tool, not a `revit_read` operation. Production `tools/list` is 23. The official MCP-client live gate is **PASS**. The BIM-IT Assistant model tools do not expose it.
 
 ## Purpose
 
@@ -132,7 +132,7 @@ Log `source_sha256`, `cache_key`, `policy_version`, Revit API name and version, 
 
 ## Acceptance
 
-This document is the contract. The compiler and execution kernel are implemented. The execution-kernel live gate passed in PR #136 on Revit 2026.5 build 26.5.0.55. Local enablement and Bridge protocol 26 are implemented. `revit_run_csharp_query` is not implemented. Live validation of that MCP tool has not been run. The Bridge live gate is prepared and has not been recorded as passed. The accepted feasibility evidence is PR #133.
+This document is the contract. The compiler and execution kernel are implemented. The execution-kernel live gate passed in PR #136 on Revit 2026.5 build 26.5.0.55. Local enablement and Bridge protocol 26 are implemented. The Bridge live gate is **PASS** in [CAP_0020_CSHARP_QUERY_BRIDGE_VALIDATION.md](../CAP_0020_CSHARP_QUERY_BRIDGE_VALIDATION.md). `revit_run_csharp_query` is implemented, and its official MCP-client live gate is **PASS** in [CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md](../CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md). CAP-0020 is live-complete. The accepted feasibility evidence is PR #133.
 
 An implementation is acceptable when:
 
