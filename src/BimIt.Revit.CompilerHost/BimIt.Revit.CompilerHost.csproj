@@ -1,0 +1,44 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="CompilerReferences.props" />
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <RollForward>Major</RollForward>
+    <RootNamespace>BimIt.Revit.CompilerHost</RootNamespace>
+    <AssemblyName>BimIt.Revit.CompilerHost</AssemblyName>
+    <Description>One-shot trusted compiler process. Roslyn stays in this executable.</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="BimIt.Revit.Compiler.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BimIt.Revit.Compiler\BimIt.Revit.Compiler.csproj" />
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" />
+    <PackageReference Include="Microsoft.NETCore.App.Ref" GeneratePathProperty="true">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>all</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <Target Name="PackageCompilerReferenceAssemblies" AfterTargets="Build">
+    <PropertyGroup>
+      <_CompilerReferencePack>$(PkgMicrosoft_NETCore_App_Ref)\ref\$(CompilerReferenceMoniker)\</_CompilerReferencePack>
+    </PropertyGroup>
+    <Error
+      Text="Pinned compiler reference pack ($(CompilerReferenceMoniker)) was not found."
+      Condition="!Exists('$(_CompilerReferencePack)System.Runtime.dll')" />
+    <ItemGroup>
+      <_CompilerReferenceAssembly Include="$(_CompilerReferencePack)*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_CompilerReferenceAssembly)" DestinationFolder="$(OutputPath)refs\$(CompilerReferenceMoniker)\" SkipUnchangedFiles="true" />
+    <ItemGroup>
+      <_MissingCompilerReference Include="@(CompilerReferenceRequired)" Condition="!Exists('$(OutputPath)refs\$(CompilerReferenceMoniker)\%(Identity)')" />
+    </ItemGroup>
+    <Error
+      Text="Packaged compiler reference %(_MissingCompilerReference.Identity) is missing from $(OutputPath)refs\$(CompilerReferenceMoniker)."
+      Condition="'@(_MissingCompilerReference)' != ''" />
+  </Target>
+</Project>

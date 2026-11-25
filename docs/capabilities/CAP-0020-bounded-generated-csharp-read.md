@@ -1,6 +1,6 @@
 # CAP-0020: Bounded generated-C# read
 
-- Status: Accepted on 2026-11-24. Not implemented. Production `tools/list` stays 22. Bridge protocol stays 25.
+- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented. Generated execution, the MCP tool, and Bridge protocol 26 are not implemented. Production `tools/list` stays 22. Bridge protocol stays 25. The out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55 against loaded `RevitAPI` 26.5.0.0. The generated PE was not loaded or executed.
 - Operation class: Read
 - Date: 2026-11-24
 - Architecture: Accepted [ADR-0028](../adr/ADR-0028-bounded-generated-csharp-read-executor.md). This is the only exception to [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md) §1. [ADR-0027](../adr/ADR-0027-layered-revit-capability-admission.md) remains the admission order.
@@ -17,7 +17,7 @@ The model supplies source text only. The Addin is the execution authority. The S
 
 The Addin launches that process from a fixed absolute path under the product directory of the loaded Addin assembly. It does not search `PATH`. `UseShellExecute` is false. Standard input and standard output are redirected. The process serves one request and then exits. The request is at most 32,768 bytes and the response is at most 262,144 bytes. The CompilerHost opens no named pipe, network socket, or other listener. A missing executable, a malformed response, an oversized response, a nonzero exit, or no exit within 30 seconds returns `CSHARP_QUERY_COMPILER_FAILED`. The Addin loads nothing from that process.
 
-The CompilerHost receives the loaded `RevitAPI` path and identity from the Addin. The path is not returned to the client. Policy version 1 runs only when that identity is `RevitAPI` 26.5.0.0. Any other loaded identity returns `CSHARP_QUERY_API_UNSUPPORTED` before the process starts.
+The CompilerHost receives the loaded `RevitAPI` path and identity from the Addin. The path is not returned to the client. Policy version 1 runs only when that identity is `RevitAPI` 26.5.0.0. Any other loaded identity returns `CSHARP_QUERY_API_UNSUPPORTED` before the process starts. Policy v1 compiles against the pinned .NET 10 reference assemblies shipped at `compiler/refs/net10.0` beside the CompilerHost. It does not use a targeting pack installed on the machine.
 
 ## MCP tool
 
