@@ -37,6 +37,6 @@
 
   <!-- Loadable stand-in for the Nice3point 26.4.10 reference assembly, which cannot be executed. -->
   <Target Name="CopyLoadableRevitApi" AfterTargets="Build">
-    <Copy SourceFiles="$(MSBuildThisFileDirectory)RevitApiLoad\RevitApiLoadStub.dll" DestinationFiles="$(OutputPath)RevitAPI.dll" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="$(MSBuildThisFileDirectory)RevitApiLoad\RevitApiLoadStub.dll" DestinationFiles="$(OutputPath)revit-load\RevitAPI.dll" SkipUnchangedFiles="true" />
   </Target>
 </Project>

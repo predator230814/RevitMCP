@@ -22,7 +22,12 @@ internal static class CSharpQueryResultCopier
     public static CSharpQueryCopiedResult Copy(object? value, Assembly? generatedAssembly)
     {
         var budget = new NodeBudget();
-        var host = CopyValue(value, generatedAssembly, depth: 1, budget);
+        var host = CopyValue(
+            value,
+            generatedAssembly,
+            depth: 1,
+            budget,
+            countNode: !IsCountedContainer(value, generatedAssembly));
         string json;
         try
         {
@@ -41,45 +46,36 @@ internal static class CSharpQueryResultCopier
         return new CSharpQueryCopiedResult(host, json);
     }
 
-    private static object? CopyValue(object? value, Assembly? generatedAssembly, int depth, NodeBudget budget)
+    private static object? CopyValue(
+        object? value,
+        Assembly? generatedAssembly,
+        int depth,
+        NodeBudget budget,
+        bool countNode)
     {
         if (depth > CSharpQueryLimits.MaxDepth)
         {
             throw new CSharpQueryCopyException(CSharpQueryCodes.ResultTooLarge);
         }
 
-        if (value is null)
+        if (value is float number && !float.IsFinite(number))
         {
-            budget.Add();
-            return null;
+            throw new CSharpQueryCopyException(CSharpQueryCodes.InvalidResult);
         }
 
-        if (value is string or bool or byte or sbyte or short or ushort or int or uint or long or ulong or decimal or char)
+        if (value is double real && !double.IsFinite(real))
+        {
+            throw new CSharpQueryCopyException(CSharpQueryCodes.InvalidResult);
+        }
+
+        if (countNode)
         {
             budget.Add();
+        }
+
+        if (value is null or string or bool or byte or sbyte or short or ushort or int or uint or long or ulong or decimal or char or float or double)
+        {
             return value;
-        }
-
-        if (value is float number)
-        {
-            if (!float.IsFinite(number))
-            {
-                throw new CSharpQueryCopyException(CSharpQueryCodes.InvalidResult);
-            }
-
-            budget.Add();
-            return number;
-        }
-
-        if (value is double real)
-        {
-            if (!double.IsFinite(real))
-            {
-                throw new CSharpQueryCopyException(CSharpQueryCodes.InvalidResult);
-            }
-
-            budget.Add();
-            return real;
         }
 
         var type = value.GetType();
@@ -121,7 +117,7 @@ internal static class CSharpQueryResultCopier
         var items = new object?[array.Length];
         for (var index = 0; index < array.Length; index++)
         {
-            items[index] = CopyValue(array.GetValue(index), generatedAssembly, depth + 1, budget);
+            items[index] = CopyValue(array.GetValue(index), generatedAssembly, depth + 1, budget, countNode: true);
         }
 
         return items;
@@ -132,7 +128,7 @@ internal static class CSharpQueryResultCopier
         var items = new object?[list.Count];
         for (var index = 0; index < list.Count; index++)
         {
-            items[index] = CopyValue(list[index], generatedAssembly, depth + 1, budget);
+            items[index] = CopyValue(list[index], generatedAssembly, depth + 1, budget, countNode: true);
         }
 
         return items;
@@ -152,7 +148,7 @@ internal static class CSharpQueryResultCopier
         var map = new SortedDictionary<string, object?>(StringComparer.Ordinal);
         foreach (var key in keys)
         {
-            map[key] = CopyValue(dictionary[key], generatedAssembly, depth + 1, budget);
+            map[key] = CopyValue(dictionary[key], generatedAssembly, depth + 1, budget, countNode: true);
         }
 
         return map;
@@ -173,10 +169,24 @@ internal static class CSharpQueryResultCopier
         foreach (var property in properties)
         {
             var propertyValue = property.GetMethod!.Invoke(value, null);
-            map[property.Name] = CopyValue(propertyValue, generatedAssembly, depth + 1, budget);
+            map[property.Name] = CopyValue(propertyValue, generatedAssembly, depth + 1, budget, countNode: true);
         }
 
         return map;
+    }
+
+    private static bool IsCountedContainer(object? value, Assembly? generatedAssembly)
+    {
+        if (value is null)
+        {
+            return false;
+        }
+
+        var type = value.GetType();
+        return type.IsSZArray
+            || IsExactList(type)
+            || IsExactStringDictionary(type)
+            || IsAnonymousProjection(type, generatedAssembly);
     }
 
     private static bool IsExactList(Type type)

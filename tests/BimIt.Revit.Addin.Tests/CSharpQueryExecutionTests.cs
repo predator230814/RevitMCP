@@ -1,6 +1,8 @@
 using System.Collections;
 using System.Reflection;
+using System.Reflection.Emit;
 using System.Runtime.CompilerServices;
+using System.Runtime.Loader;
 using System.Text.RegularExpressions;
 using Autodesk.Revit.DB;
 using BimIt.Revit.Addin.CSharpQuery;
@@ -12,6 +14,20 @@ namespace BimIt.Revit.Addin.Tests;
 
 public sealed class CSharpQueryExecutionTests
 {
+    static CSharpQueryExecutionTests()
+    {
+        AssemblyLoadContext.Default.Resolving += (_, name) =>
+        {
+            if (!string.Equals(name.Name, "RevitAPI", StringComparison.Ordinal))
+            {
+                return null;
+            }
+
+            var path = Path.Combine(AppContext.BaseDirectory, "revit-load", "RevitAPI.dll");
+            return File.Exists(path) ? Assembly.LoadFrom(path) : null;
+        };
+    }
+
     [Fact]
     public void Copier_accepts_scalars_arrays_lists_dictionaries_and_nested_values()
     {
@@ -79,6 +95,18 @@ public sealed class CSharpQueryExecutionTests
         Assert.NotNull(CSharpQueryResultCopier.Copy(Enumerable.Range(0, 1024).ToList(), null).Json);
         Assert.Equal(CSharpQueryCodes.ResultTooLarge, RejectedCode(new string('a', 15_999)));
         Assert.InRange(CSharpQueryResultCopier.Copy(new string('a', 15_998), null).Json.Length, 1, 16_000);
+        Assert.NotNull(CSharpQueryResultCopier.Copy(EmptyLists(1_024), null).Json);
+        Assert.Equal(CSharpQueryCodes.ResultTooLarge, RejectedCode(EmptyLists(1_025)));
+        Assert.NotNull(CSharpQueryResultCopier.Copy(EmptyListArray(1_024), null).Json);
+        Assert.Equal(CSharpQueryCodes.ResultTooLarge, RejectedCode(EmptyListArray(1_025)));
+        Assert.NotNull(CSharpQueryResultCopier.Copy(EmptyListDictionary(1_024), null).Json);
+        Assert.Equal(CSharpQueryCodes.ResultTooLarge, RejectedCode(EmptyListDictionary(1_025)));
+        var acceptedProjection = EmptyProjection(1_024);
+        Assert.NotNull(CSharpQueryResultCopier.Copy(acceptedProjection, acceptedProjection.GetType().Assembly).Json);
+        var rejectedProjection = EmptyProjection(1_025);
+        Assert.Equal(
+            CSharpQueryCodes.ResultTooLarge,
+            RejectedCode(rejectedProjection, rejectedProjection.GetType().Assembly));
     }
 
     [Fact]
@@ -202,6 +230,84 @@ public sealed class CSharpQueryExecutionTests
     {
         var exception = Assert.Throws<CSharpQueryCopyException>(() => CSharpQueryResultCopier.Copy(value, generatedAssembly));
         return exception.Code;
+    }
+
+    private static List<List<int>> EmptyLists(int count)
+    {
+        var lists = new List<List<int>>(count);
+        for (var index = 0; index < count; index++)
+        {
+            lists.Add([]);
+        }
+
+        return lists;
+    }
+
+    private static List<int>[] EmptyListArray(int count)
+    {
+        var lists = new List<int>[count];
+        for (var index = 0; index < count; index++)
+        {
+            lists[index] = [];
+        }
+
+        return lists;
+    }
+
+    private static Dictionary<string, List<int>> EmptyListDictionary(int count)
+    {
+        var map = new Dictionary<string, List<int>>(count);
+        for (var index = 0; index < count; index++)
+        {
+            map[index.ToString("D4")] = [];
+        }
+
+        return map;
+    }
+
+    private static object EmptyProjection(int count)
+    {
+        var assembly = AssemblyBuilder.DefineDynamicAssembly(new AssemblyName("EmptyProjection" + count), AssemblyBuilderAccess.Run);
+        var module = assembly.DefineDynamicModule("projection");
+        var type = module.DefineType(
+            "<>f__AnonymousType",
+            TypeAttributes.Public | TypeAttributes.Sealed | TypeAttributes.Class);
+        type.SetCustomAttribute(new CustomAttributeBuilder(
+            typeof(CompilerGeneratedAttribute).GetConstructor(Type.EmptyTypes)!,
+            []));
+        var listType = typeof(List<int>);
+        var listConstructor = listType.GetConstructor(Type.EmptyTypes)!;
+        var fields = new FieldBuilder[count];
+        for (var index = 0; index < count; index++)
+        {
+            var name = "P" + index.ToString("D4");
+            fields[index] = type.DefineField("_" + name, listType, FieldAttributes.Private);
+            var property = type.DefineProperty(name, PropertyAttributes.None, listType, null);
+            var getter = type.DefineMethod(
+                "get_" + name,
+                MethodAttributes.Public | MethodAttributes.SpecialName | MethodAttributes.HideBySig,
+                listType,
+                Type.EmptyTypes);
+            var getterIl = getter.GetILGenerator();
+            getterIl.Emit(OpCodes.Ldarg_0);
+            getterIl.Emit(OpCodes.Ldfld, fields[index]);
+            getterIl.Emit(OpCodes.Ret);
+            property.SetGetMethod(getter);
+        }
+
+        var constructor = type.DefineConstructor(MethodAttributes.Public, CallingConventions.Standard, Type.EmptyTypes);
+        var il = constructor.GetILGenerator();
+        il.Emit(OpCodes.Ldarg_0);
+        il.Emit(OpCodes.Call, typeof(object).GetConstructor(Type.EmptyTypes)!);
+        for (var index = 0; index < count; index++)
+        {
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Newobj, listConstructor);
+            il.Emit(OpCodes.Stfld, fields[index]);
+        }
+
+        il.Emit(OpCodes.Ret);
+        return Activator.CreateInstance(type.CreateType())!;
     }
 
     private static object Nest(int depth)

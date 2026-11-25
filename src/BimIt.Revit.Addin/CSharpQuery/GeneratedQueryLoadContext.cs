@@ -24,8 +24,9 @@ internal sealed class GeneratedQueryLoadContext : AssemblyLoadContext
             return typeof(Document).Assembly;
         }
 
-        // Policy v1 emits against the packaged net10 reference assemblies. Revit 2026 hosts
-        // net8, so framework names bind to the assembly already loaded by this process.
+        // Policy v1 emits against the packaged net10 reference assemblies. That set matches
+        // Revit 2026.5, which hosts .NET 10. Framework names still bind to the assembly
+        // already loaded in this process, so an earlier .NET 8 host does not get a private copy.
         foreach (var candidate in AssemblyLoadContext.Default.Assemblies)
         {
             if (string.Equals(candidate.GetName().Name, assemblyName.Name, StringComparison.Ordinal))
