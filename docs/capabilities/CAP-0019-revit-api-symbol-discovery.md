@@ -4,8 +4,8 @@
 - Operation class: Read
 - Date: 2026-11-24
 - Architecture: Accepted [ADR-0027](../adr/ADR-0027-layered-revit-capability-admission.md). [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md) §1 stays in force outside [CAP-0020](CAP-0020-bounded-generated-csharp-read.md). This operation still does not execute generated code. [ADR-0025](../adr/ADR-0025-bounded-revit-api-property-access.md) flexible C# stays Research Only as a property-access mechanism.
-- Bridge: no new RPC and no protocol bump. Reuses [CAP-0016](CAP-0016-revit-read-operations.md) `revit_lookup` / `revit_read`. Bridge protocol stays 25.
-- MCP: no new tool. Production `tools/list` stays 22.
+- Bridge: no new RPC and no protocol bump from this capability. Reuses [CAP-0016](CAP-0016-revit-read-operations.md) `revit_lookup` / `revit_read`. At acceptance, Bridge protocol was 25. CAP-0020 later brought the current Bridge protocol to 26.
+- MCP: no new tool from this capability. At acceptance, production `tools/list` was 22. CAP-0020 later brought the current `tools/list` to 23.
 
 This operation describes the Revit API assembly already loaded by the connected Revit process. It does not execute generated code.
 

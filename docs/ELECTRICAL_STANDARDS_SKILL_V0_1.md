@@ -1,9 +1,9 @@
 # Electrical Standards Skill v0.1 — design and capture plan
 
 - Status: Plan. Not an approved standard.
-- Date: 2026-11-07
+- Date: 2026-11-07. Workset and missing-fact sections revised 2026-11-25. The 2026-11-09 staging record is unchanged.
 - Governance: [SKILLS.md](SKILLS.md#knowledge-governance-observed-candidate-approved)
-- Architecture: [ADR-0022](adr/ADR-0022-agent-skills-and-knowledge-architecture.md), [ADR-0023](adr/ADR-0023-declarative-revit-read-query-architecture.md)
+- Architecture: [ADR-0022](adr/ADR-0022-agent-skills-and-knowledge-architecture.md), [ADR-0023](adr/ADR-0023-declarative-revit-read-query-architecture.md), [ADR-0024](adr/ADR-0024-registry-driven-compiled-revit-read-operations.md), [ADR-0027](adr/ADR-0027-layered-revit-capability-admission.md), [ADR-0028](adr/ADR-0028-bounded-generated-csharp-read-executor.md)
 
 This document plans how to build the first incremental electrical knowledge library from a good representative modeled project. Dave or another electrical/BIM lead then reviews, corrects, and approves it. It contains no company-specific family or parameter entries. Nothing here is an approved company standard, and the benchmark model is not one.
 
@@ -28,7 +28,7 @@ electrical-standards/
 1. Families and types.
 2. Parameter definitions and bindings.
 3. Targeted parameter observations where useful.
-4. Worksets/sub-projects, as a deliberately unresolved observation need.
+4. Worksets/sub-projects. Read these from the existing `project.user_worksets` primitive. See the workset section.
 
 ## `SKILL.md`
 
@@ -70,9 +70,20 @@ Source facts can be discovered with `revit_query_parameter_bindings` ([CAP-0015]
 
 ## `references/worksets.yaml`
 
-Current generic BIM-IT reads do not expose workset as a query, filter, or projection fact. This is classified as a **missing-fact research case**. This plan does not create a capability, spec, or DTO field for it. The file records what a reviewer needs and the missing-fact status, not invented values.
+On 2026-11-07 this plan classified user worksets as a missing fact. The 2026-11-09 staging record still says `capture_status: missing_fact` and is left as written. This revision does not open or rewrite the EXTERNAL Skill.
 
-The point is to test whether a future flexible Revit API path can answer long-tail facts like this without duplicating the Revit API in BIM-IT. That path is research only (see [TECH_WATCH.md](TECH_WATCH.md)).
+`project.user_worksets` contract version 1 is now the source for those observations. Read it with `revit_lookup` and `revit_read` ([CAP-0016](capabilities/CAP-0016-revit-read-operations.md)). Do not call `revit_run_csharp_query` to copy that inventory. Do not remove the operation. A later reviewed capture may replace `missing_fact` with `knowledge_state: observed` and human-readable provenance. Capture does not set `candidate` or `approved`. Do not persist `document_id`, `instance_id`, or `element_ref`.
+
+## Missing Revit facts after v0.1
+
+A fact that the current primitives and their composition do not express is handled in this order ([ADR-0027](adr/ADR-0027-layered-revit-capability-admission.md)):
+
+1. Use the existing primitive when it answers the question.
+2. Compose those facts in the Skill when composition is enough.
+3. Evaluate [CAP-0020](capabilities/CAP-0020-bounded-generated-csharp-read.md) `revit_run_csharp_query` when the fact is required, read-only, still not expressible, and a focused query is compatible with [ADR-0028](adr/ADR-0028-bounded-generated-csharp-read-executor.md). Use `revit_api.symbols` only when the signature is uncertain. Skip the query when the fact is unnecessary or outside that policy. A kept result is `observed`, with model title, Revit build, UTC date, method, policy version, Revit API name and version, and the returned `source_sha256`. This creates no capability.
+4. Promote to a compiled operation only for an explicit ADR-0027 item 4 reason: stable engineering meaning, repeated use large enough to justify product code, specialized geometry or topology, special identity, performance, a controlled write, or another reason of that kind. A Revit method, or a query used a few times, is not that reason.
+
+The bounded read is live-complete, default-off, and limited to policy version 1 on `RevitAPI` 26.5.0.0. Arbitrary C# stays prohibited ([TECH_WATCH.md](TECH_WATCH.md)). The Assistant does not expose the tool. The Skill stays EXTERNAL.
 
 ## `references/provenance.md`
 
@@ -87,4 +98,4 @@ The first usable library does not need to be complete. Success means:
 - every business rule has an explicit governance state;
 - a BIM lead can edit and approve the files directly;
 - the agent loads only the knowledge relevant to its task;
-- missing Revit facts are recorded rather than invented or automatically turned into new C# capabilities.
+- a fact already covered by a primitive is read from that primitive. A required fact that primitives and composition cannot express may be evaluated with CAP-0020 and, when kept, stored as `observed` with provenance. Capture does not promote it to `candidate`, `approved`, or a new capability. A fact that is unnecessary, or outside the CAP-0020 policy, stays unqueried.

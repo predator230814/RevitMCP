@@ -12,6 +12,8 @@ Decision record: [ADR-0022](adr/ADR-0022-agent-skills-and-knowledge-architecture
 
 Rule: if a workflow can be written as a Skill over generic tools, write a Skill. Do not add a specialised Revit tool for it.
 
+When a required read-only fact is not expressible by current primitives or by composing them, evaluate `revit_run_csharp_query` under [ADR-0028](adr/ADR-0028-bounded-generated-csharp-read-executor.md) and [CAP-0020](capabilities/CAP-0020-bounded-generated-csharp-read.md). Use it only when that fact is needed and the query fits that policy. A result kept in a firm Skill is `observed`, with provenance. Capture does not make it `candidate` or `approved`, and it does not create a capability. A compiled read operation is a later promotion that needs an explicit [ADR-0027](adr/ADR-0027-layered-revit-capability-admission.md) item 4 reason. `project.user_worksets` v1 remains supported and is not the pattern for the next inventory.
+
 ## Folder format
 
 ```

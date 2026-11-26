@@ -1,10 +1,23 @@
 # BIM-IT Revit MCP Current State
 
-_Last updated: 2026-11-07_
+_Last updated: 2026-11-25_
 
-## Current snapshot (2026-11-07) — preferred handoff
+## Read this first (2026-11-25)
 
-Start a new AI conversation here. Future project conversations should prefer current repository code, this snapshot, accepted ADRs and CAPs, and accepted validation records over reconstructing history from chat memory. Everything under "Historical accumulated detail" below is an accumulated record and is not updated to this snapshot. Do not rely on its older tool counts or protocol numbers.
+`origin/main` is `e2db7e6ffe28dc776edf9f1d2d4e8b28b86d34a7`. Production `tools/list` is 23. Bridge protocol is 26. [CAP-0020](capabilities/CAP-0020-bounded-generated-csharp-read.md) `revit_run_csharp_query` is live-complete, default-off, and policy version 1 applies only to loaded `RevitAPI` 26.5.0.0. The Assistant does not expose that tool.
+
+Admit a new Revit fact in this order:
+
+1. Use an existing primitive when it answers the question. `project.user_worksets` v1 remains the user-workset read. It is not the pattern for the next inventory.
+2. Use a Skill or composition when the existing facts are enough.
+3. Evaluate `revit_run_csharp_query` when a required read-only long-tail fact is not expressible by those primitives or by composing them, and a focused query is compatible with [ADR-0028](adr/ADR-0028-bounded-generated-csharp-read-executor.md). Skip that evaluation when the fact is unnecessary or outside the policy.
+4. Add a compiled specialized capability only for an explicit [ADR-0027](adr/ADR-0027-layered-revit-capability-admission.md) item 4 reason.
+
+The 2026-11-07 snapshot below is historical. Its statement that flexible C# is research-only describes that date. The later notes remain a chronological record.
+
+## Current snapshot (2026-11-07) — historical
+
+This snapshot records 2026-11-07. Start from the 2026-11-25 note above. Future project conversations should prefer current repository code, that note, accepted ADRs and CAPs, and accepted validation records over reconstructing history from chat memory. Everything under "Historical accumulated detail" below is an accumulated record and is not updated to this snapshot. Do not rely on its older tool counts or protocol numbers.
 
 | Fact | Value |
 |---|---|
