@@ -4,7 +4,9 @@ _Last updated: 2026-11-25_
 
 ## Read this first (2026-11-25)
 
-`origin/main` is `e2db7e6ffe28dc776edf9f1d2d4e8b28b86d34a7`. Production `tools/list` is 23. Bridge protocol is 26. [CAP-0020](capabilities/CAP-0020-bounded-generated-csharp-read.md) `revit_run_csharp_query` is live-complete, default-off, and policy version 1 applies only to loaded `RevitAPI` 26.5.0.0. The Assistant does not expose that tool.
+This handoff note was prepared from main at `e2db7e6ffe28dc776edf9f1d2d4e8b28b86d34a7` (merge of PR #138).
+
+Production `tools/list` is 23. Bridge protocol is 26. [CAP-0020](capabilities/CAP-0020-bounded-generated-csharp-read.md) `revit_run_csharp_query` is live-complete, default-off, and policy version 1 applies only to loaded `RevitAPI` 26.5.0.0. The Assistant does not expose that tool.
 
 Admit a new Revit fact in this order:
 
