@@ -283,6 +283,10 @@ Any write, preview, or approval capability is a dedicated tool under ADR-0008. C
 
 **Promotion.** If a registered operation later deserves first-class MCP visibility, promoting it is an explicit architecture decision and CAP for a hand-written dedicated tool. v1 does not generate MCP tools from operation descriptors.
 
+### Implementation note (2026-11-25)
+
+This note does not change the decision of 2026-11-10. [ADR-0027](ADR-0027-layered-revit-capability-admission.md), accepted later, places evaluation of bounded C# ahead of a new compiled operation, and [ADR-0028](ADR-0028-bounded-generated-csharp-read-executor.md) authorizes that read. [CAP-0020](../capabilities/CAP-0020-bounded-generated-csharp-read.md) is now live-complete. When a required read-only long-tail fact is not expressible by an existing primitive or by a Skill composition, and a focused query is compatible with ADR-0028, evaluate `revit_run_csharp_query`. Skip that evaluation when the fact is unnecessary or outside the policy. A new registered operation still requires an ADR-0027 item 4 reason. `project.user_worksets` v1 stays a supported operation. The examples in §6 name inventories this ADR refused to expose as one MCP tool each. They are not a backlog of required compiled operations.
+
 ### 7. Compatibility and versioning
 
 - **Stable operation ids.** An id is never renamed or reused for a different meaning. The namespace prefix (`project.`, …) is part of the id, not a routing hint.

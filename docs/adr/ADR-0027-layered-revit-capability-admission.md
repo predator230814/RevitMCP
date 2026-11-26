@@ -40,6 +40,10 @@ CAP-0019 `revit_api.symbols` v1 is a descriptive read of the Revit API assembly 
 - This ADR does not specify the executor. ADR-0028 does, for one read-only surface. The EXEC-0001 gate is PR #133.
 - CAP-0019 added no MCP tool, Bridge RPC, or protocol version. ADR-0028 plans `revit_run_csharp_query` and protocol 26. Neither is implemented. Production `tools/list` stays 22. Bridge protocol stays 25.
 
+## Implementation note (2026-11-25)
+
+This note does not change the admission order. On 2026-11-24 step 3 was still future, and `revit_run_csharp_query` was not implemented. [CAP-0020](../capabilities/CAP-0020-bounded-generated-csharp-read.md) is now that step: live-complete, default-off, and limited to policy version 1 on loaded `RevitAPI` 26.5.0.0. Evaluate it when a required read-only long-tail fact is not expressible by an existing primitive or by composition, and the query is compatible with [ADR-0028](ADR-0028-bounded-generated-csharp-read-executor.md). Skip it when the fact is unnecessary or outside that policy. Production `tools/list` is 23. Bridge protocol is 26. The sentences above that say otherwise are the acceptance-time facts. ADR-0025 generated C# remains Research Only as a property-access mechanism.
+
 ## Consequences
 
 - New Revit work starts by asking whether an existing primitive or a Skill already expresses the workflow.
