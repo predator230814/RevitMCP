@@ -47,6 +47,7 @@ internal static class TestSupport
             AddinVersion = registration.AddinVersion,
             SupportedProtocolVersions = selectedProtocolVersion switch
             {
+                BridgeProtocol.RunCSharpQueryPolicyV2Version => BridgeProtocol.SupportedVersions,
                 BridgeProtocol.RunCSharpQueryVersion => BridgeProtocol.RunCSharpQueryVersions,
                 BridgeProtocol.QueryElementPredicatesVersion => BridgeProtocol.QueryElementPredicatesVersions,
                 BridgeProtocol.GetSelectionVersion => BridgeProtocol.GetSelectionVersions,

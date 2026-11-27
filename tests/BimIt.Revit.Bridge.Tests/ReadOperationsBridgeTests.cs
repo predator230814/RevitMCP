@@ -15,7 +15,7 @@ public sealed class ReadOperationsBridgeTests
 {
     [Theory]
     [InlineData(23)]
-    [InlineData(27)]
+    [InlineData(28)]
     public async Task Versions_other_than_24_reject_both_rpcs_before_the_service(int version)
     {
         var read = new RecordingReadOperations();

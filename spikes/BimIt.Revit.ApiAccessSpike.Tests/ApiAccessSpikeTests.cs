@@ -47,7 +47,7 @@ public sealed class ApiAccessSpikeTests
         Assert.NotNull(exact.Result);
         Assert.NotNull(exact.Result.Operations[0].InputSchema);
         Assert.NotNull(exact.Result.Operations[0].OutputSchema);
-        Assert.Equal(26, BridgeProtocol.CurrentVersion);
+        Assert.Equal(27, BridgeProtocol.CurrentVersion);
         Assert.True(BridgeProtocol.SupportsReadOperations(24));
         Assert.False(BridgeProtocol.SupportsReadOperations(23));
 

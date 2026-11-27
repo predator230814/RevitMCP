@@ -89,7 +89,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     [InlineData("compiler_path", "\"C:\\\\secret\"")]
     public async Task Unknown_input_field_is_invalid_before_routing(string property, string json)
     {
-        var client = Client(V26, P26, 26);
+        var client = Client(V26, P26, 27);
         var arguments = Arguments();
         arguments[property] = Json(json);
         var result = await Invoke(client, arguments);
@@ -100,19 +100,19 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     [Fact]
     public async Task Missing_document_id_source_and_oversized_source_are_invalid_before_routing()
     {
-        var missingDocument = Client(V26, P26, 26);
+        var missingDocument = Client(V26, P26, 27);
         var withoutDocument = Arguments();
         withoutDocument.Remove("document_id");
         AssertInvalidRequest(await Invoke(missingDocument, withoutDocument));
         Assert.Equal(0, missingDocument.RunCSharpQueryCalls);
 
-        var missingSource = Client(V26, P26, 26);
+        var missingSource = Client(V26, P26, 27);
         var withoutSource = Arguments();
         withoutSource.Remove("source");
         AssertInvalidRequest(await Invoke(missingSource, withoutSource));
         Assert.Equal(0, missingSource.RunCSharpQueryCalls);
 
-        var oversized = Client(V26, P26, 26);
+        var oversized = Client(V26, P26, 27);
         var tooLong = Arguments();
         tooLong["source"] = Json("\"" + new string('a', 8001) + "\"");
         AssertInvalidRequest(await Invoke(oversized, tooLong));
@@ -120,16 +120,16 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     }
 
     [Fact]
-    public async Task One_protocol_26_host_is_selected_and_a_protocol_25_host_is_not()
+    public async Task One_protocol_27_host_is_selected_and_a_protocol_25_host_is_not()
     {
-        var v26 = Client(V26, P26, 26);
+        var v26 = Client(V26, P26, 27);
         var v25 = Client(V25, P25, 25);
         var factory = Factory(new Dictionary<string, RecordingBridgeClient>(StringComparer.Ordinal)
         {
             [P26] = v26,
             [P25] = v25
         });
-        var outcome = await Service(factory, (V26, P26, 26), (V25, P25, 25)).ExecuteAsync(null, Request(), CancellationToken.None);
+        var outcome = await Service(factory, (V26, P26, 27), (V25, P25, 25)).ExecuteAsync(null, Request(), CancellationToken.None);
 
         Assert.True(outcome.IsSuccess);
         Assert.Equal([P26], factory.RequestedPipes);
@@ -142,19 +142,19 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     }
 
     [Fact]
-    public async Task Two_protocol_26_hosts_require_an_instance_id()
+    public async Task Two_protocol_27_hosts_require_an_instance_id()
     {
-        var outcome = await Service(new RecordingBridgeClientFactory(), ("id-a", "pipe-a", 26), ("id-b", "pipe-b", 26))
+        var outcome = await Service(new RecordingBridgeClientFactory(), ("id-a", "pipe-a", 27), ("id-b", "pipe-b", 27))
             .ExecuteAsync(null, Request(), CancellationToken.None);
         Assert.Equal(McpToolErrorCodes.InstanceRequired, outcome.ErrorCode);
         Assert.Equal(["id-a", "id-b"], outcome.Candidates!.Select(candidate => candidate.InstanceId).ToArray());
     }
 
     [Fact]
-    public async Task Explicit_protocol_26_host_succeeds_and_forwards_only_document_and_source()
+    public async Task Explicit_protocol_27_host_succeeds_and_forwards_only_document_and_source()
     {
-        var client = Client(V26, P26, 26);
-        var outcome = await Service(client, V26, P26, 26).ExecuteAsync(V26, Request(), CancellationToken.None);
+        var client = Client(V26, P26, 27);
+        var outcome = await Service(client, V26, P26, 27).ExecuteAsync(V26, Request(), CancellationToken.None);
         Assert.True(outcome.IsSuccess);
         Assert.Equal(1, client.RunCSharpQueryCalls);
         Assert.Equal("doc", client.LastRunCSharpQueryRequest!.DocumentId);
@@ -167,14 +167,14 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     [Fact]
     public async Task Explicit_protocol_25_host_reaches_handshake_and_is_protocol_incompatible()
     {
-        var v26 = Client(V26, P26, 26);
+        var v26 = Client(V26, P26, 27);
         var v25 = Client(V25, P25, 25);
         var factory = Factory(new Dictionary<string, RecordingBridgeClient>(StringComparer.Ordinal)
         {
             [P26] = v26,
             [P25] = v25
         });
-        var outcome = await Service(factory, (V26, P26, 26), (V25, P25, 25)).ExecuteAsync(V25, Request(), CancellationToken.None);
+        var outcome = await Service(factory, (V26, P26, 27), (V25, P25, 25)).ExecuteAsync(V25, Request(), CancellationToken.None);
 
         Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, outcome.ErrorCode);
         Assert.Equal([P25], factory.RequestedPipes);
@@ -195,9 +195,34 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     }
 
     [Fact]
+    public async Task Omitted_instance_with_only_a_protocol_26_host_returns_no_instance()
+    {
+        var client = Client("id-v26-only", "pipe-v26-only", 26);
+        var factory = Factory(new Dictionary<string, RecordingBridgeClient>(StringComparer.Ordinal)
+        {
+            ["pipe-v26-only"] = client
+        });
+        var outcome = await Service(factory, ("id-v26-only", "pipe-v26-only", 26))
+            .ExecuteAsync(null, Request(), CancellationToken.None);
+        Assert.Equal(McpToolErrorCodes.NoRevitInstance, outcome.ErrorCode);
+        Assert.Empty(factory.RequestedPipes);
+        Assert.Equal(0, client.RunCSharpQueryCalls);
+    }
+
+    [Fact]
+    public async Task Explicit_protocol_26_host_reaches_handshake_and_is_protocol_incompatible()
+    {
+        var client = Client("id-v26-only", "pipe-v26-only", 26);
+        var outcome = await Service(client, "id-v26-only", "pipe-v26-only", 26)
+            .ExecuteAsync("id-v26-only", Request(), CancellationToken.None);
+        Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, outcome.ErrorCode);
+        Assert.Equal(0, client.RunCSharpQueryCalls);
+    }
+
+    [Fact]
     public async Task Missing_explicit_instance_is_not_found()
     {
-        var outcome = await Service(Client(V26, P26, 26), V26, P26, 26).ExecuteAsync("missing", Request(), CancellationToken.None);
+        var outcome = await Service(Client(V26, P26, 27), V26, P26, 27).ExecuteAsync("missing", Request(), CancellationToken.None);
         Assert.Equal(McpToolErrorCodes.InstanceNotFound, outcome.ErrorCode);
     }
 
@@ -205,14 +230,14 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     public async Task Handshake_identity_mismatch_is_unavailable_and_does_not_call_the_query()
     {
         var discovery = new FakeDiscovery();
-        discovery.Instances.Add(TestSupport.Ready(V26, P26, protocolVersion: 26));
+        discovery.Instances.Add(TestSupport.Ready(V26, P26, protocolVersion: 27));
         var factory = new RecordingBridgeClientFactory
         {
             Connect = (_, _, _) => Task.FromResult(new RecordingBridgeClient
             {
                 Handshake = (_, _) => Task.FromResult(TestSupport.CreateHandshake(
                     TestSupport.CreateRegistration("other", P26),
-                    selectedProtocolVersion: 26))
+                    selectedProtocolVersion: 27))
             })
         };
 
@@ -235,7 +260,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
             string text => text,
             _ => "null"
         };
-        var client = Client(V26, P26, 26, Json(json));
+        var client = Client(V26, P26, 27, Json(json));
         var arguments = Arguments();
         arguments["instance_id"] = Json($"\"{V26}\"");
         var result = await Invoke(client, arguments);
@@ -273,9 +298,9 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     [InlineData(CapabilityErrorCodes.ExecutionTimeout)]
     public async Task Accepted_capability_errors_pass_through_the_application_service(string code)
     {
-        var client = Client(V26, P26, 26);
+        var client = Client(V26, P26, 27);
         client.RunCSharpQuery = (_, _, _) => throw new BridgeException(code, "The C# query could not be completed.");
-        var outcome = await Service(client, V26, P26, 26).ExecuteAsync(null, Request(), CancellationToken.None);
+        var outcome = await Service(client, V26, P26, 27).ExecuteAsync(null, Request(), CancellationToken.None);
         Assert.Equal(code, outcome.ErrorCode);
         Assert.Equal("The C# query could not be completed.", outcome.ErrorMessage);
         Assert.Null(outcome.Details);
@@ -302,7 +327,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
               "compile_outcome": "policy_rejected"
             }
             """);
-        var client = Client(V26, P26, 26);
+        var client = Client(V26, P26, 27);
         client.RunCSharpQuery = (_, _, _) => throw new BridgeException(
             "CSHARP_QUERY_POLICY_REJECTED",
             "The C# query could not be completed.",
@@ -331,7 +356,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     [Fact]
     public async Task Malformed_or_only_forbidden_details_are_omitted()
     {
-        var client = Client(V26, P26, 26);
+        var client = Client(V26, P26, 27);
         client.RunCSharpQuery = (_, _, _) => throw new BridgeException(
             "CSHARP_QUERY_DISABLED",
             "The C# query could not be completed.",
@@ -356,13 +381,13 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     [Fact]
     public async Task Outer_timeout_uses_the_dedicated_budget_and_passes_the_bridge_timeout_code()
     {
-        var client = Client(V26, P26, 26);
+        var client = Client(V26, P26, 27);
         client.RunCSharpQuery = (_, timeout, _) =>
         {
             Assert.Equal(TimeSpan.FromSeconds(40), timeout);
             throw new BridgeException(CapabilityErrorCodes.ExecutionTimeout, "The Revit C# query request timed out.");
         };
-        var outcome = await Service(client, V26, P26, 26).ExecuteAsync(null, Request(), CancellationToken.None);
+        var outcome = await Service(client, V26, P26, 27).ExecuteAsync(null, Request(), CancellationToken.None);
         Assert.Equal(CapabilityErrorCodes.ExecutionTimeout, outcome.ErrorCode);
         Assert.Equal(TimeSpan.FromSeconds(40), client.LastRunCSharpQueryTimeout);
     }
@@ -370,9 +395,9 @@ public sealed class RunCSharpQueryMcpBoundaryTests
     [Fact]
     public async Task Unexpected_transport_failure_stays_unavailable()
     {
-        var client = Client(V26, P26, 26);
+        var client = Client(V26, P26, 27);
         client.RunCSharpQuery = (_, _, _) => throw new IOException("C:\\secret\\pipe");
-        var outcome = await Service(client, V26, P26, 26).ExecuteAsync(null, Request(), CancellationToken.None);
+        var outcome = await Service(client, V26, P26, 27).ExecuteAsync(null, Request(), CancellationToken.None);
         Assert.Equal(McpToolErrorCodes.InstanceUnavailable, outcome.ErrorCode);
         Assert.DoesNotContain("secret", outcome.ErrorMessage, StringComparison.Ordinal);
     }
@@ -394,7 +419,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
         var serverHost = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ServerHost.cs"));
         Assert.Equal(23, System.Text.RegularExpressions.Regex.Matches(serverHost, @"\.With\w+Tool\(\)").Count);
         Assert.Contains(".WithRunCSharpQueryTool()", serverHost, StringComparison.Ordinal);
-        Assert.Equal(26, BridgeProtocol.CurrentVersion);
+        Assert.Equal(27, BridgeProtocol.CurrentVersion);
 
         var server = string.Join('\n', Directory.GetFiles(Path.Combine(root, "src", "BimIt.Revit.Server"), "*.cs").Select(File.ReadAllText));
         var project = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "BimIt.Revit.Server.csproj"));
@@ -417,9 +442,9 @@ public sealed class RunCSharpQueryMcpBoundaryTests
 
     private static async Task AssertDetail(string code, string details, string property, string expected)
     {
-        var client = Client(V26, P26, 26);
+        var client = Client(V26, P26, 27);
         client.RunCSharpQuery = (_, _, _) => throw new BridgeException(code, "The C# query could not be completed.", Json(details));
-        var outcome = await Service(client, V26, P26, 26).ExecuteAsync(null, Request(), CancellationToken.None);
+        var outcome = await Service(client, V26, P26, 27).ExecuteAsync(null, Request(), CancellationToken.None);
         Assert.Equal(code, outcome.ErrorCode);
         Assert.NotNull(outcome.Details);
         Assert.Equal(expected, outcome.Details.Value.GetProperty(property).GetString());
@@ -463,13 +488,13 @@ public sealed class RunCSharpQueryMcpBoundaryTests
 
     private static async Task<CallToolResult> Invoke(RecordingBridgeClient client, IDictionary<string, JsonElement> arguments)
     {
-        var tool = RunCSharpQueryToolRegistration.Create(new RunCSharpQueryMcpTools(Service(client, V26, P26, 26)));
+        var tool = RunCSharpQueryToolRegistration.Create(new RunCSharpQueryMcpTools(Service(client, V26, P26, 27)));
         return await McpToolInvoke.InvokeAsync(tool, arguments);
     }
 
     private static ModelContextProtocol.Server.McpServerTool Tool()
     {
-        return RunCSharpQueryToolRegistration.Create(new RunCSharpQueryMcpTools(Service(Client(V26, P26, 26), V26, P26, 26)));
+        return RunCSharpQueryToolRegistration.Create(new RunCSharpQueryMcpTools(Service(Client(V26, P26, 27), V26, P26, 27)));
     }
 
     private static RunCSharpQueryApplicationService Service(RecordingBridgeClient client, string instanceId, string pipe, int protocol)

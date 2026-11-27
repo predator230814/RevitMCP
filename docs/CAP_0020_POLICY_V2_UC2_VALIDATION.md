@@ -24,7 +24,7 @@ The tested binaries were built on 2026-11-26 13:30 from the uncommitted working 
 | Revit | 2026.5, build `26.5.0.55` |
 | Loaded Revit API | `RevitAPI` `26.5.0.0`, returned by the query |
 | Active document | `Snowdon Towers Sample Electrical`, `C:\Program Files\Autodesk\Revit 2026\Samples\Snowdon Towers Sample Electrical.rvt`. `document_id` `aa41d140-9109-4f39-98c6-132d94a52995`. Active view `COVER SHEET`. Selection count 0. |
-| Host | Instance `a2d18e60-c8af-4772-927e-ae0c37229896`. The query completed, and the server admits `revit_run_csharp_query` only when the negotiated bridge is protocol 26. |
+| Host | Instance `a2d18e60-c8af-4772-927e-ae0c37229896`. The query completed on negotiated protocol 26. That is the protocol this execution used. Current binaries no longer advertise 26; see the protocol 27 section below. |
 | `tools/list` | 23. `revit_run_csharp_query` was present. No Bridge RPC name appeared. |
 | Local opt-in | `%LOCALAPPDATA%\RevitMCP\capabilities.json` was absent before the call. It was written as schema version 1 with `csharp_query_enabled` true only for the query, then deleted. |
 | `Document.IsModified` | false before the Assistant question, false before the query, and false after the query. Same `document_id`. The model was not saved. |
@@ -80,3 +80,29 @@ No primitive enrichment was run. There was no `panel_ref` and no `member_refs`.
 - The population result is conclusive for Snowdon only. `scan_truncated` false is the required condition, and it held.
 - Serialized size for a non-empty 32-member result remains an estimate. This result was 167 characters. The runtime cap stays 16 000 characters.
 - Policy version 2 is still a deny list, not a sandbox.
+
+## Protocol 27 transport revalidation (2026-11-27)
+
+This section does not replace the 2026-11-26 Snowdon gate above. That gate negotiated protocol 26. The revalidation checks only the transport split: current Server plus current Addin negotiate protocol 27, and the query is admitted only after that negotiation.
+
+The open unmodified document was the electrical local `C:\REVIT USAGER\525413_E_EG_dave.otis.rvt`, not Snowdon. Reopening it assigned `document_id` `b6b115f2-9f04-4c7f-8e96-5e2884afc430`. The A305 24/24 comparison was not repeated. The source was `return 1;`.
+
+The Release binaries were built on 2026-11-27 12:26 from this working tree, before the commit that records the revalidation.
+
+| File | SHA-256 |
+| --- | --- |
+| `BimIt.Revit.Addin.dll` | `411abf581d22cbf918058f807c944c52d93efabe8afd73a3cac926415096efe1` |
+| `BimIt.Revit.CompilerHost.exe` | `864ac7335dbd243905100692a69fab6bdf9c5612b17a3eb24dde0b3b339497a5` |
+| `BimIt.Revit.Server.exe` | `6894d2555e7c1c91026e3d6bdcf5a3e166c7b98d0a7b7c8a440c0e41d3aaf2f7` |
+
+| Check | Result |
+| --- | --- |
+| Registered Addin protocol | 27. Instance `621c6cf8-6cfa-49ac-bb9d-00d8b8beeb7d`. Revit 2026.5 build `26.5.0.55`. |
+| Handshake before the query | **PASS.** The client offered `[27, 25, ..., 1]`. The host advertised the same set and did not advertise 26. Selected protocol was 27. The query had not been sent. |
+| `tools/list` | 23 |
+| `Document.IsModified` | false before the query and false after. Same `document_id`. pyRevit also read false after the query. The model was not saved. |
+| Disabled before opt-in | **PASS.** `CSHARP_QUERY_DISABLED`. CompilerHost count 0. `capabilities.json` was absent. |
+| Query | **PASS.** `policy_version` 2, `compile_outcome` `success`, result `1`, `RevitAPI` `26.5.0.0`. `source_sha256` `f58b7c3af621b52a2bb7dc67d4491f9ab6c6d16e3cfa1e46e670ff4f9a301fdc`. `cache_key` `7f6e86ad845d48c0bd6ee3504fb1f1453be63b012396efec27468687bbb6335e`. |
+| Restore | **PASS.** The opt-in file was deleted. The next call returned `CSHARP_QUERY_DISABLED`. CompilerHost count 0. |
+
+Status: **PASS**.

@@ -75,15 +75,18 @@ public sealed class RunCSharpQueryBridgeTests
             new UnusedRead(),
             new ScriptedQuery());
         Assert.Equal(BridgeProtocol.SupportedVersions, with.SupportedProtocolVersions);
-        Assert.Equal(26, with.SupportedProtocolVersions[0]);
+        Assert.Equal(27, with.SupportedProtocolVersions[0]);
+        Assert.DoesNotContain(26, with.SupportedProtocolVersions);
         Assert.False(BridgeProtocol.SupportsRunCSharpQuery(25));
-        Assert.False(BridgeProtocol.SupportsRunCSharpQuery(27));
+        Assert.False(BridgeProtocol.SupportsRunCSharpQuery(26));
+        Assert.True(BridgeProtocol.SupportsRunCSharpQuery(27));
+        Assert.False(BridgeProtocol.SupportsRunCSharpQuery(28));
         Assert.True(BridgeProtocol.SupportsGetContext(26));
         Assert.True(BridgeProtocol.SupportsQueryElementPredicates(26));
     }
 
     [Fact]
-    public async Task Handshake_26_returns_success_and_preserves_disabled_and_diagnostic_details()
+    public async Task Handshake_27_returns_success_and_preserves_disabled_and_diagnostic_details()
     {
         if (!OperatingSystem.IsWindows())
         {
@@ -92,7 +95,7 @@ public sealed class RunCSharpQueryBridgeTests
 
         var query = new ScriptedQuery();
         await using var context = await StartAsync(query);
-        Assert.Equal(26, context.Host.Metadata.SupportedProtocolVersions[0]);
+        Assert.Equal(27, context.Host.Metadata.SupportedProtocolVersions[0]);
         await using var client = await ConnectAsync(context, BridgeProtocol.SupportedVersions);
         var success = await client.RunCSharpQueryAsync(Request(), TimeSpan.FromSeconds(3), CancellationToken.None);
         Assert.Equal(7, success.Result.GetInt32());
@@ -170,6 +173,52 @@ public sealed class RunCSharpQueryBridgeTests
         cts.Cancel();
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
         second.Hold.TrySetCanceled();
+    }
+
+    [Fact]
+    public void Policy_v2_negotiation_skips_protocol_26()
+    {
+        Assert.Equal(25, ProtocolVersionSelector.SelectHighestCommon(
+            BridgeProtocol.SupportedVersions,
+            BridgeProtocol.RunCSharpQueryVersions));
+        Assert.Equal(25, ProtocolVersionSelector.SelectHighestCommon(
+            BridgeProtocol.RunCSharpQueryVersions,
+            BridgeProtocol.SupportedVersions));
+        Assert.Equal(27, ProtocolVersionSelector.SelectHighestCommon(
+            BridgeProtocol.SupportedVersions,
+            BridgeProtocol.SupportedVersions));
+        Assert.Equal(26, ProtocolVersionSelector.SelectHighestCommon(
+            BridgeProtocol.RunCSharpQueryVersions,
+            BridgeProtocol.RunCSharpQueryVersions));
+        Assert.Null(ProtocolVersionSelector.SelectHighestCommon(
+            BridgeProtocol.SupportedVersions,
+            [28]));
+        Assert.False(BridgeProtocol.SupportsRunCSharpQuery(25));
+        Assert.DoesNotContain(28, BridgeProtocol.SupportedVersions);
+    }
+
+    [Fact]
+    public async Task Negotiated_25_refuses_the_query_before_the_service()
+    {
+        if (!OperatingSystem.IsWindows())
+        {
+            return;
+        }
+
+        var query = new ScriptedQuery();
+        await using var context = await StartAsync(query);
+        await using var client = await NamedPipeBridgeClient.ConnectAsync(context.Host.PipeName, TimeSpan.FromSeconds(3), CancellationToken.None);
+        var handshake = await client.HandshakeAsync(new BridgeHandshakeRequest
+        {
+            ExpectedInstanceId = context.Metadata.InstanceId,
+            SupportedProtocolVersions = BridgeProtocol.RunCSharpQueryVersions,
+            ClientName = "RevitMCP.Tests"
+        }, CancellationToken.None);
+        Assert.Equal(25, handshake.SelectedProtocolVersion);
+        var rejected = await Assert.ThrowsAsync<BridgeException>(() =>
+            client.RunCSharpQueryAsync(Request(), TimeSpan.FromSeconds(3), CancellationToken.None));
+        Assert.Equal(BridgeErrorCodes.ProtocolIncompatible, rejected.ErrorCode);
+        Assert.Equal(0, query.Calls);
     }
 
     private static RunCSharpQueryRequest Request() => new() { DocumentId = "doc", Source = "return 7;" };

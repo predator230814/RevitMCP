@@ -14,6 +14,8 @@ This record keeps four observations apart.
 3. One panel's parameter correlation was compared with `MEPSystem.Elements`. The sets of element references matched.
 4. Circuit Name and Circuit Number are different fields. This record does not say that either field is the normal or the abnormal way to number a circuit.
 
+The executions in this file negotiated protocol 26. A later transport revalidation, on a reopen of this same local, is recorded in the protocol 27 section of [CAP_0020_POLICY_V2_UC2_VALIDATION.md](CAP_0020_POLICY_V2_UC2_VALIDATION.md). That revalidation does not repeat the panel comparison.
+
 The 2026-11-25 records stay **PASS** under policy version 1. The 2026-11-26 Snowdon record stays the first policy version 2 gate. The population source hash and cache key match that Snowdon run because the source, the policy version, and the `RevitAPI` 26.5.0.0 identity are the same. `cache_key` identifies that compilation artifact. It does not identify the document, the model state, or the business result.
 
 ## Environment
@@ -23,7 +25,7 @@ The 2026-11-25 records stay **PASS** under policy version 1. The 2026-11-26 Snow
 | Revit | 2026.5, build `26.5.0.55` |
 | Loaded Revit API | `RevitAPI` `26.5.0.0`, returned by the query |
 | Active document | `525413_E_EG_dave.otis`, `C:\REVIT USAGER\525413_E_EG_dave.otis.rvt`. Workshared local. `document_id` `c6f06172-a037-4df0-959c-50477a7adccc`. Active view `SYNCHRONISATION`. Selection count 0. |
-| Host | Instance `b6b304b2-ded7-47d9-8b42-98dd699b1e43`. The completed call is admitted only when the negotiated bridge is protocol 26. |
+| Host | Instance `b6b304b2-ded7-47d9-8b42-98dd699b1e43`. The completed calls used negotiated protocol 26. That fact belongs to these executions. Current binaries no longer advertise 26. |
 | `tools/list` | 23 |
 | Local opt-in | Absent before the call. Written as schema version 1 with `csharp_query_enabled` true only for the query, then deleted. |
 | `Document.IsModified` | false before the Assistant question, false before the query, and false after the query. Same `document_id`. This run did not save the model. |

@@ -13,7 +13,7 @@ Predicate support is the explicit set `{25}`. `SupportsQueryElementPredicates` i
 
 `revit.query_elements` itself stays on its existing explicit set, extended with 25. A predicate-free request is valid on every version that already supported CAP-0002, including 3 through 25. A request whose `predicates` field is present requires protocol 25. Omission is not the same as an empty array. An empty array is `INVALID_QUERY` and is not treated as a legacy query.
 
-Protocol 25 preserves every protocol-24 capability by explicit membership, including `revit.lookup_read_operations`, `revit.read_operation`, `revit.query_parameter_bindings`, and `revit.query_family_types`. [BRIDGE-0022](BRIDGE-0022-bounded-csharp-query-rpc.md) preserves those guarantees on protocol 26, including predicate support. A complete v25 host without the C# query service still advertises `[25..1]`. Unknown protocol 27 supports nothing.
+Protocol 25 preserves every protocol-24 capability by explicit membership, including `revit.lookup_read_operations`, `revit.read_operation`, `revit.query_parameter_bindings`, and `revit.query_family_types`. [BRIDGE-0022](BRIDGE-0022-bounded-csharp-query-rpc.md) preserves those guarantees on protocol 26, including predicate support. A complete v25 host without the C# query service still advertises `[25..1]`. At the time of this record, unknown protocol 27 supported nothing. [BRIDGE-0023](BRIDGE-0023-csharp-query-policy-v2-protocol.md) later specifies protocol 27 and preserves this predicate prefix. Current binaries do not advertise 26.
 
 ## Advertisement
 
