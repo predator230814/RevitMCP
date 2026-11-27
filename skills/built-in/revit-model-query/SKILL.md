@@ -49,6 +49,24 @@ When the architecture is a linked model, its Rooms are not host elements. `revit
 
 **MEP around a device.** Seed `revit_get_mep_topology` with the selected device reference, keep the depth small, then describe only the nodes that matter with `revit_get_elements`.
 
+## How strong the claim is
+
+Say which of these three the answer is. Do not upgrade a weaker result into a stronger one.
+
+1. **Observed relation.** A tool result states the relation itself. Present that relation as observed.
+2. **Reconstructed correlation.** Separate elements carry matching parameter strings or other concordant values. Call it a correlation or a cross-check. Do not turn it into a Revit identity or a certain membership.
+3. **Authoritative relation not observed.** Name the missing fact. Do not invent it. Do not ask for a new specialized tool.
+
+Matching parameter strings across elements is a correlation. State the values and the count that were observed. Do not turn that correlation into a structured membership.
+
+## Counts
+
+Say there are N only when a tool returns an exact complete count, or when every page has been consumed. If the result is truncated, incompletely paginated, or taken from a subset, say that you found N, at least N, or name the incompleteness. Do not turn a bounded sample into a complete population.
+
+## A value is not an identity
+
+A name, number, or display value is not automatically a unique Revit identity. When several elements carry the same value, keep the elements distinct. Do not conclude uniqueness from that value alone. Use `element_ref` and structured relations when the exact identity is required.
+
 ## When the tools are not enough
 
 If answering needs data no tool returns, say exactly which fact is missing and which generic read would provide it, for example "door-to-room adjacency for linked rooms". Do not invent the fact, and do not ask for a one-off specialized tool. Ask the user only for facts that are not in the model.

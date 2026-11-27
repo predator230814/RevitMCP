@@ -63,6 +63,135 @@ public sealed class CompilerHostSliceTests
         Assert.DoesNotContain(ReferenceApi, string.Join(" ", response.Diagnostics.Select(diagnostic => diagnostic.Message)), StringComparison.OrdinalIgnoreCase);
     }
 
+    [Theory]
+    [InlineData("Autodesk.Revit.DB.Electrical.ElectricalSystem circuit = null;\ncircuit.SelectPanel(null);\nreturn 0;")]
+    [InlineData("Autodesk.Revit.DB.Electrical.ElectricalSystem circuit = null;\ncircuit.AddToCircuit(null);\nreturn 0;")]
+    [InlineData("Autodesk.Revit.DB.Electrical.ElectricalSystem circuit = null;\ncircuit.RemoveFromCircuit(null);\nreturn 0;")]
+    [InlineData("Autodesk.Revit.DB.Electrical.ElectricalSystem circuit = null;\ncircuit.DisconnectPanel();\nreturn 0;")]
+    [InlineData("Autodesk.Revit.DB.Electrical.ElectricalSystem circuit = null;\ncircuit.NewWires(null, default(Autodesk.Revit.DB.Electrical.WiringType));\nreturn 0;")]
+    [InlineData("Autodesk.Revit.DB.Electrical.ElectricalSystem circuit = null;\ncircuit.SetCircuitPath(null);\nreturn 0;")]
+    [InlineData("Autodesk.Revit.DB.MEPSystem system = null;\nConnectorSet connectors = null;\nsystem.Add(connectors);\nreturn 0;")]
+    [InlineData("Autodesk.Revit.DB.MEPSystem system = null;\nConnectorSet connectors = null;\nsystem.Remove(connectors);\nreturn 0;")]
+    [InlineData("Autodesk.Revit.DB.MEPSystem system = null;\nsystem.DivideSystem(doc);\nreturn 0;")]
+    [InlineData("ElementSet set = null;\nset.Insert(null);\nreturn 0;")]
+    [InlineData("ElementSet set = null;\nset.Clear();\nreturn 0;")]
+    [InlineData("ElementSet set = null;\nset.Erase(null);\nreturn 0;")]
+    [InlineData("Autodesk.Revit.DB.Electrical.ElectricalSystem circuit = null;\ncircuit.CircuitPathMode = circuit.CircuitPathMode;\nreturn 0;")]
+    [InlineData("doc.ActiveView.Scale++;\nreturn 0;")]
+    [InlineData("doc.ActiveView.Scale--;\nreturn 0;")]
+    [InlineData("doc.ActiveView.Scale += 1;\nreturn 0;")]
+    public void Policy_v2_rejects_qualified_revit_effects(string source)
+    {
+        var response = CompileTest(source);
+        Assert.Null(response.Pe);
+        Assert.Equal(CompilerOutcomes.PolicyRejected, response.Outcome);
+        Assert.Contains(response.Diagnostics, diagnostic => diagnostic.Code == CompilerResultCodes.PolicyRejected);
+    }
+
+    [Fact]
+    public void Policy_v2_compiles_the_uc2_comparison_query()
+    {
+        const string source =
+            """
+            var targetCircuitNumber = "UC2";
+            var maxScan = 7500;
+            var maxReturnedCircuits = 3;
+            var maxMemberEnumerate = 64;
+            var maxMemberRefs = 32;
+            var found = new List<Autodesk.Revit.DB.Electrical.ElectricalSystem>();
+            var seen = 0;
+            var scanStopped = false;
+            using (var collector = new FilteredElementCollector(doc))
+            {
+                foreach (Element element in collector.OfClass(typeof(Autodesk.Revit.DB.Electrical.ElectricalSystem)))
+                {
+                    if (seen >= maxScan)
+                    {
+                        scanStopped = true;
+                        break;
+                    }
+
+                    seen++;
+
+                    if (element is Autodesk.Revit.DB.Electrical.ElectricalSystem circuit
+                        && circuit.CircuitNumber == targetCircuitNumber)
+                    {
+                        found.Add(circuit);
+                    }
+                }
+            }
+
+            found.Sort((left, right) => string.CompareOrdinal(elementRef(left), elementRef(right)));
+            var take = found.Count < maxReturnedCircuits ? found.Count : maxReturnedCircuits;
+            var circuits = new List<object>();
+            for (var index = 0; index < take; index++)
+            {
+                var circuit = found[index];
+                var panel = circuit.BaseEquipment;
+                var memberRefs = new List<string>();
+                var memberCount = 0;
+                var membersTruncated = false;
+                var elements = circuit.Elements;
+                if (elements != null)
+                {
+                    memberCount = elements.Size;
+                    if (memberCount > maxMemberEnumerate)
+                    {
+                        membersTruncated = true;
+                    }
+                    else
+                    {
+                        foreach (object item in elements)
+                        {
+                            if (item is Element member)
+                            {
+                                memberRefs.Add(elementRef(member));
+                            }
+                        }
+
+                        memberRefs.Sort(StringComparer.Ordinal);
+                        if (memberRefs.Count > maxMemberRefs)
+                        {
+                            memberRefs.RemoveRange(maxMemberRefs, memberRefs.Count - maxMemberRefs);
+                            membersTruncated = true;
+                        }
+
+                        if (memberRefs.Count < memberCount)
+                        {
+                            membersTruncated = true;
+                        }
+                    }
+                }
+
+                circuits.Add(new
+                {
+                    circuit_ref = elementRef(circuit),
+                    circuit_number = circuit.CircuitNumber,
+                    panel_ref = panel == null ? null : elementRef(panel),
+                    member_count = memberCount,
+                    members_truncated = membersTruncated,
+                    member_refs = memberRefs
+                });
+            }
+
+            return new
+            {
+                target_circuit_number = targetCircuitNumber,
+                scanned_circuit_count = seen,
+                scan_truncated = scanStopped,
+                matched_circuit_count = found.Count,
+                returned_circuit_count = circuits.Count,
+                truncated = found.Count > circuits.Count,
+                circuits
+            };
+            """;
+        var response = CompileTest(source);
+        Assert.Equal(CompilerOutcomes.Success, response.Outcome);
+        Assert.NotNull(response.Pe);
+        Assert.True(response.Pe!.Length > 64);
+        Assert.DoesNotContain(response.Diagnostics, diagnostic => diagnostic.Code == CompilerResultCodes.PolicyRejected);
+    }
+
     [Fact]
     public void Typeof_wall_remains_a_type_token()
     {
@@ -255,7 +384,9 @@ public sealed class CompilerHostSliceTests
     {
         var api = new RevitApiIdentity("RevitAPI", "26.5.0.0", "abc", 10);
         var first = CompilerHashes.CacheKey("return 1;", api, 1);
+        Assert.Equal(2, CompilerProtocol.PolicyVersion);
         Assert.NotEqual(first, CompilerHashes.CacheKey("return 2;", api, 1));
+        Assert.NotEqual(first, CompilerHashes.CacheKey("return 1;", api, CompilerProtocol.PolicyVersion));
         Assert.NotEqual(first, CompilerHashes.CacheKey("return 1;", api, 2));
         Assert.NotEqual(first, CompilerHashes.CacheKey("return 1;", api with { Length = 11 }, 1));
         Assert.NotEqual(first, CompilerHashes.CacheKey("return 1;", api with { Version = "26.4.10.0" }, 1));
@@ -360,7 +491,7 @@ public sealed class CompilerHostSliceTests
         Assert.DoesNotContain("AssemblyLoadContext", service, StringComparison.Ordinal);
         Assert.DoesNotContain("EnqueueAsync", service, StringComparison.Ordinal);
         Assert.DoesNotContain("Assembly.Load", service, StringComparison.Ordinal);
-        Assert.Equal(26, BridgeProtocol.CurrentVersion);
+        Assert.Equal(27, BridgeProtocol.CurrentVersion);
         var server = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ServerHost.cs"));
         Assert.Equal(23, Regex.Matches(server, @"\.With\w+Tool\(\)").Count);
     }

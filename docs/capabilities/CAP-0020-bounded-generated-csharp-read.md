@@ -1,10 +1,10 @@
 # CAP-0020: Bounded generated-C# read
 
-- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented, and the out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55 against loaded `RevitAPI` 26.5.0.0. The production execution kernel is implemented. Its live execution gate passed in PR #136 on the same Revit build: host-owned JSON, unchanged document, budget failure, recovery, invalid result, recovery, and all six collectible contexts collected. Local enablement and Bridge protocol 26 `revit.run_csharp_query` are implemented. The MCP tool `revit_run_csharp_query` is implemented by [SERVER-0016](../server/SERVER-0016-stdio-run-csharp-query-tool.md). Production `tools/list` is 23. Bridge current version is 26. The Bridge live gate and the official MCP-client live gate are **PASS**. CAP-0020 is live-complete.
+- Status: Accepted on 2026-11-24. CompilerHost infrastructure is implemented, and the out-of-process compile-only gate passed on Revit 2026.5 build 26.5.0.55 against loaded `RevitAPI` 26.5.0.0. The production execution kernel is implemented. Its live execution gate passed in PR #136 on the same Revit build: host-owned JSON, unchanged document, budget failure, recovery, invalid result, recovery, and all six collectible contexts collected. Local enablement and Bridge protocol 26 `revit.run_csharp_query` are implemented for policy version 1. The MCP tool `revit_run_csharp_query` is implemented by [SERVER-0016](../server/SERVER-0016-stdio-run-csharp-query-tool.md). Production `tools/list` is 23. The current policy version 2 transport is Bridge protocol 27 ([BRIDGE-0023](../bridge/BRIDGE-0023-csharp-query-policy-v2-protocol.md)). Current binaries do not advertise protocol 26. The Bridge live gate and the official MCP-client live gate under policy version 1 are **PASS**. CAP-0020 is live-complete.
 - Operation class: Read
 - Date: 2026-11-24
 - Architecture: Accepted [ADR-0028](../adr/ADR-0028-bounded-generated-csharp-read-executor.md). This is the only exception to [ADR-0023](../adr/ADR-0023-declarative-revit-read-query-architecture.md) §1. [ADR-0027](../adr/ADR-0027-layered-revit-capability-admission.md) remains the admission order.
-- Bridge: `revit.run_csharp_query` on protocol 26 only. Implemented by [BRIDGE-0022](../bridge/BRIDGE-0022-bounded-csharp-query-rpc.md). A full host advertises 26 when the service is composed. Advertisement does not mean the local opt-in is on.
+- Bridge: `revit.run_csharp_query`. Protocol 26 is the historical policy version 1 transport ([BRIDGE-0022](../bridge/BRIDGE-0022-bounded-csharp-query-rpc.md)). Protocol 27 is the current policy version 2 transport ([BRIDGE-0023](../bridge/BRIDGE-0023-csharp-query-policy-v2-protocol.md)). A current full host advertises `[27, 25, ..., 1]` when the service is composed, and does not advertise 26. Advertisement does not mean the local opt-in is on.
 - MCP: `revit_run_csharp_query`, specified by [SERVER-0016](../server/SERVER-0016-stdio-run-csharp-query-tool.md). Implemented. It is a separate tool, not a `revit_read` operation. Production `tools/list` is 23. The official MCP-client live gate is **PASS**. The BIM-IT Assistant model tools do not expose it.
 
 ## Purpose
@@ -17,7 +17,7 @@ The model supplies source text only. The Addin is the execution authority. The S
 
 The Addin launches that process from a fixed absolute path under the product directory of the loaded Addin assembly. It does not search `PATH`. `UseShellExecute` is false. Standard input and standard output are redirected. The process serves one request and then exits. The request is at most 32,768 bytes and the response is at most 262,144 bytes. The CompilerHost opens no named pipe, network socket, or other listener. A missing executable, a malformed response, an oversized response, a nonzero exit, or no exit within 30 seconds returns `CSHARP_QUERY_COMPILER_FAILED`. The Addin loads nothing from that process.
 
-The CompilerHost receives the loaded `RevitAPI` path and identity from the Addin. The path is not returned to the client. Policy version 1 runs only when that identity is `RevitAPI` 26.5.0.0. Any other loaded identity returns `CSHARP_QUERY_API_UNSUPPORTED` before the process starts. Policy v1 compiles against the pinned .NET 10 reference assemblies shipped at `compiler/refs/net10.0` beside the CompilerHost. It does not use a targeting pack installed on the machine.
+The CompilerHost receives the loaded `RevitAPI` path and identity from the Addin. The path is not returned to the client. The current policy, version 2, runs only when that identity is `RevitAPI` 26.5.0.0. Any other loaded identity returns `CSHARP_QUERY_API_UNSUPPORTED` before the process starts. The CompilerHost compiles against the pinned .NET 10 reference assemblies shipped at `compiler/refs/net10.0` beside the CompilerHost. It does not use a targeting pack installed on the machine. Policy version 1 is the inventory recorded by the 2026-11-25 gates on this same identity.
 
 ## MCP tool
 
@@ -47,8 +47,8 @@ One structured result:
 | --- | --- |
 | `result` | The closed JSON value. |
 | `source_sha256` | SHA-256 of the exact UTF-8 source. The source itself is not echoed. |
-| `cache_key` | SHA-256 of the contract name `revit.run_csharp_query`, policy version, loaded Revit API identity (name, version, public key token, file length), and exact source. |
-| `policy_version` | `1` |
+| `cache_key` | SHA-256 of the contract name `revit.run_csharp_query`, policy version, loaded Revit API identity (name, version, public key token, file length), and exact source. It identifies that compilation artifact. It does not identify the document, the model state, or the business result. Do not reuse a query result across documents because the key matches. The algorithm is unchanged. |
+| `policy_version` | `2`. The 2026-11-25 live gates recorded `1`. |
 | `revit_api` | Assembly name and version only. |
 | `compile_outcome` | `success` |
 | `duration_ms` | Addin execution duration after the document gate. |
@@ -85,9 +85,23 @@ Depth limit 8. Node limit 1,024. Each scalar, array element, list element, dicti
 
 The copier calls property getters only on compiler-generated anonymous types in the generated assembly. It does not walk an arbitrary object and does not call getters on a Revit object, an `ElementId`, or an enum. Return those through an allowed projection or through `elementRef`.
 
-## Policy version 1
+## Policy version 2
 
-The reviewed identity is loaded `RevitAPI` 26.5.0.0. Reject before emit. The closed categories are in ADR-0028: transactions, Revit UI, application services, filesystem, network, process creation, reflection, dynamic assembly load, `System.Type` member calls, `System.Environment`, `System.Console`, `System.GC`, `AppDomain`, local functions, self-referential delegate locals, Roslyn, P/Invoke, unsafe code, threads, preprocessor directives, the listed C# escape statements, event subscription, and the effect-bearing Revit API save, sync, export, print, document-lifecycle, external-resource, worksharing, and file-affecting members named in that ADR. `typeof` of an allowed type remains available as a type token.
+The reviewed identity is loaded `RevitAPI` 26.5.0.0. Policy version 2 is the current policy for new executions on that identity. It is implemented, covered by automated compiler tests, and live-validated by the 2026-11-26 Snowdon dogfood in [CAP_0020_POLICY_V2_UC2_VALIDATION.md](../CAP_0020_POLICY_V2_UC2_VALIDATION.md) and by the 2026-11-27 electrical-local dogfood in [CAP_0020_POLICY_V2_UC2_ELECTRICAL_VALIDATION.md](../CAP_0020_POLICY_V2_UC2_ELECTRICAL_VALIDATION.md), including that record's focused panel comparison. Those gates do not replace the 2026-11-25 policy version 1 records. Policy version 1 remains the inventory under which the 2026-11-25 Bridge and MCP gates passed. The version number changes because the policy decides whether source is admitted and because that version is an input of `cache_key`. The same source and the same Revit API identity therefore produce a different `cache_key` under version 2. Contract version stays 1. Policy version 2 requires Bridge protocol 27. Current binaries advertise `[27, 25, ..., 1]` and do not advertise 26. Protocol 26 remains the policy version 1 transport. `tools/list` stays 23. The local activation schema stays version 1.
+
+Reject before emit. Version 2 keeps the version 1 categories in ADR-0028: transactions, Revit UI, application services, filesystem, network, process creation, reflection, dynamic assembly load, `System.Type` member calls, `System.Environment`, `System.Console`, `System.GC`, `AppDomain`, local functions, self-referential delegate locals, Roslyn, P/Invoke, unsafe code, threads, preprocessor directives, the listed C# escape statements, event subscription, and the effect-bearing Revit API save, sync, export, print, document-lifecycle, external-resource, worksharing, and file-affecting members named in that ADR. `typeof` of an allowed type remains available as a type token.
+
+Version 2 also rejects these members by declaring type and member name. The denial is not a global name ban, so `List<T>.Add`, `List<T>.Remove`, `List<T>.Clear`, `List<T>.Insert`, and `List<T>.Sort` stay available for result shaping:
+
+| Declaring type | Members |
+| --- | --- |
+| `Autodesk.Revit.DB.Electrical.ElectricalSystem` | `AddToCircuit`, `DisconnectPanel`, `NewWires`, `RemoveFromCircuit`, `SelectPanel`, `SetCircuitPath` |
+| `Autodesk.Revit.DB.MEPSystem` | `Add`, `Remove`, `DivideSystem` |
+| `Autodesk.Revit.DB.ElementSet` | `Clear`, `Erase`, `Insert` |
+
+Version 2 rejects a write to a property whose Roslyn property symbol belongs to a type in `Autodesk.Revit` or a namespace under it. The write forms are simple assignment, compound assignment, `++`, and `--`. The check uses the bound symbol, not a text search. Assignment to a local, and mutation of a BCL collection used to build the result, stay allowed.
+
+This policy is not a complete sandbox. It does not name every externally effectful Revit API member. Residual risks in ADR-0028 remain.
 
 ## Local enablement
 
@@ -100,7 +114,7 @@ Default off. The Addin reads `%LOCALAPPDATA%\RevitMCP\capabilities.json` on ever
 | `CSHARP_QUERY_DISABLED` | Local opt-in is off or unreadable. |
 | `INVALID_CSHARP_QUERY` | Source missing, empty, over 8,000 characters, or the envelope has an unknown or forbidden field. |
 | `CSHARP_QUERY_API_UNSUPPORTED` | The loaded assembly is not `RevitAPI` 26.5.0.0. |
-| `CSHARP_QUERY_POLICY_REJECTED` | Policy version 1 rejected the body before emit. |
+| `CSHARP_QUERY_POLICY_REJECTED` | Policy version 2 rejected the body before emit. |
 | `CSHARP_QUERY_COMPILE_FAILED` | Roslyn reported errors. |
 | `CSHARP_QUERY_COMPILER_FAILED` | The CompilerHost child was missing, exceeded a payload bound, returned a malformed response, exited nonzero, or did not exit within 30 seconds. No bytes are loaded. |
 | `CSHARP_QUERY_DOCUMENT_NOT_READY` | No active document, family document, `IsModifiable` is true, or `document_id` does not match. `reason` is `no_active_document`, `project_document_required`, `document_modifiable`, or `document_mismatch`. |
@@ -108,7 +122,7 @@ Default off. The Addin reads `%LOCALAPPDATA%\RevitMCP\capabilities.json` on ever
 | `CSHARP_QUERY_EXECUTION_FAILED` | The method threw for another reason. No exception text. |
 | `CSHARP_QUERY_INVALID_RESULT` | The returned graph is outside the closed set. |
 | `CSHARP_QUERY_RESULT_TOO_LARGE` | The result exceeds 1,024 nodes, depth 8, or 16,000 serialized characters. |
-| `BRIDGE_PROTOCOL_INCOMPATIBLE` | The connection does not advertise protocol 26. |
+| `BRIDGE_PROTOCOL_INCOMPATIBLE` | The negotiated protocol is not 27. A mixed pair with a protocol-26 peer negotiates 25 and does not execute the query. |
 
 Policy and compile failures include at most 8 diagnostics. Each diagnostic has `code`, `line`, `column`, and `message`. Compiler `code` is the C# diagnostic id. Policy `code` is `CSHARP_QUERY_POLICY_REJECTED`. `message` is flattened to 180 characters. The spike ids `BIMQ100`, `BIMQ101`, `BIMQ110`, `BIMQ120`, `BIMQ130`, and `BIMQ140` are research evidence only. Production clients match the codes in this table.
 
@@ -116,7 +130,7 @@ Policy and compile failures include at most 8 diagnostics. Each diagnostic has `
 
 ## Security
 
-ADR-0028 is the threat model. This capability is not an OS sandbox. No transaction prevents ordinary transactional edits. It does not prove every `RevitAPI` member is free of external effects. Policy version 1 is the deny list reviewed for `RevitAPI` 26.5.0.0 only. The in-process executor cannot guarantee protection against all CPU, memory, or blocking-call denial of service. A newly discovered external effect on that identity is a reviewed policy update, not a new wrapper tool. Another Revit API identity needs its own reviewed manifest.
+ADR-0028 is the threat model. This capability is not an OS sandbox. No transaction prevents ordinary transactional edits. It does not prove every `RevitAPI` member is free of external effects. Policy version 2 is the current deny list for `RevitAPI` 26.5.0.0 only. The in-process executor cannot guarantee protection against all CPU, memory, or blocking-call denial of service. A newly discovered external effect on that identity is a reviewed policy update, not a new wrapper tool. Another Revit API identity needs its own reviewed manifest.
 
 ## Performance
 
@@ -132,11 +146,11 @@ Log `source_sha256`, `cache_key`, `policy_version`, Revit API name and version, 
 
 ## Acceptance
 
-This document is the contract. The compiler and execution kernel are implemented. The execution-kernel live gate passed in PR #136 on Revit 2026.5 build 26.5.0.55. Local enablement and Bridge protocol 26 are implemented. The Bridge live gate is **PASS** in [CAP_0020_CSHARP_QUERY_BRIDGE_VALIDATION.md](../CAP_0020_CSHARP_QUERY_BRIDGE_VALIDATION.md). `revit_run_csharp_query` is implemented, and its official MCP-client live gate is **PASS** in [CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md](../CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md). CAP-0020 is live-complete. The accepted feasibility evidence is PR #133.
+This document is the contract. The compiler and execution kernel are implemented. The execution-kernel live gate passed in PR #136 on Revit 2026.5 build 26.5.0.55. Local enablement and Bridge protocol 26 are implemented. The Bridge live gate is **PASS** in [CAP_0020_CSHARP_QUERY_BRIDGE_VALIDATION.md](../CAP_0020_CSHARP_QUERY_BRIDGE_VALIDATION.md). `revit_run_csharp_query` is implemented, and its official MCP-client live gate is **PASS** in [CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md](../CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md). CAP-0020 is live-complete under the policy version 1 inventory used by those gates. Policy version 2 is implemented, covered by automated tests, and live-validated by the 2026-11-26 Snowdon dogfood and the 2026-11-27 electrical-local dogfood, including that record's focused panel comparison. Those gates do not replace these policy version 1 records. The accepted feasibility evidence is PR #133.
 
 An implementation is acceptable when:
 
-- the tool exists, `tools/list` is 23, and protocol 26 is advertised only by a host that implements this contract
+- the tool exists, `tools/list` is 23, and a current host advertises protocol 27, not 26, only when it implements this contract with the policy version 2 compiler
 - Roslyn is absent from the Addin, Server, Bridge, and Contracts projects
 - a disabled setting returns `CSHARP_QUERY_DISABLED` without starting the compiler
 - a loaded assembly other than `RevitAPI` 26.5.0.0 returns `CSHARP_QUERY_API_UNSUPPORTED` without starting the CompilerHost
@@ -152,4 +166,4 @@ An implementation is acceptable when:
 
 ## Deferred
 
-Generated writes. Per-call approval. Arbitrary references or IL. Python and Dynamo. A remote compiler. A named pipe or network compiler listener. A persistent compiler process. A persistent compilation cache. The ribbon control that edits the local opt-in. Reviewed policy manifests for Revit 2025, Revit 2027, and any loaded identity other than `RevitAPI` 26.5.0.0. Any claim that policy version 1 names every externally effectful Revit API member, or that the executor prevents every CPU, memory, or blocking-call denial of service.
+Generated writes. Per-call approval. Arbitrary references or IL. Python and Dynamo. A remote compiler. A named pipe or network compiler listener. A persistent compiler process. A persistent compilation cache. The ribbon control that edits the local opt-in. Reviewed policy manifests for Revit 2025, Revit 2027, and any loaded identity other than `RevitAPI` 26.5.0.0. Any claim that policy version 2 names every externally effectful Revit API member, or that the executor prevents every CPU, memory, or blocking-call denial of service.

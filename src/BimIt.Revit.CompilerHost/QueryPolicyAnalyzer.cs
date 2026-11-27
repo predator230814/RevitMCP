@@ -49,6 +49,31 @@ internal static class QueryPolicyAnalyzer
         "WorksharingUtils"
     };
 
+    private static readonly Dictionary<string, HashSet<string>> ForbiddenDeclaredMembers = new(StringComparer.Ordinal)
+    {
+        ["Autodesk.Revit.DB.Electrical.ElectricalSystem"] = new(StringComparer.Ordinal)
+        {
+            "AddToCircuit",
+            "DisconnectPanel",
+            "NewWires",
+            "RemoveFromCircuit",
+            "SelectPanel",
+            "SetCircuitPath"
+        },
+        ["Autodesk.Revit.DB.MEPSystem"] = new(StringComparer.Ordinal)
+        {
+            "Add",
+            "Remove",
+            "DivideSystem"
+        },
+        ["Autodesk.Revit.DB.ElementSet"] = new(StringComparer.Ordinal)
+        {
+            "Clear",
+            "Erase",
+            "Insert"
+        }
+    };
+
     private static readonly HashSet<string> ForbiddenEffectMembers = new(StringComparer.Ordinal)
     {
         "Save",
@@ -139,6 +164,15 @@ internal static class QueryPolicyAnalyzer
                 return;
             case AnonymousFunctionExpressionSyntax lambda when ReferencesOwnLocal(model, lambda):
                 Add(found, seen, node.GetLocation(), "self-referential delegate is outside the read-only query policy.");
+                break;
+            case AssignmentExpressionSyntax assignment:
+                RejectRevitPropertyWrite(found, seen, model, assignment.Left);
+                break;
+            case PrefixUnaryExpressionSyntax prefix when prefix.IsKind(SyntaxKind.PreIncrementExpression) || prefix.IsKind(SyntaxKind.PreDecrementExpression):
+                RejectRevitPropertyWrite(found, seen, model, prefix.Operand);
+                break;
+            case PostfixUnaryExpressionSyntax postfix when postfix.IsKind(SyntaxKind.PostIncrementExpression) || postfix.IsKind(SyntaxKind.PostDecrementExpression):
+                RejectRevitPropertyWrite(found, seen, model, postfix.Operand);
                 break;
             case MemberAccessExpressionSyntax or QualifiedNameSyntax or IdentifierNameSyntax:
                 CheckText(found, seen, node.ToString(), node.GetLocation());
@@ -288,12 +322,69 @@ internal static class QueryPolicyAnalyzer
             Add(found, seen, location, symbol.Name + " is outside the read-only query policy.");
         }
 
+        var declaredName = owner.OriginalDefinition.ToDisplayString();
+        if (ForbiddenDeclaredMembers.TryGetValue(declaredName, out var declaredMembers)
+            && declaredMembers.Contains(symbol.Name))
+        {
+            Add(found, seen, location, declaredName + "." + symbol.Name + " is outside the read-only query policy.");
+        }
+
         if (ownerSpace.StartsWith("Autodesk.Revit", StringComparison.Ordinal)
             && symbol is IMethodSymbol
             && (symbol.Name.StartsWith("add_", StringComparison.Ordinal) || symbol.Name.StartsWith("remove_", StringComparison.Ordinal)))
         {
             Add(found, seen, location, "event subscription is outside the read-only query policy.");
         }
+    }
+
+    private static void RejectRevitPropertyWrite(
+        List<CompilerDiagnostic> found,
+        HashSet<string> seen,
+        SemanticModel model,
+        ExpressionSyntax target)
+    {
+        var expression = Unwrap(target);
+        foreach (var symbol in PropertySymbols(model, expression))
+        {
+            if (IsRevitType(symbol.ContainingType))
+            {
+                Add(found, seen, expression.GetLocation(), symbol.Name + " assignment is outside the read-only query policy.");
+            }
+        }
+    }
+
+    private static IEnumerable<IPropertySymbol> PropertySymbols(SemanticModel model, ExpressionSyntax expression)
+    {
+        var info = model.GetSymbolInfo(expression);
+        if (info.Symbol is IPropertySymbol property)
+        {
+            yield return property;
+        }
+
+        foreach (var candidate in info.CandidateSymbols)
+        {
+            if (candidate is IPropertySymbol candidateProperty)
+            {
+                yield return candidateProperty;
+            }
+        }
+    }
+
+    private static ExpressionSyntax Unwrap(ExpressionSyntax expression)
+    {
+        while (expression is ParenthesizedExpressionSyntax parenthesized)
+        {
+            expression = parenthesized.Expression;
+        }
+
+        return expression;
+    }
+
+    private static bool IsRevitType(INamedTypeSymbol? type)
+    {
+        var space = type?.ContainingNamespace?.ToDisplayString() ?? "";
+        return space.Equals("Autodesk.Revit", StringComparison.Ordinal)
+            || space.StartsWith("Autodesk.Revit.", StringComparison.Ordinal);
     }
 
     private static bool IsGenerated(ISymbol symbol)

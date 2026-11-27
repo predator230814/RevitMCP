@@ -41,7 +41,7 @@ public static class CSharpCompilationPipeline
             return Reject(CompilerOutcomes.InvalidRequest, CompilerResultCodes.InvalidSource, hash, cacheKey, identity, "source is outside the size bound");
         }
 
-        if (!testManifest && !identity.IsPolicyV1Supported)
+        if (!testManifest && !identity.IsSupportedApiIdentity)
         {
             return Reject(CompilerOutcomes.ApiUnsupported, CompilerResultCodes.ApiUnsupported, hash, cacheKey, identity, "loaded Revit API identity is not supported");
         }

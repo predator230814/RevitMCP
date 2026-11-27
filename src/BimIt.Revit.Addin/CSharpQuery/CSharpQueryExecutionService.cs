@@ -98,7 +98,7 @@ internal sealed class CSharpQueryExecutionService : ICSharpQueryExecutor
 
     private static bool ApiMatches(CSharpQueryCompilation compilation)
     {
-        if (compilation.Api is null || !compilation.Api.IsPolicyV1Supported)
+        if (compilation.Api is null || !compilation.Api.IsSupportedApiIdentity)
         {
             return false;
         }

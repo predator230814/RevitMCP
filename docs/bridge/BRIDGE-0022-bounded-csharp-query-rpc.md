@@ -9,9 +9,9 @@
 
 `revit.run_csharp_query`
 
-Support is the explicit set `{26}`. `SupportsRunCSharpQuery` is true only for 26. Numeric `version >= N` checks are not used.
+Support is the explicit set `{26}`. `SupportsRunCSharpQuery` was true only for 26 in this generation. Numeric `version >= N` checks are not used.
 
-Protocol 26 preserves every protocol-25 capability by explicit membership. Unknown protocol 27 supports nothing.
+Protocol 26 preserves every protocol-25 capability by explicit membership. At the time of this record, unknown protocol 27 supported nothing. [BRIDGE-0023](BRIDGE-0023-csharp-query-policy-v2-protocol.md) later specifies protocol 27 for policy version 2. This protocol-26 record is unchanged.
 
 The request is `document_id` and `source` only. `source` is 1 to 8,000 characters. Unknown fields are `INVALID_CSHARP_QUERY`. The request does not carry `instance_id`, references, usings, options, a compiler path, a Revit API path, or IL.
 

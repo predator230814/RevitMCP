@@ -276,7 +276,7 @@ public sealed class QueryRuntimeSpikeTests
 
         var protocol = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Contracts", "BridgeProtocol.cs"));
         Assert.Contains("public const int QueryElementPredicatesVersion = 25;", protocol, StringComparison.Ordinal);
-        Assert.Contains("public const int CurrentVersion = RunCSharpQueryVersion;", protocol, StringComparison.Ordinal);
+        Assert.Contains("public const int CurrentVersion = RunCSharpQueryPolicyV2Version;", protocol, StringComparison.Ordinal);
 
         var server = File.ReadAllText(Path.Combine(root, "src", "BimIt.Revit.Server", "ServerHost.cs"));
         Assert.Equal(23, Regex.Matches(server, @"\.With\w+Tool\(\)").Count);

@@ -3,7 +3,7 @@
 - Status: Implemented. The official MCP-client live gate is **PASS** in [CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md](../CAP_0020_CSHARP_QUERY_MCP_VALIDATION.md).
 - Date: 2026-11-25
 - Capability: [CAP-0020](../capabilities/CAP-0020-bounded-generated-csharp-read.md)
-- Bridge: [BRIDGE-0022](../bridge/BRIDGE-0022-bounded-csharp-query-rpc.md)
+- Bridge: [BRIDGE-0022](../bridge/BRIDGE-0022-bounded-csharp-query-rpc.md) for the policy version 1 transport, protocol 26. [BRIDGE-0023](../bridge/BRIDGE-0023-csharp-query-policy-v2-protocol.md) for the current policy version 2 transport, protocol 27. Current binaries do not advertise 26.
 
 ## Tool
 
@@ -29,7 +29,7 @@ Unknown MCP fields return `INVALID_REQUEST` before routing. The request does not
 
 ## Output
 
-The success value is the Bridge `RunCSharpQueryResult`. `result` stays the host-owned JSON value and is not wrapped. Its schema is unconstrained. The other properties are closed: 64 lowercase hex characters for `source_sha256` and `cache_key`, `policy_version` const `1`, `revit_api.name` const `RevitAPI`, `revit_api.version` const `26.5.0.0`, `compile_outcome` const `success`, `duration_ms` integer >= 0, and `result_characters` integer 0 through 16,000.
+The success value is the Bridge `RunCSharpQueryResult`. `result` stays the host-owned JSON value and is not wrapped. Its schema is unconstrained. The other properties are closed: 64 lowercase hex characters for `source_sha256` and `cache_key`, `policy_version` const `2`, `revit_api.name` const `RevitAPI`, `revit_api.version` const `26.5.0.0`, `compile_outcome` const `success`, `duration_ms` integer >= 0, and `result_characters` integer 0 through 16,000. The 2026-11-25 gate recorded const `1`.
 
 ## Routing
 
@@ -45,13 +45,13 @@ An explicit `instance_id` for a Ready host that supports context discovery still
 
 The Server passes these codes through: `CSHARP_QUERY_DISABLED`, `INVALID_CSHARP_QUERY`, `CSHARP_QUERY_API_UNSUPPORTED`, `CSHARP_QUERY_POLICY_REJECTED`, `CSHARP_QUERY_COMPILE_FAILED`, `CSHARP_QUERY_COMPILER_FAILED`, `CSHARP_QUERY_DOCUMENT_NOT_READY`, `CSHARP_QUERY_BUDGET_EXCEEDED`, `CSHARP_QUERY_EXECUTION_FAILED`, `CSHARP_QUERY_INVALID_RESULT`, `CSHARP_QUERY_RESULT_TOO_LARGE`, `BRIDGE_PROTOCOL_INCOMPATIBLE`, and `REVIT_EXECUTION_TIMEOUT`.
 
-CAP-0020 details are reshaped as `RunCSharpQueryErrorDetails` before they reach the MCP client. Unknown fields are stripped. Diagnostics are limited to 8, and a diagnostic message over 180 characters or containing a carriage return or line feed is dropped. A source hash must be 64 lowercase hex characters or it is omitted. Policy version must be 1 or it is omitted. Revit API identity keeps name and version only. Compile outcome must be one of `success`, `policy_rejected`, `compile_failed`, `api_unsupported`, `identity_rejected`, or `invalid_request`. `reason` must be one of `no_active_document`, `project_document_required`, `document_mismatch`, or `document_modifiable`. Malformed details are omitted. The error code and message remain. Source text, a failure cache key, PE, a Revit API filesystem path, a stack trace, and raw exception text are not sent.
+CAP-0020 details are reshaped as `RunCSharpQueryErrorDetails` before they reach the MCP client. Unknown fields are stripped. Diagnostics are limited to 8, and a diagnostic message over 180 characters or containing a carriage return or line feed is dropped. A source hash must be 64 lowercase hex characters or it is omitted. Policy version must be 2 or it is omitted. Revit API identity keeps name and version only. Compile outcome must be one of `success`, `policy_rejected`, `compile_failed`, `api_unsupported`, `identity_rejected`, or `invalid_request`. `reason` must be one of `no_active_document`, `project_document_required`, `document_mismatch`, or `document_modifiable`. Malformed details are omitted. The error code and message remain. Source text, a failure cache key, PE, a Revit API filesystem path, a stack trace, and raw exception text are not sent.
 
 An MCP error without details still serializes `code` and `message` only.
 
 ## Catalog
 
-Production `tools/list` contains exactly 23 tools. Bridge current version stays 26. The Server does not reference RevitAPI, the CompilerHost, `BimIt.Revit.Compiler`, or Roslyn.
+Production `tools/list` contains exactly 23 tools. The current Bridge version for this tool is protocol 27. Protocol 26 is the historical policy version 1 transport and is not advertised by a current binary. The Server does not reference RevitAPI, the CompilerHost, `BimIt.Revit.Compiler`, or Roslyn.
 
 ## Official MCP-client live gate
 
@@ -71,7 +71,7 @@ B. Write exactly `{"schema_version":1,"csharp_query_enabled":true}` without a re
 return new FilteredElementCollector(doc).OfClass(typeof(Level)).Cast<Level>().Select(level => new { element_ref = elementRef(level), name = level.Name, elevation = level.Elevation }).ToList();
 ```
 
-Expect success, 11 real levels, opaque element refs, closed JSON, `policy_version` 1, `RevitAPI` `26.5.0.0`, `compile_outcome` `success`, source hash `8273b9dc32b5eafe0bfc8b2ebec269308c5501783c713ee97fc6a47943a9d387`, and cache key `9112f3250677a7a123a3edaf755afd19b6e63784241cdd60f41933d4b916369c` when the source text matches the Bridge gate. If the source text differs, record the exact source and the resulting hash. `Document.IsModified` stays false.
+The 2026-11-25 gate recorded success, 11 real levels, opaque element refs, closed JSON, `policy_version` 1, `RevitAPI` `26.5.0.0`, `compile_outcome` `success`, source hash `8273b9dc32b5eafe0bfc8b2ebec269308c5501783c713ee97fc6a47943a9d387`, and cache key `9112f3250677a7a123a3edaf755afd19b6e63784241cdd60f41933d4b916369c` for that source text. Those recorded values stay. A replay on the current host returns `policy_version` 2 and a different cache key for the same source, because the policy version is part of the cache key. `Document.IsModified` stays false.
 
 C. Leave the opt-in enabled. Call `return Environment.TickCount;`. Expect `CSHARP_QUERY_POLICY_REJECTED`, no result, `compile_outcome` `policy_rejected`, bounded diagnostics, no source echo, no cache key, no filesystem path, and no stack trace. The document stays unmodified.
 

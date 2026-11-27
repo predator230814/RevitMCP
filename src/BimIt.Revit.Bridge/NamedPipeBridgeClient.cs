@@ -815,7 +815,7 @@ public sealed class NamedPipeBridgeClient : IRevitBridgeClient
         {
             throw new BridgeException(
                 BridgeErrorCodes.ProtocolIncompatible,
-                "revit.run_csharp_query requires bridge protocol 26.");
+                "revit.run_csharp_query requires bridge protocol 27.");
         }
     }
 
