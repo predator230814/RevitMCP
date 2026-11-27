@@ -4,7 +4,7 @@ public static class CompilerProtocol
 {
     public const int ContractVersion = 1;
 
-    public const int PolicyVersion = 1;
+    public const int PolicyVersion = 2;
 
     public const string ContractName = "revit.run_csharp_query";
 

@@ -62,7 +62,7 @@ internal static class RunCSharpQueryErrorDetailsSanitizer
         {
             Reason = Reasons.Contains(parsed.Reason ?? "") ? parsed.Reason : null,
             SourceSha256 = ValidHash(parsed.SourceSha256),
-            PolicyVersion = parsed.PolicyVersion == 1 ? 1 : null,
+            PolicyVersion = parsed.PolicyVersion == 2 ? 2 : null,
             RevitApi = ValidApi(parsed.RevitApi),
             Diagnostics = ValidDiagnostics(parsed.Diagnostics),
             CompileOutcome = CompileOutcomes.Contains(parsed.CompileOutcome ?? "") ? parsed.CompileOutcome : null

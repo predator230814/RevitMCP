@@ -107,7 +107,7 @@ public sealed class RunCSharpQueryBridgeTests
         var details = JsonSerializer.SerializeToElement(new RunCSharpQueryErrorDetails
         {
             SourceSha256 = "hash",
-            PolicyVersion = 1,
+            PolicyVersion = 2,
             RevitApi = new RunCSharpQueryApiIdentity { Name = "RevitAPI", Version = "26.5.0.0" },
             CompileOutcome = "policy_rejected",
             Diagnostics = [new RunCSharpQueryDiagnostic { Code = "BIMQ001", Line = 1, Column = 2, Message = "forbidden" }]
@@ -256,7 +256,7 @@ public sealed class RunCSharpQueryBridgeTests
                 Result = document.RootElement.Clone(),
                 SourceSha256 = "hash",
                 CacheKey = "cache",
-                PolicyVersion = 1,
+                PolicyVersion = 2,
                 RevitApi = new RunCSharpQueryApiIdentity { Name = "RevitAPI", Version = "26.5.0.0" },
                 CompileOutcome = "success",
                 DurationMs = 1,

@@ -128,7 +128,7 @@ public sealed class RunCSharpQuerySliceTests
             Result = CSharpQueryCompilation.From(CompilerCallResult.Ok(new CompilerResponse
             {
                 Outcome = CompilerOutcomes.PolicyRejected,
-                PolicyVersion = 1,
+                PolicyVersion = 2,
                 SourceSha256 = "hash",
                 CacheKey = "hidden-cache",
                 RevitApi = new RevitApiIdentity("RevitAPI", "26.5.0.0", "token", 10),
@@ -142,7 +142,7 @@ public sealed class RunCSharpQuerySliceTests
         Assert.Equal(0, executor.Calls);
         var details = error.Details!.Value;
         Assert.Equal("hash", details.GetProperty("source_sha256").GetString());
-        Assert.Equal(1, details.GetProperty("policy_version").GetInt32());
+        Assert.Equal(2, details.GetProperty("policy_version").GetInt32());
         Assert.Equal("RevitAPI", details.GetProperty("revit_api").GetProperty("name").GetString());
         Assert.Equal(CompilerOutcomes.PolicyRejected, details.GetProperty("compile_outcome").GetString());
         Assert.Equal(8, details.GetProperty("diagnostics").GetArrayLength());
@@ -165,7 +165,7 @@ public sealed class RunCSharpQuerySliceTests
         return CSharpQueryCompilation.From(CompilerCallResult.Ok(new CompilerResponse
         {
             Outcome = CompilerOutcomes.Success,
-            PolicyVersion = 1,
+            PolicyVersion = 2,
             SourceSha256 = "abc",
             CacheKey = "cache",
             RevitApi = new RevitApiIdentity("RevitAPI", "26.5.0.0", "", 4),

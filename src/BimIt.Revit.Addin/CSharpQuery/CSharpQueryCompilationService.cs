@@ -115,7 +115,7 @@ internal sealed class CSharpQueryCompilationService : ICSharpQueryCompiler
             return CSharpQueryCompilation.Failed(CompilerResultCodes.InvalidSource, source ?? "", api.Identity);
         }
 
-        if (!api.Identity.IsPolicyV1Supported)
+        if (!api.Identity.IsSupportedApiIdentity)
         {
             return CSharpQueryCompilation.Failed(CompilerResultCodes.ApiUnsupported, source, api.Identity);
         }

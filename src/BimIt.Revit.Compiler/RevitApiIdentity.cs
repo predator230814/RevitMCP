@@ -5,7 +5,7 @@ namespace BimIt.Revit.Compiler;
 
 public sealed record RevitApiIdentity(string Name, string Version, string PublicKeyToken, long Length)
 {
-    public bool IsPolicyV1Supported =>
+    public bool IsSupportedApiIdentity =>
         string.Equals(Name, CompilerProtocol.SupportedApiName, StringComparison.Ordinal)
         && string.Equals(Version, CompilerProtocol.SupportedApiVersion, StringComparison.Ordinal);
 

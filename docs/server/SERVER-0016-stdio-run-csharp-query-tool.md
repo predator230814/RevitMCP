@@ -29,7 +29,7 @@ Unknown MCP fields return `INVALID_REQUEST` before routing. The request does not
 
 ## Output
 
-The success value is the Bridge `RunCSharpQueryResult`. `result` stays the host-owned JSON value and is not wrapped. Its schema is unconstrained. The other properties are closed: 64 lowercase hex characters for `source_sha256` and `cache_key`, `policy_version` const `1`, `revit_api.name` const `RevitAPI`, `revit_api.version` const `26.5.0.0`, `compile_outcome` const `success`, `duration_ms` integer >= 0, and `result_characters` integer 0 through 16,000.
+The success value is the Bridge `RunCSharpQueryResult`. `result` stays the host-owned JSON value and is not wrapped. Its schema is unconstrained. The other properties are closed: 64 lowercase hex characters for `source_sha256` and `cache_key`, `policy_version` const `2`, `revit_api.name` const `RevitAPI`, `revit_api.version` const `26.5.0.0`, `compile_outcome` const `success`, `duration_ms` integer >= 0, and `result_characters` integer 0 through 16,000. The 2026-11-25 gate recorded const `1`.
 
 ## Routing
 
@@ -71,7 +71,7 @@ B. Write exactly `{"schema_version":1,"csharp_query_enabled":true}` without a re
 return new FilteredElementCollector(doc).OfClass(typeof(Level)).Cast<Level>().Select(level => new { element_ref = elementRef(level), name = level.Name, elevation = level.Elevation }).ToList();
 ```
 
-Expect success, 11 real levels, opaque element refs, closed JSON, `policy_version` 1, `RevitAPI` `26.5.0.0`, `compile_outcome` `success`, source hash `8273b9dc32b5eafe0bfc8b2ebec269308c5501783c713ee97fc6a47943a9d387`, and cache key `9112f3250677a7a123a3edaf755afd19b6e63784241cdd60f41933d4b916369c` when the source text matches the Bridge gate. If the source text differs, record the exact source and the resulting hash. `Document.IsModified` stays false.
+The 2026-11-25 gate recorded success, 11 real levels, opaque element refs, closed JSON, `policy_version` 1, `RevitAPI` `26.5.0.0`, `compile_outcome` `success`, source hash `8273b9dc32b5eafe0bfc8b2ebec269308c5501783c713ee97fc6a47943a9d387`, and cache key `9112f3250677a7a123a3edaf755afd19b6e63784241cdd60f41933d4b916369c` for that source text. Those recorded values stay. A replay on the current host returns `policy_version` 2 and a different cache key for the same source, because the policy version is part of the cache key. `Document.IsModified` stays false.
 
 C. Leave the opt-in enabled. Call `return Environment.TickCount;`. Expect `CSHARP_QUERY_POLICY_REJECTED`, no result, `compile_outcome` `policy_rejected`, bounded diagnostics, no source echo, no cache key, no filesystem path, and no stack trace. The document stays unmodified.
 

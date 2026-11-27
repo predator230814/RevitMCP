@@ -28,7 +28,7 @@ internal static class RunCSharpQueryJsonSchemas
             "result": {},
             "source_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
             "cache_key": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
-            "policy_version": { "type": "integer", "const": 1 },
+            "policy_version": { "type": "integer", "const": 2 },
             "revit_api": {
               "type": "object",
               "additionalProperties": false,

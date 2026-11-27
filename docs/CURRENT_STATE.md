@@ -1,12 +1,12 @@
 # BIM-IT Revit MCP Current State
 
-_Last updated: 2026-11-25_
+_Last updated: 2026-11-27_
 
 ## Read this first (2026-11-25)
 
 This handoff note was prepared from main at `e2db7e6ffe28dc776edf9f1d2d4e8b28b86d34a7` (merge of PR #138).
 
-Production `tools/list` is 23. Bridge protocol is 26. [CAP-0020](capabilities/CAP-0020-bounded-generated-csharp-read.md) `revit_run_csharp_query` is live-complete, default-off, and policy version 1 applies only to loaded `RevitAPI` 26.5.0.0. The Assistant does not expose that tool.
+Production `tools/list` is 23. Bridge protocol is 26. [CAP-0020](capabilities/CAP-0020-bounded-generated-csharp-read.md) `revit_run_csharp_query` is live-complete under policy version 1 and default-off. The 2026-11-25 Bridge and MCP gates passed on that policy. Policy version 2 is the current deny list for loaded `RevitAPI` 26.5.0.0. It is implemented, covered by automated tests, and live-validated by the 2026-11-26 Snowdon dogfood in [CAP_0020_POLICY_V2_UC2_VALIDATION.md](CAP_0020_POLICY_V2_UC2_VALIDATION.md) and by the 2026-11-27 electrical-local dogfood in [CAP_0020_POLICY_V2_UC2_ELECTRICAL_VALIDATION.md](CAP_0020_POLICY_V2_UC2_ELECTRICAL_VALIDATION.md). That electrical record includes the focused panel comparison. Sharing one circuit number across several systems there is a model observation, not a product rule. Those gates do not replace the 2026-11-25 policy version 1 records. The Assistant does not expose that tool.
 
 Admit a new Revit fact in this order:
 

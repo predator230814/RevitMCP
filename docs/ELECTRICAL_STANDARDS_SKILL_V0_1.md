@@ -83,7 +83,7 @@ A fact that the current primitives and their composition do not express is handl
 3. Evaluate [CAP-0020](capabilities/CAP-0020-bounded-generated-csharp-read.md) `revit_run_csharp_query` when the fact is required, read-only, still not expressible, and a focused query is compatible with [ADR-0028](adr/ADR-0028-bounded-generated-csharp-read-executor.md). Use `revit_api.symbols` only when the signature is uncertain. Skip the query when the fact is unnecessary or outside that policy. A kept result is `observed`, with model title, Revit build, UTC date, method, policy version, Revit API name and version, and the returned `source_sha256`. This creates no capability.
 4. Promote to a compiled operation only for an explicit ADR-0027 item 4 reason: stable engineering meaning, repeated use large enough to justify product code, specialized geometry or topology, special identity, performance, a controlled write, or another reason of that kind. A Revit method, or a query used a few times, is not that reason.
 
-The bounded read is live-complete, default-off, and limited to policy version 1 on `RevitAPI` 26.5.0.0. Arbitrary C# stays prohibited ([TECH_WATCH.md](TECH_WATCH.md)). The Assistant does not expose the tool. The Skill stays EXTERNAL.
+The bounded read is live-complete under policy version 1 and default-off. Policy version 2 is the current deny list for `RevitAPI` 26.5.0.0. It is implemented, covered by automated tests, and live-validated by the 2026-11-26 Snowdon dogfood. That gate does not replace the 2026-11-25 policy version 1 records. Policy version 1 is the 2026-11-25 gate inventory. Arbitrary C# stays prohibited ([TECH_WATCH.md](TECH_WATCH.md)). The Assistant does not expose the tool. The Skill stays EXTERNAL.
 
 ## `references/provenance.md`
 

@@ -71,7 +71,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
         Assert.False(result.EnumerateObject().Any());
         Assert.Equal("^[0-9a-f]{64}$", output.GetProperty("properties").GetProperty("source_sha256").GetProperty("pattern").GetString());
         Assert.Equal("^[0-9a-f]{64}$", output.GetProperty("properties").GetProperty("cache_key").GetProperty("pattern").GetString());
-        Assert.Equal(1, output.GetProperty("properties").GetProperty("policy_version").GetProperty("const").GetInt32());
+        Assert.Equal(2, output.GetProperty("properties").GetProperty("policy_version").GetProperty("const").GetInt32());
         Assert.Equal("success", output.GetProperty("properties").GetProperty("compile_outcome").GetProperty("const").GetString());
         Assert.Equal(0, output.GetProperty("properties").GetProperty("duration_ms").GetProperty("minimum").GetInt32());
         Assert.Equal(0, output.GetProperty("properties").GetProperty("result_characters").GetProperty("minimum").GetInt32());
@@ -246,7 +246,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
         Assert.Equal(json, structured.GetProperty("result").GetRawText());
         Assert.Equal(Hash, structured.GetProperty("source_sha256").GetString());
         Assert.Equal(Cache, structured.GetProperty("cache_key").GetString());
-        Assert.Equal(1, structured.GetProperty("policy_version").GetInt32());
+        Assert.Equal(2, structured.GetProperty("policy_version").GetInt32());
         Assert.Equal("RevitAPI", structured.GetProperty("revit_api").GetProperty("name").GetString());
         Assert.Equal("26.5.0.0", structured.GetProperty("revit_api").GetProperty("version").GetString());
         Assert.Equal("success", structured.GetProperty("compile_outcome").GetString());
@@ -293,7 +293,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
               "stack_trace": "at GeneratedQuery.Execute",
               "unexpected": "leak",
               "source_sha256": "ca37dfdba83278d4cd4babaefd2c7a52ef7c9ad5606339fcae2cd3e97c5f3fde",
-              "policy_version": 1,
+              "policy_version": 2,
               "revit_api": { "name": "RevitAPI", "version": "26.5.0.0", "path": "C:\\secret\\RevitAPI.dll" },
               "diagnostics": [
                 { "code": "CSHARP_QUERY_POLICY_REJECTED", "line": 1, "column": 8, "message": "Environment is outside the read-only query policy.", "source": "return Environment.TickCount;" },
@@ -313,7 +313,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
         Assert.Equal("The C# query could not be completed.", payload.GetProperty("message").GetString());
         var sanitized = payload.GetProperty("details");
         Assert.Equal("policy_rejected", sanitized.GetProperty("compile_outcome").GetString());
-        Assert.Equal(1, sanitized.GetProperty("policy_version").GetInt32());
+        Assert.Equal(2, sanitized.GetProperty("policy_version").GetInt32());
         Assert.Equal("RevitAPI", sanitized.GetProperty("revit_api").GetProperty("name").GetString());
         Assert.Equal("26.5.0.0", sanitized.GetProperty("revit_api").GetProperty("version").GetString());
         Assert.False(sanitized.GetProperty("revit_api").TryGetProperty("path", out _));
@@ -516,7 +516,7 @@ public sealed class RunCSharpQueryMcpBoundaryTests
             Result = result,
             SourceSha256 = Hash,
             CacheKey = Cache,
-            PolicyVersion = 1,
+            PolicyVersion = 2,
             RevitApi = new RunCSharpQueryApiIdentity { Name = "RevitAPI", Version = "26.5.0.0" },
             CompileOutcome = "success",
             DurationMs = 27,
